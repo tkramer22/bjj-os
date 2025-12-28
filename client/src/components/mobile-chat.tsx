@@ -86,7 +86,7 @@ export function MobileChat() {
   const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [totalLoadedCount, setTotalLoadedCount] = useState(0);
+  const [oldestMessageTimestamp, setOldestMessageTimestamp] = useState<string | null>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -211,10 +211,12 @@ What would you like to work on today?`,
           }));
         console.log('[HISTORY] Setting', deduplicatedMessages.length, 'messages (deduplicated from', data.messages.length, ')');
         setMessages(deduplicatedMessages);
-        // Track total loaded for offset pagination
-        setTotalLoadedCount(deduplicatedMessages.length);
-        // If we got fewer than 20, there's no more history
-        setHasMoreMessages(deduplicatedMessages.length >= 20);
+        // Track oldest message timestamp for cursor-based pagination
+        if (deduplicatedMessages.length > 0) {
+          setOldestMessageTimestamp(deduplicatedMessages[0].timestamp.toISOString());
+        }
+        // Use hasMore from backend response
+        setHasMoreMessages(data.hasMore ?? deduplicatedMessages.length >= 20);
         // Enable auto-scroll for initial load
         setShouldAutoScroll(true);
         // Mark context as loaded for persistence (iOS app)
@@ -291,7 +293,7 @@ What would you like to work on today?`,
 
   // Load more (older) messages when scrolling up
   const loadMoreMessages = async () => {
-    if (!hasMoreMessages || isLoadingMore || !userId) return;
+    if (!hasMoreMessages || isLoadingMore || !userId || !oldestMessageTimestamp) return;
     
     // Disable auto-scroll when loading older messages
     setShouldAutoScroll(false);
@@ -301,41 +303,43 @@ What would you like to work on today?`,
     const container = messagesContainerRef.current;
     const scrollHeightBefore = container?.scrollHeight || 0;
     
-    console.log('[LOAD-MORE] Loading older messages, offset:', totalLoadedCount);
+    const loadMoreCount = 30;
+    console.log('[LOAD-MORE] Loading older messages, before:', oldestMessageTimestamp, 'limit:', loadMoreCount);
     
     try {
-      // Request more messages with offset (load 30 more at a time)
-      const data = await getChatHistory(userId, totalLoadedCount + 30);
+      // Request older messages using cursor (before timestamp)
+      const data = await getChatHistory(userId, loadMoreCount, oldestMessageTimestamp);
       
       if (data.messages && data.messages.length > 0) {
-        const existingIds = new Set(messages.map(m => m.id));
+        // Map API messages to our format
+        const olderMessages = data.messages.map((msg: any, idx: number) => ({
+          id: msg.id || `older-${idx}-${Date.now()}`,
+          sender: (msg.role === 'user' || msg.sender === 'user') ? 'user' : 'assistant' as const,
+          message: msg.content || msg.message || '',
+          timestamp: new Date(msg.createdAt || msg.timestamp),
+          videos: msg.videos || []
+        }));
         
-        // Filter to only older messages not already loaded
-        const olderMessages = data.messages
-          .map((msg: any, idx: number) => ({
-            id: msg.id || String(idx),
-            sender: (msg.role === 'user' || msg.sender === 'user') ? 'user' : 'assistant' as const,
-            message: msg.content || msg.message || '',
-            timestamp: new Date(msg.createdAt || msg.timestamp),
-            videos: msg.videos || []
-          }))
-          .filter((msg: Message) => !existingIds.has(msg.id));
-        
-        if (olderMessages.length === 0) {
-          setHasMoreMessages(false);
-        } else {
-          // Prepend older messages and update total count
-          setMessages(prev => [...olderMessages, ...prev]);
-          setTotalLoadedCount(prev => prev + olderMessages.length);
-          
-          // Preserve scroll position after DOM updates
-          requestAnimationFrame(() => {
-            if (container) {
-              const scrollHeightAfter = container.scrollHeight;
-              container.scrollTop = scrollHeightAfter - scrollHeightBefore;
-            }
-          });
+        // Update oldest timestamp cursor (first message in chronological order)
+        if (olderMessages.length > 0) {
+          setOldestMessageTimestamp(olderMessages[0].timestamp.toISOString());
         }
+        
+        // Defensive deduplication before prepending
+        setMessages(prev => {
+          const existingIds = new Set(prev.map(m => m.id));
+          const uniqueOlder = olderMessages.filter((m: Message) => !existingIds.has(m.id));
+          return [...uniqueOlder, ...prev];
+        });
+        setHasMoreMessages(data.hasMore ?? false);
+        
+        // Preserve scroll position after DOM updates
+        requestAnimationFrame(() => {
+          if (container) {
+            const scrollHeightAfter = container.scrollHeight;
+            container.scrollTop = scrollHeightAfter - scrollHeightBefore;
+          }
+        });
       } else {
         setHasMoreMessages(false);
       }

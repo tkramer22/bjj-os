@@ -29,10 +29,14 @@ export async function sendChatMessage(userId, message) {
 }
 
 // Get chat history (default 20 for fast initial load, scroll up for more)
-export async function getChatHistory(userId, limit = 20) {
+// Supports cursor-based pagination using `before` timestamp
+export async function getChatHistory(userId, limit = 20, beforeTimestamp = null) {
   try {
-    const url = getApiUrl(`/api/ai/chat/history/${userId}?limit=${limit}`);
-    console.log('[API] getChatHistory URL:', url);
+    let url = getApiUrl(`/api/ai/chat/history/${userId}?limit=${limit}`);
+    if (beforeTimestamp) {
+      url += `&before=${encodeURIComponent(beforeTimestamp)}`;
+    }
+    console.log('[API] getChatHistory URL:', url, 'before:', beforeTimestamp || 'none');
     const response = await fetch(url, {
       headers: getAuthHeaders(),
       credentials: 'include'
@@ -41,7 +45,7 @@ export async function getChatHistory(userId, limit = 20) {
     return await response.json();
   } catch (error) {
     console.error('History API error:', error);
-    return { messages: [] };
+    return { messages: [], hasMore: false };
   }
 }
 

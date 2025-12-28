@@ -6,7 +6,7 @@ import { logActivity, logSystemError } from "./activity-logger";
 import adminDashboardRouter from "./admin-dashboard-api";
 import analyticsRouter from "./analytics";
 import { getProfessorOSFeedbackResponse, getAppreciationMessage, shouldShowAppreciation } from './professor-os-feedback-responses';
-import { eq, desc, sql as drizzleSql, sql, and, or, ilike, asc, count, isNotNull, gte, lte } from "drizzle-orm";
+import { eq, desc, sql as drizzleSql, sql, and, or, ilike, asc, count, isNotNull, gte, lte, lt } from "drizzle-orm";
 import { sendSMS } from "./twilio";
 import { sendVerificationCode, verifyCode } from "./twilio-verify";
 import { normalizePhoneNumber, validateAndNormalizePhone } from "./utils/phone-normalization";
@@ -7997,12 +7997,21 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
     }
   });
 
-  // Get chat history
+  // Get chat history with cursor-based pagination
+  // Uses `before` timestamp to load older messages reliably even when new messages arrive
   app.get('/api/ai/chat/history/:userId', async (req, res) => {
     try {
       const { userId } = req.params;
       const limit = parseInt(req.query.limit as string) || 50;
+      const beforeTimestamp = req.query.before as string; // ISO timestamp cursor
       
+      // Build query conditions
+      const conditions = [eq(aiConversationLearning.userId, userId)];
+      if (beforeTimestamp) {
+        conditions.push(lt(aiConversationLearning.createdAt, new Date(beforeTimestamp)));
+      }
+      
+      // Query newest messages first (DESC) then reverse for display order
       const history = await db.select({
         id: aiConversationLearning.id,
         message: aiConversationLearning.messageText,
@@ -8010,27 +8019,38 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
         timestamp: aiConversationLearning.createdAt
       })
       .from(aiConversationLearning)
-      .where(eq(aiConversationLearning.userId, userId))
-      .orderBy(asc(aiConversationLearning.createdAt))
+      .where(and(...conditions))
+      .orderBy(desc(aiConversationLearning.createdAt))
       .limit(limit);
       
-      const mappedMessages = history.map(m => ({
+      // Get oldest timestamp BEFORE reversing (last element in DESC order = oldest)
+      const oldestInBatch = history.length > 0 ? history[history.length - 1].timestamp : null;
+      
+      // Reverse to get chronological order (oldest first) for display
+      const mappedMessages = history.reverse().map(m => ({
         id: m.id.toString(),
         role: m.sender === 'user_sent' ? 'user' : 'assistant',
         content: m.message || '',
         createdAt: m.timestamp
       }));
       
-      // Debug: Log message order from backend
-      console.log('🔍 [BACKEND] Message order (oldest→newest):', mappedMessages.map(m => ({
-        id: m.id,
-        role: m.role,
-        timestamp: m.createdAt,
-        preview: m.content.substring(0, 30)
-      })));
+      // Check if there are more older messages (strictly older than oldest in batch)
+      let hasMore = false;
+      if (oldestInBatch) {
+        const olderCount = await db.select({ count: sql`count(*)::int` })
+          .from(aiConversationLearning)
+          .where(and(
+            eq(aiConversationLearning.userId, userId),
+            lt(aiConversationLearning.createdAt, oldestInBatch)
+          ));
+        hasMore = (olderCount[0]?.count || 0) > 0;
+      }
+      
+      console.log('🔍 [BACKEND] History: before=', beforeTimestamp || 'none', 'limit=', limit, 'count=', history.length, 'hasMore=', hasMore);
       
       res.json({
-        messages: mappedMessages
+        messages: mappedMessages,
+        hasMore
       });
       
     } catch (error: any) {
