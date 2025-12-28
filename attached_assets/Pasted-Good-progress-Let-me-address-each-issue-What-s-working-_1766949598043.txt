@@ -1,0 +1,116 @@
+Good progress! Let me address each issue:
+
+**What’s working:**
+✅ Chat persistence - December messages showing
+✅ Settings page layout looks clean
+✅ Bottom nav with icons + labels
+✅ Native pages (no WebView)
+
+**Issues to fix:**
+
+1. **Video cards not rendering** - Shows `[VIDEO: ...]` as text instead of clickable thumbnail cards
+1. **Double responses** - Still happening on new messages
+1. **Input placeholder** - “Ask about techniques” doesn’t fit properly
+1. **Settings missing user data** - No belt, weight, height, or other profile info from signup
+
+-----
+
+```
+iOS APP FIXES - 4 ISSUES
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: VIDEO CARDS NOT RENDERING IN CHAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Video recommendations show as raw text:
+[VIDEO: The main sweep to know from half guard (Lachlan Giles) | START: 00:00]
+
+Should render as clickable video card with:
+- YouTube thumbnail image
+- Video title
+- Instructor name
+- Play button
+- Bookmark icon
+
+Check the message parser in mobile-chat.tsx or ios-chat.tsx.
+The [VIDEO: ...] token should be parsed and rendered as a VideoCard component.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: DOUBLE RESPONSES STILL HAPPENING
+═══════════════════════════════════════════════════════════════════════════════
+
+When Professor OS responds, the message appears TWICE.
+
+Check:
+1. Is the streaming handler adding message AND final response adding again?
+2. Is useEffect running twice?
+3. Is the message being added before checking if ID already exists?
+
+FIX - Add deduplication check:
+const addMessage = (newMessage) => {
+  setMessages(prev => {
+    if (prev.some(m => m.id === newMessage.id)) {
+      return prev; // Don't add duplicate
+    }
+    return [...prev, newMessage];
+  });
+};
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: INPUT PLACEHOLDER STYLING
+═══════════════════════════════════════════════════════════════════════════════
+
+"Ask about techniques..." placeholder text doesn't fit properly in input field.
+
+Fix the input styling:
+- Proper padding
+- Text should not overflow
+- Placeholder should be fully visible or truncated with ellipsis
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 4: SETTINGS PAGE MISSING USER PROFILE DATA
+═══════════════════════════════════════════════════════════════════════════════
+
+Settings shows:
+- BJJ Practitioner (generic)
+- Email ✅
+- Subscription status ✅
+
+Missing from user's signup data:
+- Actual name (not "BJJ Practitioner")
+- Belt rank
+- Weight
+- Height
+- Training frequency
+- Academy/gym name
+- Years training
+
+Fetch this from /api/auth/me or /api/user/profile and display in Settings.
+
+Add a "Profile" section showing:
+- Name
+- Belt: [Blue Belt]
+- Weight: [185 lbs]
+- Academy: [Essential Jiu-Jitsu]
+- Training: [6x per week]
+
+═══════════════════════════════════════════════════════════════════════════════
+DO NOT TOUCH - WORKING:
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Chat persistence
+✅ Cascading dropdowns
+✅ Native settings pages (no WebView)
+✅ Bottom nav
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+```
+
+-----
+
+This focuses on the 4 remaining issues. The video card rendering is probably the biggest one - there’s likely a parser that’s supposed to convert `[VIDEO: ...]` into a component but it’s not working in the iOS context.​​​​​​​​​​​​​​​​

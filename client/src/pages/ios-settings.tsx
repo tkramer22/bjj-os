@@ -1,7 +1,23 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Bell, Moon, Volume2, Vibrate } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft, Bell, Moon, Volume2, Vibrate, User, Award, Scale, Ruler, Calendar } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
+
+interface UserProfile {
+  id: number;
+  email: string;
+  name?: string;
+  username?: string;
+  beltLevel?: string;
+  weight?: number;
+  height?: number;
+  trainingFrequency?: string;
+  style?: string;
+  age?: number;
+  struggleTechnique?: string;
+  injuries?: string;
+}
 
 export default function IOSSettingsPage() {
   const [, navigate] = useLocation();
@@ -9,6 +25,11 @@ export default function IOSSettingsPage() {
   const [darkMode, setDarkMode] = useState(true);
   const [sound, setSound] = useState(true);
   const [haptics, setHaptics] = useState(true);
+  
+  // Fetch user profile data
+  const { data: user } = useQuery<UserProfile>({
+    queryKey: ['/api/auth/me'],
+  });
 
   const handleBack = () => {
     triggerHaptic('light');
@@ -93,6 +114,143 @@ export default function IOSSettingsPage() {
       </div>
 
       <div style={{ padding: '20px' }}>
+        {/* Profile Section */}
+        {user && (
+          <>
+            <h2 style={{ 
+              fontSize: '13px', 
+              fontWeight: 600, 
+              color: '#71717A', 
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              marginBottom: '12px',
+              paddingLeft: '8px'
+            }}>
+              Profile
+            </h2>
+            <div style={{
+              background: '#1A1A1D',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              border: '1px solid #2A2A2E',
+              marginBottom: '24px',
+            }}>
+              {/* Name */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <User size={18} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Name</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-name">
+                  {user.name || user.username || 'Not set'}
+                </span>
+              </div>
+
+              {/* Belt Level */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Award size={18} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Belt</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#8B5CF6' }} data-testid="text-user-belt">
+                  {user.beltLevel || 'Not set'}
+                </span>
+              </div>
+
+              {/* Style */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <User size={18} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Style</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-style">
+                  {user.style || 'Not set'}
+                </span>
+              </div>
+
+              {/* Weight */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Scale size={18} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Weight</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-weight">
+                  {user.weight ? `${user.weight} lbs` : 'Not set'}
+                </span>
+              </div>
+
+              {/* Height */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Ruler size={18} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Height</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-height">
+                  {user.height ? `${Math.floor(user.height / 12)}'${user.height % 12}"` : 'Not set'}
+                </span>
+              </div>
+
+              {/* Training Frequency */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Calendar size={18} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Training</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-training">
+                  {user.trainingFrequency || 'Not set'}
+                </span>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* App Settings Section */}
+        <h2 style={{ 
+          fontSize: '13px', 
+          fontWeight: 600, 
+          color: '#71717A', 
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          marginBottom: '12px',
+          paddingLeft: '8px'
+        }}>
+          App Settings
+        </h2>
         <div style={{
           background: '#1A1A1D',
           borderRadius: '16px',

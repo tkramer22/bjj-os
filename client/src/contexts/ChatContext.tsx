@@ -19,12 +19,40 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | null>(null);
 
+// Deduplication helper - filters out duplicate messages by ID
+function deduplicateMessages(messages: Message[]): Message[] {
+  const seen = new Set<string>();
+  return messages.filter(m => {
+    if (seen.has(m.id)) {
+      console.log('[ChatContext] Filtered duplicate message:', m.id);
+      return false;
+    }
+    seen.add(m.id);
+    return true;
+  });
+}
+
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessagesInternal] = useState<Message[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
+  // Wrap setMessages to always deduplicate
+  const setMessages: React.Dispatch<React.SetStateAction<Message[]>> = useCallback((action) => {
+    setMessagesInternal(prev => {
+      const newMessages = typeof action === 'function' ? action(prev) : action;
+      return deduplicateMessages(newMessages);
+    });
+  }, []);
+
   const addMessage = useCallback((message: Message) => {
-    setMessages(prev => [...prev, message]);
+    setMessagesInternal(prev => {
+      // Check for duplicate before adding
+      if (prev.some(m => m.id === message.id)) {
+        console.log('[ChatContext] Skipped duplicate addMessage:', message.id);
+        return prev;
+      }
+      return [...prev, message];
+    });
   }, []);
 
   const updateMessage = useCallback((id: string, updates: Partial<Message>) => {

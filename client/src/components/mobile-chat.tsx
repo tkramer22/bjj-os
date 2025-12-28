@@ -52,9 +52,21 @@ export function MobileChat() {
   
   // Unified setMessages that updates both local and context
   // Uses functional update pattern to avoid stale closures
+  // CRITICAL: Includes deduplication to prevent double responses
   const setMessages = useCallback((updater: Message[] | ((prev: Message[]) => Message[])) => {
     setLocalMessages(prevMessages => {
-      const newMessages = typeof updater === 'function' ? updater(prevMessages) : updater;
+      let newMessages = typeof updater === 'function' ? updater(prevMessages) : updater;
+      
+      // DEDUPLICATION: Remove duplicate messages by ID
+      const seenIds = new Set<string>();
+      newMessages = newMessages.filter(m => {
+        if (seenIds.has(m.id)) {
+          console.log('[MOBILE-CHAT] Filtered duplicate message:', m.id);
+          return false;
+        }
+        seenIds.add(m.id);
+        return true;
+      });
       
       // Also update context for persistence (iOS app)
       if (isNativeApp()) {
