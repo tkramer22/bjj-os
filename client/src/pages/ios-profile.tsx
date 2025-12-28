@@ -41,6 +41,7 @@ function formatDate(dateString: string | null | undefined): string {
 export default function IOSProfilePage() {
   const [, navigate] = useLocation();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [webViewUrl, setWebViewUrl] = useState<string | null>(null);
 
   const { data: user, isLoading } = useQuery<UserProfile>({
     queryKey: ["/api/auth/me"],
@@ -59,7 +60,14 @@ export default function IOSProfilePage() {
     }
   };
 
-  const handleOpenSafari = async (url: string) => {
+  // Open URL in-app using iframe WebView
+  const handleOpenInApp = (url: string) => {
+    triggerHaptic('light');
+    setWebViewUrl(url);
+  };
+
+  // Open URL in external browser (for subscription management only)
+  const handleOpenExternal = async (url: string) => {
     triggerHaptic('light');
     if (isNativeApp()) {
       await Browser.open({ url });
@@ -70,7 +78,7 @@ export default function IOSProfilePage() {
 
   const handleManageSubscription = async () => {
     triggerHaptic('light');
-    await handleOpenSafari('https://bjjos.app/settings/subscription');
+    await handleOpenExternal('https://bjjos.app/settings/subscription');
   };
 
   const getSubscriptionLabel = () => {
@@ -106,6 +114,70 @@ export default function IOSProfilePage() {
         justifyContent: 'center',
       }}>
         <Loader2 className="animate-spin" size={32} color="#8B5CF6" />
+      </div>
+    );
+  }
+
+  // In-App WebView Modal
+  if (webViewUrl) {
+    return (
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        background: '#0A0A0B',
+        zIndex: 100,
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+        {/* WebView Header */}
+        <div style={{
+          padding: '12px 16px',
+          paddingTop: 'max(12px, env(safe-area-inset-top))',
+          background: '#1A1A1D',
+          borderBottom: '1px solid #2A2A2E',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <button
+            onClick={() => setWebViewUrl(null)}
+            data-testid="button-close-webview"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#8B5CF6',
+              fontSize: '16px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              padding: '8px 0',
+            }}
+          >
+            Done
+          </button>
+          <span style={{
+            color: '#71717A',
+            fontSize: '13px',
+            maxWidth: '200px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {webViewUrl.replace('https://', '')}
+          </span>
+          <div style={{ width: '50px' }} />
+        </div>
+        
+        {/* WebView Content */}
+        <iframe
+          src={webViewUrl}
+          style={{
+            flex: 1,
+            width: '100%',
+            border: 'none',
+            background: '#FFFFFF',
+          }}
+          title="In-App Browser"
+        />
       </div>
     );
   }
@@ -263,7 +335,6 @@ export default function IOSProfilePage() {
 
           <button
             onClick={handleManageSubscription}
-            onTouchEnd={handleManageSubscription}
             data-testid="button-manage-subscription"
             style={{
               width: '100%',
@@ -295,8 +366,7 @@ export default function IOSProfilePage() {
           border: '1px solid #2A2A2E',
         }}>
           <button
-            onClick={() => handleOpenSafari('https://bjjos.app/settings')}
-            onTouchEnd={() => handleOpenSafari('https://bjjos.app/settings')}
+            onClick={() => handleOpenExternal('https://bjjos.app/settings')}
             data-testid="button-settings"
             style={{
               width: '100%',
@@ -318,8 +388,7 @@ export default function IOSProfilePage() {
           </button>
 
           <button
-            onClick={() => handleOpenSafari('https://bjjos.app/terms')}
-            onTouchEnd={() => handleOpenSafari('https://bjjos.app/terms')}
+            onClick={() => handleOpenInApp('https://bjjos.app/terms')}
             data-testid="button-terms"
             style={{
               width: '100%',
@@ -337,12 +406,11 @@ export default function IOSProfilePage() {
               <FileText size={20} color="#71717A" />
               <span style={{ color: '#FFFFFF', fontSize: '15px' }}>Terms of Service</span>
             </div>
-            <ExternalLink size={16} color="#71717A" />
+            <ChevronRight size={20} color="#71717A" />
           </button>
 
           <button
-            onClick={() => handleOpenSafari('https://bjjos.app/privacy')}
-            onTouchEnd={() => handleOpenSafari('https://bjjos.app/privacy')}
+            onClick={() => handleOpenInApp('https://bjjos.app/privacy')}
             data-testid="button-privacy"
             style={{
               width: '100%',
@@ -360,18 +428,11 @@ export default function IOSProfilePage() {
               <Shield size={20} color="#71717A" />
               <span style={{ color: '#FFFFFF', fontSize: '15px' }}>Privacy Policy</span>
             </div>
-            <ExternalLink size={16} color="#71717A" />
+            <ChevronRight size={20} color="#71717A" />
           </button>
 
           <button
-            onClick={() => {
-              triggerHaptic('light');
-              window.location.href = 'mailto:support@bjjos.app?subject=BJJ OS Support Request';
-            }}
-            onTouchEnd={() => {
-              triggerHaptic('light');
-              window.location.href = 'mailto:support@bjjos.app?subject=BJJ OS Support Request';
-            }}
+            onClick={() => handleOpenInApp('https://bjjos.app/help')}
             data-testid="button-help"
             style={{
               width: '100%',
@@ -395,7 +456,6 @@ export default function IOSProfilePage() {
         {/* Logout Button */}
         <button
           onClick={handleLogout}
-          onTouchEnd={handleLogout}
           disabled={isLoggingOut}
           data-testid="button-logout"
           style={{

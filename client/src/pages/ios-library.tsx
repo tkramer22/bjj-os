@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
-import { Search, Play, BookmarkCheck, Loader2 } from "lucide-react";
+import { Search, Play, BookmarkCheck, Loader2, ChevronDown } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 
 interface VideoApiResponse {
@@ -28,7 +28,8 @@ interface Video {
 
 export default function IOSLibraryPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedPosition, setSelectedPosition] = useState<string | null>(null);
+  const [selectedTechnique, setSelectedTechnique] = useState<string>("All");
+  const [selectedProfessor, setSelectedProfessor] = useState<string>("All");
 
   const { data: user } = useQuery<{ id: string }>({
     queryKey: ["/api/auth/me"],
@@ -57,20 +58,40 @@ export default function IOSLibraryPage() {
 
   const savedVideoIds = savedVideosData?.videos?.map(v => parseInt(v.id)) || [];
 
-  const positions = [
-    "All", "Guard", "Half Guard", "Mount", "Side Control", 
-    "Back", "Turtle", "Standing"
-  ];
+  // Build techniques dropdown with counts
+  const techniquesWithCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    videos.forEach(v => {
+      const tech = v.technique || 'Other';
+      counts[tech] = (counts[tech] || 0) + 1;
+    });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    return [{ name: 'All', count: videos.length }, ...sorted.map(([name, count]) => ({ name, count }))];
+  }, [videos]);
+
+  // Build professors dropdown with counts
+  const professorsWithCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    videos.forEach(v => {
+      const prof = v.instructor || 'Unknown';
+      counts[prof] = (counts[prof] || 0) + 1;
+    });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    return [{ name: 'All', count: videos.length }, ...sorted.map(([name, count]) => ({ name, count }))];
+  }, [videos]);
 
   const filteredVideos = videos?.filter((video) => {
     const matchesSearch = !searchQuery || 
       video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       video.instructor.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesPosition = !selectedPosition || selectedPosition === "All" ||
-      video.position?.toLowerCase().includes(selectedPosition.toLowerCase());
+    const matchesTechnique = selectedTechnique === "All" ||
+      (video.technique || 'Other') === selectedTechnique;
     
-    return matchesSearch && matchesPosition;
+    const matchesProfessor = selectedProfessor === "All" ||
+      video.instructor === selectedProfessor;
+    
+    return matchesSearch && matchesTechnique && matchesProfessor;
   });
 
   const handleVideoPress = (videoId: string) => {
@@ -145,39 +166,115 @@ export default function IOSLibraryPage() {
           />
         </div>
 
-        {/* Position Filters */}
+        {/* Dropdown Filters */}
         <div style={{
-          display: 'flex',
-          gap: '8px',
-          overflowX: 'auto',
-          paddingBottom: '4px',
-          WebkitOverflowScrolling: 'touch',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '12px',
         }}>
-          {positions.map((position) => (
-            <button
-              key={position}
-              onClick={() => {
-                triggerHaptic('light');
-                setSelectedPosition(position === "All" ? null : position);
-              }}
-              data-testid={`filter-${position.toLowerCase().replace(' ', '-')}`}
-              style={{
-                background: (selectedPosition === position || (!selectedPosition && position === "All")) 
-                  ? '#8B5CF6' 
-                  : '#1A1A1D',
-                border: '1px solid #2A2A2E',
-                borderRadius: '20px',
-                padding: '8px 16px',
-                color: '#FFFFFF',
-                fontSize: '13px',
-                fontWeight: 500,
-                whiteSpace: 'nowrap',
-                cursor: 'pointer',
-              }}
-            >
-              {position}
-            </button>
-          ))}
+          {/* Techniques Dropdown */}
+          <div style={{ position: 'relative' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '12px',
+              color: '#71717A',
+              marginBottom: '6px',
+              fontWeight: 600,
+            }}>
+              Techniques
+            </label>
+            <div style={{ position: 'relative' }}>
+              <select
+                value={selectedTechnique}
+                onChange={(e) => {
+                  triggerHaptic('light');
+                  setSelectedTechnique(e.target.value);
+                }}
+                data-testid="select-technique-filter"
+                style={{
+                  width: '100%',
+                  background: '#1A1A1D',
+                  border: '1px solid #2A2A2E',
+                  borderRadius: '10px',
+                  padding: '12px 36px 12px 12px',
+                  color: '#FFFFFF',
+                  fontSize: '14px',
+                  outline: 'none',
+                  appearance: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {techniquesWithCounts.map(({ name, count }) => (
+                  <option key={name} value={name}>
+                    {name} ({count})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown 
+                size={16} 
+                color="#71717A"
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  pointerEvents: 'none',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Professors Dropdown */}
+          <div style={{ position: 'relative' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '12px',
+              color: '#71717A',
+              marginBottom: '6px',
+              fontWeight: 600,
+            }}>
+              Professors
+            </label>
+            <div style={{ position: 'relative' }}>
+              <select
+                value={selectedProfessor}
+                onChange={(e) => {
+                  triggerHaptic('light');
+                  setSelectedProfessor(e.target.value);
+                }}
+                data-testid="select-professor-filter"
+                style={{
+                  width: '100%',
+                  background: '#1A1A1D',
+                  border: '1px solid #2A2A2E',
+                  borderRadius: '10px',
+                  padding: '12px 36px 12px 12px',
+                  color: '#FFFFFF',
+                  fontSize: '14px',
+                  outline: 'none',
+                  appearance: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {professorsWithCounts.map(({ name, count }) => (
+                  <option key={name} value={name}>
+                    {name} ({count})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown 
+                size={16} 
+                color="#71717A"
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  pointerEvents: 'none',
+                }}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -199,7 +296,7 @@ export default function IOSLibraryPage() {
           }}>
             <p>No videos found</p>
             <p style={{ fontSize: '14px', marginTop: '8px' }}>
-              Try a different search term
+              Try a different search or filter
             </p>
           </div>
         ) : (
@@ -212,7 +309,6 @@ export default function IOSLibraryPage() {
               <button
                 key={video.id}
                 onClick={() => handleVideoPress(video.youtubeId)}
-                onTouchEnd={() => handleVideoPress(video.youtubeId)}
                 data-testid={`video-card-${video.id}`}
                 style={{
                   background: '#1A1A1D',

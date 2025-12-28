@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
-import { Bookmark, Search, Loader2, Play, X } from "lucide-react";
+import { Bookmark, Search, Loader2, Play, X, ChevronDown } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { Browser } from '@capacitor/browser';
 import { isNativeApp } from "@/lib/capacitorAuth";
@@ -14,12 +14,15 @@ interface SavedVideo {
   thumbnailUrl?: string;
   duration?: string;
   category?: string;
+  techniqueType?: string;
 }
 
 export default function IOSSavedPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTechnique, setSelectedTechnique] = useState<string>("All");
+  const [selectedProfessor, setSelectedProfessor] = useState<string>("All");
 
-  const { data: user } = useQuery({
+  const { data: user } = useQuery<{ id: number }>({
     queryKey: ["/api/auth/me"],
   });
 
@@ -36,10 +39,40 @@ export default function IOSSavedPage() {
     return match ? match[1] : '';
   };
 
+  // Build techniques dropdown with counts
+  const techniquesWithCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    savedVideos.forEach(v => {
+      const tech = v.techniqueType || v.category || 'Other';
+      counts[tech] = (counts[tech] || 0) + 1;
+    });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    return [{ name: 'All', count: savedVideos.length }, ...sorted.map(([name, count]) => ({ name, count }))];
+  }, [savedVideos]);
+
+  // Build professors dropdown with counts
+  const professorsWithCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    savedVideos.forEach(v => {
+      const prof = v.instructor || 'Unknown';
+      counts[prof] = (counts[prof] || 0) + 1;
+    });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    return [{ name: 'All', count: savedVideos.length }, ...sorted.map(([name, count]) => ({ name, count }))];
+  }, [savedVideos]);
+
   const filteredVideos = savedVideos.filter(video => {
-    if (!searchQuery) return true;
-    return video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           video.instructor?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = !searchQuery || 
+      video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      video.instructor?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesTechnique = selectedTechnique === "All" ||
+      (video.techniqueType || video.category || 'Other') === selectedTechnique;
+    
+    const matchesProfessor = selectedProfessor === "All" ||
+      video.instructor === selectedProfessor;
+    
+    return matchesSearch && matchesTechnique && matchesProfessor;
   });
 
   const handleVideoPress = async (videoUrl: string) => {
@@ -100,13 +133,12 @@ export default function IOSSavedPage() {
           color: '#71717A', 
           fontSize: '14px',
           marginTop: '4px',
+          marginBottom: '16px',
         }}>
           {savedVideos.length} videos saved
         </p>
-      </div>
 
-      {/* Search */}
-      <div style={{ padding: '16px 20px' }}>
+        {/* Search */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -115,6 +147,7 @@ export default function IOSSavedPage() {
           borderRadius: '12px',
           padding: '12px 16px',
           border: '1px solid #2A2A2E',
+          marginBottom: '12px',
         }}>
           <Search size={20} color="#71717A" />
           <input
@@ -147,10 +180,121 @@ export default function IOSSavedPage() {
             </button>
           )}
         </div>
+
+        {/* Dropdown Filters */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '12px',
+        }}>
+          {/* Techniques Dropdown */}
+          <div style={{ position: 'relative' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '12px',
+              color: '#71717A',
+              marginBottom: '6px',
+              fontWeight: 600,
+            }}>
+              Techniques
+            </label>
+            <div style={{ position: 'relative' }}>
+              <select
+                value={selectedTechnique}
+                onChange={(e) => {
+                  triggerHaptic('light');
+                  setSelectedTechnique(e.target.value);
+                }}
+                data-testid="select-technique-filter"
+                style={{
+                  width: '100%',
+                  background: '#1A1A1D',
+                  border: '1px solid #2A2A2E',
+                  borderRadius: '10px',
+                  padding: '12px 36px 12px 12px',
+                  color: '#FFFFFF',
+                  fontSize: '14px',
+                  outline: 'none',
+                  appearance: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {techniquesWithCounts.map(({ name, count }) => (
+                  <option key={name} value={name}>
+                    {name} ({count})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown 
+                size={16} 
+                color="#71717A"
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  pointerEvents: 'none',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Professors Dropdown */}
+          <div style={{ position: 'relative' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '12px',
+              color: '#71717A',
+              marginBottom: '6px',
+              fontWeight: 600,
+            }}>
+              Professors
+            </label>
+            <div style={{ position: 'relative' }}>
+              <select
+                value={selectedProfessor}
+                onChange={(e) => {
+                  triggerHaptic('light');
+                  setSelectedProfessor(e.target.value);
+                }}
+                data-testid="select-professor-filter"
+                style={{
+                  width: '100%',
+                  background: '#1A1A1D',
+                  border: '1px solid #2A2A2E',
+                  borderRadius: '10px',
+                  padding: '12px 36px 12px 12px',
+                  color: '#FFFFFF',
+                  fontSize: '14px',
+                  outline: 'none',
+                  appearance: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {professorsWithCounts.map(({ name, count }) => (
+                  <option key={name} value={name}>
+                    {name} ({count})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown 
+                size={16} 
+                color="#71717A"
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  pointerEvents: 'none',
+                }}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Videos */}
-      <div style={{ padding: '0 20px' }}>
+      <div style={{ padding: '16px 20px' }}>
         {filteredVideos.length === 0 ? (
           <div style={{
             display: 'flex',
@@ -167,15 +311,17 @@ export default function IOSSavedPage() {
               fontWeight: 600,
               marginTop: '16px',
             }}>
-              {searchQuery ? 'No videos found' : 'No saved videos yet'}
+              {searchQuery || selectedTechnique !== 'All' || selectedProfessor !== 'All' 
+                ? 'No videos found' 
+                : 'No saved videos yet'}
             </h3>
             <p style={{ 
               color: '#52525B', 
               fontSize: '14px',
               marginTop: '8px',
             }}>
-              {searchQuery 
-                ? 'Try a different search term' 
+              {searchQuery || selectedTechnique !== 'All' || selectedProfessor !== 'All'
+                ? 'Try a different search or filter' 
                 : 'Save videos from Professor OS to watch later'}
             </p>
           </div>
@@ -275,10 +421,22 @@ export default function IOSSavedPage() {
                     </div>
                     <div style={{
                       fontSize: '13px',
-                      color: '#71717A',
+                      color: '#8B5CF6',
                     }}>
                       {video.instructor}
                     </div>
+                    {(video.techniqueType || video.category) && (
+                      <span style={{
+                        fontSize: '11px',
+                        color: '#71717A',
+                        background: '#2A2A2E',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        alignSelf: 'flex-start',
+                      }}>
+                        {video.techniqueType || video.category}
+                      </span>
+                    )}
                   </div>
                 </button>
               );
