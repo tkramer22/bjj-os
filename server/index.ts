@@ -29,6 +29,14 @@ const corsOptions = {
       return callback(null, true);
     }
     
+    // Allow Capacitor/Ionic native app origins (iOS/Android)
+    if (origin === 'capacitor://localhost' || 
+        origin === 'ionic://localhost' || 
+        origin === 'https://localhost' ||
+        origin === 'http://localhost') {
+      return callback(null, true);
+    }
+    
     // Allow Replit preview and deployment URLs
     if (origin.match(/\.replit\.dev$/) || origin.match(/\.replit\.app$/)) {
       return callback(null, true);
