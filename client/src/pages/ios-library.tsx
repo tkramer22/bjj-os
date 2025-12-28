@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
-import { Search, Play, BookmarkCheck, Loader2, ChevronDown } from "lucide-react";
+import { Search, Play, BookmarkCheck, Loader2, ChevronDown, RefreshCw } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 
 interface VideoApiResponse {
@@ -30,6 +30,9 @@ export default function IOSLibraryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTechnique, setSelectedTechnique] = useState<string>("All");
   const [selectedProfessor, setSelectedProfessor] = useState<string>("All");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  const queryClient = useQueryClient();
 
   const { data: user } = useQuery<{ id: string }>({
     queryKey: ["/api/auth/me"],
@@ -38,6 +41,15 @@ export default function IOSLibraryPage() {
   const { data: videosData, isLoading } = useQuery<{ count: number; videos: VideoApiResponse[] }>({
     queryKey: ["/api/ai/videos"],
   });
+
+  // Pull-to-refresh handler
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    triggerHaptic('medium');
+    await queryClient.invalidateQueries({ queryKey: ["/api/ai/videos"] });
+    await queryClient.invalidateQueries({ queryKey: [`/api/ai/saved-videos/${user?.id}`] });
+    setTimeout(() => setIsRefreshing(false), 500);
+  }, [queryClient, user?.id]);
 
   // Transform API response to component format
   const videos: Video[] = (videosData?.videos || []).map(v => ({
@@ -139,14 +151,32 @@ export default function IOSLibraryPage() {
         background: '#0A0A0B',
         zIndex: 10,
       }}>
-        <h1 style={{ 
-          fontSize: '28px', 
-          fontWeight: 700,
-          margin: 0,
-          marginBottom: '16px',
-        }}>
-          Technique Library
-        </h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h1 style={{ 
+            fontSize: '28px', 
+            fontWeight: 700,
+            margin: 0,
+          }}>
+            Technique Library
+          </h1>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            data-testid="button-refresh-library"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: '8px',
+              cursor: 'pointer',
+              color: isRefreshing ? '#8B5CF6' : '#71717A',
+            }}
+          >
+            <RefreshCw 
+              size={22} 
+              className={isRefreshing ? 'animate-spin' : ''}
+            />
+          </button>
+        </div>
 
         {/* Search Bar */}
         <div style={{
