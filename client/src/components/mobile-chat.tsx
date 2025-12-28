@@ -112,6 +112,9 @@ export function MobileChat() {
 
   // Start rotating thinking status messages
   const startThinkingAnimation = () => {
+    // Clear any existing interval first to prevent timer leaks on repeated sends
+    stopThinkingAnimation();
+    
     let index = 0;
     setThinkingStatus(thinkingMessages[0]);
     
@@ -468,6 +471,7 @@ What would you like to work on today?`,
 
               if (data === '[DONE]') {
                 isDone = true;
+                stopThinkingAnimation();
                 setIsTyping(false);
                 triggerHaptic('light');
                 break;
@@ -508,6 +512,7 @@ What would you like to work on today?`,
                   // Server sent post-processed content with full video tokens
                   // IMPORTANT: This REPLACES the content, not appends - it's the enriched version
                   console.log('[MOBILE-CHAT] ✅ Received processed content with video tokens (REPLACING)');
+                  stopThinkingAnimation();
                   streamedContent = parsed.processedContent;
                   setMessages(prev => prev.map(msg =>
                     msg.id === assistantMessageId
@@ -559,6 +564,9 @@ What would you like to work on today?`,
         videos: []
       };
       setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      // Guarantee thinking animation is always stopped
+      stopThinkingAnimation();
     }
   };
 
