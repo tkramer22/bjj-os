@@ -143,7 +143,7 @@ export default function App() {
   if (!authRestored) {
     return (
       <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center">
-        <h1 className="text-4xl font-black text-white tracking-tight mb-4">BJJ OS</h1>
+        <img src="/bjjos-logo.png" alt="BJJ OS" className="h-8 w-auto mb-4" />
         <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
       </div>
     );
