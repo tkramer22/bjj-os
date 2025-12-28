@@ -42,17 +42,47 @@ export function MobileChat() {
   
   // Use context messages for native app (persists across tab switches)
   // Use local state for web (component lifecycle)
-  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  const [localMessagesState, setLocalMessagesState] = useState<Message[]>([]);
   
-  // For native app: use context messages once history is loaded to prevent flash
+  // Keep a ref to current messages for access during cleanup/unmount
+  // CRITICAL: Ref is updated DIRECTLY (not via useEffect) to survive aborted renders
+  const localMessagesRef = useRef<Message[]>([]);
+  
+  // Wrapper that updates both ref AND state atomically
+  // This ensures ref is always current even if React abandons the render
+  const setLocalMessages = useCallback((updater: Message[] | ((prev: Message[]) => Message[])) => {
+    const newMessages = typeof updater === 'function' 
+      ? updater(localMessagesRef.current) 
+      : updater;
+    localMessagesRef.current = newMessages; // Update ref FIRST (synchronous)
+    setLocalMessagesState(newMessages); // Then update React state
+  }, []);
+  
+  // Alias for reading local messages
+  const localMessages = localMessagesState;
+  
+  // For native app: use context messages once history is loaded, BUT use local during streaming
+  // This prevents the race condition where both local and context updates cause double rendering
   // For web: use local state (component lifecycle)
-  const messages = isNativeApp() && chatContext.historyLoaded 
+  const isStreaming = useRef(false);
+  
+  // CRITICAL: Reset isStreaming on mount AND cleanup
+  // This ensures reopening mid-stream shows context (not blank)
+  useEffect(() => {
+    isStreaming.current = false;
+    return () => {
+      isStreaming.current = false; // Reset on unmount too
+    };
+  }, []);
+  
+  const messages = isNativeApp() && chatContext.historyLoaded && !isStreaming.current
     ? contextMessages 
     : localMessages;
   
-  // Unified setMessages that updates both local and context
+  // Unified setMessages that updates local state
   // Uses functional update pattern to avoid stale closures
   // CRITICAL: Includes deduplication to prevent double responses
+  // NOTE: Context is updated separately via syncToContext to prevent race conditions
   const setMessages = useCallback((updater: Message[] | ((prev: Message[]) => Message[])) => {
     setLocalMessages(prevMessages => {
       let newMessages = typeof updater === 'function' ? updater(prevMessages) : updater;
@@ -68,30 +98,34 @@ export function MobileChat() {
         return true;
       });
       
-      // Also update context for persistence (iOS app)
-      if (isNativeApp()) {
-        chatContext.setMessages(newMessages.map(m => {
-          // Safely handle timestamp: Date object, string, or undefined
-          let timestampStr: string;
-          if (m.timestamp instanceof Date) {
-            timestampStr = m.timestamp.toISOString();
-          } else if (m.timestamp) {
-            timestampStr = new Date(m.timestamp).toISOString();
-          } else {
-            timestampStr = new Date().toISOString();
-          }
-          
-          return {
-            id: m.id,
-            role: m.sender === 'user' ? 'user' : 'assistant' as const,
-            content: m.message,
-            timestamp: timestampStr
-          };
-        }));
-      }
-      
       return newMessages;
     });
+  }, []);
+  
+  // Separate function to sync local messages to context - called ONLY after streaming completes
+  // This prevents the race condition where both local and context updates cause double rendering
+  const syncToContext = useCallback((messagesToSync: Message[]) => {
+    if (!isNativeApp()) return;
+    
+    console.log('[MOBILE-CHAT] Syncing to context:', messagesToSync.length, 'messages');
+    chatContext.setMessages(messagesToSync.map(m => {
+      // Safely handle timestamp: Date object, string, or undefined
+      let timestampStr: string;
+      if (m.timestamp instanceof Date) {
+        timestampStr = m.timestamp.toISOString();
+      } else if (m.timestamp) {
+        timestampStr = new Date(m.timestamp).toISOString();
+      } else {
+        timestampStr = new Date().toISOString();
+      }
+      
+      return {
+        id: m.id,
+        role: m.sender === 'user' ? 'user' : 'assistant' as const,
+        content: m.message,
+        timestamp: timestampStr
+      };
+    }));
   }, [chatContext]);
   
   const [inputValue, setInputValue] = useState("");
@@ -205,20 +239,24 @@ export function MobileChat() {
     };
   }, [messages.length]);
 
-  // Sync localMessages from context when history loads on native
+  // ONE-TIME sync from context to local when history first loads on native
   // This prevents flash when switching from local to context source
-  // CRITICAL: Only sync when NOT streaming (isTyping) to prevent double messages during streaming
+  // CRITICAL: Use a ref to ensure this only happens ONCE per component lifecycle
+  const hasSyncedFromContext = useRef(false);
   useEffect(() => {
-    if (isNativeApp() && chatContext.historyLoaded && contextMessages.length > 0 && !isTyping) {
-      // Only sync if local is empty or behind context (initial load scenario)
-      // During streaming, local and context are updated together, so skip sync
-      if (localMessages.length === 0 || 
-          (localMessages.length < contextMessages.length && localMessages.every(lm => contextMessages.some(cm => cm.id === lm.id)))) {
-        console.log('[MOBILE-CHAT] Syncing from context:', contextMessages.length, 'messages (local had', localMessages.length, ')');
-        setLocalMessages(contextMessages);
-      }
+    if (isNativeApp() && chatContext.historyLoaded && chatContext.messages.length > 0 && !hasSyncedFromContext.current) {
+      // Mark as synced BEFORE updating to prevent any race conditions
+      hasSyncedFromContext.current = true;
+      console.log('[MOBILE-CHAT] ONE-TIME sync from context:', chatContext.messages.length, 'messages');
+      setLocalMessages(chatContext.messages.map(m => ({
+        id: m.id,
+        sender: (m.role === 'user' ? 'user' : 'assistant') as "user" | "assistant",
+        message: m.content,
+        timestamp: new Date(m.timestamp),
+        videos: []
+      })));
     }
-  }, [chatContext.historyLoaded, contextMessages.length, isTyping]);
+  }, [chatContext.historyLoaded, chatContext.messages.length]);
 
   // Load chat history when we have a valid authenticated user ID
   // Re-load if the authenticated user changes (e.g., after auth restoration)
@@ -251,7 +289,7 @@ export function MobileChat() {
       } else {
         // No valid user - show welcome message
         console.log('[CHAT-HISTORY] No user found, showing welcome message');
-        setMessages([{
+        const noUserWelcome: Message[] = [{
           id: "0",
           sender: "assistant",
           message: `Welcome to Professor OS!
@@ -261,7 +299,10 @@ I'm your personal BJJ coach, available 24/7 to help you level up your game.
 What would you like to work on today?`,
           timestamp: new Date(),
           videos: []
-        }]);
+        }];
+        setMessages(noUserWelcome);
+        // Sync to context for persistence (iOS app)
+        syncToContext(noUserWelcome);
         setIsLoading(false);
         setLoadedUserId('none');
         // Mark context as loaded for persistence (iOS app)
@@ -311,6 +352,8 @@ What would you like to work on today?`,
           }));
         console.log('[HISTORY] Setting', deduplicatedMessages.length, 'messages (deduplicated from', data.messages.length, ')');
         setMessages(deduplicatedMessages);
+        // Sync to context for persistence (iOS app) - history load is a non-stream update
+        syncToContext(deduplicatedMessages);
         // Track oldest message timestamp for cursor-based pagination
         if (deduplicatedMessages.length > 0) {
           setOldestMessageTimestamp(deduplicatedMessages[0].timestamp.toISOString());
@@ -326,7 +369,7 @@ What would you like to work on today?`,
       } else {
         console.log('[HISTORY] No messages found, showing welcome');
         // Welcome message if no history
-        setMessages([{
+        const welcomeMessages: Message[] = [{
           id: "0",
           sender: "assistant",
           message: `Welcome to Professor OS!
@@ -349,7 +392,10 @@ Want to improve? Ask me anything about BJJ - from fundamentals to advanced conce
 What would you like to work on today?`,
           timestamp: new Date(),
           videos: []
-        }]);
+        }];
+        setMessages(welcomeMessages);
+        // Sync to context for persistence (iOS app)
+        syncToContext(welcomeMessages);
         // Mark context as loaded for persistence (iOS app)
         if (isNativeApp()) {
           chatContext.setHistoryLoaded(true);
@@ -358,7 +404,7 @@ What would you like to work on today?`,
     } catch (error) {
       console.error('Failed to load history:', error);
       // Show welcome message on error
-      setMessages([{
+      const errorWelcomeMessages: Message[] = [{
         id: "0",
         sender: "assistant",
         message: `Welcome to Professor OS!
@@ -381,7 +427,10 @@ Want to improve? Ask me anything about BJJ - from fundamentals to advanced conce
 What would you like to work on today?`,
         timestamp: new Date(),
         videos: []
-      }]);
+      }];
+      setMessages(errorWelcomeMessages);
+      // Sync to context for persistence (iOS app)
+      syncToContext(errorWelcomeMessages);
       // Mark context as loaded even on error (iOS app)
       if (isNativeApp()) {
         chatContext.setHistoryLoaded(true);
@@ -429,7 +478,10 @@ What would you like to work on today?`,
         setMessages(prev => {
           const existingIds = new Set(prev.map(m => m.id));
           const uniqueOlder = olderMessages.filter((m: Message) => !existingIds.has(m.id));
-          return [...uniqueOlder, ...prev];
+          const newMessages = [...uniqueOlder, ...prev];
+          // Sync to context for persistence (iOS app) - pagination is a non-stream update
+          syncToContext(newMessages);
+          return newMessages;
         });
         setHasMoreMessages(data.hasMore ?? false);
         
@@ -442,6 +494,8 @@ What would you like to work on today?`,
         });
       } else {
         setHasMoreMessages(false);
+        // Still sync to context even when no new messages, to persist hasMore state
+        syncToContext(localMessagesRef.current);
       }
     } catch (error) {
       console.error('[LOAD-MORE] Failed to load more messages:', error);
@@ -454,6 +508,9 @@ What would you like to work on today?`,
     const messageText = String(text || "").trim();
     if (!messageText || isTyping) return;
 
+    // Mark streaming as started to use localMessages during the stream
+    isStreaming.current = true;
+    
     // Re-enable auto-scroll when sending new messages
     setShouldAutoScroll(true);
     triggerHaptic('light');
@@ -466,7 +523,20 @@ What would you like to work on today?`,
       videos: []
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    // CRITICAL PERSISTENCE: Sync user message to context FIRST (before any React state)
+    // This ensures the message is persisted even if React abandons the render or app is killed
+    const messagesWithUser = [...localMessagesRef.current, userMessage];
+    if (isNativeApp()) {
+      // Persist directly to chatContext BEFORE any state updates
+      chatContext.setMessages(messagesWithUser.map(m => ({
+        id: m.id,
+        role: m.sender === 'user' ? 'user' : 'assistant' as const,
+        content: m.message,
+        timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : new Date(m.timestamp || Date.now()).toISOString()
+      })));
+    }
+    // Then update local state (ref and React state)
+    setLocalMessages(messagesWithUser);
     setInputValue("");
     setIsTyping(true);
     startThinkingAnimation(); // Show thinking status while waiting
@@ -480,7 +550,8 @@ What would you like to work on today?`,
       timestamp: new Date(),
       videos: []
     };
-    setMessages(prev => [...prev, assistantMessage]);
+    // Add placeholder - don't sync to context yet (it will be synced when streaming completes)
+    setLocalMessages(prev => [...prev, assistantMessage]);
 
     try {
       // Call Claude streaming endpoint with SSE (same as web for consistency)
@@ -543,7 +614,8 @@ What would you like to work on today?`,
                   console.error('[SSE] Server error:', parsed.error);
                   stopThinkingAnimation();
                   streamedContent = "I had trouble with that message. This can happen when certain words trigger safety filters, even in normal BJJ context. Could you try rephrasing? For example, instead of 'I got destroyed,' you could say 'I struggled against mount.'";
-                  setMessages(prev => prev.map(msg =>
+                  // Use setLocalMessages directly to bypass dedup (we're updating, not adding)
+                  setLocalMessages(prev => prev.map(msg =>
                     msg.id === assistantMessageId
                       ? { ...msg, message: streamedContent }
                       : msg
@@ -561,7 +633,8 @@ What would you like to work on today?`,
                   stopThinkingAnimation();
 
                   // Update assistant message with streamed content in real-time
-                  setMessages(prev => prev.map(msg =>
+                  // Use setLocalMessages directly to bypass dedup (we're updating, not adding)
+                  setLocalMessages(prev => prev.map(msg =>
                     msg.id === assistantMessageId
                       ? { ...msg, message: streamedContent }
                       : msg
@@ -572,7 +645,8 @@ What would you like to work on today?`,
                   console.log('[MOBILE-CHAT] ✅ Received processed content with video tokens (REPLACING)');
                   stopThinkingAnimation();
                   streamedContent = parsed.processedContent;
-                  setMessages(prev => prev.map(msg =>
+                  // Use setLocalMessages directly to bypass dedup (we're updating, not adding)
+                  setLocalMessages(prev => prev.map(msg =>
                     msg.id === assistantMessageId
                       ? { ...msg, message: parsed.processedContent }
                       : msg
@@ -592,6 +666,7 @@ What would you like to work on today?`,
       }
 
       setIsTyping(false);
+      // Context sync happens in finally block to guarantee execution
       
     } catch (error: any) {
       console.error('[MOBILE-CHAT] Failed to send message:', error);
@@ -623,6 +698,11 @@ What would you like to work on today?`,
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
+      // ALWAYS mark streaming complete and sync to context in finally block
+      // This guarantees sync even if component unmounts or throws during streaming
+      isStreaming.current = false;
+      // Use ref to access current messages directly - works even during unmount
+      syncToContext(localMessagesRef.current);
       // Guarantee thinking animation is always stopped
       stopThinkingAnimation();
     }
