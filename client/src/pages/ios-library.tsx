@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import { Search, Play, BookmarkCheck, Loader2, ChevronDown, RefreshCw } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 
@@ -33,6 +34,7 @@ export default function IOSLibraryPage() {
   const [selectedTechnique, setSelectedTechnique] = useState<string>("All");
   const [selectedProfessor, setSelectedProfessor] = useState<string>("All");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string } | null>(null);
   
   const queryClient = useQueryClient();
 
@@ -124,9 +126,13 @@ export default function IOSLibraryPage() {
     return matchesSearch && matchesTechnique && matchesProfessor;
   });
 
-  const handleVideoPress = (videoId: string) => {
+  const handleVideoPress = (video: Video) => {
     triggerHaptic('light');
-    window.open(`https://youtube.com/watch?v=${videoId}`, '_blank');
+    setCurrentVideo({
+      videoId: video.youtubeId,
+      title: video.title,
+      instructor: video.instructor
+    });
   };
 
   const isVideoSaved = (videoId: number) => {
@@ -356,7 +362,7 @@ export default function IOSLibraryPage() {
             {filteredVideos?.map((video) => (
               <button
                 key={video.id}
-                onClick={() => handleVideoPress(video.youtubeId)}
+                onClick={() => handleVideoPress(video)}
                 data-testid={`video-card-${video.id}`}
                 style={{
                   background: '#1A1A1D',
@@ -467,6 +473,16 @@ export default function IOSLibraryPage() {
       </div>
 
       <IOSBottomNav />
+
+      {/* In-app Video Player Modal */}
+      {currentVideo && (
+        <VideoPlayer
+          videoId={currentVideo.videoId}
+          title={currentVideo.title}
+          instructor={currentVideo.instructor}
+          onClose={() => setCurrentVideo(null)}
+        />
+      )}
     </div>
   );
 }

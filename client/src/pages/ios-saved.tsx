@@ -1,10 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import { Bookmark, Search, Loader2, Play, X, ChevronDown, RefreshCw } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
-import { Browser } from '@capacitor/browser';
-import { isNativeApp } from "@/lib/capacitorAuth";
 
 console.log('✅ iOS SAVED loaded');
 
@@ -24,6 +23,7 @@ export default function IOSSavedPage() {
   const [selectedTechnique, setSelectedTechnique] = useState<string>("All");
   const [selectedProfessor, setSelectedProfessor] = useState<string>("All");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -104,12 +104,15 @@ export default function IOSSavedPage() {
     return matchesSearch && matchesTechnique && matchesProfessor;
   });
 
-  const handleVideoPress = async (videoUrl: string) => {
+  const handleVideoPress = (video: SavedVideo) => {
     triggerHaptic('light');
-    if (isNativeApp()) {
-      await Browser.open({ url: videoUrl });
-    } else {
-      window.open(videoUrl, '_blank');
+    const videoId = extractVideoId(video.videoUrl);
+    if (videoId) {
+      setCurrentVideo({
+        videoId,
+        title: video.title,
+        instructor: video.instructor
+      });
     }
   };
 
@@ -386,7 +389,7 @@ export default function IOSSavedPage() {
               return (
                 <button
                   key={video.id}
-                  onClick={() => handleVideoPress(video.videoUrl)}
+                  onClick={() => handleVideoPress(video)}
                   data-testid={`video-card-${video.id}`}
                   style={{
                     display: 'flex',
@@ -494,6 +497,16 @@ export default function IOSSavedPage() {
       </div>
 
       <IOSBottomNav />
+
+      {/* In-app Video Player Modal */}
+      {currentVideo && (
+        <VideoPlayer
+          videoId={currentVideo.videoId}
+          title={currentVideo.title}
+          instructor={currentVideo.instructor}
+          onClose={() => setCurrentVideo(null)}
+        />
+      )}
     </div>
   );
 }

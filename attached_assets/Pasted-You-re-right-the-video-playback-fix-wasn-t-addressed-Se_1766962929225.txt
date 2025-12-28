@@ -1,0 +1,100 @@
+You’re right - the video playback fix wasn’t addressed. Send this focused prompt:
+
+-----
+
+```
+CRITICAL: VIDEO PLAYBACK STILL NOT FIXED
+
+Videos are still opening external YouTube app. This is the #1 priority.
+
+We had this working before using youtube-proxy.html
+
+═══════════════════════════════════════════════════════════════════════════════
+REQUIRED BEHAVIOR:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. User taps video (in chat or library)
+2. Video plays IN-APP using embedded player
+3. User NEVER leaves BJJ OS
+
+═══════════════════════════════════════════════════════════════════════════════
+CHECK THESE FILES:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Does public/youtube-proxy.html exist?
+   - If not, create it
+
+2. What URL is VideoPlayer component using?
+   - Should be: https://bjjos.app/youtube-proxy.html?v=VIDEO_ID
+   - NOT: https://youtube.com/watch?v=VIDEO_ID
+
+3. Show me the VideoPlayer component code
+
+═══════════════════════════════════════════════════════════════════════════════
+YOUTUBE PROXY IMPLEMENTATION:
+═══════════════════════════════════════════════════════════════════════════════
+
+public/youtube-proxy.html should contain:
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #000; }
+    iframe { width: 100%; height: 100%; border: none; }
+  </style>
+</head>
+<body>
+  <iframe 
+    id="player"
+    src=""
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen>
+  </iframe>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const videoId = params.get('v');
+    const start = params.get('t') || 0;
+    if (videoId) {
+      document.getElementById('player').src = 
+        `https://www.youtube.com/embed/${videoId}?autoplay=1&start=${start}&playsinline=1&rel=0`;
+    }
+  </script>
+</body>
+</html>
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+VIDEO PLAYER COMPONENT FIX:
+═══════════════════════════════════════════════════════════════════════════════
+
+When opening a video, use:
+
+const playVideo = (videoId: string, startTime?: number) => {
+const proxyUrl = `https://bjjos.app/youtube-proxy.html?v=${videoId}&t=${startTime || 0}`;
+// Open in modal/overlay within the app, NOT external browser
+};
+
+Do NOT use window.open() or Linking.openURL() to YouTube.
+Use an in-app modal with iframe pointing to the proxy.
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST:
+═══════════════════════════════════════════════════════════════════════════════
+
+After fix, verify <https://bjjos.app/youtube-proxy.html?v=dQw4w9WgXcQ> loads in browser.
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIX:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+
+```
+---
+
+This gives Replit the exact code needed for the proxy and explains exactly how to use it. Send this now while we wait to test the other fixes.​​​​​​​​​​​​​​​​
+```
