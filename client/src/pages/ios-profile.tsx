@@ -373,7 +373,7 @@ export default function IOSProfilePage() {
           border: '1px solid #2A2A2E',
         }}>
           <button
-            onClick={() => handleOpenExternal('https://bjjos.app/settings')}
+            onClick={() => handleOpenInApp('https://bjjos.app/settings')}
             data-testid="button-settings"
             style={{
               width: '100%',
@@ -391,7 +391,7 @@ export default function IOSProfilePage() {
               <Settings size={20} color="#71717A" />
               <span style={{ color: '#FFFFFF', fontSize: '15px' }}>Settings</span>
             </div>
-            <ExternalLink size={16} color="#71717A" />
+            <ChevronRight size={20} color="#71717A" />
           </button>
 
           <button

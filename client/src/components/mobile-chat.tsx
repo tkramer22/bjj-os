@@ -88,6 +88,8 @@ export function MobileChat() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [oldestMessageTimestamp, setOldestMessageTimestamp] = useState<string | null>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [thinkingStatus, setThinkingStatus] = useState<string | null>(null);
+  const thinkingStatusRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -99,6 +101,43 @@ export function MobileChat() {
 
   // Use authenticated user ID, falling back to localStorage only if API unavailable
   const userId = currentUser?.id?.toString() || localStorage.getItem('mobileUserId') || '1';
+
+  // Thinking status messages that rotate while AI is processing
+  const thinkingMessages = [
+    "Analyzing your question...",
+    "Searching training database...",
+    "Finding relevant techniques...",
+    "Formulating response...",
+  ];
+
+  // Start rotating thinking status messages
+  const startThinkingAnimation = () => {
+    let index = 0;
+    setThinkingStatus(thinkingMessages[0]);
+    
+    thinkingStatusRef.current = setInterval(() => {
+      index = (index + 1) % thinkingMessages.length;
+      setThinkingStatus(thinkingMessages[index]);
+    }, 2000); // Rotate every 2 seconds
+  };
+
+  // Stop thinking animation
+  const stopThinkingAnimation = () => {
+    if (thinkingStatusRef.current) {
+      clearInterval(thinkingStatusRef.current);
+      thinkingStatusRef.current = null;
+    }
+    setThinkingStatus(null);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (thinkingStatusRef.current) {
+        clearInterval(thinkingStatusRef.current);
+      }
+    };
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -369,6 +408,7 @@ What would you like to work on today?`,
     setMessages(prev => [...prev, userMessage]);
     setInputValue("");
     setIsTyping(true);
+    startThinkingAnimation(); // Show thinking status while waiting
 
     // Create placeholder assistant message for streaming
     const assistantMessageId = (Date.now() + 1).toString();
@@ -439,6 +479,7 @@ What would you like to work on today?`,
                 // Handle error responses from server (e.g., Claude refused, safety filter)
                 if (parsed.error) {
                   console.error('[SSE] Server error:', parsed.error);
+                  stopThinkingAnimation();
                   streamedContent = "I had trouble with that message. This can happen when certain words trigger safety filters, even in normal BJJ context. Could you try rephrasing? For example, instead of 'I got destroyed,' you could say 'I struggled against mount.'";
                   setMessages(prev => prev.map(msg =>
                     msg.id === assistantMessageId
@@ -453,6 +494,9 @@ What would you like to work on today?`,
                 if (parsed.chunk || parsed.content) {
                   const content = parsed.chunk || parsed.content;
                   streamedContent += content;
+                  
+                  // Stop thinking animation once we get first content
+                  stopThinkingAnimation();
 
                   // Update assistant message with streamed content in real-time
                   setMessages(prev => prev.map(msg =>
@@ -493,6 +537,7 @@ What would you like to work on today?`,
         name: error?.name,
         stack: error?.stack?.substring(0, 500)
       });
+      stopThinkingAnimation();
       setIsTyping(false);
       
       // Remove placeholder message and show error
@@ -610,7 +655,37 @@ What would you like to work on today?`,
             </div>
           );
         })}
-        {isTyping && <MobileTypingIndicator />}
+        {/* Thinking status indicator (shown before first content arrives) */}
+        {thinkingStatus && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '12px 16px',
+            marginLeft: '12px',
+            marginRight: '48px',
+            background: 'rgba(139, 92, 246, 0.1)',
+            borderRadius: '12px',
+            border: '1px solid rgba(139, 92, 246, 0.2)',
+            marginBottom: '8px',
+          }} data-testid="thinking-indicator">
+            <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: '#8B5CF6',
+              animation: 'pulse 1.5s ease-in-out infinite',
+            }} />
+            <span style={{ 
+              color: '#A78BFA', 
+              fontSize: '0.875rem',
+              fontStyle: 'italic',
+            }}>
+              {thinkingStatus}
+            </span>
+          </div>
+        )}
+        {isTyping && !thinkingStatus && <MobileTypingIndicator />}
         <div ref={messagesEndRef} />
       </div>
 

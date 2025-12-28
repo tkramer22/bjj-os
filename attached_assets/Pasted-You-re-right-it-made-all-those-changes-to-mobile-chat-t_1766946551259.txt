@@ -1,0 +1,99 @@
+You’re right - it made all those changes to `mobile-chat.tsx` instead of `ios-chat.tsx`. The logic is good, but it’s in the wrong file.
+
+The 20 messages limit is correct for token management - that shouldn’t change. Loading 30 on scroll-up is fine too since it’s paginated.
+
+Here’s the refocus prompt:
+
+-----
+
+```
+STOP - YOU MADE CHANGES TO THE WRONG FILE
+
+You edited mobile-chat.tsx. The iOS app uses ios-chat.tsx.
+
+MOBILE WEB (browser) → mobile-chat.tsx
+iOS NATIVE APP (Capacitor) → ios-chat.tsx
+
+These are DIFFERENT files for DIFFERENT platforms.
+
+═══════════════════════════════════════════════════════════════════════════════
+ACTION REQUIRED:
+═══════════════════════════════════════════════════════════════════════════════
+
+Apply the EXACT same chat fixes you just made to:
+
+ios-chat.tsx (NOT mobile-chat.tsx)
+
+The changes were good:
+✅ Cursor-based pagination using timestamps
+✅ Initial load: 20 most recent messages, scrolls to bottom
+✅ Scroll up: Loads 30 older messages, preserves position
+✅ Defensive deduplication prevents duplicate messages
+✅ shouldAutoScroll state prevents jumping
+
+Now apply ALL of that to ios-chat.tsx
+
+═══════════════════════════════════════════════════════════════════════════════
+ALSO FIX: ios-profile.tsx (Settings Page)
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT PROBLEMS:
+- Shows "BJJ Practitioner" instead of actual user name
+- Links open external Safari browser
+
+FIXES NEEDED:
+
+1. Fetch real user data:
+   - Call /api/auth/me on mount
+   - Display actual name, email, subscription status
+
+2. All links stay IN-APP:
+   - Settings → in-app page/modal
+   - Terms of Service → in-app page/modal
+   - Privacy Policy → in-app page/modal
+   - Help & Support → in-app page/modal
+   - ONLY "Manage Subscription" opens external (Stripe requirement)
+
+3. IOSBottomNav at bottom with icons + labels
+
+═══════════════════════════════════════════════════════════════════════════════
+ADD THINKING INDICATORS TO ios-chat.tsx:
+═══════════════════════════════════════════════════════════════════════════════
+
+While Professor OS is generating a response, show status messages:
+- "Analyzing your question..."
+- "Searching training database..."
+- "Formulating response..."
+
+These appear as temporary UI elements that disappear when actual response arrives.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFY iOS ROUTING:
+═══════════════════════════════════════════════════════════════════════════════
+
+Confirm in App.tsx that when Capacitor.isNativePlatform() is true:
+- Login redirects to /ios-chat
+- Bottom nav uses ios-* routes
+
+Add console.log to ios-chat.tsx:
+console.log('✅ iOS CHAT component loaded');
+
+═══════════════════════════════════════════════════════════════════════════════
+DO NOT TOUCH:
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Cascading dropdowns - WORKING
+✅ Video playback - WORKING
+✅ mobile-chat.tsx - Already updated, leave it
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+```
+
+-----
+
+This tells Replit to copy those good changes to the correct iOS file, fix the settings page, and add thinking indicators.​​​​​​​​​​​​​​​​
