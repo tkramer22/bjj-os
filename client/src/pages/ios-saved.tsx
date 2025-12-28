@@ -220,7 +220,7 @@ export default function IOSSavedPage() {
                 }}
               >
                 {techniquesWithCounts.map(({ name, count }) => (
-                  <option key={name} value={name}>
+                  <option key={name} value={name} data-testid={`option-technique-${name.toLowerCase().replace(/\s+/g, '-')}`}>
                     {name} ({count})
                   </option>
                 ))}
@@ -272,7 +272,7 @@ export default function IOSSavedPage() {
                 }}
               >
                 {professorsWithCounts.map(({ name, count }) => (
-                  <option key={name} value={name}>
+                  <option key={name} value={name} data-testid={`option-professor-${name.toLowerCase().replace(/\s+/g, '-')}`}>
                     {name} ({count})
                   </option>
                 ))}

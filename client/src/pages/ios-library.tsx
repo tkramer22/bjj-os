@@ -51,12 +51,12 @@ export default function IOSLibraryPage() {
     position: v.positionCategory,
   }));
 
-  const { data: savedVideosData } = useQuery<{ videos: { id: string }[] }>({
+  const { data: savedVideosData } = useQuery<{ videos: { id: string | number }[] }>({
     queryKey: [`/api/ai/saved-videos/${user?.id}`],
     enabled: !!user?.id,
   });
 
-  const savedVideoIds = savedVideosData?.videos?.map(v => parseInt(v.id)) || [];
+  const savedVideoIds = savedVideosData?.videos?.map(v => String(v.id)) || [];
 
   // Build techniques dropdown with counts
   const techniquesWithCounts = useMemo(() => {
@@ -100,7 +100,7 @@ export default function IOSLibraryPage() {
   };
 
   const isVideoSaved = (videoId: number) => {
-    return savedVideoIds.includes(videoId);
+    return savedVideoIds.includes(String(videoId));
   };
 
   return (
@@ -205,7 +205,7 @@ export default function IOSLibraryPage() {
                 }}
               >
                 {techniquesWithCounts.map(({ name, count }) => (
-                  <option key={name} value={name}>
+                  <option key={name} value={name} data-testid={`option-technique-${name.toLowerCase().replace(/\s+/g, '-')}`}>
                     {name} ({count})
                   </option>
                 ))}
@@ -257,7 +257,7 @@ export default function IOSLibraryPage() {
                 }}
               >
                 {professorsWithCounts.map(({ name, count }) => (
-                  <option key={name} value={name}>
+                  <option key={name} value={name} data-testid={`option-professor-${name.toLowerCase().replace(/\s+/g, '-')}`}>
                     {name} ({count})
                   </option>
                 ))}

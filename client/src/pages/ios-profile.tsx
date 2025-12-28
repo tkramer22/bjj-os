@@ -118,14 +118,19 @@ export default function IOSProfilePage() {
     );
   }
 
-  // In-App WebView Modal
-  if (webViewUrl) {
+  // In-App WebView Modal Overlay Component
+  const WebViewModal = () => {
+    if (!webViewUrl) return null;
+    
     return (
       <div style={{
         position: 'fixed',
-        inset: 0,
-        background: '#0A0A0B',
-        zIndex: 100,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: '80px', // Leave space for bottom nav - not covered
+        background: 'rgba(0,0,0,0.95)',
+        zIndex: 40,
         display: 'flex',
         flexDirection: 'column',
       }}>
@@ -492,6 +497,9 @@ export default function IOSProfilePage() {
           BJJ OS v{APP_VERSION}
         </div>
       </div>
+
+      {/* WebView Modal Overlay */}
+      <WebViewModal />
 
       <IOSBottomNav />
     </div>
