@@ -1,10 +1,12 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
 import { Bookmark, Search, Loader2, Play, X, ChevronDown, RefreshCw } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { Browser } from '@capacitor/browser';
 import { isNativeApp } from "@/lib/capacitorAuth";
+
+console.log('✅ iOS SAVED loaded');
 
 interface SavedVideo {
   id: number;

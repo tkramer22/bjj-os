@@ -1,0 +1,91 @@
+Got it. So the cascading dropdowns ARE working - that’s good progress.
+
+The core issue is exactly what you said: **mobile vs iOS confusion**.
+
+Here’s the focused prompt:
+
+-----
+
+```
+CRITICAL: iOS APP LOADING WRONG COMPONENTS
+
+The iOS app is loading MOBILE WEB components instead of iOS-SPECIFIC components.
+
+MOBILE WEB ≠ iOS APP
+
+- mobile-*.tsx = for Safari/Chrome browser on phone
+- ios-*.tsx = for standalone Capacitor iOS app
+
+The iOS app MUST load:
+- ios-chat.tsx (NOT mobile-chat.tsx)
+- ios-library.tsx (NOT mobile-library.tsx)
+- ios-saved.tsx (NOT mobile-saved.tsx)
+- ios-profile.tsx (NOT mobile-settings.tsx)
+
+═══════════════════════════════════════════════════════════════════════════════
+DETECTION:
+═══════════════════════════════════════════════════════════════════════════════
+
+import { Capacitor } from '@capacitor/core';
+
+const isIOSApp = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
+
+// isIOSApp = true → use ios-*.tsx components
+// isIOSApp = false + mobile browser → use mobile-*.tsx components
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFY WITH CONSOLE LOGS:
+═══════════════════════════════════════════════════════════════════════════════
+
+Add to EACH component:
+
+ios-chat.tsx: console.log('✅ iOS CHAT loaded');
+ios-library.tsx: console.log('✅ iOS LIBRARY loaded');
+ios-saved.tsx: console.log('✅ iOS SAVED loaded');
+ios-profile.tsx: console.log('✅ iOS PROFILE loaded');
+
+mobile-chat.tsx: console.log('❌ MOBILE chat loaded - WRONG');
+mobile-settings.tsx: console.log('❌ MOBILE settings loaded - WRONG');
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX THE ROUTING:
+═══════════════════════════════════════════════════════════════════════════════
+
+Check App.tsx or router configuration.
+
+When Capacitor.isNativePlatform() returns true:
+- After login → redirect to /ios-chat
+- Bottom nav Chat → /ios-chat
+- Bottom nav Videos → /ios-library
+- Bottom nav Saved → /ios-saved
+- Bottom nav Settings → /ios-profile
+
+═══════════════════════════════════════════════════════════════════════════════
+THEN FIX ios-chat.tsx:
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT: Scrolls through entire history from November 9th
+CORRECT: Opens instantly at most recent message, 20 messages loaded, scroll UP for older
+
+═══════════════════════════════════════════════════════════════════════════════
+THEN FIX ios-profile.tsx:
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT: Shows "BJJ Practitioner", links open external browser
+CORRECT: Shows actual user name, ALL links stay in-app
+
+═══════════════════════════════════════════════════════════════════════════════
+WORKING - DO NOT CHANGE:
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Cascading dropdowns (professor filters techniques)
+✅ Video counts from database
+✅ Video playback in-app
+
+npm run build
+npx cap sync ios
+```
+
+-----
+
+This is laser-focused on the routing issue. Once Replit fixes the component detection, the iOS-specific pages we built will actually load.​​​​​​​​​​​​​​​​

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
@@ -9,6 +9,8 @@ import {
 import { clearAuth, isNativeApp } from "@/lib/capacitorAuth";
 import { triggerHaptic } from "@/lib/haptics";
 import { Browser } from '@capacitor/browser';
+
+console.log('✅ iOS PROFILE loaded');
 
 const APP_VERSION = "1.0.0";
 

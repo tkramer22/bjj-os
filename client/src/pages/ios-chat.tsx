@@ -1,7 +1,12 @@
 import { MobileChat } from "@/components/mobile-chat";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
+import { useEffect } from "react";
 
 export default function IOSChatPage() {
+  useEffect(() => {
+    console.log('✅ iOS CHAT loaded');
+  }, []);
+
   return (
     <div 
       className="ios-page"

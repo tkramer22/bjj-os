@@ -1,8 +1,10 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
 import { Search, Play, BookmarkCheck, Loader2, ChevronDown, RefreshCw } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
+
+console.log('✅ iOS LIBRARY loaded');
 
 interface VideoApiResponse {
   id: number;

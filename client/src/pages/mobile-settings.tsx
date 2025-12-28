@@ -5,6 +5,8 @@ import { User, Dumbbell, Save, Loader2, ChevronLeft } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
+console.log('❌ MOBILE settings loaded - WRONG if you see this in iOS app');
+
 export default function MobileSettingsPage() {
   const [, navigate] = useLocation();
   const [saveStatus, setSaveStatus] = useState<string>('');
