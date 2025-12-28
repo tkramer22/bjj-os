@@ -26,7 +26,26 @@ export function getApiUrl(path: string): string {
 }
 
 export function isNativeApp(): boolean {
-  return Capacitor.isNativePlatform();
+  // Primary check: Capacitor native platform API
+  if (Capacitor.isNativePlatform()) {
+    return true;
+  }
+  
+  // Secondary check: Look for Capacitor in window object
+  // This helps when Capacitor bridge is injected but not fully initialized
+  if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
+    return true;
+  }
+  
+  // Fallback: Check for iOS routes BUT only if Capacitor object exists
+  // This prevents false positives in regular browsers viewing /ios-* routes
+  if (typeof window !== 'undefined' && 
+      window.location.pathname.startsWith('/ios-') &&
+      (window as any).Capacitor !== undefined) {
+    return true;
+  }
+  
+  return false;
 }
 
 export function isIOSApp(): boolean {

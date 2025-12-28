@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { MobileMessageBubble } from "./mobile-message-bubble";
@@ -7,7 +7,8 @@ import { MobileVoiceRecorder } from "./mobile-voice-recorder";
 import { sendChatMessage, getChatHistory } from "@/services/api";
 import { formatDateDivider, shouldShowDateDivider } from "@/lib/timestamps";
 import { triggerHaptic } from "@/lib/haptics";
-import { getApiUrl } from "@/lib/capacitorAuth";
+import { getApiUrl, isNativeApp } from "@/lib/capacitorAuth";
+import { useChatContext } from "@/contexts/ChatContext";
 
 interface Message {
   id: string;
@@ -25,7 +26,60 @@ interface AuthUser {
 }
 
 export function MobileChat() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Use ChatContext for persistence across tab switches (iOS app)
+  const chatContext = useChatContext();
+  
+  // Convert ChatContext messages to component format
+  const contextMessages: Message[] = chatContext.messages.map(m => ({
+    id: m.id,
+    sender: (m.role === 'user' ? 'user' : 'assistant') as "user" | "assistant",
+    message: m.content,
+    timestamp: new Date(m.timestamp),
+    videos: []
+  }));
+  
+  // Use context messages for native app (persists across tab switches)
+  // Use local state for web (component lifecycle)
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  
+  // For native app: use context messages once history is loaded to prevent flash
+  // For web: use local state (component lifecycle)
+  const messages = isNativeApp() && chatContext.historyLoaded 
+    ? contextMessages 
+    : localMessages;
+  
+  // Unified setMessages that updates both local and context
+  // Uses functional update pattern to avoid stale closures
+  const setMessages = useCallback((updater: Message[] | ((prev: Message[]) => Message[])) => {
+    setLocalMessages(prevMessages => {
+      const newMessages = typeof updater === 'function' ? updater(prevMessages) : updater;
+      
+      // Also update context for persistence (iOS app)
+      if (isNativeApp()) {
+        chatContext.setMessages(newMessages.map(m => {
+          // Safely handle timestamp: Date object, string, or undefined
+          let timestampStr: string;
+          if (m.timestamp instanceof Date) {
+            timestampStr = m.timestamp.toISOString();
+          } else if (m.timestamp) {
+            timestampStr = new Date(m.timestamp).toISOString();
+          } else {
+            timestampStr = new Date().toISOString();
+          }
+          
+          return {
+            id: m.id,
+            role: m.sender === 'user' ? 'user' : 'assistant' as const,
+            content: m.message,
+            timestamp: timestampStr
+          };
+        }));
+      }
+      
+      return newMessages;
+    });
+  }, [chatContext]);
+  
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,6 +102,14 @@ export function MobileChat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isTyping]);
+
+  // Sync localMessages from context when history loads on native
+  // This prevents flash when switching from local to context source
+  useEffect(() => {
+    if (isNativeApp() && chatContext.historyLoaded && contextMessages.length > 0) {
+      setLocalMessages(contextMessages);
+    }
+  }, [chatContext.historyLoaded, contextMessages]);
 
   // Load chat history when we have a valid authenticated user ID
   // Re-load if the authenticated user changes (e.g., after auth restoration)
@@ -93,6 +155,10 @@ What would you like to work on today?`,
         }]);
         setIsLoading(false);
         setLoadedUserId('none');
+        // Mark context as loaded for persistence (iOS app)
+        if (isNativeApp()) {
+          chatContext.setHistoryLoaded(true);
+        }
       }
       return;
     }
@@ -136,6 +202,10 @@ What would you like to work on today?`,
           }));
         console.log('[HISTORY] Setting', deduplicatedMessages.length, 'messages (deduplicated from', data.messages.length, ')');
         setMessages(deduplicatedMessages);
+        // Mark context as loaded for persistence (iOS app)
+        if (isNativeApp()) {
+          chatContext.setHistoryLoaded(true);
+        }
       } else {
         console.log('[HISTORY] No messages found, showing welcome');
         // Welcome message if no history
@@ -163,6 +233,10 @@ What would you like to work on today?`,
           timestamp: new Date(),
           videos: []
         }]);
+        // Mark context as loaded for persistence (iOS app)
+        if (isNativeApp()) {
+          chatContext.setHistoryLoaded(true);
+        }
       }
     } catch (error) {
       console.error('Failed to load history:', error);
@@ -191,6 +265,10 @@ What would you like to work on today?`,
         timestamp: new Date(),
         videos: []
       }]);
+      // Mark context as loaded even on error (iOS app)
+      if (isNativeApp()) {
+        chatContext.setHistoryLoaded(true);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -374,7 +452,11 @@ What would you like to work on today?`,
     }
   };
 
-  if (isLoading) {
+  // Show loading spinner until we have messages ready
+  // For native apps: also wait for historyLoaded to prevent flash
+  const showLoading = isLoading || (isNativeApp() && !chatContext.historyLoaded);
+  
+  if (showLoading) {
     return (
       <div className="mobile-chat-container">
         <div style={{ 
