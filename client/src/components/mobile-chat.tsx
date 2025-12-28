@@ -207,11 +207,18 @@ export function MobileChat() {
 
   // Sync localMessages from context when history loads on native
   // This prevents flash when switching from local to context source
+  // CRITICAL: Only sync when NOT streaming (isTyping) to prevent double messages during streaming
   useEffect(() => {
-    if (isNativeApp() && chatContext.historyLoaded && contextMessages.length > 0) {
-      setLocalMessages(contextMessages);
+    if (isNativeApp() && chatContext.historyLoaded && contextMessages.length > 0 && !isTyping) {
+      // Only sync if local is empty or behind context (initial load scenario)
+      // During streaming, local and context are updated together, so skip sync
+      if (localMessages.length === 0 || 
+          (localMessages.length < contextMessages.length && localMessages.every(lm => contextMessages.some(cm => cm.id === lm.id)))) {
+        console.log('[MOBILE-CHAT] Syncing from context:', contextMessages.length, 'messages (local had', localMessages.length, ')');
+        setLocalMessages(contextMessages);
+      }
     }
-  }, [chatContext.historyLoaded, contextMessages]);
+  }, [chatContext.historyLoaded, contextMessages.length, isTyping]);
 
   // Load chat history when we have a valid authenticated user ID
   // Re-load if the authenticated user changes (e.g., after auth restoration)

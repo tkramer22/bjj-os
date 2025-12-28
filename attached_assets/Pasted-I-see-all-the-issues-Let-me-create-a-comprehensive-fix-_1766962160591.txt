@@ -1,0 +1,110 @@
+I see all the issues. Let me create a comprehensive fix prompt:
+
+-----
+
+```
+CRITICAL FIXES - MULTIPLE ISSUES REMAIN
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: PROFILE PAGE - SIMPLIFY LAYOUT
+═══════════════════════════════════════════════════════════════════════════════
+
+Current layout is cluttered. Simplify to:
+
+TOP SECTION (User Info Card):
+- Profile icon
+- Name (currently shows "Not set" - should show actual name)
+- Email
+- Belt: blue
+- Weight: 180 lbs
+- Style: both
+
+REMOVE from top section:
+- Frequency (not needed)
+- Academy (not needed)
+- Height (shows N/A anyway)
+
+BOTTOM SECTION:
+- Settings → navigates to /ios-settings (contains subscription, terms, privacy, help, logout)
+
+That's it. Clean and simple. Settings handles everything else.
+
+The Profile page should be about the USER's BJJ identity.
+Settings page handles app stuff (subscription, terms, privacy, help, logout).
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: DOUBLE MESSAGES STILL HAPPENING
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS responses STILL appear twice. This was supposed to be fixed.
+
+The deduplication is not working. Check:
+1. Is the streaming handler adding the message?
+2. Is the final response ALSO adding the message?
+3. Is the message ID check actually preventing duplicates?
+
+Add console.log to track when messages are added:
+console.log('Adding message:', newMessage.id, 'Existing IDs:', messages.map(m => m.id));
+
+Fix this properly - it's a critical bug.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: VIDEO PLAYBACK STILL OPENS YOUTUBE APP
+═══════════════════════════════════════════════════════════════════════════════
+
+Videos are STILL opening external YouTube app. This is wrong.
+
+We had youtube-proxy.html working before. Videos must play IN-APP.
+
+Check:
+1. Does youtube-proxy.html exist in public folder?
+2. Is VideoPlayer using the proxy URL: https://bjjos.app/youtube-proxy.html?v=VIDEO_ID
+3. Why is it falling back to external YouTube?
+
+The user should NEVER leave BJJ OS to watch a video.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 4: PROFESSOR OS TONE - TOO HARSH
+═══════════════════════════════════════════════════════════════════════════════
+
+When user asked for another video, Professor OS pushed back harshly:
+"No. You haven't even drilled the Lachlan video I sent you three times."
+"You're doing the thing that keeps blue belts stuck at blue belt"
+
+This is too aggressive. Professor OS should be a COACH, not a drill sergeant.
+
+UPDATE THE SYSTEM PROMPT:
+
+"You are a supportive but direct coach. When users ask for new content:
+- You CAN offer coaching perspective ('I'd suggest mastering X first')
+- You MUST still provide what they ask for
+- Never refuse a direct request
+- Never shame or criticize the user
+- Be encouraging, not discouraging
+
+Example good response:
+'Here's a deep half video. Quick coaching note - the Lachlan sweep I sent earlier is gold. Once you nail that, deep half becomes your backup plan. But let's look at deep half now...'"
+
+The coach can guide, but must always serve the user's request.
+
+═══════════════════════════════════════════════════════════════════════════════
+WORKING - DO NOT BREAK:
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Bottom nav: Chat | Videos | Saved | Profile
+✅ "Ask Professor OS..." placeholder
+✅ Chat persistence
+✅ Cascading dropdowns
+✅ Video library with thumbnails
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+```
+
+-----
+
+This covers all 4 issues: simplified profile, double messages, video playback, and Professor OS tone. Send this to Replit.​​​​​​​​​​​​​​​​

@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bell, Moon, Volume2, Vibrate, User, Award, Scale, Ruler, Calendar } from "lucide-react";
+import { 
+  ArrowLeft, Bell, Moon, Volume2, Vibrate, User, Award, Scale, 
+  CreditCard, FileText, Shield, HelpCircle, LogOut, ChevronRight,
+  ExternalLink, Loader2
+} from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
+import { clearAuth, isNativeApp } from "@/lib/capacitorAuth";
+import { Browser } from '@capacitor/browser';
 
 interface UserProfile {
   id: number;
@@ -11,13 +17,24 @@ interface UserProfile {
   username?: string;
   beltLevel?: string;
   weight?: number | string;
-  height?: number | string;
-  trainingFrequency?: string;
   style?: string;
-  age?: number;
-  gym?: string;
-  struggleTechnique?: string;
-  injuries?: string;
+  isPro?: boolean;
+  isLifetime?: boolean;
+  subscriptionEndDate?: string;
+}
+
+function formatDate(dateString: string | null | undefined): string {
+  if (!dateString) return 'N/A';
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  } catch {
+    return 'N/A';
+  }
 }
 
 export default function IOSSettingsPage() {
@@ -26,8 +43,8 @@ export default function IOSSettingsPage() {
   const [darkMode, setDarkMode] = useState(true);
   const [sound, setSound] = useState(true);
   const [haptics, setHaptics] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   
-  // Fetch user profile data
   const { data: user } = useQuery<UserProfile>({
     queryKey: ['/api/auth/me'],
   });
@@ -37,9 +54,42 @@ export default function IOSSettingsPage() {
     navigate('/ios-profile');
   };
 
+  const handleLogout = async () => {
+    triggerHaptic('medium');
+    setIsLoggingOut(true);
+    
+    try {
+      await clearAuth();
+      navigate("/ios-login");
+    } catch (error) {
+      console.error('Logout error:', error);
+      setIsLoggingOut(false);
+    }
+  };
+
+  const handleNavigate = (path: string) => {
+    triggerHaptic('light');
+    navigate(path);
+  };
+
+  const handleOpenExternal = async (url: string) => {
+    triggerHaptic('light');
+    if (isNativeApp()) {
+      await Browser.open({ url });
+    } else {
+      window.open(url, '_blank');
+    }
+  };
+
   const toggleSetting = (setter: (v: boolean) => void, currentValue: boolean) => {
     triggerHaptic('light');
     setter(!currentValue);
+  };
+
+  const getSubscriptionLabel = () => {
+    if (user?.isLifetime) return 'Lifetime';
+    if (user?.isPro) return 'Pro';
+    return 'Free';
   };
 
   const ToggleSwitch = ({ 
@@ -81,7 +131,9 @@ export default function IOSSettingsPage() {
       minHeight: '100vh',
       background: '#0A0A0B',
       color: '#FFFFFF',
+      paddingBottom: '40px',
     }}>
+      {/* Header */}
       <div style={{
         padding: '16px 20px',
         paddingTop: 'max(16px, env(safe-area-inset-top))',
@@ -115,7 +167,86 @@ export default function IOSSettingsPage() {
       </div>
 
       <div style={{ padding: '20px' }}>
-        {/* Profile Section */}
+        {/* Subscription Section */}
+        <h2 style={{ 
+          fontSize: '13px', 
+          fontWeight: 600, 
+          color: '#71717A', 
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          marginBottom: '12px',
+          paddingLeft: '8px'
+        }}>
+          Subscription
+        </h2>
+        <div style={{
+          background: '#1A1A1D',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          border: '1px solid #2A2A2E',
+          marginBottom: '24px',
+        }}>
+          <div style={{
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid #2A2A2E',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <CreditCard size={20} color="#71717A" />
+              <span style={{ fontSize: '15px', color: '#71717A' }}>Plan</span>
+            </div>
+            <span style={{ 
+              fontSize: '15px', 
+              color: user?.isPro || user?.isLifetime ? '#22C55E' : '#FFFFFF',
+              fontWeight: 600
+            }} data-testid="text-plan">
+              {getSubscriptionLabel()}
+            </span>
+          </div>
+
+          {user?.subscriptionEndDate && !user?.isLifetime && (
+            <div style={{
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: '1px solid #2A2A2E',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <CreditCard size={20} color="#71717A" />
+                <span style={{ fontSize: '15px', color: '#71717A' }}>Renews</span>
+              </div>
+              <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-renews">
+                {formatDate(user.subscriptionEndDate)}
+              </span>
+            </div>
+          )}
+
+          <button
+            onClick={() => handleOpenExternal('https://bjjos.app/settings/subscription')}
+            data-testid="button-manage-subscription"
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <ExternalLink size={20} color="#8B5CF6" />
+              <span style={{ fontSize: '15px', color: '#8B5CF6' }}>Manage Subscription</span>
+            </div>
+            <ChevronRight size={20} color="#8B5CF6" />
+          </button>
+        </div>
+
+        {/* Profile Info Section */}
         {user && (
           <>
             <h2 style={{ 
@@ -136,7 +267,6 @@ export default function IOSSettingsPage() {
               border: '1px solid #2A2A2E',
               marginBottom: '24px',
             }}>
-              {/* Name */}
               <div style={{
                 padding: '14px 20px',
                 display: 'flex',
@@ -153,7 +283,6 @@ export default function IOSSettingsPage() {
                 </span>
               </div>
 
-              {/* Belt Level */}
               <div style={{
                 padding: '14px 20px',
                 display: 'flex',
@@ -165,29 +294,11 @@ export default function IOSSettingsPage() {
                   <Award size={18} color="#71717A" />
                   <span style={{ fontSize: '15px', color: '#71717A' }}>Belt</span>
                 </div>
-                <span style={{ fontSize: '15px', color: '#8B5CF6' }} data-testid="text-user-belt">
+                <span style={{ fontSize: '15px', color: '#8B5CF6', textTransform: 'capitalize' }} data-testid="text-user-belt">
                   {user.beltLevel || 'Not set'}
                 </span>
               </div>
 
-              {/* Style */}
-              <div style={{
-                padding: '14px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                borderBottom: '1px solid #2A2A2E',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <User size={18} color="#71717A" />
-                  <span style={{ fontSize: '15px', color: '#71717A' }}>Style</span>
-                </div>
-                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-style">
-                  {user.style || 'Not set'}
-                </span>
-              </div>
-
-              {/* Weight */}
               <div style={{
                 padding: '14px 20px',
                 display: 'flex',
@@ -204,60 +315,18 @@ export default function IOSSettingsPage() {
                 </span>
               </div>
 
-              {/* Height */}
               <div style={{
                 padding: '14px 20px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                borderBottom: '1px solid #2A2A2E',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Ruler size={18} color="#71717A" />
-                  <span style={{ fontSize: '15px', color: '#71717A' }}>Height</span>
-                </div>
-                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-height">
-                  {user.height ? (typeof user.height === 'number' ? `${Math.floor(user.height / 12)}'${user.height % 12}"` : user.height) : 'Not set'}
-                </span>
-              </div>
-
-              {/* Academy/Gym */}
-              <div style={{
-                padding: '14px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                borderBottom: '1px solid #2A2A2E',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <User size={18} color="#71717A" />
-                  <span style={{ fontSize: '15px', color: '#71717A' }}>Academy</span>
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Style</span>
                 </div>
-                <span style={{ 
-                  fontSize: '15px', 
-                  color: '#FFFFFF',
-                  maxWidth: '160px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }} data-testid="text-user-gym">
-                  {user.gym || 'Not set'}
-                </span>
-              </div>
-
-              {/* Training Frequency */}
-              <div style={{
-                padding: '14px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Calendar size={18} color="#71717A" />
-                  <span style={{ fontSize: '15px', color: '#71717A' }}>Training</span>
-                </div>
-                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-training">
-                  {user.trainingFrequency || 'Not set'}
+                <span style={{ fontSize: '15px', color: '#FFFFFF', textTransform: 'capitalize' }} data-testid="text-user-style">
+                  {user.style || 'Not set'}
                 </span>
               </div>
             </div>
@@ -281,6 +350,7 @@ export default function IOSSettingsPage() {
           borderRadius: '16px',
           overflow: 'hidden',
           border: '1px solid #2A2A2E',
+          marginBottom: '24px',
         }}>
           <div style={{
             padding: '16px 20px',
@@ -354,14 +424,129 @@ export default function IOSSettingsPage() {
           </div>
         </div>
 
+        {/* Legal Section */}
+        <h2 style={{ 
+          fontSize: '13px', 
+          fontWeight: 600, 
+          color: '#71717A', 
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          marginBottom: '12px',
+          paddingLeft: '8px'
+        }}>
+          Legal & Support
+        </h2>
+        <div style={{
+          background: '#1A1A1D',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          border: '1px solid #2A2A2E',
+          marginBottom: '24px',
+        }}>
+          <button
+            onClick={() => handleNavigate('/ios-terms')}
+            data-testid="button-terms"
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: '1px solid #2A2A2E',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <FileText size={20} color="#71717A" />
+              <span style={{ color: '#FFFFFF', fontSize: '15px' }}>Terms of Service</span>
+            </div>
+            <ChevronRight size={20} color="#71717A" />
+          </button>
+
+          <button
+            onClick={() => handleNavigate('/ios-privacy')}
+            data-testid="button-privacy"
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: '1px solid #2A2A2E',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Shield size={20} color="#71717A" />
+              <span style={{ color: '#FFFFFF', fontSize: '15px' }}>Privacy Policy</span>
+            </div>
+            <ChevronRight size={20} color="#71717A" />
+          </button>
+
+          <button
+            onClick={() => handleNavigate('/ios-help')}
+            data-testid="button-help"
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <HelpCircle size={20} color="#71717A" />
+              <span style={{ color: '#FFFFFF', fontSize: '15px' }}>Help & Support</span>
+            </div>
+            <ChevronRight size={20} color="#71717A" />
+          </button>
+        </div>
+
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          data-testid="button-logout"
+          style={{
+            width: '100%',
+            background: '#1A1A1D',
+            border: '1px solid #DC2626',
+            borderRadius: '16px',
+            padding: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            cursor: isLoggingOut ? 'not-allowed' : 'pointer',
+            opacity: isLoggingOut ? 0.5 : 1,
+          }}
+        >
+          {isLoggingOut ? (
+            <Loader2 className="animate-spin" size={20} color="#DC2626" />
+          ) : (
+            <LogOut size={20} color="#DC2626" />
+          )}
+          <span style={{ color: '#DC2626', fontSize: '15px', fontWeight: 600 }}>
+            {isLoggingOut ? 'Logging out...' : 'Log Out'}
+          </span>
+        </button>
+
         <p style={{
           marginTop: '16px',
           padding: '0 8px',
           fontSize: '13px',
           color: '#71717A',
           lineHeight: 1.5,
+          textAlign: 'center',
         }}>
-          Settings are stored locally on your device. Some features may require app restart to take effect.
+          BJJ OS v1.0.0
         </p>
       </div>
     </div>
