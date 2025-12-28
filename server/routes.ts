@@ -2971,6 +2971,7 @@ export function registerRoutes(app: Express): Server {
         height: bjjUsers.height,
         weight: bjjUsers.weight,
         age: bjjUsers.age,
+        gym: bjjUsers.gym,
         struggleTechnique: bjjUsers.struggleTechnique,
         injuries: bjjUsers.injuries,
         passwordHash: bjjUsers.passwordHash,
@@ -3012,6 +3013,7 @@ export function registerRoutes(app: Express): Server {
         height: user.height,
         weight: user.weight,
         age: user.age,
+        gym: user.gym,
         struggleTechnique: user.struggleTechnique,
         injuries: user.injuries,
         hasPassword: !!user.passwordHash,
@@ -7088,6 +7090,83 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
     return match ? match[1] : '';
   }
+  
+  // Search videos by title and/or instructor - used for unenriched video token fallback
+  app.get('/api/ai/videos/search', async (req, res) => {
+    try {
+      const { title, instructor, limit: limitParam } = req.query;
+      const searchLimit = Math.min(parseInt(limitParam as string) || 5, 20);
+      
+      const titleStr = (title as string || '').trim();
+      const instructorStr = (instructor as string || '').trim();
+      
+      if (!titleStr && !instructorStr) {
+        return res.status(400).json({ error: 'At least title or instructor is required', videos: [] });
+      }
+      
+      // Build search conditions array - only add non-empty conditions
+      const conditions: ReturnType<typeof sql>[] = [];
+      
+      if (titleStr) {
+        // Use ILIKE for case-insensitive search, keep original characters for better matching
+        const titlePattern = `%${titleStr.toLowerCase()}%`;
+        conditions.push(sql`LOWER(COALESCE(${aiVideoKnowledge.title}, '')) LIKE ${titlePattern}`);
+        conditions.push(sql`LOWER(COALESCE(${aiVideoKnowledge.techniqueName}, '')) LIKE ${titlePattern}`);
+      }
+      
+      if (instructorStr) {
+        const instructorPattern = `%${instructorStr.toLowerCase()}%`;
+        conditions.push(sql`LOWER(COALESCE(${aiVideoKnowledge.instructorName}, '')) LIKE ${instructorPattern}`);
+      }
+      
+      // If no conditions, return empty (shouldn't happen due to check above)
+      if (conditions.length === 0) {
+        return res.json({ count: 0, videos: [] });
+      }
+      
+      // Query videos with any matching condition
+      const videos = await db.select({
+        id: aiVideoKnowledge.id,
+        youtubeId: aiVideoKnowledge.youtubeId,
+        videoUrl: aiVideoKnowledge.videoUrl,
+        thumbnailUrl: aiVideoKnowledge.thumbnailUrl,
+        title: aiVideoKnowledge.title,
+        techniqueName: aiVideoKnowledge.techniqueName,
+        instructorName: aiVideoKnowledge.instructorName,
+        qualityScore: aiVideoKnowledge.qualityScore,
+        duration: aiVideoKnowledge.duration,
+      })
+      .from(aiVideoKnowledge)
+      .where(
+        and(
+          sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`,
+          sql`(${sql.join(conditions, sql` OR `)})`
+        )
+      )
+      .orderBy(desc(aiVideoKnowledge.qualityScore))
+      .limit(searchLimit);
+      
+      const transformedVideos = videos
+        .map(video => ({
+          id: video.id,
+          videoId: video.youtubeId || extractYouTubeId(video.videoUrl),
+          thumbnailUrl: video.thumbnailUrl,
+          title: video.title || video.techniqueName,
+          instructorName: video.instructorName || 'Unknown Instructor',
+          qualityScore: video.qualityScore ? parseFloat(video.qualityScore.toString()) : 0,
+          duration: formatDuration(video.duration),
+        }))
+        .filter(v => v.videoId); // Only return videos with valid YouTube IDs
+      
+      res.json({
+        count: transformedVideos.length,
+        videos: transformedVideos
+      });
+    } catch (error: any) {
+      console.error('Error searching videos:', error);
+      res.status(500).json({ error: error.message, videos: [] });
+    }
+  });
   
   // Helper: Format duration in seconds to MM:SS format
   function formatDuration(seconds: number | null): string {

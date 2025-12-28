@@ -1,0 +1,87 @@
+I see all the issues clearly. Let me check our previous conversations for how we had this working before.​​​​​​​​​​​​​​​​
+
+Found it. We had `youtube-proxy.html` working before. Here’s the focused fix prompt:
+
+-----
+
+```
+CRITICAL FIXES - VIDEO PLAYBACK & SETTINGS
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: VIDEO PLAYBACK - MUST STAY IN-APP
+═══════════════════════════════════════════════════════════════════════════════
+
+Videos are opening external YouTube app. This is WRONG.
+
+WE HAD THIS WORKING BEFORE using youtube-proxy.html
+
+The flow should be:
+1. User taps video thumbnail
+2. Video plays IN-APP using youtube-proxy.html
+3. User NEVER leaves BJJ OS
+
+Check:
+1. Is youtube-proxy.html in the public folder?
+2. Is VideoPlayer component using the proxy URL?
+3. The proxy URL should be: https://bjjos.app/youtube-proxy.html?v=VIDEO_ID
+
+FIX the VideoPlayer to use the proxy, NOT external YouTube links.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: VIDEO THUMBNAILS IN CHAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Chat shows [VIDEO: ...] with "Search on YouTube" button.
+
+Should show:
+- Actual YouTube thumbnail image
+- Video title
+- Instructor name  
+- Clickable card that plays video IN-APP
+
+If thumbnail can't be fetched, show BJJ OS logo as placeholder (we had this before).
+
+The video token format is:
+[VIDEO: title | instructor | duration | videoId | id | startTime]
+
+Parse this and render a proper VideoCard component with thumbnail.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: SETTINGS PAGE - MISSING USER DATA
+═══════════════════════════════════════════════════════════════════════════════
+
+Settings shows "BJJ Practitioner" - generic placeholder.
+
+Should show actual user data from signup:
+- User's real name
+- Belt rank
+- Weight
+- Height  
+- Academy/gym
+- Training frequency
+
+This data exists in the database from when user signed up.
+Fetch from /api/auth/me or /api/user/profile and display it.
+
+═══════════════════════════════════════════════════════════════════════════════
+WORKING - DO NOT BREAK:
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Chat persistence (December messages showing)
+✅ Single response (no more duplicates)
+✅ Cascading dropdowns in library
+✅ Video library with 2,357 videos
+✅ Bottom nav with icons + labels
+✅ Native settings pages (Terms, Privacy, Help)
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+```
+
+-----
+
+This focuses on the 3 remaining issues: in-app video playback via proxy, proper video thumbnails in chat, and user profile data in settings.​​​​​​​​​​​​​​​​

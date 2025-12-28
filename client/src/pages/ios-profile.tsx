@@ -16,14 +16,23 @@ const APP_VERSION = "1.0.0";
 
 interface UserProfile {
   id: number;
-  username: string;
+  username?: string;
+  name?: string;
   displayName?: string;
   email?: string;
   phoneNumber?: string;
   beltLevel?: string;
+  style?: string;
+  weight?: number | string;
+  height?: number | string;
+  trainingFrequency?: string;
+  gym?: string;
   isPro?: boolean;
   isLifetime?: boolean;
+  subscriptionType?: string;
+  subscriptionStatus?: string;
   subscriptionEndDate?: string;
+  trialEndDate?: string;
 }
 
 function formatDate(dateString: string | null | undefined): string {
@@ -177,7 +186,7 @@ export default function IOSProfilePage() {
                 fontWeight: 600,
                 marginBottom: '4px',
               }} data-testid="text-username">
-                {user?.displayName || user?.username || 'BJJ Practitioner'}
+                {user?.name || user?.displayName || user?.username || 'Not set'}
               </div>
               <div style={{ 
                 fontSize: '14px', 
@@ -188,6 +197,72 @@ export default function IOSProfilePage() {
               }} data-testid="text-email">
                 <Mail size={14} />
                 {user?.email || user?.phoneNumber || 'No email'}
+              </div>
+            </div>
+          </div>
+          
+          {/* Training Stats */}
+          <div style={{
+            marginTop: '16px',
+            paddingTop: '16px',
+            borderTop: '1px solid #2A2A2E',
+          }}>
+            {/* Row 1: Belt, Style, Frequency */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '12px',
+              marginBottom: '12px',
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: '#8B5CF6' }} data-testid="text-belt-level">
+                  {user?.beltLevel || 'N/A'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#71717A' }}>Belt</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600 }} data-testid="text-style">
+                  {user?.style || 'N/A'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#71717A' }}>Style</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600 }} data-testid="text-training-frequency">
+                  {user?.trainingFrequency || 'N/A'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#71717A' }}>Frequency</div>
+              </div>
+            </div>
+            {/* Row 2: Weight, Height, Gym */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '12px',
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600 }} data-testid="text-weight">
+                  {user?.weight ? `${user.weight} lbs` : 'N/A'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#71717A' }}>Weight</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600 }} data-testid="text-height">
+                  {user?.height ? (typeof user.height === 'number' ? `${Math.floor(user.height / 12)}'${user.height % 12}"` : user.height) : 'N/A'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#71717A' }}>Height</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ 
+                  fontSize: '13px', 
+                  fontWeight: 600,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '100%'
+                }} data-testid="text-gym">
+                  {user?.gym || 'N/A'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#71717A' }}>Academy</div>
               </div>
             </div>
           </div>

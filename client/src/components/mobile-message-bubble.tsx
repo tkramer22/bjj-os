@@ -5,6 +5,18 @@ import { useToast } from "@/hooks/use-toast";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { ThumbnailImage } from "@/components/ThumbnailImage";
 import { formatMessageTimestamp } from "@/lib/timestamps";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
+
+// Helper to open URLs properly on iOS (in-app browser vs external app)
+async function openInAppBrowser(url: string) {
+  if (Capacitor.isNativePlatform()) {
+    // Use Capacitor Browser which opens in-app webview (not external YouTube app)
+    await Browser.open({ url, presentationStyle: 'popover' });
+  } else {
+    window.open(url, '_blank');
+  }
+}
 
 interface MessageBubbleProps {
   message: string;
@@ -135,8 +147,52 @@ function parseVideoTokens(content: string): { text: string; video?: { id: number
 export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbleProps) {
   const [savedVideoIds, setSavedVideoIds] = useState<Set<number>>(new Set());
   const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string; startTime?: string } | null>(null);
+  const [loadingVideos, setLoadingVideos] = useState<Set<number>>(new Set());
   const { toast } = useToast();
   const userId = localStorage.getItem('mobileUserId') || '1';
+
+  // Search database for video and play in-app if found, otherwise open browser
+  const handleUnenrichedVideoClick = async (video: { id: number; title: string; instructor: string; startTime?: string }) => {
+    setLoadingVideos(prev => new Set(prev).add(video.id));
+    
+    try {
+      // Search our database for matching video
+      const params = new URLSearchParams();
+      params.append('title', video.title);
+      params.append('instructor', video.instructor);
+      params.append('limit', '1');
+      
+      const response = await fetch(`/api/ai/videos/search?${params.toString()}`);
+      const data = await response.json();
+      
+      if (data.videos && data.videos.length > 0 && data.videos[0].videoId) {
+        // Found a match - play in-app
+        const match = data.videos[0];
+        setCurrentVideo({
+          videoId: match.videoId,
+          title: match.title,
+          instructor: match.instructorName,
+          startTime: video.startTime
+        });
+        return;
+      }
+      
+      // No match found - fall back to browser search
+      const searchQuery = encodeURIComponent(`${video.title} ${video.instructor} BJJ`);
+      openInAppBrowser(`https://www.youtube.com/results?search_query=${searchQuery}`);
+    } catch (error) {
+      console.error('Video search failed:', error);
+      // On error, fall back to browser
+      const searchQuery = encodeURIComponent(`${video.title} ${video.instructor} BJJ`);
+      openInAppBrowser(`https://www.youtube.com/results?search_query=${searchQuery}`);
+    } finally {
+      setLoadingVideos(prev => {
+        const next = new Set(prev);
+        next.delete(video.id);
+        return next;
+      });
+    }
+  };
 
 
   const toggleSaveVideo = async (videoId: number) => {
@@ -238,33 +294,60 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
                     </button>
                   </div>
                 ) : (
-                  /* Unenriched video - show search on YouTube button */
+                  /* Unenriched video - search database first, then fall back to browser */
                   <button
-                    onClick={() => {
-                      const searchQuery = encodeURIComponent(`${segment.video!.title} ${segment.video!.instructor} BJJ`);
-                      window.open(`https://www.youtube.com/results?search_query=${searchQuery}`, '_blank');
-                    }}
+                    onClick={() => handleUnenrichedVideoClick(segment.video!)}
+                    disabled={loadingVideos.has(segment.video.id)}
                     style={{
                       width: "100%",
                       border: "none",
-                      cursor: "pointer",
+                      cursor: loadingVideos.has(segment.video.id) ? "wait" : "pointer",
                       padding: "1.5rem 1rem",
                       background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
                       justifyContent: "center",
-                      gap: "0.5rem"
+                      gap: "0.5rem",
+                      opacity: loadingVideos.has(segment.video.id) ? 0.7 : 1
                     }}
                     data-testid={`button-search-video-${segment.video.id}`}
-                    title="Search on YouTube"
+                    title="Find and play video"
                   >
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="#FF0000">
-                      <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0C.488 3.45.029 5.804 0 12c.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0C23.512 20.55 23.971 18.196 24 12c-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 3.993L9 16z"/>
-                    </svg>
-                    <span style={{ fontSize: "0.75rem", color: "#A78BFA" }}>
-                      Search on YouTube
-                    </span>
+                    {loadingVideos.has(segment.video.id) ? (
+                      <>
+                        <div style={{
+                          width: "32px",
+                          height: "32px",
+                          border: "3px solid rgba(167, 139, 250, 0.3)",
+                          borderTopColor: "#A78BFA",
+                          borderRadius: "50%",
+                          animation: "spin 1s linear infinite"
+                        }} />
+                        <span style={{ fontSize: "0.75rem", color: "#A78BFA" }}>
+                          Finding video...
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{
+                          width: "3rem",
+                          height: "3rem",
+                          background: "rgba(102, 126, 234, 0.8)",
+                          borderRadius: "50%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center"
+                        }}>
+                          <svg width="20" height="20" viewBox="0 0 16 16" fill="white">
+                            <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
+                          </svg>
+                        </div>
+                        <span style={{ fontSize: "0.75rem", color: "#A78BFA" }}>
+                          Tap to play
+                        </span>
+                      </>
+                    )}
                   </button>
                 )}
                 <div style={{ padding: "0.75rem", display: "flex", gap: "0.75rem", alignItems: "center" }}>
@@ -278,8 +361,7 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
                           startTime: segment.video!.startTime 
                         });
                       } else {
-                        const searchQuery = encodeURIComponent(`${segment.video!.title} ${segment.video!.instructor} BJJ`);
-                        window.open(`https://www.youtube.com/results?search_query=${searchQuery}`, '_blank');
+                        handleUnenrichedVideoClick(segment.video!);
                       }
                     }}
                     style={{ flex: 1, minWidth: 0, cursor: "pointer" }}

@@ -10,11 +10,12 @@ interface UserProfile {
   name?: string;
   username?: string;
   beltLevel?: string;
-  weight?: number;
-  height?: number;
+  weight?: number | string;
+  height?: number | string;
   trainingFrequency?: string;
   style?: string;
   age?: number;
+  gym?: string;
   struggleTechnique?: string;
   injuries?: string;
 }
@@ -216,7 +217,31 @@ export default function IOSSettingsPage() {
                   <span style={{ fontSize: '15px', color: '#71717A' }}>Height</span>
                 </div>
                 <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-height">
-                  {user.height ? `${Math.floor(user.height / 12)}'${user.height % 12}"` : 'Not set'}
+                  {user.height ? (typeof user.height === 'number' ? `${Math.floor(user.height / 12)}'${user.height % 12}"` : user.height) : 'Not set'}
+                </span>
+              </div>
+
+              {/* Academy/Gym */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <User size={18} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Academy</span>
+                </div>
+                <span style={{ 
+                  fontSize: '15px', 
+                  color: '#FFFFFF',
+                  maxWidth: '160px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }} data-testid="text-user-gym">
+                  {user.gym || 'Not set'}
                 </span>
               </div>
 
