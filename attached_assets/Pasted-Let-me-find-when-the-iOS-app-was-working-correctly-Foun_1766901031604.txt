@@ -1,0 +1,160 @@
+Let me find when the iOS app was working correctly.​​​​​​​​​​​​​​​​
+
+**Found it all.** Here’s the comprehensive master prompt based on everything we discussed and what was working before:
+
+-----
+
+## **MASTER PROMPT FOR REPLIT - RESTORE iOS APP:**
+
+```
+iOS APP - COMPLETE RESTORATION TO PREVIOUS WORKING STATE
+
+The iOS app regressed. We need to restore it to exactly how it was working before.
+This is NOT a web wrapper - we have iOS-specific components.
+
+═══════════════════════════════════════════════════════════════════════════════
+ARCHITECTURE REMINDER
+═══════════════════════════════════════════════════════════════════════════════
+
+iOS app uses THESE files (not mobile web files):
+- ios-chat.tsx (NOT mobile-chat.tsx)
+- ios-library.tsx
+- ios-saved.tsx
+- ios-profile.tsx
+- ios-home.tsx
+- ios-login.tsx
+
+All must use IOSBottomNav component with icons + labels.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: LOGIN SCREEN MISSING
+═══════════════════════════════════════════════════════════════════════════════
+
+Currently: App auto-logs in, skipping login screen entirely.
+Should be: Splash screen → Login screen (if not authenticated)
+
+LOGIN SCREEN MUST SHOW:
+┌─────────────────────────────────────────┐
+│            [BJJ OS LOGO]                │
+│         (properly sized)                │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ Email                           │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ Password                        │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│         [ Sign In ]                     │
+│                                         │
+│   Forgot password?  (clickable link)    │
+│                                         │
+│   ─────────────────────────────────     │
+│                                         │
+│   Don't have an account?                │
+│   Visit bjjos.app to get started        │
+│   (PLAIN TEXT - NOT CLICKABLE)          │
+└─────────────────────────────────────────┘
+
+APP STORE COMPLIANCE (Reader App Model):
+- NO "Sign in with Apple" button
+- NO signup functionality in app
+- "Visit bjjos.app to get started" = PLAIN TEXT, not a link
+- "Forgot password?" CAN be clickable (opens Safari)
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: CHAT PERSISTENCE BROKEN
+═══════════════════════════════════════════════════════════════════════════════
+
+Problems:
+- When switching tabs, chat disappears
+- When returning to chat, it scrolls from TOP (oldest) instead of BOTTOM (newest)
+- New messages not persisting
+- Shows old November messages instead of recent ones
+
+FIX IN ios-chat.tsx:
+- Load chat history from /api/ai/chat/history on mount
+- Always scroll to BOTTOM (most recent message)
+- Allow scrolling UP for older messages
+- Persist new messages to database immediately
+- Keep chat state when switching tabs (React Context or keep mounted)
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: DROPDOWN COUNTS WRONG
+═══════════════════════════════════════════════════════════════════════════════
+
+Videos Library shows "All (1000)" - hardcoded placeholder.
+
+FIX IN ios-library.tsx and ios-saved.tsx:
+- Query REAL counts from database
+- Techniques: SELECT technique_type, COUNT(*) FROM ai_video_knowledge GROUP BY technique_type
+- Professors: SELECT instructor_name, COUNT(*) FROM ai_video_knowledge GROUP BY instructor_name
+- Update counts dynamically when filters change
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 4: SETTINGS PAGE - USER DATA NOT LOADING
+═══════════════════════════════════════════════════════════════════════════════
+
+Shows generic "BJJ Practitioner" instead of actual user name.
+Related to missing login - no proper authentication context.
+
+FIX:
+- Ensure login stores user data properly
+- Load user profile on settings page mount
+- Display actual user name, email, subscription status
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 5: PROFESSOR OS DUPLICATES
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS repeats content within single responses.
+
+FIX IN server/buildSystemPrompt.ts:
+Ensure this rule exists and is enforced:
+"RULE: NO REPETITION - Never repeat the same fact, sentence, or paragraph 
+within a single response. Say it once, move on. Check your response before 
+sending - if you've already stated something, remove the duplicate."
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 6: SPLASH SCREEN LOGO
+═══════════════════════════════════════════════════════════════════════════════
+
+Current: Logo too large, same size as login screen logo
+Should be: Smaller, properly fitted for splash screen
+
+The login screen logo looks good - make splash screen logo SMALLER (about 60% of login logo size).
+
+═══════════════════════════════════════════════════════════════════════════════
+FLOW SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+1. App opens → Splash screen (1-2 seconds)
+2. Check auth status
+   - If NOT logged in → Login screen
+   - If logged in → Chat screen (home)
+3. Login successful → Store auth permanently (never ask again until logout)
+4. Bottom nav on all screens: Chat | Videos | Saved | Settings (icons + labels)
+5. Chat loads most recent messages, scrolled to bottom
+6. All data persists correctly
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+
+Show me the specific code changes for each issue.
+```
+
+-----
+
+**Copy and send this to Replit Agent.** This covers everything we identified:
+
+1. ✅ Missing login screen
+1. ✅ Chat persistence/scroll issues
+1. ✅ Dropdown counts
+1. ✅ Settings user data
+1. ✅ Professor OS duplicates
+1. ✅ Splash screen sizing​​​​​​​​​​​​​​​​

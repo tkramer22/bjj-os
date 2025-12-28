@@ -79,10 +79,10 @@ export default function IOSLoginPage() {
       });
 
       if (!data.user?.onboardingCompleted) {
-        setLocation("/onboarding");
+        setLocation("/ios-onboarding");
       } else {
-        // Redirect to real chat page (not iOS-specific page)
-        setLocation("/chat");
+        // Redirect to iOS chat page
+        setLocation("/ios-chat");
       }
     } catch (err: any) {
       setError(err.message || "Something went wrong. Please try again.");
