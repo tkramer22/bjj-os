@@ -1,11 +1,21 @@
 import { getApiUrl } from '@/lib/capacitorAuth';
 
+// Get session token from localStorage (fallback for iOS WKWebView cookie issues)
+function getAuthHeaders() {
+  const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
+  const headers = { 'Content-Type': 'application/json' };
+  if (sessionToken) {
+    headers['Authorization'] = `Bearer ${sessionToken}`;
+  }
+  return headers;
+}
+
 // Chat with AI Coach
 export async function sendChatMessage(userId, message) {
   try {
     const response = await fetch(getApiUrl('/api/ai/chat/message'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify({ userId, message })
     });
@@ -24,6 +34,7 @@ export async function getChatHistory(userId, limit = 50) {
     const url = getApiUrl(`/api/ai/chat/history/${userId}?limit=${limit}`);
     console.log('[API] getChatHistory URL:', url);
     const response = await fetch(url, {
+      headers: getAuthHeaders(),
       credentials: 'include'
     });
     if (!response.ok) throw new Error('Failed to get history');
@@ -38,6 +49,7 @@ export async function getChatHistory(userId, limit = 50) {
 export async function getUserProfile(userId) {
   try {
     const response = await fetch(getApiUrl(`/api/ai/user/${userId}/context`), {
+      headers: getAuthHeaders(),
       credentials: 'include'
     });
     if (!response.ok) throw new Error('Failed to get profile');
@@ -53,7 +65,7 @@ export async function updateUserProfile(userId, updates) {
   try {
     const response = await fetch(getApiUrl(`/api/ai/user/${userId}/profile`), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify(updates)
     });
@@ -70,6 +82,7 @@ export async function updateUserProfile(userId, updates) {
 export async function getSavedVideos(userId) {
   try {
     const response = await fetch(getApiUrl(`/api/ai/saved-videos/${userId}`), {
+      headers: getAuthHeaders(),
       credentials: 'include'
     });
     if (!response.ok) throw new Error('Failed to get saved videos');
@@ -85,7 +98,7 @@ export async function saveVideo(userId, videoId, note = '') {
   try {
     const response = await fetch(getApiUrl('/api/ai/saved-videos'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify({ userId, videoId, note })
     });
@@ -103,7 +116,7 @@ export async function unsaveVideo(userId, videoId) {
   try {
     const response = await fetch(getApiUrl(`/api/ai/saved-videos/${videoId}`), {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify({ userId })
     });
@@ -121,7 +134,7 @@ export async function recordFeedback(userId, videoId, signalType, signalValue) {
   try {
     const response = await fetch(getApiUrl('/api/ai/feedback'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify({ userId, videoId, signalType, signalValue })
     });
@@ -139,6 +152,7 @@ export async function getRecommendation(userId) {
   try {
     const response = await fetch(getApiUrl(`/api/ai/recommend/${userId}`), {
       method: 'POST',
+      headers: getAuthHeaders(),
       credentials: 'include'
     });
     

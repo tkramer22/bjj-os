@@ -1,0 +1,200 @@
+**Analyzing Replit’s response:**
+
+They added Bearer token authentication as a fallback for when cookies fail in the iOS WebView. This is a valid fix for the authentication issue, but it doesn’t address why the **pages themselves are broken** (chat scrolling from beginning, videos showing 0, profile showing generic data).
+
+-----
+
+**Here’s the master prompt. Review it before sending:**
+
+```
+MASTER iOS APP VERIFICATION - ALL PAGES
+
+Before publishing, verify EVERY iOS page matches these exact specifications.
+This is a wrapped web app that must LOOK and FEEL like a native iOS app.
+
+The app has 4 main pages accessed via bottom tab navigation.
+
+═══════════════════════════════════════════════════════════════════════════════
+PAGE 1: CHAT (/ios-chat using ios-chat.tsx)
+═══════════════════════════════════════════════════════════════════════════════
+
+CORRECT BEHAVIOR:
+- Opens showing MOST RECENT messages (not oldest)
+- Loads LAST 50 messages maximum on initial load
+- Scrolls to BOTTOM automatically (newest message visible)
+- User scrolls UP to see older messages (lazy load more)
+- Text input at bottom with microphone icon and send button
+- Bottom navigation bar visible (Chat, Videos, Saved, Settings)
+
+CURRENT BUG:
+- Chat loads from FIRST message ever (oldest)
+- Scrolls through entire history to November 9th then stops
+- Text is garbled/overlapping
+
+FIX REQUIRED:
+- API call should fetch recent messages: /api/ai/chat/history?limit=50&order=desc
+- After loading, scroll container to bottom
+- Ensure message rendering doesn't overlap
+
+VERIFY:
+- Console.log the API response - how many messages returned?
+- Is scrollTop being set to scrollHeight after render?
+- Are message styles properly separated (no overlap)?
+
+═══════════════════════════════════════════════════════════════════════════════
+PAGE 2: VIDEO LIBRARY (/ios-library using ios-library.tsx)
+═══════════════════════════════════════════════════════════════════════════════
+
+CORRECT BEHAVIOR:
+- Header: "Technique Library"
+- Search bar: "Search techniques or instructors..."
+- Two dropdown filters:
+  - Techniques: Shows categories WITH COUNTS (e.g., "Guard (342)", "Mount (156)")
+  - Professors: Shows instructors WITH COUNTS (e.g., "John Danaher (89)", "Gordon Ryan (124)")
+- Video grid/list showing 2000+ videos with thumbnails
+- Each video shows: thumbnail, title, instructor, duration
+- Infinite scroll or pagination for more videos
+- Bottom navigation bar visible
+
+CURRENT BUG:
+- Dropdowns show "All (0)" - zero counts
+- "No videos found" message
+- Videos not loading at all
+
+FIX REQUIRED:
+- API endpoint: /api/videos or /api/ai/videos (verify which exists)
+- Must use getApiUrl() for the fetch
+- Must include credentials AND Authorization header
+- Dropdown counts come from aggregating video data
+
+VERIFY:
+- Console.log the API response - is it returning 1000+ videos?
+- Are the videos being stored in state?
+- Is the render function mapping over the videos array?
+- What does the network tab show for the API call?
+
+═══════════════════════════════════════════════════════════════════════════════
+PAGE 3: SAVED VIDEOS (/ios-saved using ios-saved.tsx)
+═══════════════════════════════════════════════════════════════════════════════
+
+CORRECT BEHAVIOR:
+- Header: "Saved Videos"
+- Subheader: Shows count (e.g., "12 videos saved")
+- Search bar: "Search saved videos..."
+- Same filter dropdowns as library (Techniques, Professors) with counts
+- Grid/list of user's bookmarked videos
+- If no saved videos: "No saved videos yet" with helpful message
+- Bottom navigation bar visible
+
+CURRENT BUG:
+- Shows "0 videos saved"
+- Dropdowns show "All (0)"
+- Not fetching user's actual saved videos
+
+FIX REQUIRED:
+- API endpoint: /api/user/saved-videos or /api/saved (verify which exists)
+- Must include auth (Bearer token + credentials)
+- This is USER-SPECIFIC data - requires authentication
+
+VERIFY:
+- Is the API call being made?
+- Is the user authenticated when this call happens?
+- Does the logged-in user have saved videos in the database?
+
+═══════════════════════════════════════════════════════════════════════════════
+PAGE 4: PROFILE/SETTINGS (/ios-profile using ios-profile.tsx)
+═══════════════════════════════════════════════════════════════════════════════
+
+CORRECT BEHAVIOR:
+- Header: "Profile"
+- User avatar (or placeholder icon)
+- User's ACTUAL name (e.g., "Todd Kramer" not "BJJ Practitioner")
+- User's ACTUAL email (e.g., "toddkramer@icloud.com" not "No email")
+- Subscription section:
+  - Plan: Shows actual plan (e.g., "Lifetime" not "Free")
+  - Status: Shows actual status
+  - "Manage Subscription" button
+- Settings section with links:
+  - Settings (gear icon)
+  - Terms of Service
+  - Privacy Policy
+  - Help & Support
+- Sign Out button (red, at bottom)
+- Bottom navigation bar visible
+
+CURRENT BUG:
+- Shows "BJJ Practitioner" instead of actual name
+- Shows "No email" instead of actual email
+- Shows "Free" instead of "Lifetime" subscription
+- User data not loading from API
+
+FIX REQUIRED:
+- API endpoint: /api/auth/me
+- Must use getApiUrl() + credentials + Authorization header
+- Response contains: name, email, subscriptionType, subscriptionStatus
+- Map response data to UI fields
+
+VERIFY:
+- Console.log the /api/auth/me response
+- Is it returning the correct user data?
+- Is the data being set in component state?
+- Is the UI reading from that state?
+
+═══════════════════════════════════════════════════════════════════════════════
+BOTTOM NAVIGATION (IOSBottomNav component)
+═══════════════════════════════════════════════════════════════════════════════
+
+CORRECT BEHAVIOR:
+- Fixed at bottom of screen
+- 4 tabs with ICONS + LABELS:
+  1. Chat icon + "Chat"
+  2. Grid/book icon + "Videos"  
+  3. Bookmark icon + "Saved"
+  4. Person/gear icon + "Settings"
+- Active tab highlighted (purple/blue)
+- Tapping tab navigates to that page
+- Visible on ALL 4 main pages
+- Respects iOS safe area (home indicator)
+
+VERIFY:
+- Is IOSBottomNav imported and rendered in each ios-*.tsx page?
+- Are the navigation links correct (/ios-chat, /ios-library, /ios-saved, /ios-profile)?
+
+═══════════════════════════════════════════════════════════════════════════════
+AUTHENTICATION FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+CORRECT BEHAVIOR:
+- App opens to /ios-login if not authenticated
+- After successful login:
+  - Session token saved to localStorage
+  - Redirect to /ios-chat
+  - All subsequent API calls include:
+    - credentials: 'include' (for cookies)
+    - Authorization: Bearer ${token} (as fallback)
+- Token persists across app restarts
+
+VERIFY:
+- After login, is sessionToken in localStorage?
+- Are API calls including the Authorization header?
+- Test: Close and reopen app - does it stay logged in?
+
+═══════════════════════════════════════════════════════════════════════════════
+ACTION REQUIRED
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Open each iOS page file and verify it matches the spec above
+2. Add console.log statements to debug API calls
+3. Test in browser at bjjos.app/ios-chat, /ios-library, /ios-saved, /ios-profile
+4. Fix any discrepancies
+5. DO NOT publish until all 4 pages work correctly
+
+Report back with:
+- Screenshot or description of each page working
+- Any issues found and how you fixed them
+- Confirmation that all specs are met
+```
+
+-----
+
+**Review this prompt.** If it accurately captures what each page should be, send it to Replit.​​​​​​​​​​​​​​​​
