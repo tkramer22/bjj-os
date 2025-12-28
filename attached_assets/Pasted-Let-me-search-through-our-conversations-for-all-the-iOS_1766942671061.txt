@@ -1,0 +1,336 @@
+Let me search through our conversations for all the iOS native feel requirements.​​​​​​​​​​​​​​​​
+
+Now I have all the context. Let me compile the comprehensive prompt:
+
+-----
+
+**Here’s the master prompt combining everything we’ve discussed. Send this after the cascading dropdown prompt finishes:**
+
+```
+iOS APP - NATIVE FEEL & PREMIUM UX ENHANCEMENTS
+
+This is a WRAPPED WEB APP that must FEEL like a NATIVE iOS APP.
+Users should never feel like they're using a website.
+
+These are ADDITIVE enhancements - do NOT break existing functionality.
+
+═══════════════════════════════════════════════════════════════════════════════
+1. HAPTIC FEEDBACK (CRITICAL FOR NATIVE FEEL)
+═══════════════════════════════════════════════════════════════════════════════
+
+Install and implement @capacitor/haptics:
+
+npm install @capacitor/haptics
+
+Add haptic feedback to these interactions:
+
+LIGHT IMPACT (subtle tap feel):
+- Tab bar navigation switches
+- Button taps
+- Dropdown selection
+- Keyboard "Done" button
+
+MEDIUM IMPACT:
+- Send message to Professor OS
+- Save/bookmark a video
+- Filter selection
+
+SUCCESS NOTIFICATION (3 quick pulses):
+- Successful login
+- Video saved confirmation
+- Message sent successfully
+
+ERROR NOTIFICATION:
+- Login failed
+- Network error
+- Form validation error
+
+Implementation:
+```typescript
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+
+// Light tap
+const lightTap = () => Haptics.impact({ style: ImpactStyle.Light });
+
+// Medium tap
+const mediumTap = () => Haptics.impact({ style: ImpactStyle.Medium });
+
+// Success
+const successHaptic = () => Haptics.notification({ type: NotificationType.Success });
+
+// Error
+const errorHaptic = () => Haptics.notification({ type: NotificationType.Error });
+```
+
+Add to:
+
+- IOSBottomNav.tsx - lightTap() on tab switch
+- ios-chat.tsx - mediumTap() on send message, lightTap() on receive
+- ios-library.tsx - lightTap() on dropdown change, mediumTap() on bookmark
+- ios-saved.tsx - same as library
+- ios-profile.tsx - lightTap() on button taps, successHaptic() on logout
+- Login screen - successHaptic() on success, errorHaptic() on failure
+
+═══════════════════════════════════════════════════════════════════════════════
+2. CHAT BEHAVIOR (CORRECT IMPLEMENTATION)
+═══════════════════════════════════════════════════════════════════════════════
+
+CORRECT CHAT BEHAVIOR:
+
+- Opens with MOST RECENT message visible at bottom
+- Loads only LAST 20 messages initially (not entire history)
+- User scrolls UP to load older messages (lazy load)
+- Does NOT scroll through old messages on load
+
+PERSISTENCE REQUIREMENTS:
+
+- Chat persists when switching tabs
+- Chat persists when logging out and back in
+- Chat history tied to userId, loaded from database
+- Messages saved to database on send/receive
+
+IMPLEMENTATION:
+
+```typescript
+// On mount - load recent messages
+useEffect(() => {
+  const loadHistory = async () => {
+    const response = await fetch(`${getApiUrl()}/api/ai/chat/history?limit=20&order=desc`, {
+      credentials: 'include',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await response.json();
+    // Reverse to show oldest first in array, newest at bottom
+    setMessages(data.messages.reverse());
+  };
+  loadHistory();
+}, [userId]);
+
+// After setting messages, scroll to bottom
+useEffect(() => {
+  scrollRef.current?.scrollToEnd({ animated: false });
+}, [messages]);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+3. DUPLICATE MESSAGE BUG FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS responses appear TWICE. This is a critical bug.
+
+LIKELY CAUSES:
+
+1. Streaming response adds message, then final response adds again
+1. useEffect running twice (React StrictMode or missing dependency)
+1. Event listener attached multiple times
+
+FIX:
+
+- Check if message ID already exists before adding
+- Use Set or Map to track message IDs
+- Add message only ONCE when response is complete
+
+```typescript
+const addMessage = (newMessage) => {
+  setMessages(prev => {
+    // Check if message already exists
+    if (prev.some(m => m.id === newMessage.id)) {
+      return prev; // Don't add duplicate
+    }
+    return [...prev, newMessage];
+  });
+};
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+4. KEYBOARD HANDLING
+═══════════════════════════════════════════════════════════════════════════════
+
+Chat input must work correctly with iOS keyboard:
+
+- When keyboard opens, chat input rises above keyboard
+- Messages scroll up so newest stays visible
+- Tap outside input dismisses keyboard
+- “Send” on keyboard sends message (or show Send button)
+
+Use KeyboardAvoidingView:
+
+```typescript
+<KeyboardAvoidingView 
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  keyboardVerticalOffset={90} // Adjust for tab bar
+>
+  {/* Chat content */}
+</KeyboardAvoidingView>
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+5. PULL TO REFRESH
+═══════════════════════════════════════════════════════════════════════════════
+
+Add pull-to-refresh on:
+
+- Chat page (refreshes/loads more history)
+- Video library (refreshes video list)
+- Saved videos (refreshes saved list)
+
+Standard iOS pattern users expect.
+
+═══════════════════════════════════════════════════════════════════════════════
+6. LOADING STATES
+═══════════════════════════════════════════════════════════════════════════════
+
+Use iOS-native feeling loading:
+
+- Skeleton screens for content loading (gray animated placeholders)
+- NOT spinning circles
+- Smooth fade-in when content appears
+
+For chat “typing” indicator:
+
+- Animated dots (. . .) while Professor OS is thinking
+- Subtle pulse animation
+
+═══════════════════════════════════════════════════════════════════════════════
+7. SMOOTH TRANSITIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Tab switching should feel smooth:
+
+- Subtle fade or slide between pages
+- Not instant jarring page swaps
+- Content should animate in
+
+Video player modal:
+
+- Slides up from bottom
+- Slides down to close
+- Background dims smoothly
+
+═══════════════════════════════════════════════════════════════════════════════
+8. TOUCH TARGETS
+═══════════════════════════════════════════════════════════════════════════════
+
+Apple requires minimum 44x44 points for all tappable elements:
+
+- All buttons at least 44pt
+- Tab bar icons have adequate padding
+- Dropdown items have enough height
+- Links and text buttons have padding
+
+═══════════════════════════════════════════════════════════════════════════════
+9. VIDEO PLAYBACK (VERIFY WORKING)
+═══════════════════════════════════════════════════════════════════════════════
+
+Videos should play IN-APP using youtube-proxy.html:
+
+- User taps video thumbnail
+- Video opens in modal/fullscreen WITHIN the app
+- User never leaves BJJ OS
+- Close button returns to previous screen
+
+This was working before - verify it still works.
+
+═══════════════════════════════════════════════════════════════════════════════
+10. VOICE INPUT (MICROPHONE BUTTON)
+═══════════════════════════════════════════════════════════════════════════════
+
+The microphone button in chat should:
+
+- Request microphone permission on first use
+- Show recording indicator when active
+- Convert speech to text
+- Auto-send or populate input field
+
+Uses Web Speech API or Whisper.
+Note: Only testable on real device, not simulator.
+
+═══════════════════════════════════════════════════════════════════════════════
+11. SAFE AREAS
+═══════════════════════════════════════════════════════════════════════════════
+
+Respect iOS safe areas:
+
+- Top: Below notch/Dynamic Island
+- Bottom: Above home indicator
+- Tab bar sits in safe area
+- Content doesn’t get cut off
+
+Use:
+
+```css
+padding-top: env(safe-area-inset-top);
+padding-bottom: env(safe-area-inset-bottom);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+12. NO BROWSER BEHAVIORS
+═══════════════════════════════════════════════════════════════════════════════
+
+Remove web-like behaviors:
+
+- No text selection highlight on tap
+- No rubber-band scroll on wrong elements
+- No pinch-to-zoom on non-zoomable content
+- No browser context menus
+
+Add to CSS:
+
+```css
+* {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Allow selection only in input fields */
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Fix duplicate message bug (CRITICAL)
+1. Fix chat persistence (CRITICAL)
+1. Add haptic feedback (HIGH - biggest native feel impact)
+1. Keyboard handling (HIGH)
+1. Touch targets (MEDIUM)
+1. Loading states (MEDIUM)
+1. Pull to refresh (LOW)
+1. Smooth transitions (LOW)
+
+═══════════════════════════════════════════════════════════════════════════════
+DO NOT CHANGE
+═══════════════════════════════════════════════════════════════════════════════
+
+- Video playback (working)
+- Video library with 2,357 videos (working)
+- Profile showing real user data (working)
+- Bottom navigation with 4 tabs (working)
+- Authentication flow (working)
+
+Only ADD enhancements, don’t break what works.
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST AFTER IMPLEMENTATION
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Send a message - does it appear ONCE (not twice)?
+1. Switch tabs and return - is chat still there?
+1. Logout and login - is chat history loaded?
+1. Tap tab bar - do you feel haptic feedback?
+1. Tap send button - do you feel haptic feedback?
+1. Does keyboard push chat input up correctly?
+
+Report PASS/FAIL for each.
+
+```
+---
+
+This prompt covers everything from our previous conversations about making the app feel native. Send it after the cascading dropdown fix completes.​​​​​​​​​​​​​​​​
+```
