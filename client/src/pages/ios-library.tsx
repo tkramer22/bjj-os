@@ -58,27 +58,43 @@ export default function IOSLibraryPage() {
 
   const savedVideoIds = savedVideosData?.videos?.map(v => String(v.id)) || [];
 
-  // Build techniques dropdown with counts
+  // CASCADING FILTERS: Filter videos by one selection to compute the other dropdown's options
+  
+  // Videos filtered by current professor selection (for technique dropdown)
+  const videosFilteredByProfessor = useMemo(() => {
+    if (selectedProfessor === "All") return videos;
+    return videos.filter(v => v.instructor === selectedProfessor);
+  }, [videos, selectedProfessor]);
+
+  // Videos filtered by current technique selection (for professor dropdown)
+  const videosFilteredByTechnique = useMemo(() => {
+    if (selectedTechnique === "All") return videos;
+    return videos.filter(v => (v.technique || 'Other') === selectedTechnique);
+  }, [videos, selectedTechnique]);
+
+  // Build techniques dropdown - shows only techniques available for selected professor
   const techniquesWithCounts = useMemo(() => {
+    const sourceVideos = videosFilteredByProfessor;
     const counts: Record<string, number> = {};
-    videos.forEach(v => {
+    sourceVideos.forEach(v => {
       const tech = v.technique || 'Other';
       counts[tech] = (counts[tech] || 0) + 1;
     });
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    return [{ name: 'All', count: videos.length }, ...sorted.map(([name, count]) => ({ name, count }))];
-  }, [videos]);
+    return [{ name: 'All', count: sourceVideos.length }, ...sorted.map(([name, count]) => ({ name, count }))];
+  }, [videosFilteredByProfessor]);
 
-  // Build professors dropdown with counts
+  // Build professors dropdown - shows only professors who teach selected technique
   const professorsWithCounts = useMemo(() => {
+    const sourceVideos = videosFilteredByTechnique;
     const counts: Record<string, number> = {};
-    videos.forEach(v => {
+    sourceVideos.forEach(v => {
       const prof = v.instructor || 'Unknown';
       counts[prof] = (counts[prof] || 0) + 1;
     });
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    return [{ name: 'All', count: videos.length }, ...sorted.map(([name, count]) => ({ name, count }))];
-  }, [videos]);
+    return [{ name: 'All', count: sourceVideos.length }, ...sorted.map(([name, count]) => ({ name, count }))];
+  }, [videosFilteredByTechnique]);
 
   const filteredVideos = videos?.filter((video) => {
     const matchesSearch = !searchQuery || 

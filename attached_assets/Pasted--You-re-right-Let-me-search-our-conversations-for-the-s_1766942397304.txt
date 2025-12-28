@@ -1,0 +1,179 @@
+**You’re right.** Let me search our conversations for the specific dropdown behavior we discussed.​​​​​​​​​​​​​​​​
+
+**Found it.** Here’s the exact dropdown behavior we established:
+
+-----
+
+**CASCADING FILTER BEHAVIOR (from our conversations):**
+
+**When user selects a PROFESSOR:**
+
+- Technique dropdown updates to show ONLY techniques that professor teaches
+- Each technique shows count of videos from that professor
+- Example: Select “John Danaher” → Techniques shows “Leg Locks (45)”, “Back Attacks (23)” etc.
+
+**When user selects a TECHNIQUE:**
+
+- Professor dropdown updates to show ONLY professors who teach that technique
+- Each professor shows count of their videos for that technique
+- Example: Select “Heel Hook” → Professors shows “Craig Jones (5)”, “Lachlan Giles (4)” etc.
+
+**When BOTH selected:**
+
+- Shows only videos matching both filters
+- Example: “Lachlan Giles” + “Heel Hook” = 4 videos
+
+-----
+
+**Send this to Replit:**
+
+```
+CRITICAL FIX: CASCADING DROPDOWN FILTERS
+
+The dropdowns must be LINKED and UPDATE EACH OTHER dynamically.
+
+═══════════════════════════════════════════════════════════════════════════════
+CURRENT BUG
+═══════════════════════════════════════════════════════════════════════════════
+
+When I select a Professor, the Techniques dropdown does NOT change.
+When I select a Technique, the Professors dropdown does NOT change.
+
+This is WRONG.
+
+═══════════════════════════════════════════════════════════════════════════════
+CORRECT BEHAVIOR
+═══════════════════════════════════════════════════════════════════════════════
+
+SCENARIO 1: User selects "John Danaher" from Professor dropdown
+
+BEFORE:
+- Professors: All (2,357)
+- Techniques: All (2,357)
+
+AFTER:
+- Professors: John Danaher ✓ (128 videos)
+- Techniques: ONLY techniques John Danaher teaches with HIS counts:
+  - Leg Locks (45)
+  - Back Attacks (32)
+  - Guard Passing (28)
+  - etc.
+
+The technique dropdown FILTERS to show only what that professor teaches.
+
+───────────────────────────────────────────────────────────────────────────────
+
+SCENARIO 2: User selects "Heel Hook" from Technique dropdown
+
+BEFORE:
+- Professors: All (2,357)
+- Techniques: All (2,357)
+
+AFTER:
+- Professors: ONLY professors who teach heel hooks with THEIR counts:
+  - Craig Jones (12)
+  - Lachlan Giles (8)
+  - John Danaher (6)
+  - Gordon Ryan (4)
+- Techniques: Heel Hook ✓
+
+The professor dropdown FILTERS to show only instructors with that technique.
+
+───────────────────────────────────────────────────────────────────────────────
+
+SCENARIO 3: User selects BOTH
+
+- Professor: Lachlan Giles ✓
+- Technique: Heel Hook ✓
+
+Shows: Only Lachlan Giles heel hook videos (8 videos)
+Both dropdowns stay filtered to their selections.
+
+───────────────────────────────────────────────────────────────────────────────
+
+SCENARIO 4: User clears a filter
+
+If user clears Professor (back to "All"):
+- Techniques dropdown RESETS to show ALL techniques with full counts
+- Videos show all matching the remaining technique filter (or all if none)
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION
+═══════════════════════════════════════════════════════════════════════════════
+
+When either dropdown changes, re-query the OTHER dropdown's options:
+
+```javascript
+// When professor changes
+const handleProfessorChange = async (professor) => {
+  setSelectedProfessor(professor);
+  
+  if (professor) {
+    // Fetch only techniques this professor teaches
+    const techniques = await fetch(`/api/videos/techniques?instructor=${professor}`);
+    setTechniqueOptions(techniques);
+  } else {
+    // Reset to all techniques
+    const techniques = await fetch('/api/videos/techniques');
+    setTechniqueOptions(techniques);
+  }
+  
+  // Also filter videos
+  filterVideos(professor, selectedTechnique);
+};
+
+// When technique changes
+const handleTechniqueChange = async (technique) => {
+  setSelectedTechnique(technique);
+  
+  if (technique) {
+    // Fetch only professors who teach this technique
+    const professors = await fetch(`/api/videos/instructors?technique=${technique}`);
+    setProfessorOptions(professors);
+  } else {
+    // Reset to all professors
+    const professors = await fetch('/api/videos/instructors');
+    setProfessorOptions(professors);
+  }
+  
+  // Also filter videos
+  filterVideos(selectedProfessor, technique);
+};
+```
+
+API endpoints needed:
+
+- GET /api/videos/instructors - returns all instructors with counts
+- GET /api/videos/instructors?technique=X - returns only instructors who teach X
+- GET /api/videos/techniques - returns all techniques with counts
+- GET /api/videos/techniques?instructor=X - returns only techniques X teaches
+
+═══════════════════════════════════════════════════════════════════════════════
+APPLIES TO BOTH
+═══════════════════════════════════════════════════════════════════════════════
+
+This cascading behavior must work on:
+
+1. ios-library.tsx (Video Library page)
+1. ios-saved.tsx (Saved Videos page)
+
+Both pages use the same dropdown logic.
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST AFTER FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Open Video Library
+1. Select “John Danaher” from Professors
+1. VERIFY: Techniques dropdown now shows only his techniques with counts
+1. Clear Professor selection
+1. Select “Armbar” from Techniques
+1. VERIFY: Professors dropdown now shows only instructors who teach armbars
+1. Select “John Danaher” while “Armbar” is selected
+1. VERIFY: Shows only John Danaher armbar videos
+
+Report PASS/FAIL for each step.
+
+```
+
+```
