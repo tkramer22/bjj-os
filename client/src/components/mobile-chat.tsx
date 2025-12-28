@@ -10,6 +10,8 @@ import { triggerHaptic } from "@/lib/haptics";
 import { getApiUrl, isNativeApp } from "@/lib/capacitorAuth";
 import { useChatContext } from "@/contexts/ChatContext";
 
+console.log('⚠️ mobile-chat.tsx LOADED');
+
 interface Message {
   id: string;
   sender: "user" | "assistant";
