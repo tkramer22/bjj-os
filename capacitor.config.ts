@@ -4,10 +4,8 @@ const config: CapacitorConfig = {
   appId: 'app.bjjos.ios',
   appName: 'BJJ OS',
   webDir: 'dist/public',
-  // BUNDLED MODE: Server URL disabled - app loads from local bundle
-  // This is more reliable than remote loading and preferred for App Store
   server: {
-    // url: 'https://bjjos.app/ios-login',  // DISABLED - causes iOS 18 issues
+    url: 'https://bjjos.app',
     androidScheme: 'https',
     iosScheme: 'https',
   },
@@ -26,7 +24,6 @@ const config: CapacitorConfig = {
       iosSpinnerStyle: 'small',
       splashFullScreen: true,
       splashImmersive: true,
-      // iOS splash screen sizing
       launchAutoHide: true,
       useDialog: false,
     },
