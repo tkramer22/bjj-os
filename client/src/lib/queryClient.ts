@@ -13,6 +13,11 @@ function addCacheBusting(url: string): string {
   return `${url}${separator}_t=${Date.now()}`;
 }
 
+// Get session token from localStorage (fallback for iOS WKWebView cookie issues)
+function getSessionToken(): string | null {
+  return localStorage.getItem('sessionToken') || localStorage.getItem('token');
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -24,12 +29,14 @@ export async function apiRequest(
   
   // Get admin token from localStorage if available
   const adminToken = localStorage.getItem('adminToken');
+  // Get session token as fallback for iOS WKWebView cookie issues
+  const sessionToken = getSessionToken();
   
   const res = await fetch(bustURL, {
     method,
     headers: {
       ...(data ? { "Content-Type": "application/json" } : {}),
-      ...(adminToken ? { "Authorization": `Bearer ${adminToken}` } : {}),
+      ...(adminToken ? { "Authorization": `Bearer ${adminToken}` } : (sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {})),
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
     },
@@ -52,11 +59,16 @@ export const getQueryFn: <T>(options: {
     const baseUrl = queryKey.join("/") as string;
     const fullUrl = getApiUrl(baseUrl);
     const url = addCacheBusting(fullUrl);
+    
+    // Get session token as fallback for iOS WKWebView cookie issues
+    const sessionToken = getSessionToken();
+    
     const res = await fetch(url, {
       credentials: "include",
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
+        ...(sessionToken ? { "Authorization": `Bearer ${sessionToken}` } : {}),
       },
       cache: "no-store",
     });
