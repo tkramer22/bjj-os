@@ -84,7 +84,12 @@ export function MobileChat() {
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [totalLoadedCount, setTotalLoadedCount] = useState(0);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Get authenticated user from API (not localStorage which can be stale)
@@ -99,9 +104,13 @@ export function MobileChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Only auto-scroll for NEW messages (typing indicator or newly sent/received)
+  // Don't scroll when prepending older history
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isTyping]);
+    if (shouldAutoScroll) {
+      scrollToBottom();
+    }
+  }, [messages.length, isTyping, shouldAutoScroll]);
 
   // Sync localMessages from context when history loads on native
   // This prevents flash when switching from local to context source
@@ -202,6 +211,12 @@ What would you like to work on today?`,
           }));
         console.log('[HISTORY] Setting', deduplicatedMessages.length, 'messages (deduplicated from', data.messages.length, ')');
         setMessages(deduplicatedMessages);
+        // Track total loaded for offset pagination
+        setTotalLoadedCount(deduplicatedMessages.length);
+        // If we got fewer than 20, there's no more history
+        setHasMoreMessages(deduplicatedMessages.length >= 20);
+        // Enable auto-scroll for initial load
+        setShouldAutoScroll(true);
         // Mark context as loaded for persistence (iOS app)
         if (isNativeApp()) {
           chatContext.setHistoryLoaded(true);
@@ -274,10 +289,69 @@ What would you like to work on today?`,
     }
   };
 
+  // Load more (older) messages when scrolling up
+  const loadMoreMessages = async () => {
+    if (!hasMoreMessages || isLoadingMore || !userId) return;
+    
+    // Disable auto-scroll when loading older messages
+    setShouldAutoScroll(false);
+    setIsLoadingMore(true);
+    
+    // Save scroll position before loading
+    const container = messagesContainerRef.current;
+    const scrollHeightBefore = container?.scrollHeight || 0;
+    
+    console.log('[LOAD-MORE] Loading older messages, offset:', totalLoadedCount);
+    
+    try {
+      // Request more messages with offset (load 30 more at a time)
+      const data = await getChatHistory(userId, totalLoadedCount + 30);
+      
+      if (data.messages && data.messages.length > 0) {
+        const existingIds = new Set(messages.map(m => m.id));
+        
+        // Filter to only older messages not already loaded
+        const olderMessages = data.messages
+          .map((msg: any, idx: number) => ({
+            id: msg.id || String(idx),
+            sender: (msg.role === 'user' || msg.sender === 'user') ? 'user' : 'assistant' as const,
+            message: msg.content || msg.message || '',
+            timestamp: new Date(msg.createdAt || msg.timestamp),
+            videos: msg.videos || []
+          }))
+          .filter((msg: Message) => !existingIds.has(msg.id));
+        
+        if (olderMessages.length === 0) {
+          setHasMoreMessages(false);
+        } else {
+          // Prepend older messages and update total count
+          setMessages(prev => [...olderMessages, ...prev]);
+          setTotalLoadedCount(prev => prev + olderMessages.length);
+          
+          // Preserve scroll position after DOM updates
+          requestAnimationFrame(() => {
+            if (container) {
+              const scrollHeightAfter = container.scrollHeight;
+              container.scrollTop = scrollHeightAfter - scrollHeightBefore;
+            }
+          });
+        }
+      } else {
+        setHasMoreMessages(false);
+      }
+    } catch (error) {
+      console.error('[LOAD-MORE] Failed to load more messages:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
   const handleSend = async (text = inputValue) => {
     const messageText = String(text || "").trim();
     if (!messageText || isTyping) return;
 
+    // Re-enable auto-scroll when sending new messages
+    setShouldAutoScroll(true);
     triggerHaptic('light');
 
     const userMessage: Message = {
@@ -485,7 +559,27 @@ What would you like to work on today?`,
         </div>
       </div>
 
-      <div className="mobile-chat-messages">
+      <div 
+        className="mobile-chat-messages"
+        ref={messagesContainerRef}
+        onScroll={(e) => {
+          const container = e.currentTarget;
+          if (container.scrollTop < 100 && hasMoreMessages && !isLoadingMore) {
+            loadMoreMessages();
+          }
+        }}
+      >
+        {/* Load more indicator at top */}
+        {isLoadingMore && (
+          <div style={{ textAlign: 'center', padding: '12px', color: 'var(--mobile-text-secondary)' }}>
+            <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⚙️</span> Loading older messages...
+          </div>
+        )}
+        {!hasMoreMessages && messages.length > 20 && (
+          <div style={{ textAlign: 'center', padding: '12px', color: 'var(--mobile-text-secondary)', fontSize: '0.75rem' }}>
+            Beginning of conversation
+          </div>
+        )}
         {messages.map((msg, index) => {
           const previousMsg = index > 0 ? messages[index - 1] : undefined;
           const showDivider = shouldShowDateDivider(msg.timestamp, previousMsg?.timestamp);

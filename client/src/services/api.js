@@ -28,8 +28,8 @@ export async function sendChatMessage(userId, message) {
   }
 }
 
-// Get chat history
-export async function getChatHistory(userId, limit = 50) {
+// Get chat history (default 20 for fast initial load, scroll up for more)
+export async function getChatHistory(userId, limit = 20) {
   try {
     const url = getApiUrl(`/api/ai/chat/history/${userId}?limit=${limit}`);
     console.log('[API] getChatHistory URL:', url);
