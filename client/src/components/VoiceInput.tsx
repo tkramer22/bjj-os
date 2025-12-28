@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { getApiUrl } from '@/lib/capacitorAuth';
 
 interface VoiceInputProps {
   userId: string;
@@ -73,9 +74,10 @@ export function VoiceInput({ userId, onTranscription, disabled }: VoiceInputProp
       formData.append('audio', audioBlob, 'voice-message.webm');
       formData.append('userId', userId);
 
-      const response = await fetch('/api/ai/chat/transcribe', {
+      const response = await fetch(getApiUrl('/api/ai/chat/transcribe'), {
         method: 'POST',
         body: formData,
+        credentials: 'include',
       });
 
       if (!response.ok) {

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Volume2, Loader2 } from "lucide-react";
+import { getApiUrl } from '@/lib/capacitorAuth';
 
 interface VoicePlayerProps {
   text: string;
@@ -24,9 +25,10 @@ export function VoicePlayer({ text, userId, voiceSpeed = 1.0, autoplay = true }:
       setError(false);
 
       try {
-        const response = await fetch('/api/voice/generate', {
+        const response = await fetch(getApiUrl('/api/voice/generate'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ text, userId, speed: voiceSpeed }),
         });
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Bell, BellOff, Smartphone, CheckCircle, AlertCircle } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
+import { getApiUrl } from '@/lib/capacitorAuth';
 
 interface NotificationSettingsProps {
   userId: string;
@@ -35,10 +36,11 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
       }
 
       // Check server subscription status
-      const response = await fetch(`/api/push/status/${userId}`, {
+      const response = await fetch(getApiUrl(`/api/push/status/${userId}`), {
         headers: {
           'Authorization': `Bearer ${token}`
-        }
+        },
+        credentials: 'include',
       });
       const data = await response.json();
       
@@ -109,12 +111,13 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
       }
 
       // Send subscription to server
-      const response = await fetch('/api/push/subscribe', {
+      const response = await fetch(getApiUrl('/api/push/subscribe'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
+        credentials: 'include',
         body: JSON.stringify({
           userId,
           subscription: sub.toJSON(),
@@ -155,12 +158,13 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
         }
 
         // Notify server first
-        const response = await fetch('/api/push/unsubscribe', {
+        const response = await fetch(getApiUrl('/api/push/unsubscribe'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
+          credentials: 'include',
           body: JSON.stringify({
             endpoint: subscription.endpoint
           })
