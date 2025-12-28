@@ -36,11 +36,11 @@ export default function MobileOnboardingPage() {
     // On native, save to Preferences for persistent auth
     if (isNativeApp()) {
       await Preferences.set({ key: 'mobileUserId', value: userId });
-      // Navigate directly on native (no page reload needed)
-      setLocation('/chat');
+      // Navigate directly to iOS chat on native (no page reload needed)
+      setLocation('/ios-chat');
     } else {
       // Force page reload to re-check authentication on web
-      window.location.href = '/app/chat';
+      window.location.href = '/chat';
     }
   };
 

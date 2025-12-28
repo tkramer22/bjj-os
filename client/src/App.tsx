@@ -183,6 +183,7 @@ export default function App() {
             <Route path="/ios-library" component={IOSLibraryPage} />
             <Route path="/ios-saved" component={IOSSavedPage} />
             <Route path="/ios-profile" component={IOSProfilePage} />
+            <Route path="/ios-onboarding" component={MobileOnboardingPage} />
             
             {/* Web Chat */}
             <Route path="/chat" component={ChatPage} />
