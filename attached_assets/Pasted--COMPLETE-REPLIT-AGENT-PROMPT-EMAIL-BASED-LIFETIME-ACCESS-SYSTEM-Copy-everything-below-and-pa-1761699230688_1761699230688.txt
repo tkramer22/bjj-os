@@ -1,0 +1,462 @@
+# 🚀 COMPLETE REPLIT AGENT PROMPT - EMAIL-BASED LIFETIME ACCESS SYSTEM
+
+Copy everything below and paste into Replit Agent:
+
+-----
+
+```
+IMPLEMENT EMAIL-BASED LIFETIME ACCESS SYSTEM
+
+CRITICAL: This is 100% EMAIL-BASED. No phone numbers. No SMS. All invitations sent via email from noreply@bjjos.app.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: DATABASE SCHEMA
+═══════════════════════════════════════════════════════════════════════════════
+
+Create new table called `lifetime_invitations`:
+
+CREATE TABLE IF NOT EXISTS lifetime_invitations (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) NOT NULL,
+  invite_token VARCHAR(255) UNIQUE NOT NULL,
+  personal_message TEXT,
+  reason VARCHAR(100),
+  admin_notes TEXT,
+  invited_by_admin INT REFERENCES users(id),
+  
+  status VARCHAR(50) DEFAULT 'pending',
+  -- Status options: 'pending', 'completed', 'expired'
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  expires_at TIMESTAMP NOT NULL,
+  used_at TIMESTAMP,
+  completed_by_user_id INT REFERENCES users(id)
+);
+
+CREATE INDEX idx_lifetime_invite_token ON lifetime_invitations(invite_token);
+CREATE INDEX idx_lifetime_invite_email ON lifetime_invitations(email);
+CREATE INDEX idx_lifetime_invite_status ON lifetime_invitations(status);
+
+Also update the `users` table to add these columns if they don't exist:
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS lifetime_access BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_founding_member BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS invited_by INT REFERENCES users(id);
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: BACKEND API ENDPOINTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Add these 5 new endpoints to your Express server:
+
+ENDPOINT 1: Send Lifetime Invitation
+──────────────────────────────────────
+POST /api/admin/lifetime/invite
+
+Protected by checkAdminAuth middleware.
+
+Request body:
+{
+  "email": "user@example.com",
+  "personalMessage": "optional personal note",
+  "reason": "founding_member",
+  "adminNotes": "optional internal notes",
+  "expirationDays": 14
+}
+
+Logic:
+1. Validate email and reason are provided
+2. Check if email already has lifetime access (reject if yes)
+3. Check if there's already a pending invitation for this email (reject if yes)
+4. Generate unique invite token using crypto.randomBytes(32).toString('hex')
+5. Calculate expiration date (current date + expirationDays)
+6. Insert invitation into lifetime_invitations table
+7. Generate magic link: https://bjjos.app/lifetime-signup?token={inviteToken}
+8. Send email using nodemailer (see email template below)
+9. Return success response
+
+Response:
+{
+  "success": true,
+  "message": "Lifetime access invitation sent successfully",
+  "invitationId": 123,
+  "email": "user@example.com",
+  "expiresAt": "2025-11-11T00:00:00.000Z"
+}
+
+ENDPOINT 2: Get All Invitations (Admin)
+──────────────────────────────────────
+GET /api/admin/lifetime/invitations
+
+Protected by checkAdminAuth middleware.
+
+Returns all lifetime invitations ordered by created_at DESC:
+
+Response:
+{
+  "success": true,
+  "invitations": [
+    {
+      "id": 1,
+      "email": "user@example.com",
+      "personal_message": "...",
+      "reason": "founding_member",
+      "admin_notes": "...",
+      "status": "pending",
+      "created_at": "2025-10-28T...",
+      "expires_at": "2025-11-11T...",
+      "used_at": null,
+      "invited_by_admin": 1
+    }
+  ]
+}
+
+ENDPOINT 3: Validate Invitation Token
+──────────────────────────────────────
+GET /api/auth/validate-lifetime-invite?token={token}
+
+Public endpoint (no auth required).
+
+Logic:
+1. Check if token exists in lifetime_invitations table
+2. Check if status is 'pending'
+3. Check if not expired (expires_at > NOW())
+4. If all checks pass, return email
+
+Response:
+{
+  "success": true,
+  "email": "user@example.com",
+  "personalMessage": "optional message"
+}
+
+ENDPOINT 4: Complete Signup with Invitation
+──────────────────────────────────────
+POST /api/auth/signup-with-lifetime-invite
+
+Public endpoint (no auth required).
+
+Request body:
+{
+  "token": "invite_token_here",
+  "displayName": "John Doe",
+  "username": "johndoe",
+  "password": "securepassword123"
+}
+
+Logic:
+1. Validate invitation token (same checks as endpoint 3)
+2. Check if username is available
+3. Hash password using bcrypt
+4. Create new user with:
+   - email from invitation
+   - username, display_name, password_hash from request
+   - lifetime_access = true
+   - is_founding_member = true
+   - invited_by = invitation.invited_by_admin
+5. Update invitation status to 'completed' and set used_at = NOW()
+6. Generate JWT token for new user
+7. Return token and user data
+
+Response:
+{
+  "success": true,
+  "message": "Account created successfully",
+  "token": "jwt_token_here",
+  "user": {
+    "id": 123,
+    "email": "user@example.com",
+    "username": "johndoe",
+    "display_name": "John Doe",
+    "lifetime_access": true
+  }
+}
+
+ENDPOINT 5: Resend Invitation
+──────────────────────────────────────
+POST /api/admin/lifetime/resend/:id
+
+Protected by checkAdminAuth middleware.
+
+Logic:
+1. Find invitation by ID
+2. Check if status is still 'pending'
+3. Generate new token
+4. Update expires_at to new date
+5. Resend email
+6. Return success
+
+ENDPOINT 6: Delete Invitation
+──────────────────────────────────────
+DELETE /api/admin/lifetime/invitation/:id
+
+Protected by checkAdminAuth middleware.
+
+Logic:
+1. Find invitation by ID
+2. Delete from database
+3. Return success
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: EMAIL TEMPLATE (EXACT COPY)
+═══════════════════════════════════════════════════════════════════════════════
+
+Use this exact email template in your nodemailer configuration:
+
+Subject: "Your BJJ OS lifetime access"
+
+From: "Todd - BJJ OS" <noreply@bjjos.app>
+Reply-To: todd@bjjos.app
+
+HTML Body:
+────────────────────────────────────────────────────────────────────────────────
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      border: 1px solid #e0e0e0;
+    }
+    .logo h1 {
+      color: #000;
+      margin: 0 0 30px 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .cta-button {
+      display: inline-block;
+      background: #000;
+      color: white;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 20px 0;
+    }
+    .footer {
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+      color: #666;
+    }
+    .contact {
+      margin-top: 20px;
+      padding: 16px;
+      background: #f5f5f5;
+      border-radius: 6px;
+      border-left: 3px solid #000;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <h1>BJJ OS</h1>
+    </div>
+    
+    <p>You have lifetime access to BJJ OS. Forever. No charge.</p>
+    
+    <p>Takes 45 seconds to sign up:</p>
+    
+    <div style="text-align: center;">
+      <a href="${magicLink}" class="cta-button">
+        Create your account
+      </a>
+    </div>
+    
+    <p>This isn't a chatbot. Prof. OS is your training partner. It remembers every session you log, spots patterns you can't see yourself, and tells you exactly what to work on next.</p>
+    
+    <p>Here's what I'm really excited about: Prof. OS autonomously screens YouTube instructionals multiple times per day. It runs every video through a rigorous filtering process for quality and content, then saves the ones that pass. It's already saved over 1,000 videos and continues building its library daily. Every technique recommendation comes with time-stamped links to the exact moment you need to see.</p>
+    
+    <p>The more you use it, the more you'll see its intelligence at work. It learns your game, tracks your progress, and gets smarter about what you specifically need.</p>
+    
+    <p>I've been working on this for months and I'm genuinely excited to finally share it with you. You're getting it early as a beta tester, and honestly, your feedback is everything. Use it after training. Tell me what breaks. Tell me what feels off. Tell me what could be better. I need the honest truth - criticism helps way more than praise right now.</p>
+    
+    <div class="contact">
+      <p style="margin: 0 0 8px 0; font-weight: 600;">Please reach out anytime:</p>
+      <p style="margin: 4px 0;">Todd</p>
+      <p style="margin: 4px 0;"><a href="mailto:todd@bjjos.app" style="color: #000;">todd@bjjos.app</a></p>
+      <p style="margin: 4px 0;"><a href="tel:+19148373750" style="color: #000;">1.914.837.3750</a></p>
+    </div>
+    
+    <p style="margin-top: 24px;">Really appreciate you being here early.</p>
+    
+    <div class="footer">
+      <p style="color: #000; font-weight: 600; margin-bottom: 4px;">
+        Todd
+      </p>
+      <p style="margin: 4px 0;">
+        Founder, BJJ OS
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+────────────────────────────────────────────────────────────────────────────────
+
+Plain Text Body:
+────────────────────────────────────────────────────────────────────────────────
+You have lifetime access to BJJ OS. Forever. No charge.
+
+Takes 45 seconds to sign up:
+${magicLink}
+
+This isn't a chatbot. Prof. OS is your training partner. It remembers every session you log, spots patterns you can't see yourself, and tells you exactly what to work on next.
+
+Here's what I'm really excited about: Prof. OS autonomously screens YouTube instructionals multiple times per day. It runs every video through a rigorous filtering process for quality and content, then saves the ones that pass. It's already saved over 1,000 videos and continues building its library daily. Every technique recommendation comes with time-stamped links to the exact moment you need to see.
+
+The more you use it, the more you'll see its intelligence at work. It learns your game, tracks your progress, and gets smarter about what you specifically need.
+
+I've been working on this for months and I'm genuinely excited to finally share it with you. You're getting it early as a beta tester, and honestly, your feedback is everything. Use it after training. Tell me what breaks. Tell me what feels off. Tell me what could be better. I need the honest truth - criticism helps way more than praise right now.
+
+Please reach out anytime:
+Todd
+todd@bjjos.app
+1.914.837.3750
+
+Really appreciate you being here early.
+
+- Todd
+Founder, BJJ OS
+────────────────────────────────────────────────────────────────────────────────
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: ADMIN PANEL UI
+═══════════════════════════════════════════════════════════════════════════════
+
+Update the admin panel at /admin/lifetime to include:
+
+1. BUTTON: "Grant Lifetime Access" (opens modal)
+
+2. MODAL with form:
+   - Email input (required)
+   - Personal message textarea (optional)
+   - Reason dropdown (required):
+     • Founding Member
+     • Beta Tester
+     • Special Contributor
+     • VIP Access
+     • Partnership
+     • Other
+   - Admin notes textarea (optional, internal only)
+   - Expiration dropdown (default 14 days):
+     • 7 days
+     • 14 days
+     • 30 days
+     • 60 days
+     • 90 days
+   - Submit button: "Send Invitation"
+
+3. LIST of all invitations showing:
+   - Email
+   - Status badge (pending/completed/expired)
+   - Reason
+   - Created date
+   - Expiration date
+   - Actions: Resend (if pending) | Delete
+
+4. FILTERS:
+   - All
+   - Pending
+   - Completed
+   - Expired
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: SIGNUP PAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+Create new page at /lifetime-signup that:
+
+1. Reads token from URL query parameter: ?token=xxxxx
+2. Calls GET /api/auth/validate-lifetime-invite?token=xxxxx
+3. If valid, shows signup form with:
+   - Email (pre-filled, read-only)
+   - Display Name input
+   - Username input
+   - Password input
+   - Submit button: "Activate Lifetime Access"
+4. On submit, calls POST /api/auth/signup-with-lifetime-invite
+5. On success, stores JWT token and redirects to /onboarding
+6. If token invalid/expired, shows error message
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: NODEMAILER CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Use existing nodemailer configuration. If it doesn't exist, set up using:
+
+const nodemailer = require('nodemailer');
+
+const emailTransporter = nodemailer.createTransport({
+  // Use your existing email service configuration
+  // This should already be set up for your noreply@bjjos.app domain
+});
+
+Make sure emails can be sent from: noreply@bjjos.app
+Make sure reply-to is set to: todd@bjjos.app
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 7: TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, test these flows:
+
+1. Admin sends invitation → Email received with correct link
+2. User clicks link → Taken to signup page with email pre-filled
+3. User creates account → Account created with lifetime_access = true
+4. User logs in → Full access to all features
+5. Admin sees invitation status changed to "completed"
+6. Try invalid token → Shows error message
+7. Try expired token → Shows error message
+8. Try using same token twice → Shows error message
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL REQUIREMENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. NO PHONE NUMBERS anywhere in this system
+2. Email sent from: noreply@bjjos.app
+3. Reply-to set to: todd@bjjos.app
+4. Magic link format: https://bjjos.app/lifetime-signup?token={token}
+5. Tokens must be cryptographically secure (use crypto.randomBytes)
+6. Tokens are single-use only
+7. Users created through this system get lifetime_access = true
+8. Users created through this system get is_founding_member = true
+9. Email template must match EXACTLY as specified above
+10. All dates/times in database should be in UTC
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+Build in this order:
+1. Database schema first
+2. Backend API endpoints
+3. Email sending logic
+4. Admin panel UI
+5. Signup page
+6. Test end-to-end flow
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF SPECIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Build this system now. Make it production-ready. Test thoroughly.
+```
+
+-----
+
+**Copy everything above and paste into Replit Agent. This is your complete specification to get beta testers onboarded via email!** 🚀​​​​​​​​​​​​​​​​

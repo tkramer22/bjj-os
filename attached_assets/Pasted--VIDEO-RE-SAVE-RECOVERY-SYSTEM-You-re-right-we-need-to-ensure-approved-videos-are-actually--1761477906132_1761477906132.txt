@@ -1,0 +1,547 @@
+# 🔧 VIDEO RE-SAVE & RECOVERY SYSTEM
+
+You’re right - we need to ensure approved videos are actually saved to the database. Here’s a complete recovery system:
+
+-----
+
+## **STEP 1: CHECK WHAT WAS APPROVED BUT NOT SAVED**
+
+```javascript
+const findOrphanedApprovals = async () => {
+  // Find candidates marked as 'approved' but not in videos table
+  const approvedCandidates = await db.video_candidates.findAll({
+    where: { status: 'approved' }
+  });
+  
+  const orphaned = [];
+  
+  for (const candidate of approvedCandidates) {
+    // Check if video exists in main videos table
+    const existsInVideos = await db.videos.findOne({
+      where: { video_id: candidate.video_id }
+    });
+    
+    if (!existsInVideos) {
+      orphaned.push(candidate);
+      console.log(`❌ Orphaned: ${candidate.title} (approved but not saved)`);
+    }
+  }
+  
+  console.log(`\n📊 Found ${orphaned.length} orphaned approvals`);
+  return orphaned;
+};
+```
+
+-----
+
+## **STEP 2: RE-SAVE ORPHANED VIDEOS**
+
+```javascript
+const resaveOrphanedVideos = async () => {
+  console.log('🔄 Starting orphaned video recovery...\n');
+  
+  const orphaned = await findOrphanedApprovals();
+  
+  let successCount = 0;
+  let failCount = 0;
+  
+  for (const candidate of orphaned) {
+    console.log(`\n📹 Re-processing: ${candidate.title}`);
+    
+    try {
+      // Check if we have cached analysis
+      let analysis = candidate.analysis_data; // If you stored it
+      
+      if (!analysis) {
+        // Re-analyze the video
+        console.log('  ⏳ Re-analyzing video...');
+        analysis = await analyzeVideo(candidate.video_id, {
+          title: candidate.title,
+          instructor: candidate.instructor,
+          duration: candidate.duration
+        });
+      }
+      
+      if (!analysis) {
+        console.log(`  ❌ Could not get analysis for ${candidate.video_id}`);
+        failCount++;
+        continue;
+      }
+      
+      // Save to database
+      const saved = await saveApprovedVideo(candidate.video_id, analysis);
+      
+      if (saved) {
+        console.log(`  ✅ Successfully saved: ${analysis.title}`);
+        successCount++;
+      } else {
+        console.log(`  ❌ Failed to save: ${candidate.title}`);
+        failCount++;
+      }
+      
+    } catch (error) {
+      console.error(`  ❌ Error: ${error.message}`);
+      failCount++;
+    }
+    
+    // Rate limit protection
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  
+  console.log(`\n✅ Recovery complete: ${successCount} saved, ${failCount} failed`);
+  return { successCount, failCount };
+};
+```
+
+-----
+
+## **STEP 3: IMPROVED SAVE FUNCTION WITH VERIFICATION**
+
+```javascript
+const saveApprovedVideo = async (videoId, analysis) => {
+  try {
+    // Validate analysis exists
+    if (!analysis) {
+      console.log(`  ❌ Cannot save null analysis for ${videoId}`);
+      return null;
+    }
+    
+    // Check if already exists (prevent duplicates)
+    const existing = await db.videos.findOne({
+      where: { video_id: videoId }
+    });
+    
+    if (existing) {
+      console.log(`  ⚠️ Video ${videoId} already exists, skipping`);
+      return existing;
+    }
+    
+    // Calculate instructor credibility
+    const instructorTier = findInstructorTier(analysis.instructor);
+    const credibilityScore = instructorTier?.credibility_score || 50;
+    
+    // Convert duration safely
+    let durationSeconds = 0;
+    try {
+      durationSeconds = timeToSeconds(analysis.total_duration);
+    } catch (e) {
+      console.log(`  ⚠️ Could not parse duration: ${analysis.total_duration}`);
+    }
+    
+    // 1. Save to videos table
+    const video = await db.videos.create({
+      video_id: videoId,
+      title: analysis.title || 'Untitled',
+      instructor: analysis.instructor || 'Unknown',
+      total_duration: durationSeconds,
+      quality_score: analysis.quality_score || 0,
+      quality_reasoning: analysis.quality_reasoning || '',
+      language: analysis.language || 'en',
+      difficulty: analysis.techniques[0]?.difficulty || 'intermediate',
+      gi_or_nogi: analysis.techniques[0]?.gi_or_nogi || 'both',
+      instructor_credibility_score: credibilityScore,
+      approved: true,
+      approved_at: new Date()
+    });
+    
+    console.log(`  💾 Saved video to database: ${video.id}`);
+    
+    // 2. Save techniques
+    let techniquesSaved = 0;
+    for (const technique of analysis.techniques) {
+      try {
+        const startSeconds = timeToSeconds(technique.start_time);
+        const endSeconds = timeToSeconds(technique.end_time);
+        
+        await db.technique_index.create({
+          video_id: video.id,
+          technique_name: technique.technique_name || 'Unknown',
+          technique_name_pt: technique.technique_name_pt || technique.technique_name,
+          start_time: technique.start_time || '0:00',
+          end_time: technique.end_time || '0:00',
+          start_seconds: startSeconds,
+          end_seconds: endSeconds,
+          duration_seconds: endSeconds - startSeconds,
+          description: technique.description || '',
+          description_pt: technique.description_pt || technique.description || '',
+          difficulty: technique.difficulty || 'intermediate',
+          gi_or_nogi: technique.gi_or_nogi || 'both',
+          position_tags: technique.position_tags || [],
+          instructor: analysis.instructor || 'Unknown',
+          key_moments: technique.key_details || []
+        });
+        
+        techniquesSaved++;
+      } catch (techError) {
+        console.error(`  ❌ Error saving technique:`, techError.message);
+      }
+    }
+    
+    console.log(`  💾 Saved ${techniquesSaved}/${analysis.techniques.length} techniques`);
+    
+    // 3. VERIFY the save worked
+    const verifyVideo = await db.videos.findOne({
+      where: { video_id: videoId }
+    });
+    
+    const verifyTechniques = await db.technique_index.count({
+      where: { video_id: video.id }
+    });
+    
+    if (!verifyVideo) {
+      throw new Error('VERIFICATION FAILED: Video not found after save');
+    }
+    
+    if (verifyTechniques === 0 && analysis.techniques.length > 0) {
+      console.log(`  ⚠️ WARNING: No techniques saved for ${videoId}`);
+    }
+    
+    console.log(`  ✅ VERIFIED: Video + ${verifyTechniques} techniques saved`);
+    
+    return video;
+    
+  } catch (error) {
+    console.error(`  ❌ Error saving video ${videoId}:`, error.message);
+    console.error('  Stack:', error.stack);
+    return null;
+  }
+};
+```
+
+-----
+
+## **STEP 4: ADD ANALYSIS CACHING TO VIDEO_CANDIDATES TABLE**
+
+Update your schema to cache analysis results:
+
+```sql
+-- Add column to video_candidates table
+ALTER TABLE video_candidates 
+ADD COLUMN analysis_data JSONB;
+
+ALTER TABLE video_candidates
+ADD COLUMN last_analysis_attempt TIMESTAMP;
+```
+
+```javascript
+// Update your analyze function to cache results
+const analyzeVideo = async (videoId, videoMetadata) => {
+  try {
+    const transcript = await getYouTubeTranscript(videoId);
+    
+    if (!transcript || transcript.length === 0) {
+      console.log(`  ❌ No transcript for ${videoId} - skipping`);
+      return null;
+    }
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      temperature: 0.3,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: TIMESTAMP_ANALYSIS_PROMPT
+        },
+        {
+          role: 'user',
+          content: `Analyze this BJJ instructional video...`
+        }
+      ]
+    });
+    
+    const content = response.choices[0].message.content;
+    if (!content) return null;
+    
+    let analysis;
+    try {
+      analysis = JSON.parse(content);
+    } catch (parseError) {
+      console.log(`  ❌ JSON parse error for ${videoId}`);
+      return null;
+    }
+    
+    // Build safe analysis object
+    const safeAnalysis = {
+      video_id: videoId,
+      title: analysis.title || videoMetadata.title || 'Untitled',
+      instructor: analysis.instructor || videoMetadata.instructor || 'Unknown',
+      total_duration: analysis.total_duration || videoMetadata.duration || '0:00',
+      quality_score: parseFloat(analysis.quality_score) || 0,
+      quality_reasoning: analysis.quality_reasoning || 'No reasoning provided',
+      is_instructional: analysis.is_instructional !== false,
+      techniques: Array.isArray(analysis.techniques) ? analysis.techniques.map(tech => ({
+        technique_name: tech.technique_name || 'Unknown Technique',
+        technique_name_pt: tech.technique_name_pt || tech.technique_name || 'Técnica Desconhecida',
+        start_time: tech.start_time || '0:00',
+        end_time: tech.end_time || '0:00',
+        description: tech.description || '',
+        description_pt: tech.description_pt || tech.description || '',
+        difficulty: tech.difficulty || 'intermediate',
+        gi_or_nogi: tech.gi_or_nogi || 'both',
+        position_tags: Array.isArray(tech.position_tags) ? tech.position_tags : [],
+        key_details: Array.isArray(tech.key_details) ? tech.key_details : []
+      })) : [],
+      language: analysis.language || 'en',
+      production_quality: analysis.production_quality || 'medium'
+    };
+    
+    // CACHE THE ANALYSIS in video_candidates table
+    await db.video_candidates.update(
+      { video_id: videoId },
+      { 
+        analysis_data: safeAnalysis,
+        last_analysis_attempt: new Date()
+      }
+    );
+    
+    console.log(`  💾 Cached analysis for ${videoId}`);
+    
+    return safeAnalysis;
+    
+  } catch (error) {
+    console.error(`  ❌ Error analyzing video ${videoId}:`, error.message);
+    
+    // Update failed attempt
+    await db.video_candidates.update(
+      { video_id: videoId },
+      { last_analysis_attempt: new Date() }
+    );
+    
+    return null;
+  }
+};
+```
+
+-----
+
+## **STEP 5: COMPLETE RECOVERY SCRIPT**
+
+```javascript
+// Run this to recover all orphaned videos
+const completeVideoRecovery = async () => {
+  console.log('🚀 STARTING COMPLETE VIDEO RECOVERY\n');
+  console.log('=' .repeat(60));
+  
+  // Step 1: Find orphaned approvals
+  console.log('\n📊 STEP 1: Finding orphaned approvals...');
+  const orphaned = await findOrphanedApprovals();
+  
+  if (orphaned.length === 0) {
+    console.log('✅ No orphaned videos found! All approvals are saved.');
+    return;
+  }
+  
+  // Step 2: Re-save orphaned videos
+  console.log(`\n🔄 STEP 2: Re-saving ${orphaned.length} orphaned videos...\n`);
+  const results = await resaveOrphanedVideos();
+  
+  // Step 3: Final verification
+  console.log('\n🔍 STEP 3: Final verification...');
+  const stillOrphaned = await findOrphanedApprovals();
+  
+  console.log('\n' + '='.repeat(60));
+  console.log('📊 RECOVERY SUMMARY:');
+  console.log(`  • Original orphaned: ${orphaned.length}`);
+  console.log(`  • Successfully saved: ${results.successCount}`);
+  console.log(`  • Failed to save: ${results.failCount}`);
+  console.log(`  • Still orphaned: ${stillOrphaned.length}`);
+  console.log('=' .repeat(60));
+  
+  if (stillOrphaned.length > 0) {
+    console.log('\n⚠️ Some videos still orphaned. Details:');
+    stillOrphaned.forEach(v => {
+      console.log(`  • ${v.title} (${v.video_id})`);
+    });
+  } else {
+    console.log('\n✅ ALL VIDEOS RECOVERED SUCCESSFULLY!');
+  }
+};
+
+// Run it
+completeVideoRecovery().catch(console.error);
+```
+
+-----
+
+## **STEP 6: VERIFY WHAT’S IN DATABASE**
+
+```javascript
+const verifyDatabase = async () => {
+  console.log('🔍 DATABASE VERIFICATION\n');
+  
+  const videoCount = await db.videos.count();
+  const techniqueCount = await db.technique_index.count();
+  const candidateCount = await db.video_candidates.count({
+    where: { status: 'approved' }
+  });
+  
+  console.log(`📊 Current database state:`);
+  console.log(`  • Videos saved: ${videoCount}`);
+  console.log(`  • Techniques indexed: ${techniqueCount}`);
+  console.log(`  • Approved candidates: ${candidateCount}`);
+  
+  if (videoCount < candidateCount) {
+    console.log(`\n⚠️ MISMATCH: ${candidateCount - videoCount} approved videos not in database`);
+  } else {
+    console.log(`\n✅ All approved candidates are in database!`);
+  }
+  
+  // Show sample videos
+  const sampleVideos = await db.videos.findAll({
+    limit: 5,
+    order: [['created_at', 'DESC']]
+  });
+  
+  console.log(`\n📹 Latest 5 videos saved:`);
+  sampleVideos.forEach((v, i) => {
+    console.log(`  ${i + 1}. ${v.title} (Score: ${v.quality_score})`);
+  });
+};
+
+verifyDatabase().catch(console.error);
+```
+
+-----
+
+## **🎯 WHAT TO DO NOW:**
+
+### **Run these commands in order:**
+
+```bash
+# 1. Verify current state
+node scripts/verifyDatabase.js
+
+# 2. Find orphaned videos
+node scripts/findOrphaned.js
+
+# 3. Recover orphaned videos
+node scripts/recoverVideos.js
+
+# 4. Verify recovery worked
+node scripts/verifyDatabase.js
+```
+
+-----
+
+## **📋 COPY THESE COMPLETE SCRIPTS:**
+
+### **scripts/verifyDatabase.js**
+
+```javascript
+const { db } = require('../server/db');
+
+const verifyDatabase = async () => {
+  console.log('🔍 DATABASE VERIFICATION\n');
+  
+  const videoCount = await db.videos.count();
+  const techniqueCount = await db.technique_index.count();
+  const candidateCount = await db.video_candidates.count({
+    where: { status: 'approved' }
+  });
+  
+  console.log(`📊 Current database state:`);
+  console.log(`  • Videos saved: ${videoCount}`);
+  console.log(`  • Techniques indexed: ${techniqueCount}`);
+  console.log(`  • Approved candidates: ${candidateCount}`);
+  
+  if (videoCount < candidateCount) {
+    console.log(`\n⚠️ MISMATCH: ${candidateCount - videoCount} approved videos not in database`);
+  } else {
+    console.log(`\n✅ All approved candidates are in database!`);
+  }
+  
+  const sampleVideos = await db.videos.findAll({
+    limit: 5,
+    order: [['created_at', 'DESC']]
+  });
+  
+  console.log(`\n📹 Latest 5 videos saved:`);
+  sampleVideos.forEach((v, i) => {
+    console.log(`  ${i + 1}. ${v.title} (Score: ${v.quality_score})`);
+  });
+  
+  process.exit(0);
+};
+
+verifyDatabase().catch(console.error);
+```
+
+### **scripts/recoverVideos.js**
+
+```javascript
+const { db } = require('../server/db');
+const { analyzeVideo, saveApprovedVideo } = require('../server/videoCuration');
+
+const completeVideoRecovery = async () => {
+  console.log('🚀 STARTING COMPLETE VIDEO RECOVERY\n');
+  
+  // Find orphaned
+  const approvedCandidates = await db.video_candidates.findAll({
+    where: { status: 'approved' }
+  });
+  
+  const orphaned = [];
+  for (const candidate of approvedCandidates) {
+    const exists = await db.videos.findOne({
+      where: { video_id: candidate.video_id }
+    });
+    if (!exists) orphaned.push(candidate);
+  }
+  
+  console.log(`📊 Found ${orphaned.length} orphaned approvals\n`);
+  
+  if (orphaned.length === 0) {
+    console.log('✅ No recovery needed!');
+    process.exit(0);
+  }
+  
+  // Re-save
+  let successCount = 0;
+  let failCount = 0;
+  
+  for (const candidate of orphaned) {
+    console.log(`\n📹 Re-saving: ${candidate.title}`);
+    
+    try {
+      let analysis = candidate.analysis_data;
+      
+      if (!analysis) {
+        console.log('  ⏳ Re-analyzing...');
+        analysis = await analyzeVideo(candidate.video_id, {
+          title: candidate.title,
+          instructor: candidate.instructor,
+          duration: candidate.duration
+        });
+      }
+      
+      if (analysis) {
+        const saved = await saveApprovedVideo(candidate.video_id, analysis);
+        if (saved) {
+          console.log(`  ✅ Saved successfully`);
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } else {
+        failCount++;
+      }
+      
+    } catch (error) {
+      console.error(`  ❌ Error: ${error.message}`);
+      failCount++;
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  
+  console.log(`\n✅ Recovery complete: ${successCount} saved, ${failCount} failed`);
+  process.exit(0);
+};
+
+completeVideoRecovery().catch(console.error);
+```
+
+-----
+
+**Run `node scripts/verifyDatabase.js` first to see the current state, then `node scripts/recoverVideos.js` to save all the orphaned videos!**

@@ -1,0 +1,85 @@
+I can see the config has the server URL (`https://bjjos.app/ios-login`) BUT the grep for IOSBottomNav returned nothing - meaning the bundled JS might be incomplete or different.
+
+The config is correct but Capacitor is ignoring it. **Send this to Replit:**
+
+```
+CAPACITOR SERVER URL IS BEING IGNORED
+
+The ios/App/App/capacitor.config.json HAS the server URL:
+"url": "https://bjjos.app/ios-login"
+
+But the iOS app is NOT loading from it. It's loading bundled files.
+
+═══════════════════════════════════════════════════════════════════════════════
+WHY CAPACITOR IGNORES SERVER URL - COMMON CAUSES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. WKWebView blocks mixed content or external URLs by default
+2. App Transport Security (ATS) blocking the request
+3. CORS headers missing on server
+4. Native code override
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX #1: CHECK INFO.PLIST FOR ATS
+═══════════════════════════════════════════════════════════════════════════════
+
+Open ios/App/App/Info.plist
+
+Ensure this exists:
+<key>NSAppTransportSecurity</key>
+<dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+</dict>
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX #2: ADD CORS HEADERS TO SERVER
+═══════════════════════════════════════════════════════════════════════════════
+
+In your Express server, add:
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', '*');
+  next();
+});
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX #3: CHECK CAPACITOR BRIDGE IN NATIVE CODE
+═══════════════════════════════════════════════════════════════════════════════
+
+Open ios/App/App/AppDelegate.swift
+
+Is there any code that overrides the URL or sets a different configuration?
+
+Show me the full AppDelegate.swift file.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX #4: TRY DIFFERENT SERVER CONFIG FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Maybe try without the /ios-login path:
+
+server: {
+  url: "https://bjjos.app",
+  cleartext: true
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+ALTERNATIVE: ABANDON REMOTE MODE, FIX BUNDLED MODE
+═══════════════════════════════════════════════════════════════════════════════
+
+If remote loading won't work, then:
+1. REMOVE the server URL from config entirely
+2. Make sure the BUNDLED code works correctly
+3. Debug why icons don't show in bundled mode
+
+To debug bundled mode, I need to know:
+- Are lucide-react icons being bundled?
+- Is there a CSS issue with the icons?
+- Is there a component rendering issue?
+
+Show me the actual IOSBottomNav component code and how it renders icons.
+
+PICK ONE PATH AND FIX IT COMPLETELY.
+```

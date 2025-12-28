@@ -1,0 +1,762 @@
+**CRITICAL CATCH! 🚨 You’re absolutely right!**
+
+This is a **major security/revenue hole** that needs to be plugged immediately.
+
+-----
+
+## **The Problem:**
+
+**Current system vulnerability:**
+
+- User signs up with phone number: +1-555-1234
+- Gets lifetime access or Pro subscription
+- Shares login code with 5 friends
+- All 5 friends use the same account
+- **You lose 4 potential paying customers**
+
+-----
+
+## **Solutions - Pick Your Strategy:**
+
+### **Option 1: Device Fingerprinting + Limit (Recommended)**
+
+**How it works:**
+
+- Track unique devices per account
+- Allow 2-3 devices maximum (phone + tablet + laptop is reasonable)
+- Block new devices after limit reached
+- User can “deauthorize” old devices from settings
+
+**Implementation:**
+
+```javascript
+// On login, generate device fingerprint
+const deviceFingerprint = generateFingerprint({
+  userAgent: req.headers['user-agent'],
+  ip: req.ip,
+  screenResolution: req.body.screen,
+  timezone: req.body.timezone
+});
+
+// Check if device already authorized
+const device = await db.query(`
+  SELECT * FROM authorized_devices 
+  WHERE user_id = $1 AND fingerprint = $2
+`, [userId, deviceFingerprint]);
+
+if (!device.rows.length) {
+  // New device - check if under limit
+  const deviceCount = await db.query(`
+    SELECT COUNT(*) FROM authorized_devices WHERE user_id = $1
+  `, [userId]);
+  
+  if (deviceCount.rows[0].count >= 3) {
+    // TOO MANY DEVICES
+    return res.status(403).json({
+      error: 'device_limit_reached',
+      message: 'Maximum 3 devices allowed. Remove a device in Settings to add this one.',
+      devices: await getUserDevices(userId)
+    });
+  }
+  
+  // Add new device
+  await db.query(`
+    INSERT INTO authorized_devices (user_id, fingerprint, first_seen, last_seen, device_name)
+    VALUES ($1, $2, NOW(), NOW(), $3)
+  `, [userId, deviceFingerprint, getDeviceName(req)]);
+}
+
+// Update last seen
+await db.query(`
+  UPDATE authorized_devices 
+  SET last_seen = NOW(), login_count = login_count + 1
+  WHERE user_id = $1 AND fingerprint = $2
+`, [userId, deviceFingerprint]);
+```
+
+**Database schema:**
+
+```sql
+CREATE TABLE authorized_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  fingerprint TEXT NOT NULL,
+  device_name TEXT, -- "iPhone 15 - Safari", "MacBook Pro - Chrome"
+  first_seen TIMESTAMP DEFAULT NOW(),
+  last_seen TIMESTAMP DEFAULT NOW(),
+  login_count INTEGER DEFAULT 1,
+  ip_address TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_devices ON authorized_devices(user_id);
+CREATE UNIQUE INDEX idx_device_fingerprint ON authorized_devices(user_id, fingerprint);
+```
+
+**User Settings UI:**
+
+```
+YOUR DEVICES (3/3 max)
+
+┌──────────────────────────────────────────┐
+│ 📱 iPhone 15 - Safari                   │
+│    Last active: 2 minutes ago           │
+│    Added: Oct 15, 2025                  │
+│    [Remove Device]                       │
+└──────────────────────────────────────────┘
+
+┌──────────────────────────────────────────┐
+│ 💻 MacBook Pro - Chrome                 │
+│    Last active: 3 hours ago             │
+│    Added: Oct 10, 2025                  │
+│    [Remove Device]                       │
+└──────────────────────────────────────────┘
+
+┌──────────────────────────────────────────┐
+│ 📱 iPad Air - Safari                    │
+│    Last active: 2 days ago              │
+│    Added: Oct 5, 2025                   │
+│    [Remove Device]                       │
+└──────────────────────────────────────────┘
+
+⚠️ Device limit reached (3/3)
+To add a new device, remove one above.
+```
+
+**Pros:**
+
+- ✅ Allows legitimate multi-device use (phone + laptop + tablet)
+- ✅ Prevents mass sharing (can’t have 10 people using it)
+- ✅ User-friendly (can manage devices themselves)
+- ✅ Detects suspicious activity (10 logins from 10 IPs = sharing)
+
+**Cons:**
+
+- ❌ Fingerprinting can be bypassed (VPN, different browsers)
+- ❌ Annoying if user gets new phone often
+
+-----
+
+### **Option 2: Session-Based Concurrent Limit (Stricter)**
+
+**How it works:**
+
+- Only 1-2 active sessions allowed at same time
+- If someone logs in while you’re active, boot the old session
+- Forces real-time exclusivity
+
+**Implementation:**
+
+```javascript
+// On login, check active sessions
+const activeSessions = await db.query(`
+  SELECT COUNT(*) FROM user_sessions 
+  WHERE user_id = $1 AND expires_at > NOW()
+`, [userId]);
+
+if (activeSessions.rows[0].count >= 2) {
+  // Boot the OLDEST session
+  await db.query(`
+    DELETE FROM user_sessions 
+    WHERE id = (
+      SELECT id FROM user_sessions 
+      WHERE user_id = $1 AND expires_at > NOW()
+      ORDER BY last_activity ASC 
+      LIMIT 1
+    )
+  `, [userId]);
+  
+  // Send push notification to booted device
+  await sendPushNotification(oldestSessionDeviceId, {
+    title: 'Logged out',
+    body: 'Someone else logged in with your account.'
+  });
+}
+
+// Create new session
+await db.query(`
+  INSERT INTO user_sessions (user_id, session_token, device_fingerprint, expires_at)
+  VALUES ($1, $2, $3, NOW() + INTERVAL '30 days')
+`, [userId, sessionToken, deviceFingerprint]);
+```
+
+**Pros:**
+
+- ✅ VERY effective at preventing sharing
+- ✅ Forces exclusivity (can’t have 5 people using at once)
+
+**Cons:**
+
+- ❌ Annoying for legitimate users (can’t use phone + laptop simultaneously)
+- ❌ Poor UX (gets logged out unexpectedly)
+
+-----
+
+### **Option 3: Behavioral Analysis + Auto-Flag (Smart)**
+
+**How it works:**
+
+- Track usage patterns (location, time, frequency)
+- Flag suspicious accounts for manual review
+- Auto-suspend if abuse detected
+
+**Implementation:**
+
+```javascript
+async function detectAccountSharing(userId) {
+  // Check for red flags
+  const last30Days = await db.query(`
+    SELECT 
+      COUNT(DISTINCT ip_address) as unique_ips,
+      COUNT(DISTINCT device_fingerprint) as unique_devices,
+      COUNT(DISTINCT DATE_TRUNC('hour', login_time)) as login_hours,
+      MAX(login_time) - MIN(login_time) as time_span
+    FROM login_events
+    WHERE user_id = $1 AND login_time > NOW() - INTERVAL '30 days'
+  `, [userId]);
+  
+  const { unique_ips, unique_devices, login_hours } = last30Days.rows[0];
+  
+  // RED FLAGS:
+  // 1. More than 5 unique IPs in 30 days
+  if (unique_ips > 5) {
+    await flagAccount(userId, 'suspicious_ip_count', { count: unique_ips });
+  }
+  
+  // 2. More than 3 devices
+  if (unique_devices > 3) {
+    await flagAccount(userId, 'excessive_devices', { count: unique_devices });
+  }
+  
+  // 3. Geographically impossible logins (NYC then LA 2 hours later)
+  const impossibleTravel = await detectImpossibleTravel(userId);
+  if (impossibleTravel) {
+    await flagAccount(userId, 'impossible_travel', impossibleTravel);
+  }
+  
+  // 4. Logins at all hours (suggests multiple people in different timezones)
+  if (login_hours > 18) { // Logging in 18+ different hours = suspicious
+    await flagAccount(userId, 'unusual_hours', { hours: login_hours });
+  }
+}
+
+async function flagAccount(userId, reason, data) {
+  await db.query(`
+    INSERT INTO flagged_accounts (user_id, reason, data, flagged_at)
+    VALUES ($1, $2, $3, NOW())
+  `, [userId, reason, JSON.stringify(data)]);
+  
+  // Notify admin
+  await sendAdminAlert(`Account ${userId} flagged for: ${reason}`);
+}
+```
+
+**Admin Dashboard - Flagged Accounts:**
+
+```
+SUSPICIOUS ACCOUNT ACTIVITY
+
+┌──────────────────────────────────────────────────────────────┐
+│ USER: mike@example.com (+1-555-1234)                        │
+│ Flagged: Oct 17, 2025                                       │
+│                                                              │
+│ ⚠️ RED FLAGS:                                               │
+│ • 8 unique IP addresses in 30 days                          │
+│ • 5 different devices                                       │
+│ • Logins from NYC and LA within 3 hours                     │
+│ • Active 20+ different hours per day                        │
+│                                                              │
+│ LIKELY SHARING ACCOUNT                                      │
+│                                                              │
+│ [Suspend Account]  [Warn User]  [False Positive - Ignore]  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Pros:**
+
+- ✅ Smart detection (catches real abuse, ignores legitimate use)
+- ✅ Less annoying to users (doesn’t block immediately)
+- ✅ Gives you control (manual review)
+
+**Cons:**
+
+- ❌ Requires manual review (your time)
+- ❌ Doesn’t prevent sharing, just detects it
+
+-----
+
+### **Option 4: Phone Number Verification on EVERY Login (Nuclear)**
+
+**How it works:**
+
+- Every time someone logs in, send SMS code
+- Can’t share because only phone owner gets code
+
+**Pros:**
+
+- ✅ 100% effective at preventing sharing
+
+**Cons:**
+
+- ❌ TERRIBLE user experience
+- ❌ High Twilio costs
+- ❌ Users will hate you
+- ❌ Not recommended
+
+-----
+
+## **My Recommendation: Hybrid Approach**
+
+**Combine Option 1 + Option 3:**
+
+1. **Device limit (3 devices max)** - Prevents casual sharing
+1. **Behavioral analysis** - Flags serious abuse
+1. **Admin review** - You decide on edge cases
+
+**Why this works:**
+
+- Most users won’t share (device limit stops them)
+- Serious abusers get flagged automatically
+- You maintain control without annoying legitimate users
+
+-----
+
+## **Add to Mega Prompt:**
+
+Here’s the addition for the mega prompt:
+
+```
+═══════════════════════════════════════════════════════════════════
+PART 14: ACCOUNT SHARING PREVENTION SYSTEM
+═══════════════════════════════════════════════════════════════════
+
+CRITICAL: Prevent users from sharing login credentials with multiple people.
+
+**14.1 - DATABASE SCHEMA**
+
+CREATE TABLE authorized_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  fingerprint TEXT NOT NULL,
+  device_name TEXT,
+  device_type TEXT, -- 'mobile', 'tablet', 'desktop'
+  browser TEXT,
+  os TEXT,
+  first_seen TIMESTAMP DEFAULT NOW(),
+  last_seen TIMESTAMP DEFAULT NOW(),
+  login_count INTEGER DEFAULT 1,
+  ip_address TEXT,
+  city TEXT,
+  country TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(user_id, fingerprint)
+);
+
+CREATE TABLE login_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  device_fingerprint TEXT,
+  ip_address TEXT,
+  city TEXT,
+  country TEXT,
+  latitude DECIMAL,
+  longitude DECIMAL,
+  login_time TIMESTAMP DEFAULT NOW(),
+  success BOOLEAN DEFAULT true
+);
+
+CREATE TABLE flagged_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  reason TEXT,
+  data JSONB,
+  flagged_at TIMESTAMP DEFAULT NOW(),
+  reviewed_by TEXT,
+  reviewed_at TIMESTAMP,
+  status TEXT DEFAULT 'pending', -- 'pending', 'false_positive', 'suspended'
+  notes TEXT
+);
+
+CREATE INDEX idx_user_devices ON authorized_devices(user_id);
+CREATE INDEX idx_login_events_user ON login_events(user_id, login_time DESC);
+CREATE INDEX idx_flagged_accounts_pending ON flagged_accounts(status) WHERE status = 'pending';
+
+**14.2 - DEVICE FINGERPRINTING**
+
+```javascript
+function generateDeviceFingerprint(req) {
+  const ua = req.headers['user-agent'];
+  const components = [
+    ua,
+    req.body.screen_resolution || '',
+    req.body.timezone || '',
+    req.body.language || '',
+    req.body.platform || ''
+  ];
+  
+  return crypto
+    .createHash('sha256')
+    .update(components.join('|'))
+    .digest('hex');
+}
+
+function getDeviceInfo(req) {
+  const ua = UAParser(req.headers['user-agent']);
+  
+  return {
+    device_name: `${ua.device.vendor || ua.os.name} - ${ua.browser.name}`,
+    device_type: ua.device.type || 'desktop',
+    browser: ua.browser.name,
+    os: ua.os.name
+  };
+}
+```
+
+**14.3 - LOGIN FLOW WITH DEVICE LIMIT**
+
+```javascript
+async function handleLogin(userId, req) {
+  const fingerprint = generateDeviceFingerprint(req);
+  const deviceInfo = getDeviceInfo(req);
+  const ipData = await getIpLocation(req.ip);
+  
+  // Log login event
+  await db.query(`
+    INSERT INTO login_events (user_id, device_fingerprint, ip_address, city, country, latitude, longitude)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+  `, [userId, fingerprint, req.ip, ipData.city, ipData.country, ipData.lat, ipData.lon]);
+  
+  // Check if device already authorized
+  const existingDevice = await db.query(`
+    SELECT * FROM authorized_devices 
+    WHERE user_id = $1 AND fingerprint = $2 AND is_active = true
+  `, [userId, fingerprint]);
+  
+  if (existingDevice.rows.length > 0) {
+    // Known device - update last seen
+    await db.query(`
+      UPDATE authorized_devices 
+      SET last_seen = NOW(), login_count = login_count + 1, ip_address = $1
+      WHERE id = $2
+    `, [req.ip, existingDevice.rows[0].id]);
+    
+  } else {
+    // New device - check limit
+    const deviceCount = await db.query(`
+      SELECT COUNT(*) FROM authorized_devices 
+      WHERE user_id = $1 AND is_active = true
+    `, [userId]);
+    
+    const MAX_DEVICES = 3;
+    
+    if (deviceCount.rows[0].count >= MAX_DEVICES) {
+      // DEVICE LIMIT REACHED
+      return {
+        success: false,
+        error: 'device_limit_reached',
+        message: `Maximum ${MAX_DEVICES} devices allowed. Remove a device in Settings to add this one.`,
+        devices: await getUserDevices(userId)
+      };
+    }
+    
+    // Add new device
+    await db.query(`
+      INSERT INTO authorized_devices 
+      (user_id, fingerprint, device_name, device_type, browser, os, ip_address, city, country)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      userId, 
+      fingerprint, 
+      deviceInfo.device_name,
+      deviceInfo.device_type,
+      deviceInfo.browser,
+      deviceInfo.os,
+      req.ip,
+      ipData.city,
+      ipData.country
+    ]);
+  }
+  
+  // Run behavioral analysis (async, don't block login)
+  detectAccountSharing(userId).catch(console.error);
+  
+  return { success: true };
+}
+```
+
+**14.4 - BEHAVIORAL ANALYSIS (DETECTS SHARING)**
+
+```javascript
+async function detectAccountSharing(userId) {
+  const analysis = await db.query(`
+    SELECT 
+      COUNT(DISTINCT ip_address) as unique_ips,
+      COUNT(DISTINCT device_fingerprint) as unique_devices,
+      COUNT(DISTINCT city) as unique_cities,
+      COUNT(DISTINCT DATE_TRUNC('hour', login_time)) as login_hours,
+      MAX(login_time) as last_login,
+      MIN(login_time) as first_login
+    FROM login_events
+    WHERE user_id = $1 
+      AND login_time > NOW() - INTERVAL '30 days'
+  `, [userId]);
+  
+  const { unique_ips, unique_devices, unique_cities, login_hours } = analysis.rows[0];
+  
+  // RED FLAG 1: Too many unique IPs
+  if (unique_ips > 6) {
+    await flagAccount(userId, 'excessive_ips', { count: unique_ips });
+  }
+  
+  // RED FLAG 2: Too many devices (should be caught by limit, but double check)
+  if (unique_devices > 4) {
+    await flagAccount(userId, 'excessive_devices', { count: unique_devices });
+  }
+  
+  // RED FLAG 3: Too many cities
+  if (unique_cities > 3) {
+    await flagAccount(userId, 'multiple_cities', { count: unique_cities });
+  }
+  
+  // RED FLAG 4: Active at unreasonable hours (20+ different hours = shared)
+  if (login_hours > 20) {
+    await flagAccount(userId, 'unrealistic_hours', { hours: login_hours });
+  }
+  
+  // RED FLAG 5: Impossible travel
+  const impossibleTravel = await detectImpossibleTravel(userId);
+  if (impossibleTravel) {
+    await flagAccount(userId, 'impossible_travel', impossibleTravel);
+  }
+}
+
+async function detectImpossibleTravel(userId) {
+  const recentLogins = await db.query(`
+    SELECT login_time, latitude, longitude, city, country
+    FROM login_events
+    WHERE user_id = $1 
+      AND login_time > NOW() - INTERVAL '7 days'
+      AND latitude IS NOT NULL
+    ORDER BY login_time DESC
+    LIMIT 10
+  `, [userId]);
+  
+  for (let i = 0; i < recentLogins.rows.length - 1; i++) {
+    const current = recentLogins.rows[i];
+    const previous = recentLogins.rows[i + 1];
+    
+    const distance = calculateDistance(
+      current.latitude, current.longitude,
+      previous.latitude, previous.longitude
+    );
+    
+    const timeDiff = (new Date(current.login_time) - new Date(previous.login_time)) / (1000 * 60 * 60); // hours
+    
+    // If > 500km apart and < 6 hours between logins = impossible
+    if (distance > 500 && timeDiff < 6) {
+      return {
+        from: { city: previous.city, country: previous.country },
+        to: { city: current.city, country: current.country },
+        distance_km: Math.round(distance),
+        time_hours: Math.round(timeDiff * 10) / 10
+      };
+    }
+  }
+  
+  return null;
+}
+
+async function flagAccount(userId, reason, data) {
+  // Check if already flagged for this reason recently
+  const existing = await db.query(`
+    SELECT * FROM flagged_accounts
+    WHERE user_id = $1 AND reason = $2 AND flagged_at > NOW() - INTERVAL '7 days'
+  `, [userId, reason]);
+  
+  if (existing.rows.length > 0) {
+    // Already flagged recently, don't spam
+    return;
+  }
+  
+  await db.query(`
+    INSERT INTO flagged_accounts (user_id, reason, data)
+    VALUES ($1, $2, $3)
+  `, [userId, reason, JSON.stringify(data)]);
+  
+  // Alert admin
+  const user = await db.query('SELECT email, phone FROM users WHERE id = $1', [userId]);
+  await sendAdminAlert(
+    `Account Sharing Suspected`,
+    `User: ${user.rows[0].email}\nReason: ${reason}\nData: ${JSON.stringify(data, null, 2)}`
+  );
+}
+```
+
+**14.5 - USER SETTINGS - MANAGE DEVICES**
+
+CREATE PAGE: /settings/devices
+
+Display all authorized devices with ability to remove them:
+
+```jsx
+<div className="devices-list">
+  <h2>Your Devices ({devices.length}/3)</h2>
+  
+  {devices.map(device => (
+    <div key={device.id} className="device-card">
+      <div className="device-icon">
+        {device.device_type === 'mobile' ? '📱' : 
+         device.device_type === 'tablet' ? '📱' : '💻'}
+      </div>
+      <div className="device-info">
+        <h3>{device.device_name}</h3>
+        <p>Last active: {formatRelativeTime(device.last_seen)}</p>
+        <p>Added: {formatDate(device.first_seen)}</p>
+        <p className="device-location">{device.city}, {device.country}</p>
+      </div>
+      <button 
+        onClick={() => removeDevice(device.id)}
+        className="btn-remove"
+      >
+        Remove
+      </button>
+    </div>
+  ))}
+  
+  {devices.length >= 3 && (
+    <div className="device-limit-warning">
+      ⚠️ Device limit reached (3/3). Remove a device to add a new one.
+    </div>
+  )}
+</div>
+```
+
+**14.6 - ADMIN DASHBOARD - FLAGGED ACCOUNTS**
+
+CREATE PAGE: /admin/flagged-accounts
+
+```jsx
+<div className="flagged-accounts">
+  <h1>Suspicious Account Activity</h1>
+  
+  <div className="filters">
+    <select value={filter} onChange={setFilter}>
+      <option value="pending">Pending Review</option>
+      <option value="all">All Flagged</option>
+      <option value="suspended">Suspended</option>
+      <option value="false_positive">False Positives</option>
+    </select>
+  </div>
+  
+  {flaggedAccounts.map(account => (
+    <div key={account.id} className="flagged-account-card">
+      <div className="account-header">
+        <h3>{account.user.email} ({account.user.phone})</h3>
+        <span className="flag-date">Flagged: {formatDate(account.flagged_at)}</span>
+      </div>
+      
+      <div className="red-flags">
+        <h4>⚠️ RED FLAGS:</h4>
+        <ul>
+          {account.reason === 'excessive_ips' && (
+            <li>{account.data.count} unique IP addresses in 30 days</li>
+          )}
+          {account.reason === 'excessive_devices' && (
+            <li>{account.data.count} different devices</li>
+          )}
+          {account.reason === 'impossible_travel' && (
+            <li>
+              Logins from {account.data.from.city} and {account.data.to.city} 
+              ({account.data.distance_km}km apart) within {account.data.time_hours} hours
+            </li>
+          )}
+          {account.reason === 'unrealistic_hours' && (
+            <li>Active {account.data.hours} different hours per day</li>
+          )}
+        </ul>
+      </div>
+      
+      <div className="account-details">
+        <p>Subscription: {account.user.subscription_tier}</p>
+        <p>Devices: {account.device_count}/3</p>
+        <p>Total sessions: {account.session_count} (last 30 days)</p>
+      </div>
+      
+      <div className="actions">
+        <button onClick={() => suspendAccount(account.user_id)}>
+          Suspend Account
+        </button>
+        <button onClick={() => warnUser(account.user_id)}>
+          Send Warning Email
+        </button>
+        <button onClick={() => markFalsePositive(account.id)}>
+          False Positive - Ignore
+        </button>
+        <button onClick={() => viewUserDetails(account.user_id)}>
+          View Full Details
+        </button>
+      </div>
+    </div>
+  ))}
+</div>
+```
+
+**14.7 - AUTO-SUSPENSION (OPTIONAL - SEVERE CASES)**
+
+```javascript
+async function autoSuspendSuspiciousAccounts() {
+  // Only auto-suspend EXTREME cases
+  const extremeCases = await db.query(`
+    SELECT user_id, COUNT(*) as flag_count
+    FROM flagged_accounts
+    WHERE flagged_at > NOW() - INTERVAL '7 days'
+      AND status = 'pending'
+    GROUP BY user_id
+    HAVING COUNT(*) >= 3 -- Flagged 3+ times in one week
+  `);
+  
+  for (const account of extremeCases.rows) {
+    await db.query(`
+      UPDATE users 
+      SET subscription_status = 'suspended'
+      WHERE id = $1
+    `, [account.user_id]);
+    
+    await sendEmail(account.email, {
+      subject: 'BJJ OS Account Suspended',
+      body: `Your account has been suspended due to suspicious activity indicating account sharing. Please contact support.`
+    });
+    
+    await logAdminAction('auto_suspended', { user_id: account.user_id, flag_count: account.flag_count });
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+VERIFICATION - ACCOUNT SHARING PREVENTION
+═══════════════════════════════════════════════════════════════════
+
+TEST THESE SCENARIOS:
+
+✅ User logs in on iPhone - works
+✅ Same user logs in on MacBook - works
+✅ Same user logs in on iPad - works (3/3 devices)
+✅ Same user tries to log in on 4th device - BLOCKED
+✅ User removes iPad from settings
+✅ User can now add 4th device
+✅ Simulate sharing: 5 IPs in one day - account gets FLAGGED
+✅ Admin sees flagged account in dashboard
+✅ Admin can suspend account
+✅ Suspended user cannot log in
+✅ Device fingerprinting works across browsers
+
+═══════════════════════════════════════════════════════════════════
+
+```
+---
+
+**Should I add this to the mega prompt, or do you want to adjust the strategy first?**
+```

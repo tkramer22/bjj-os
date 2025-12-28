@@ -1,0 +1,109 @@
+# 🔍 **TWO CHECKS NEEDED**
+
+-----
+
+## **📋 CHECK 1: METADATA VERIFICATION - COPY TO AGENT**
+
+```
+Verify the recently curated videos have proper metadata.
+
+Show me the 20 most recently added videos with ALL their metadata:
+
+SELECT 
+  id,
+  title,
+  instructor_name,
+  technique_type,
+  position_category,
+  gi_nogi,
+  tags,
+  quality_score,
+  created_at
+FROM ai_video_knowledge
+ORDER BY created_at DESC
+LIMIT 20;
+
+I need to verify each video has:
+- technique_type (attack | defense | concept)
+- position_category (closed_guard, open_guard, etc.)
+- gi_nogi (gi | nogi | both)
+- tags (array of keywords)
+
+If any fields are NULL or empty, show me which ones are missing.
+
+Also run this summary:
+SELECT 
+  COUNT(*) as total_today,
+  SUM(CASE WHEN technique_type IS NULL THEN 1 ELSE 0 END) as missing_type,
+  SUM(CASE WHEN position_category IS NULL THEN 1 ELSE 0 END) as missing_position,
+  SUM(CASE WHEN gi_nogi IS NULL THEN 1 ELSE 0 END) as missing_gi_nogi,
+  SUM(CASE WHEN tags IS NULL OR array_length(tags, 1) IS NULL THEN 1 ELSE 0 END) as missing_tags
+FROM ai_video_knowledge
+WHERE created_at >= CURRENT_DATE;
+```
+
+-----
+
+## **📋 CHECK 2: ADMIN VIDEO SEARCH UI - COPY TO AGENT**
+
+```
+The admin video search page on mobile still shows the OLD design:
+- Text search bar for "technique"
+- Belt level filter
+- Gi/No-gi filter
+
+This is NOT what we designed. We agreed on:
+
+CORRECT DESIGN (what it should be):
+1. Smart search bar (fuzzy matching across title, instructor, techniques)
+2. Professor/Instructor dropdown (dynamic, populated from library)
+3. Technique dropdown (dynamic, populated from library)
+4. NO belt level filter (removed - all content is advanced)
+5. Gi/No-gi as badge on cards only (not primary filter)
+
+Check the admin video search component and fix it to match this spec:
+
+USER APP VIDEO SEARCH:
+- Smart search bar
+- Professor dropdown (dynamic from DB)
+- Technique dropdown (dynamic from DB)
+- Cascading filters (select professor → technique shows only their techniques)
+- NO belt level
+- NO gi/nogi as primary filter
+
+ADMIN APP VIDEO SEARCH:
+- Same as user PLUS:
+- Quality score filter (9+, 8+, 7+, any)
+- Date added filter (today, week, month, all)
+- Edit/Delete buttons on cards
+
+Show me the current admin video search component code and update it to match this design.
+
+Files to check:
+- client/src/pages/admin/Videos.tsx (or similar)
+- Any video search/filter components
+
+The filters should be:
+1. Search bar (searches title, instructor, tags)
+2. Instructor dropdown (populated dynamically)
+3. Technique/Position dropdown (populated dynamically)
+4. Quality filter (admin only)
+5. Date filter (admin only)
+
+Remove:
+- Belt level filter
+- Gi/No-gi as standalone filter
+```
+
+-----
+
+## **QUICK SUMMARY**
+
+|Issue       |What’s Wrong                               |What It Should Be                               |
+|------------|-------------------------------------------|------------------------------------------------|
+|**Metadata**|Need to verify new videos have all 4 fields|technique_type, position_category, gi_nogi, tags|
+|**Admin UI**|Still shows belt level + gi/nogi filters   |Professor dropdown + Technique dropdown         |
+
+-----
+
+**Send both prompts. Let’s make sure the system is working correctly before we scale up curation further.** 🎯​​​​​​​​​​​​​​​​

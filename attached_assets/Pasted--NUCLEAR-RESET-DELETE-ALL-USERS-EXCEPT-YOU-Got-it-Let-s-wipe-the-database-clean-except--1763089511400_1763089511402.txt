@@ -1,0 +1,165 @@
+# 🗑️ **NUCLEAR RESET - DELETE ALL USERS EXCEPT YOU**
+
+Got it. Let’s wipe the database clean except for your account.
+
+-----
+
+# **⚠️ CRITICAL - COPY THIS TO REPLIT AGENT**
+
+```
+URGENT DATABASE CLEANUP
+
+We need to delete ALL users except toddlramer@icloud.com
+
+SAFETY FIRST - Do this in 2 steps:
+
+STEP 1: VERIFY TODD'S ACCOUNT EXISTS
+Run this query first to confirm:
+
+SELECT id, email, phone_number, subscription_status, created_at 
+FROM users 
+WHERE email = 'toddlramer@icloud.com' OR phone_number LIKE '%YOUR_PHONE%';
+
+Show me the result before proceeding.
+
+STEP 2: DELETE ALL OTHER USERS (after confirmation)
+Once we confirm Todd's account is safe, run:
+
+-- Start transaction for safety
+BEGIN;
+
+-- Show what will be deleted (review first)
+SELECT COUNT(*) as users_to_delete
+FROM users 
+WHERE email != 'toddlramer@icloud.com';
+
+-- If count looks right, delete related data first
+DELETE FROM conversations 
+WHERE user_id IN (
+  SELECT id FROM users WHERE email != 'toddlramer@icloud.com'
+);
+
+DELETE FROM sessions 
+WHERE user_id IN (
+  SELECT id FROM users WHERE email != 'toddlramer@icloud.com'
+);
+
+-- Then delete the users
+DELETE FROM users 
+WHERE email != 'toddlramer@icloud.com';
+
+-- Review final state
+SELECT id, email, subscription_status FROM users;
+
+-- If everything looks good, commit
+COMMIT;
+
+-- If something looks wrong, rollback
+-- ROLLBACK;
+
+WAIT FOR MY CONFIRMATION before running Step 2.
+```
+
+-----
+
+## **🔒 SAFETY CHECKLIST BEFORE DELETION**
+
+Before Agent runs the delete, verify:
+
+1. ✅ Your email is exactly: `toddlramer@icloud.com`
+1. ✅ You have access to that email (in case you need to reset password)
+1. ✅ You’re okay losing ALL conversation history from test users
+1. ✅ You’re okay losing ALL test subscription data
+
+-----
+
+## **📋 WHAT THIS WILL DELETE**
+
+- All users except `toddlramer@icloud.com`
+- All their conversations
+- All their sessions
+- All their subscription records (in Stripe, you may need to cancel separately)
+
+**What will NOT be deleted:**
+
+- Your account (toddlramer@icloud.com)
+- All 605 videos in library
+- All curation data
+- System configuration
+
+-----
+
+## **💳 STRIPE CLEANUP (SEPARATE STEP)**
+
+After database cleanup, you’ll need to cancel any active Stripe subscriptions:
+
+1. Go to [Stripe Dashboard](https://dashboard.stripe.com)
+1. Navigate to: Customers
+1. Search for test customers
+1. Cancel their subscriptions manually
+1. Optionally delete the customer records
+
+-----
+
+## **🎯 AFTER CLEANUP - RESET DASHBOARD**
+
+Once users are deleted, your dashboard should show:
+
+- Users: 1 (just you)
+- Active Subscriptions: 0 (or 1 if you’re testing)
+- MRR: $0 (or $14.99 if you have active sub)
+- Video Library: 605 (unchanged)
+
+-----
+
+## **⚡ QUICK ALTERNATIVE - DIRECT SQL**
+
+If Agent is frozen, you can run this directly in your database console:
+
+**STEP 1 - Verify your account:**
+
+```sql
+SELECT * FROM users WHERE email = 'toddlramer@icloud.com';
+```
+
+**STEP 2 - Delete others (only after confirming Step 1):**
+
+```sql
+BEGIN;
+
+DELETE FROM conversations WHERE user_id IN (
+  SELECT id FROM users WHERE email != 'toddlramer@icloud.com'
+);
+
+DELETE FROM sessions WHERE user_id IN (
+  SELECT id FROM users WHERE email != 'toddlramer@icloud.com'
+);
+
+DELETE FROM users WHERE email != 'toddlramer@icloud.com';
+
+COMMIT;
+```
+
+-----
+
+## **🚨 WHAT TO DO RIGHT NOW**
+
+**Option A: Use Agent (Recommended)**
+
+1. Copy the full prompt above to Agent
+1. Wait for Step 1 results (verify your account exists)
+1. Confirm deletion
+1. Agent executes Step 2
+
+**Option B: Direct Database Access**
+
+1. Open Supabase/Database console
+1. Run Step 1 query manually
+1. Verify your account exists
+1. Run Step 2 queries manually
+
+**Which approach do you want to use?**
+
+-----
+
+**Important: Don’t run the DELETE commands until we confirm your account (toddlramer@icloud.com) exists and is safe!**

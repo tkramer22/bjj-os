@@ -1,0 +1,59 @@
+```
+POSSIBLE ROOT CAUSE OF DUPLICATE MESSAGES FOUND
+
+Theory: BOTH the Claude endpoint AND the GPT-4o legacy endpoint are being called simultaneously for mobile chat.
+
+This would explain:
+- Same message appearing twice
+- Slightly different formatting between duplicates
+- Why duplicates happen on mobile
+
+═══════════════════════════════════════════════════════════════════════════════
+INVESTIGATE THE DUAL ENDPOINT THEORY
+═══════════════════════════════════════════════════════════════════════════════
+
+CHECK THIS NOW:
+
+1. In the mobile chat code (mobile-chat.tsx or ios-chat.tsx), what endpoint URL is being called?
+
+2. Is there ANY code that calls BOTH endpoints?
+
+3. Search for all fetch/axios calls in mobile chat files:
+   grep -r "fetch\|axios" client/src/pages/ios-chat.tsx
+   grep -r "fetch\|axios" client/src/pages/mobile-chat.tsx
+
+4. Check if there are multiple event listeners or useEffects that trigger API calls
+
+5. Is there a fallback that calls GPT-4o if Claude fails, but BOTH responses come through?
+
+SHOW ME:
+- The sendMessage function in mobile/iOS chat
+- All API endpoint URLs being called
+- Any fallback logic between Claude and GPT-4o
+
+═══════════════════════════════════════════════════════════════════════════════
+ACTIONS NEEDED
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Add temperature: 0.7 to Claude endpoint (you offered this - YES do it)
+
+2. Confirm iOS uses Claude endpoint ONLY, NOT the GPT-4o legacy endpoint
+
+3. If BOTH endpoints are being called, REMOVE the GPT-4o call entirely for mobile - use Claude only
+
+4. If GPT-4o endpoint is truly "legacy" and unused, consider removing it completely to avoid confusion
+
+═══════════════════════════════════════════════════════════════════════════════
+WHY THIS MATTERS
+═══════════════════════════════════════════════════════════════════════════════
+
+If both endpoints fire:
+- User sends 1 message
+- Claude responds (message 1)
+- GPT-4o responds (message 2) 
+- User sees duplicate
+
+This matches EXACTLY what I'm experiencing.
+
+Find and fix this NOW.
+```

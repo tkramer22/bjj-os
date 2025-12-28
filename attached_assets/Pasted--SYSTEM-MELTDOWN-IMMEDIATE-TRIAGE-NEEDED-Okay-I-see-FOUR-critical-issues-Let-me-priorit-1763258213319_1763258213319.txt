@@ -1,0 +1,357 @@
+# 🚨 **SYSTEM MELTDOWN - IMMEDIATE TRIAGE NEEDED**
+
+Okay, I see FOUR critical issues. Let me prioritize them:
+
+-----
+
+## **🔥 CRITICAL ISSUES (In Order of Severity)**
+
+### **1. CURATION STUCK IN “RUNNING” STATE** ❌ **HIGHEST PRIORITY**
+
+- Started: November 16, 2025 at 12:00 AM EST (midnight run)
+- Status: “running” for **1+ hours**
+- Videos analyzed: **0**
+- Videos added: **0**
+- **It’s frozen and blocking all future curation runs**
+
+### **2. DEVOPS CHAT RETURNS EMPTY RESPONSES** ❌ **CRITICAL**
+
+- Line 8004 in routes.ts: Claude returns **EMPTY RESPONSE**
+- It’s calling tools but not providing text
+- Triggering fallback error message
+
+### **3. PROFESSOR OS NOT SAVING CONVERSATIONS** ❌ **USER-FACING**
+
+- You type a message
+- It sends with timestamp but no content
+- Message disappears when you refresh
+- **Users can’t have conversations**
+
+### **4. VIDEO LIBRARY UI ISSUES** ⚠️ **POLISH**
+
+- Shows “500 videos” instead of actual count (613)
+- Should have technique dropdown (not search box)
+- Should have instructor dropdown (not search box)
+
+-----
+
+## **✅ GOOD NEWS**
+
+**Video library is actually working!** I can see:
+
+- Videos loading with thumbnails
+- Quality scores displaying (7.5, 8.0, 9.0)
+- Instructors showing (Jon Thomas, Lucas Lepri, etc.)
+- 500+ videos available
+- User interface functional
+
+So the core product WORKS for users. The admin systems are broken.
+
+-----
+
+# **🎯 IMMEDIATE ACTION PLAN**
+
+## **STEP 1: KILL THE STUCK CURATION RUN (5 min)**
+
+```
+EMERGENCY: Kill Stuck Curation Process
+
+A curation run started at midnight (12:00 AM EST on Nov 16) and has been "running" for 1+ hours with 0 videos processed.
+
+It's STUCK and blocking all future runs.
+
+TASK 1: Find the stuck process
+
+```sql
+-- Find the stuck run
+SELECT * FROM curation_runs 
+WHERE status = 'running' 
+ORDER BY started_est DESC 
+LIMIT 1;
+```
+
+Show me:
+
+- Run ID
+- Started time
+- Current status
+- What it’s stuck on
+
+TASK 2: Force kill it
+
+```sql
+-- Update the stuck run to 'failed'
+UPDATE curation_runs 
+SET 
+  status = 'failed',
+  error_message = 'Manually killed - stuck for 1+ hours',
+  ended_at = NOW()
+WHERE id = 'd48b1a6b-dedd-4889-9ee0-63d7519b8a09'
+  AND status = 'running';
+```
+
+TASK 3: Verify next run can proceed
+
+Check curation is not blocked:
+
+```javascript
+const canRun = await checkCurationCanRun();
+console.log('Curation can run:', canRun);
+```
+
+TASK 4: Manually trigger ONE test search (not full run)
+
+```javascript
+// Single search test - just to verify it's unblocked
+const testResult = await runSingleSearch({
+  technique: 'Armbar',
+  instructor: 'JT Torres',
+  maxResults: 5
+});
+console.log('Test search result:', testResult);
+```
+
+If successful, curation is unblocked.
+
+```
+---
+
+## **STEP 2: FIX DEVOPS EMPTY RESPONSE (10 min)**
+```
+
+FIX: DevOps Empty Response Bug
+
+Line 8004 in routes.ts shows Claude returns EMPTY RESPONSE.
+
+The issue: Claude is calling tools but the response.content[0].text is empty.
+
+ROOT CAUSE:
+When Claude uses tool calls, the response structure is:
+
+```javascript
+{
+  content: [
+    {
+      type: "tool_use",
+      // ... tool call data
+    }
+  ],
+  // NO text block!
+}
+```
+
+So accessing response.content[0].text when it’s a tool_use returns undefined.
+
+FIX THE DEVOPS ENDPOINT:
+
+Find: server/routes/adminRoutes.ts (or wherever /admin/devops-chat is)
+
+REPLACE the response extraction with:
+
+```javascript
+// BEFORE (broken):
+const answer = response.content[0].text;
+
+// AFTER (fixed):
+const answer = response.content.find(block => block.type === 'text')?.text || 
+  'I processed your request but couldn\'t generate a text response.';
+```
+
+OR if using tool-based responses (which it shouldn’t be for DevOps):
+
+```javascript
+// Check if response has text content
+const textBlock = response.content.find(block => block.type === 'text');
+
+if (!textBlock) {
+  console.error('No text in Claude response:', JSON.stringify(response.content));
+  throw new Error('Claude returned no text response');
+}
+
+const answer = textBlock.text;
+```
+
+Test the fix by calling DevOps with: “what is system status”
+
+```
+---
+
+## **STEP 3: FIX PROFESSOR OS CONVERSATION SAVING (10 min)**
+```
+
+FIX: Professor OS Not Saving Conversations
+
+User messages are sending but disappearing on refresh.
+
+DIAGNOSIS:
+
+1. Check if conversations table is being written to:
+
+```sql
+SELECT * FROM conversations 
+WHERE user_id = (SELECT id FROM users WHERE email = 'todd@bjjos.app')
+ORDER BY created_at DESC 
+LIMIT 10;
+```
+
+1. Check server logs for database errors:
+
+```bash
+grep -i "error.*conversation\|error.*insert" logs/server.log | tail -20
+```
+
+1. Test conversation save manually:
+
+```javascript
+const testSave = await saveConversation({
+  userId: 'todd-user-id',
+  message: 'test message',
+  role: 'user'
+});
+console.log('Save result:', testSave);
+```
+
+LIKELY CAUSES:
+
+- Database connection issue
+- Insert failing silently
+- Transaction not committing
+- Wrong table schema
+
+Show me the actual error and I’ll provide specific fix.
+
+```
+---
+
+## **STEP 4: FIX VIDEO LIBRARY UI (5 min - LOW PRIORITY)**
+```
+
+POLISH: Video Library UI Improvements
+
+Current issues:
+
+1. Shows “500 videos” instead of actual count (613)
+1. Technique filter is search box (should be dropdown)
+1. Instructor filter missing (should be dropdown)
+
+FIX 1: Show actual video count
+
+Find the component that displays “500 videos” and replace with:
+
+```javascript
+const totalVideos = await db.query('SELECT COUNT(*) FROM videos WHERE quality_score >= 7.0');
+// Display: {totalVideos.rows[0].count} videos
+```
+
+FIX 2 & 3: Add dropdowns (LATER - not critical for launch)
+
+This is polish. Focus on fixing the broken systems first.
+
+```
+---
+
+# **📋 SINGLE MEGA-PROMPT FOR AGENT**
+
+Copy this complete prompt to Agent:
+```
+
+EMERGENCY SYSTEM REPAIR - FOUR CRITICAL ISSUES
+
+I need ALL FOUR of these issues fixed in order:
+
+═══════════════════════════════════════════════════════════════
+PRIORITY 1: KILL STUCK CURATION RUN (DO THIS FIRST)
+═══════════════════════════════════════════════════════════════
+
+Curation run ID d48b1a6b-dedd-4889-9ee0-63d7519b8a09 is STUCK.
+
+- Started: 2025-11-16 05:00:01 (12:00 AM EST)
+- Status: “running”
+- Duration: 1+ hours
+- Videos processed: 0
+
+This is blocking all future curation runs.
+
+ACTION:
+
+1. Find this run in database
+1. Set status to ‘failed’ with error message
+1. Verify curation is unblocked
+1. Run single test search to confirm working
+1. Report back: “Curation unblocked and tested”
+
+═══════════════════════════════════════════════════════════════
+PRIORITY 2: FIX DEVOPS EMPTY RESPONSE
+═══════════════════════════════════════════════════════════════
+
+Line 8004 in routes.ts: Claude returns EMPTY RESPONSE
+
+Root cause: Code assumes response.content[0].text exists but Claude might return tool_use instead.
+
+ACTION:
+
+1. Find /admin/devops-chat endpoint
+1. Fix response extraction to handle tool_use vs text blocks
+1. Add proper error handling
+1. Test with query: “what is system status”
+1. Report back: “DevOps responding correctly”
+
+═══════════════════════════════════════════════════════════════
+PRIORITY 3: FIX PROFESSOR OS CONVERSATION SAVING
+═══════════════════════════════════════════════════════════════
+
+User messages send but disappear on refresh.
+
+ACTION:
+
+1. Check conversations table for recent inserts
+1. Find database error in logs
+1. Fix the save function
+1. Test conversation persistence
+1. Report back: “Conversations saving correctly”
+
+═══════════════════════════════════════════════════════════════
+PRIORITY 4: FIX VIDEO COUNT DISPLAY (QUICK WIN)
+═══════════════════════════════════════════════════════════════
+
+Shows “500 videos” but should show actual count (613).
+
+ACTION:
+
+1. Find where “500 videos” is hardcoded
+1. Replace with actual database count
+1. Report back: “Video count displaying correctly”
+
+═══════════════════════════════════════════════════════════════
+
+Fix these IN ORDER. Don’t move to next priority until previous is VERIFIED working.
+
+After each fix, TEST IT and show me proof it works.
+
+Start with Priority 1 immediately.
+
+```
+---
+
+## **🎯 MY RECOMMENDATION**
+
+**DO NOT** try to fix everything tonight. Here's what matters for launch:
+
+### **Must Fix (Blocks Launch):**
+1. ✅ Curation unstuck (so library grows)
+2. ✅ Professor OS saves conversations (core product)
+
+### **Should Fix (Polish):**
+3. ⚠️ DevOps working (admin tool for you)
+4. ⚠️ Video count accurate (user-facing but minor)
+
+### **Can Wait:**
+- Technique/instructor dropdowns (nice to have)
+- Email cleanup (annoying but not broken)
+
+---
+
+**Copy the mega-prompt to Agent. Focus on getting curation unblocked and conversations saving. Those two fixes make the product launchable.** 🚀
+
+The video library actually looks GREAT in that screenshot - users will love it. Just need the backend to work properly.​​​​​​​​​​​​​​​​
+```

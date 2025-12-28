@@ -1,0 +1,240 @@
+```
+Fix the Partnerships page and build a comprehensive partnership management system:
+
+PART 1 - FIX THE BLACK SCREEN BUG:
+
+1. DEBUG "ADD PARTNERSHIP" BUTTON:
+The black screen is likely caused by:
+- Missing modal component
+- Broken JavaScript rendering
+- API endpoint not responding
+- Missing instructor data to populate dropdown
+
+Fix by:
+- Ensure modal component exists and renders properly
+- Add error handling and loading states
+- Test API endpoint /api/admin/instructors/list
+- Add fallback UI if data fails to load
+
+2. CREATE FUNCTIONAL "ADD PARTNERSHIP" MODAL:
+When admin clicks "Add Partnership", show modal:
+
+┌────────────────────────────────────────────────────────┐
+│  Add New Partnership                          [X Close] │
+├────────────────────────────────────────────────────────┤
+│                                                         │
+│  Select Instructor: *                                   │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │ [Search instructors...]                    ▼    │   │
+│  └─────────────────────────────────────────────────┘   │
+│  Dropdown shows:                                        │
+│  - JT Torres (🏆 Elite • 8 videos)                     │
+│  - Gordon Ryan (🏆 Elite • 28 videos)                  │
+│  - Lachlan Giles (🏆 Elite • 34 videos)                │
+│  - ... (all 138 instructors searchable)                │
+│                                                         │
+│  Partnership Type: *                                    │
+│  ○ Featured Partner (highest visibility)               │
+│  ○ Active Partner (high visibility)                    │
+│  ○ Affiliate (moderate visibility)                     │
+│  ○ Content Partner (normal visibility)                 │
+│                                                         │
+│  Promotion Settings:                                    │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │ Feature Level:     [●●●●●] 5/5 stars            │   │
+│  │ Search Boost:      [========] +50%              │   │
+│  │ Rec Boost:         [============] +75%          │   │
+│  │ Homepage Feature:  ☑ Show on homepage           │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  Agreement Details:                                     │
+│  Start Date: [10/21/2025]                              │
+│  End Date:   [○ No end date  ○ Set date: ______]       │
+│  Revenue Share: [20]% (if applicable)                  │
+│  Free Access: ☑ Grant lifetime free access             │
+│                                                         │
+│  Internal Notes:                                        │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │ My coach at Essential Jiu-Jitsu. 2x Pan Am     │   │
+│  │ champ. Promote heavily. Lifetime partner.       │   │
+│  │ Will help promote BJJ OS to his network.        │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  [Cancel]                    [Create Partnership]       │
+└────────────────────────────────────────────────────────┘
+
+3. VALIDATION & ERROR HANDLING:
+- Required fields: Instructor, Partnership Type
+- Prevent duplicate partnerships (can't add JT Torres twice)
+- Validate dates (end date must be after start date)
+- Show loading spinner while saving
+- Success message: "Partnership with JT Torres created successfully!"
+- Error message: "Failed to create partnership. Please try again."
+
+PART 2 - PARTNERSHIP MANAGEMENT INTERFACE:
+
+Once partnerships exist, display them in a clear table:
+
+┌────────────────────────────────────────────────────────────────┐
+│  Active Partnerships (3)                      [+ Add Partnership]│
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  🏆 JT TORRES - Featured Partner                    [Edit] [📊]│
+│  ├─ Status: ✅ Active since Oct 21, 2025                       │
+│  ├─ Promotion: ⭐⭐⭐⭐⭐ Featured | +75% Rec Boost | Homepage  │
+│  ├─ Videos: 8 videos (94% helpful rate)                        │
+│  ├─ Performance: 723 views, 23 followers                       │
+│  ├─ Agreement: Lifetime free access, promote heavily           │
+│  └─ Notes: "My coach - 2x Pan Am champ. Will promote          │
+│            organically to students at Essential JJ."           │
+│                                                                 │
+│  🤝 GORDON RYAN - Active Partner                    [Edit] [📊]│
+│  ├─ Status: 🟡 Pending (contacted, no response yet)            │
+│  ├─ Promotion: ⭐⭐⭐ Moderate | +50% Rec Boost                 │
+│  ├─ Videos: 28 videos ready                                    │
+│  ├─ Performance: N/A (partnership not active)                  │
+│  ├─ Agreement: TBD                                             │
+│  └─ Next Action: Follow up via Instagram in 3 days             │
+│                                                                 │
+│  ⭐ LACHLAN GILES - Content Partner                 [Edit] [📊]│
+│  ├─ Status: ✅ Active since Oct 15, 2025                       │
+│  ├─ Promotion: ⭐⭐⭐ Standard | +25% Rec Boost                 │
+│  ├─ Videos: 34 videos (96% helpful rate)                       │
+│  ├─ Performance: 847 views, 19 followers                       │
+│  ├─ Agreement: Revenue share 15%, content collaboration        │
+│  └─ Notes: "Excellent instructor, high engagement"             │
+│                                                                 │
+└────────────────────────────────────────────────────────────────┘
+
+PART 3 - PARTNERSHIP TYPES & TIERS:
+
+Define clear partnership levels:
+
+1. FEATURED PARTNER (Tier 1):
+Reserved for top-tier strategic partners (JT Torres, major gym owners)
+Benefits:
+- ⭐⭐⭐⭐⭐ Feature Level (maximum visibility)
+- +75-100% Recommendation Boost
+- Homepage featured section
+- Mentioned in marketing materials
+- Lifetime free access
+- Revenue share options
+- Direct partnership badge on all videos
+
+2. ACTIVE PARTNER (Tier 2):
+For established instructors with strong engagement
+Benefits:
+- ⭐⭐⭐⭐ Feature Level (high visibility)
+- +50% Recommendation Boost
+- Occasional homepage features
+- Free Pro subscription
+- Revenue share options
+- Partnership badge on videos
+
+3. AFFILIATE (Tier 3):
+For instructors promoting BJJ OS to their audience
+Benefits:
+- ⭐⭐⭐ Feature Level (moderate visibility)
+- +25% Recommendation Boost
+- Affiliate link tracking
+- Commission on referrals (20% lifetime)
+- Free Pro subscription
+- Affiliate badge on videos
+
+4. CONTENT PARTNER (Tier 4):
+For instructors with great content, no formal promotion
+Benefits:
+- ⭐⭐ Feature Level (slight visibility boost)
+- +10% Recommendation Boost
+- Recognition in "Featured Instructors" when relevant
+- Free Pro subscription
+- No obligations
+
+PART 4 - PARTNERSHIP ANALYTICS DASHBOARD:
+
+Add detailed analytics for each partnership:
+
+Click [📊] button on any partnership to see:
+
+┌────────────────────────────────────────────────────────┐
+│  PARTNERSHIP ANALYTICS: JT Torres                      │
+├────────────────────────────────────────────────────────┤
+│  CONTENT PERFORMANCE:                                  │
+│  - Total Videos: 8                                     │
+│  - Total Views: 723                                    │
+│  - Avg Views per Video: 90                            │
+│  - Helpful Rate: 94% (68 👍 / 4 👎)                    │
+│  - Saves: 47                                           │
+│  - Comments: 12                                        │
+│                                                         │
+│  RECOMMENDATION IMPACT:                                │
+│  - Times Recommended by Prof. OS: 89                   │
+│  - Click-through Rate: 78% (users watched)            │
+│  - Completion Rate: 67% (watched >80% of video)       │
+│  - Follow-up Questions: 23 (users asked more)         │
+│                                                         │
+│  USER ENGAGEMENT:                                      │
+│  - Users Following: 23                                 │
+│  - User Mentions: "Love JT's teaching style" (5×)     │
+│  - Requested More Content: 8 users                    │
+│                                                         │
+│  PARTNERSHIP VALUE:                                    │
+│  - Lifetime Access Value: $179.88/year saved          │
+│  - Content Value: 8 videos × avg $50/video = $400    │
+│  - Total Value Delivered: $579.88                     │
+│  - Cost to You: $0 (lifetime access only)            │
+│  - ROI: Excellent (high engagement, organic growth)   │
+│                                                         │
+│  REFERRALS & GROWTH:                                   │
+│  - Estimated reach through JT's network: 40+ students │
+│  - Trackable signups (if using ref link): TBD         │
+│                                                         │
+│  RECOMMENDATIONS:                                      │
+│  ✅ High engagement - continue promoting              │
+│  💡 Create "JT Torres Spider Guard" collection        │
+│  💡 Feature in next marketing push                    │
+└────────────────────────────────────────────────────────┘
+
+PART 5 - PARTNERSHIP WORKFLOW AUTOMATION:
+
+1. ONBOARDING CHECKLIST:
+When partnership is created:
+☐ Send welcome email/SMS to partner
+☐ Grant lifetime free access to their account
+☐ Add partnership badge to their instructor profile
+☐ Boost their videos in recommendations (per settings)
+☐ Add to homepage "Featured Instructors" (if enabled)
+☐ Set calendar reminder to check in (30 days)
+
+2. ONGOING MANAGEMENT:
+- Monthly email: "JT Torres partnership performance this month"
+- Quarterly review: Analytics summary
+- Auto-alerts: "JT Torres uploaded new video - curate it?"
+
+3. EXPIRATION HANDLING:
+If partnership has end date:
+- 30 days before: "JT Torres partnership expires in 30 days. Renew?"
+- 7 days before: Reminder
+- On expiration: Auto-downgrade promotion levels
+- Post-expiration: "Partnership with JT Torres expired. Archive or renew?"
+
+PART 6 - TRUST-BASED RESULTS TRACKING:
+
+The system focuses on RESULTS, not micromanaging partner activities:
+
+What you track:
+✅ Are their videos performing well? (views, helpful rate)
+✅ Are users engaging with their content? (saves, follows)
+✅ Is the partnership valuable? (ROI calculation)
+✅ Should you continue promoting them? (performance trends)
+
+What you DON'T track:
+❌ Individual social media posts
+❌ Post schedules or quotas
+❌ UTM parameters or click tracking
+❌ Content calendars
+
+Philosophy: Trust partners to promote organically. Measure only what matters: content performance and user engagement.
+
+Make partnerships a strategic growth tool that's easy to manage, trust-based, and focused on results.
+```

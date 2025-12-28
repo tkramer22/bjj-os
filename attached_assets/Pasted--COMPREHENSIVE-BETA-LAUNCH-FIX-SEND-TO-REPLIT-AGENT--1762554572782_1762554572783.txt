@@ -1,0 +1,712 @@
+# **🚀 COMPREHENSIVE BETA LAUNCH FIX - SEND TO REPLIT AGENT:**
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL FIXES FOR BETA LAUNCH - WEEKEND DEADLINE
+═══════════════════════════════════════════════════════════════════════════════
+
+MISSION: Fix all critical UX issues blocking beta launch. Excellence is our pillar.
+Timeline: Must be production-ready by this weekend for beta testers.
+
+PRIORITY ORDER:
+🔴 CRITICAL (Blockers - must fix)
+🟡 HIGH (Should fix for good first impression)
+🟢 MEDIUM (Can wait if needed)
+
+═══════════════════════════════════════════════════════════════════════════════
+🔴 CRITICAL #1: PROFESSOR OS PERSONALIZED FIRST MESSAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+User completes onboarding → Lands in chat → Sees generic "Welcome to Prof. OS" message
+This defeats the entire value proposition. User thinks: "Does this thing even know me?"
+
+REQUIREMENT:
+After onboarding completes, Professor OS should ALREADY have a personalized message 
+waiting in chat that demonstrates intelligence and insight - NOT just regurgitating 
+what user typed.
+
+IMPLEMENTATION:
+
+Step 1: Create First Message Generator
+File: server/utils/generate-first-message.ts
+
+export async function generateProfessorOSFirstMessage(userProfile: {
+  firstName: string;
+  beltLevel: string;
+  yearsTraining: string;
+  trainingFrequency: string;
+  struggleArea: string;
+  trainingStyle: string;
+  height?: string;
+  weight?: string;
+}) {
+  
+  // Generate INTELLIGENT OBSERVATION based on belt + experience
+  // NOT regurgitation - actual insight
+  
+  let observation = '';
+  
+  // Belt + Experience Matrix
+  if (userProfile.beltLevel === 'WHITE' && userProfile.yearsTraining === '<6 months') {
+    observation = "You're brand new to this - everything probably feels overwhelming right now. That's normal. Most white belts quit in the first 3 months because they don't see progress. I'm here to make sure you see it.";
+  } 
+  else if (userProfile.beltLevel === 'WHITE' && userProfile.yearsTraining === '6mo-2yr') {
+    observation = "You're past the 'am I even going to stick with this' phase. Now comes the real learning. Your body knows the movements but your brain hasn't connected the concepts yet.";
+  }
+  else if (userProfile.beltLevel === 'BLUE' && userProfile.yearsTraining === '1-2yr') {
+    observation = "Fresh blue belt or close to it - this is where most people plateau. You know enough to survive but not enough to impose your game. Let's change that.";
+  }
+  else if (userProfile.beltLevel === 'BLUE' && userProfile.yearsTraining === '2-5yr') {
+    observation = "Mid-blue belt - you've put in serious time. If you're struggling with techniques at this point, it's probably not a technique problem anymore. It's timing and positioning.";
+  }
+  else if (userProfile.beltLevel === 'PURPLE') {
+    observation = "Purple belt - you're building your A-game now. Everything you learn should connect to your core style. Random techniques won't help you anymore.";
+  }
+  else if (userProfile.beltLevel === 'BROWN' || userProfile.beltLevel === 'BLACK') {
+    observation = "You've put in the years. You know what works for YOU. My job isn't to teach you new techniques - it's to help you refine what you already do and fill specific gaps.";
+  }
+  else {
+    // Default fallback
+    observation = "You've been training for a while. You know the basics. Let's figure out what's holding you back and fix it.";
+  }
+  
+  // Build complete first message
+  const firstMessage = `Hey ${userProfile.firstName}.
+
+${observation}
+
+Here's the deal: I'm not a chatbot. I'm your training partner who never forgets anything.
+
+Talk to me like you'd talk to your coach after training. Be real with me. Tell me what actually happened - the good, the bad, the frustrating parts.
+
+I'll remember every session, spot patterns you can't see, and help you fix what's not working.
+
+But I need you to trust me and actually talk. Not just click buttons or give me one-word answers.
+
+Deal?
+
+So... when did you last train? What happened?`;
+
+  return firstMessage;
+}
+
+
+Step 2: Trigger First Message After Onboarding
+File: client/src/pages/OnboardingFlow.tsx (or wherever onboarding completes)
+
+After user submits final onboarding step:
+
+const handleComplete = async () => {
+  // Save profile data
+  await fetch('/api/user/profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  
+  // Generate and save Professor OS first message
+  await fetch('/api/professor-os/initialize', {
+    method: 'POST'
+  });
+  
+  // Navigate to app - message will be waiting
+  navigate('/app');
+};
+
+
+Step 3: API Endpoint to Generate First Message
+File: server/routes/professor-os.ts
+
+app.post('/api/professor-os/initialize', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Get user profile
+    const profile = await db.user_profiles.findOne({
+      where: { user_id: userId }
+    });
+    
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    
+    // Generate personalized first message
+    const firstMessage = await generateProfessorOSFirstMessage({
+      firstName: profile.first_name,
+      beltLevel: profile.belt_level,
+      yearsTraining: profile.years_training,
+      trainingFrequency: profile.training_frequency,
+      struggleArea: profile.biggest_struggle,
+      trainingStyle: profile.training_style,
+      height: profile.height,
+      weight: profile.weight
+    });
+    
+    // Save as first message in conversation
+    await db.chat_messages.create({
+      user_id: userId,
+      role: 'assistant',
+      content: firstMessage,
+      created_at: new Date()
+    });
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error initializing Professor OS:', error);
+    res.status(500).json({ error: 'Failed to initialize' });
+  }
+});
+
+
+Step 4: Update Professor OS System Prompt to Use Profile Data
+File: server/routes/professor-os.ts (in chat endpoint)
+
+When user sends a message to Professor OS, load their profile and inject into system prompt:
+
+const profile = await db.user_profiles.findOne({
+  where: { user_id: userId },
+  include: [{ model: db.users, as: 'user' }]
+});
+
+const systemPrompt = `You are Professor OS, an elite BJJ coach and training partner.
+
+USER CONTEXT (use this naturally in all responses):
+- Name: ${profile.first_name}
+- Belt Level: ${profile.belt_level}
+- Years Training: ${profile.years_training}
+- Training Frequency: ${profile.training_frequency}x per week
+- Main Struggle: ${profile.biggest_struggle}
+- Training Style: ${profile.training_style}
+${profile.height ? `- Height: ${profile.height}` : ''}
+${profile.weight ? `- Weight: ${profile.weight}` : ''}
+
+CRITICAL INSTRUCTIONS:
+1. You are a TRAINING PARTNER, not a chatbot
+2. Reference their profile naturally (don't just list facts)
+3. Talk like a real coach - direct, honest, practical
+4. Use their name occasionally
+5. When relevant, reference height/weight for technique advice
+6. Remember everything they tell you across conversations
+7. Ask diagnostic questions to understand root causes
+8. Give specific, actionable advice
+9. Call out excuses gently but firmly
+10. Celebrate progress genuinely
+
+Your responses should feel like talking to an experienced training partner who 
+knows them well, not an AI assistant.`;
+
+═══════════════════════════════════════════════════════════════════════════════
+🔴 CRITICAL #2: FIX SAVE/FAVORITE FUNCTIONALITY
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+Heart icon on video cards does nothing. Users can't save videos to their "Saved" section.
+
+IMPLEMENTATION:
+
+Step 1: Create Save Endpoint
+File: server/routes/videos.ts
+
+app.post('/api/videos/:videoId/save', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { videoId } = req.params;
+    
+    // Check if already saved
+    const existing = await db.saved_videos.findOne({
+      where: { user_id: userId, video_id: videoId }
+    });
+    
+    if (existing) {
+      return res.json({ success: true, saved: true });
+    }
+    
+    // Save video
+    await db.saved_videos.create({
+      user_id: userId,
+      video_id: videoId,
+      saved_at: new Date()
+    });
+    
+    res.json({ success: true, saved: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to save video' });
+  }
+});
+
+app.delete('/api/videos/:videoId/save', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { videoId } = req.params;
+    
+    await db.saved_videos.destroy({
+      where: { user_id: userId, video_id: videoId }
+    });
+    
+    res.json({ success: true, saved: false });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to unsave video' });
+  }
+});
+
+app.get('/api/videos/saved', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const saved = await db.saved_videos.findAll({
+      where: { user_id: userId },
+      include: [{ model: db.videos, as: 'video' }],
+      order: [['saved_at', 'DESC']]
+    });
+    
+    res.json({ videos: saved.map(s => s.video) });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load saved videos' });
+  }
+});
+
+
+Step 2: Wire Up Frontend Heart Icon
+File: client/src/components/VideoCard.tsx
+
+import { useState } from 'react';
+
+export function VideoCard({ video }) {
+  const [saved, setSaved] = useState(video.isSaved || false);
+  const [loading, setLoading] = useState(false);
+  
+  const handleSaveToggle = async (e) => {
+    e.stopPropagation(); // Prevent card click
+    setLoading(true);
+    
+    try {
+      if (saved) {
+        // Unsave
+        await fetch(`/api/videos/${video.id}/save`, {
+          method: 'DELETE'
+        });
+        setSaved(false);
+      } else {
+        // Save
+        await fetch(`/api/videos/${video.id}/save`, {
+          method: 'POST'
+        });
+        setSaved(true);
+      }
+    } catch (error) {
+      console.error('Failed to toggle save:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <div className="video-card">
+      {/* ... other card content ... */}
+      
+      <button 
+        className={`heart-button ${saved ? 'saved' : ''}`}
+        onClick={handleSaveToggle}
+        disabled={loading}
+      >
+        {saved ? '❤️' : '🤍'}
+      </button>
+    </div>
+  );
+}
+
+
+Step 3: Update Saved Page to Load Saved Videos
+File: client/src/pages/Saved.tsx
+
+export function Saved() {
+  const { data: savedVideos, isLoading } = useQuery({
+    queryKey: ['saved-videos'],
+    queryFn: async () => {
+      const res = await fetch('/api/videos/saved');
+      return res.json();
+    }
+  });
+  
+  if (isLoading) return <div>Loading...</div>;
+  
+  if (!savedVideos?.videos?.length) {
+    return (
+      <div className="empty-state">
+        <p>No saved videos yet</p>
+        <p>Click the heart on any video to save it here</p>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="saved-videos">
+      <h1>Saved Videos</h1>
+      <div className="video-grid">
+        {savedVideos.videos.map(video => (
+          <VideoCard key={video.id} video={video} isSaved={true} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+🔴 CRITICAL #3: FIX SETTINGS PAGE DATA POPULATION
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+Settings page shows blank name/email even though system knows this data.
+"Biggest struggle" is text input (should be dropdown).
+
+IMPLEMENTATION:
+
+File: client/src/pages/Settings.tsx
+
+import { useQuery, useMutation } from '@tanstack/react-query';
+
+export function Settings() {
+  const { data: profile, refetch } = useQuery({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const res = await fetch('/api/user/profile');
+      return res.json();
+    }
+  });
+  
+  const updateProfile = useMutation({
+    mutationFn: async (data) => {
+      const res = await fetch('/api/user/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      refetch();
+    }
+  });
+  
+  const struggles = [
+    'Guard passing',
+    'Guard retention',
+    'Submissions from top',
+    'Escapes from bottom',
+    'Takedowns',
+    'Side control pressure',
+    'Back attacks',
+    'Leg locks',
+    'Competition nerves',
+    'Rolling with bigger opponents',
+    'Cardio/conditioning',
+    'Other'
+  ];
+  
+  if (!profile) return <div>Loading...</div>;
+  
+  return (
+    <div className="settings">
+      <h2>Profile</h2>
+      
+      <label>Name</label>
+      <input 
+        type="text"
+        defaultValue={profile.firstName || ''}
+        onBlur={(e) => updateProfile.mutate({ firstName: e.target.value })}
+      />
+      
+      <label>Email</label>
+      <input 
+        type="email"
+        value={profile.email || ''}
+        disabled
+        style={{ opacity: 0.6, cursor: 'not-allowed' }}
+      />
+      <small style={{ color: '#999' }}>Email cannot be changed</small>
+      
+      <label>Belt Level</label>
+      <select 
+        defaultValue={profile.beltLevel || 'WHITE'}
+        onChange={(e) => updateProfile.mutate({ beltLevel: e.target.value })}
+      >
+        <option value="WHITE">White</option>
+        <option value="BLUE">Blue</option>
+        <option value="PURPLE">Purple</option>
+        <option value="BROWN">Brown</option>
+        <option value="BLACK">Black</option>
+      </select>
+      
+      <label>Training Style</label>
+      <select 
+        defaultValue={profile.trainingStyle || 'both'}
+        onChange={(e) => updateProfile.mutate({ trainingStyle: e.target.value })}
+      >
+        <option value="gi">Gi Only</option>
+        <option value="nogi">No-Gi Only</option>
+        <option value="both">Both Gi & No-Gi</option>
+      </select>
+      
+      <label>Biggest Struggle</label>
+      <select 
+        defaultValue={profile.biggestStruggle || ''}
+        onChange={(e) => updateProfile.mutate({ biggestStruggle: e.target.value })}
+      >
+        <option value="">Select...</option>
+        {struggles.map(s => (
+          <option key={s} value={s}>{s}</option>
+        ))}
+      </select>
+      
+      <h3 style={{ marginTop: '32px' }}>Optional Info</h3>
+      <small style={{ color: '#999' }}>Helps Professor OS give better personalized advice</small>
+      
+      <label>Height</label>
+      <input 
+        type="text"
+        placeholder='e.g., 5\'10"'
+        defaultValue={profile.height || ''}
+        onBlur={(e) => updateProfile.mutate({ height: e.target.value })}
+      />
+      
+      <label>Weight</label>
+      <input 
+        type="text"
+        placeholder="e.g., 170 lbs"
+        defaultValue={profile.weight || ''}
+        onBlur={(e) => updateProfile.mutate({ weight: e.target.value })}
+      />
+      
+      <label>Birth Year</label>
+      <input 
+        type="number"
+        placeholder="e.g., 1990"
+        defaultValue={profile.birthYear || ''}
+        onBlur={(e) => updateProfile.mutate({ birthYear: e.target.value })}
+      />
+      
+      <h2 style={{ marginTop: '48px' }}>Subscription</h2>
+      <div style={{ 
+        padding: '16px', 
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        borderRadius: '8px',
+        color: 'white',
+        fontWeight: '600'
+      }}>
+        Plan: LIFETIME ✓
+      </div>
+    </div>
+  );
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+🔴 CRITICAL #4: FIX VIDEO THUMBNAILS
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+Many videos show gray placeholder boxes instead of actual YouTube thumbnails.
+
+IMPLEMENTATION:
+
+Step 1: Ensure Thumbnails Are Stored
+File: server/services/curation-pipeline.js (or wherever videos are saved)
+
+When saving videos to database, ensure YouTube thumbnail URL is captured:
+
+await db.videos.create({
+  video_id: video.videoId,
+  title: video.title,
+  thumbnail_url: `https://img.youtube.com/vi/${video.videoId}/maxresdefault.jpg`, // High quality
+  // or fallback to: `https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg`
+  // ... other fields
+});
+
+
+Step 2: Display Thumbnails in Frontend
+File: client/src/components/VideoCard.tsx
+
+export function VideoCard({ video }) {
+  const thumbnailUrl = video.thumbnail_url || 
+    `https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`;
+  
+  return (
+    <div className="video-card">
+      <div className="thumbnail-container">
+        <img 
+          src={thumbnailUrl}
+          alt={video.title}
+          onError={(e) => {
+            // Fallback if image fails to load
+            e.target.src = `https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`;
+          }}
+        />
+        
+        {/* Duration overlay */}
+        {video.duration && (
+          <span className="duration">{video.duration}</span>
+        )}
+      </div>
+      
+      {/* Rest of card */}
+    </div>
+  );
+}
+
+CSS:
+.thumbnail-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  border-radius: 8px 8px 0 0;
+}
+
+.thumbnail-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.duration {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.8);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+🟡 HIGH #5: CLEAN UP TAG DISPLAY
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+Tags show confusing "All/Both", "All/Gi" labels. Should only show:
+- Duration
+- Gi/No-Gi/Both indicator
+
+IMPLEMENTATION:
+
+File: client/src/components/VideoCard.tsx
+
+export function VideoCard({ video }) {
+  return (
+    <div className="video-card">
+      <div className="thumbnail-container">
+        {/* thumbnail */}
+        <span className="duration">{video.duration || '10:24'}</span>
+      </div>
+      
+      <div className="card-content">
+        <h3>{video.title}</h3>
+        <p className="instructor">{video.instructor}</p>
+        
+        <div className="video-meta">
+          {/* Only show Gi/No-Gi indicator */}
+          <span className={`gi-badge ${video.gi_or_nogi}`}>
+            {video.gi_or_nogi === 'gi' ? 'Gi' : 
+             video.gi_or_nogi === 'nogi' ? 'No-Gi' : 
+             'Both'}
+          </span>
+          
+          {/* Rating */}
+          <span className="rating">
+            ⭐ {video.quality_score ? (video.quality_score / 10).toFixed(1) : '9.0'}
+          </span>
+        </div>
+      </div>
+      
+      <button className="heart-button">
+        {/* heart icon */}
+      </button>
+    </div>
+  );
+}
+
+CSS:
+.gi-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gi-badge.gi {
+  background: #4169e1;
+  color: white;
+}
+
+.gi-badge.nogi {
+  background: #ff6b6b;
+  color: white;
+}
+
+.gi-badge.both {
+  background: #9370db;
+  color: white;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+🟡 HIGH #6: FIX LIFETIME USER WELCOME FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+Lifetime users see confusing "$14.99/month" pricing page on first login.
+
+IMPLEMENTATION:
+
+Already sent in previous prompt (WelcomeLifetime page + routing logic).
+Verify this is implemented and working.
+
+═══════════════════════════════════════════════════════════════════════════════
+🟡 HIGH #7: FIX LOGIN PASSCODE EMAILS
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+Lifetime invite emails work, but login passcode emails don't send.
+
+INVESTIGATION NEEDED:
+Add comprehensive logging to passcode email function to diagnose why it's failing.
+
+File: server/routes/auth.ts (or wherever passcode emails are sent)
+
+Add detailed logging as specified in earlier prompt about email debugging.
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, test:
+
+1. ✅ New user completes onboarding → Lands in chat with personalized Prof OS message
+2. ✅ Professor OS uses user's name, belt level in responses
+3. ✅ Heart icon saves video to "Saved" section
+4. ✅ Unsaving works (heart toggles off, removes from Saved)
+5. ✅ Settings page shows pre-filled name, email, belt level
+6. ✅ Settings dropdown for "biggest struggle" works
+7. ✅ Video thumbnails display (no gray placeholders)
+8. ✅ Tag display shows only: Duration + Gi/No-Gi badge + Rating
+9. ✅ Lifetime users see welcome page (not pricing)
+
+═══════════════════════════════════════════════════════════════════════════════
+NOTES
+═══════════════════════════════════════════════════════════════════════════════
+
+- All fixes are ADDITIVE - don't break existing functionality
+- If you encounter database table issues, check existing schema first
+- If API endpoints already exist, enhance them rather than duplicate
+- Focus on CRITICAL fixes first - HIGH priority can wait if needed for timeline
+- Excellence is the pillar - make it feel professional and polished
+
+Begin implementation now. Prioritize CRITICAL fixes #1-4 above all else.
+```
+
+-----
+
+**COPY THIS ENTIRE PROMPT AND SEND TO REPLIT AGENT**
+
+This is comprehensive but prioritized for your weekend deadline. The agent will tackle the critical issues first! 🚀​​​​​​​​​​​​​​​​

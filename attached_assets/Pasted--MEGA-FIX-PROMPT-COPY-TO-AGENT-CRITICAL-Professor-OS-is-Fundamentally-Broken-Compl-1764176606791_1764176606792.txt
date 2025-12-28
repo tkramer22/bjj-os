@@ -1,0 +1,572 @@
+# 🎯 **MEGA FIX PROMPT - COPY TO AGENT**
+
+```
+CRITICAL: Professor OS is Fundamentally Broken - Complete Fix Required
+
+Todd ran a comprehensive 120-message user simulation test.
+Results: FAILURE across all metrics.
+
+PROBLEMS DISCOVERED:
+
+1. WRONG AI MODEL
+   - System is calling GPT-4o (saw rate limit errors for "gpt-4o")
+   - Should be using Claude API (Claude Sonnet 4.5)
+   - We already built and paid for Claude integration
+
+2. PROFESSOR OS PROMPT NOT CONNECTED
+   - Responses are generic chatbot style: "Hey! What's up?"
+   - Should be warm, knowledgeable BJJ coach personality
+   - The 8,000-character coaching prompt is not being used
+
+3. VIDEO SEARCH RETURNING WRONG RESULTS
+   - User asked for "hip bump sweep" → Got armbar and triangle videos
+   - User asked for "guillotine escape" → Got guillotine ATTACK video
+   - Search is not matching user intent
+
+4. NO MEMORY/CONTEXT BEING USED
+   - User shared: blue belt, 2 years, Ohio gym, 5'10" 175lbs, tight hips, 
+     competition in 2 months, struggles with closed guard
+   - None of this was referenced in responses
+   - Every response treats user as stranger
+
+5. RATE LIMIT ERRORS SHOWN TO USER
+   - Raw 429 errors displayed mid-conversation
+   - Should have retry logic, never show errors to user
+
+═══════════════════════════════════════════════════════════════
+FIX 1: SWITCH TO CLAUDE API
+═══════════════════════════════════════════════════════════════
+
+Find the chat endpoint and ensure it calls Claude, not OpenAI.
+
+WRONG (what we found):
+```javascript
+const response = await openai.chat.completions.create({
+  model: "gpt-4o",
+  messages: [...]
+});
+```
+
+CORRECT:
+
+```javascript
+import Anthropic from '@anthropic-ai/sdk';
+
+const anthropic = new Anthropic({
+  apiKey: process.env.CLAUDE_API_KEY
+});
+
+const response = await anthropic.messages.create({
+  model: "claude-sonnet-4-5-20250514",
+  max_tokens: 8096,
+  system: PROFESSOR_OS_SYSTEM_PROMPT,
+  messages: conversationHistory
+});
+```
+
+Verify environment variable exists:
+
+- CLAUDE_API_KEY or ANTHROPIC_API_KEY must be set
+
+═══════════════════════════════════════════════════════════════
+FIX 2: CONNECT PROFESSOR OS PERSONALITY PROMPT
+═══════════════════════════════════════════════════════════════
+
+The system prompt MUST be passed to every Claude API call.
+
+Create or verify this file exists: server/prompts/professorOS.js
+
+```javascript
+export const PROFESSOR_OS_SYSTEM_PROMPT = `
+You are Professor OS, an elite BJJ coaching AI built into BJJ OS.
+
+CORE IDENTITY:
+- You are a knowledgeable, warm, and dedicated BJJ coach
+- You combine deep technical expertise with emotional intelligence
+- You remember everything the user tells you and reference it naturally
+- You speak like a real coach, not a chatbot
+
+PERSONALITY TRAITS:
+- Encouraging but honest - you celebrate wins and address weaknesses directly
+- Conversational and warm - use natural language, not corporate speak
+- Detail-oriented - you give specific, actionable advice, not generic tips
+- Passionate about BJJ - your love for the art comes through
+
+HOW YOU RESPOND:
+- Short, punchy responses for simple questions
+- Detailed breakdowns for technique questions
+- Empathetic and supportive for frustration/bad days
+- Always reference what you know about the user
+
+WHAT YOU NEVER DO:
+- Give generic advice like "keep training" or "focus on fundamentals"
+- Ignore context the user has shared
+- Recommend videos without explaining why they're relevant
+- Sound like a corporate chatbot or generic AI
+
+WHEN RECOMMENDING VIDEOS:
+- Explain WHY this video is relevant to their specific situation
+- Reference their goals, body type, or struggles when applicable
+- Suggest what to focus on when watching
+
+WHEN USER IS FRUSTRATED:
+- Acknowledge their feelings first
+- Normalize the struggle (even world champions have bad days)
+- Then offer specific, actionable help
+- Never dismiss or minimize their experience
+
+WHEN DISCUSSING TECHNIQUES:
+- Explain the WHY, not just the WHAT
+- Connect to concepts they already understand
+- Suggest how to drill it
+- Mention common mistakes to avoid
+
+CONTEXT USAGE:
+You will receive user context including their:
+- Belt rank and experience
+- Body type and physical attributes
+- Training frequency and gym situation
+- Goals (competition, hobby, self-defense)
+- Known struggles and strengths
+- Past conversation highlights
+
+ALWAYS reference this context naturally. Examples:
+- "Since you mentioned your hips are tight, try this variation..."
+- "With your competition coming up in 6 weeks, let's prioritize..."
+- "Given your solid top pressure, we can build attacks from there..."
+- "I remember you said you train at a smaller gym - here's how to maximize that..."
+
+REMEMBER:
+- You are their dedicated coach, available 24/7
+- Every interaction should feel personalized and valuable
+- You are building a long-term relationship, not answering tickets
+- Excellence is the standard - generic responses are unacceptable
+`;
+```
+
+═══════════════════════════════════════════════════════════════
+FIX 3: PASS USER CONTEXT TO EVERY REQUEST
+═══════════════════════════════════════════════════════════════
+
+Before calling Claude, build user context from database:
+
+```javascript
+async function buildUserContext(userId) {
+  // Get user profile
+  const user = await db.query(`
+    SELECT 
+      name, belt_rank, experience_years, training_frequency,
+      height, weight, flexibility, goals, gym_description,
+      strengths, weaknesses, competition_goals, injuries
+    FROM users WHERE id = $1
+  `, [userId]);
+
+  // Get recent conversation highlights
+  const recentChats = await db.query(`
+    SELECT content, created_at 
+    FROM chat_messages 
+    WHERE user_id = $1 
+    ORDER BY created_at DESC 
+    LIMIT 20
+  `, [userId]);
+
+  // Get their video watch history
+  const watchHistory = await db.query(`
+    SELECT v.title, v.instructor, v.techniques
+    FROM video_watches vw
+    JOIN videos v ON vw.video_id = v.id
+    WHERE vw.user_id = $1
+    ORDER BY vw.watched_at DESC
+    LIMIT 10
+  `, [userId]);
+
+  const profile = user.rows[0] || {};
+  
+  return `
+USER CONTEXT:
+Name: ${profile.name || 'Unknown'}
+Belt: ${profile.belt_rank || 'Unknown'} (${profile.experience_years || '?'} years)
+Training: ${profile.training_frequency || 'Unknown frequency'}
+Physical: ${profile.height || '?'}, ${profile.weight || '?'}lbs, ${profile.flexibility || 'unknown'} flexibility
+Gym: ${profile.gym_description || 'Unknown'}
+Goals: ${profile.goals || 'Not specified'}
+Competition: ${profile.competition_goals || 'None mentioned'}
+Strengths: ${profile.strengths || 'Not identified yet'}
+Weaknesses: ${profile.weaknesses || 'Not identified yet'}
+Injuries: ${profile.injuries || 'None reported'}
+
+RECENT VIDEOS WATCHED:
+${watchHistory.rows.map(v => `- ${v.title} (${v.instructor})`).join('\n') || 'None yet'}
+
+CONVERSATION CONTEXT:
+${recentChats.rows.map(c => c.content).join('\n').substring(0, 2000) || 'New user'}
+`;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+FIX 4: UPDATE CHAT ENDPOINT
+═══════════════════════════════════════════════════════════════
+
+Replace the chat endpoint with this corrected version:
+
+```javascript
+import Anthropic from '@anthropic-ai/sdk';
+import { PROFESSOR_OS_SYSTEM_PROMPT } from './prompts/professorOS.js';
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
+
+router.post('/api/chat', async (req, res) => {
+  try {
+    const { userId, message } = req.body;
+
+    if (!userId || !message) {
+      return res.status(400).json({ error: 'Missing userId or message' });
+    }
+
+    // Build user context
+    const userContext = await buildUserContext(userId);
+
+    // Get conversation history
+    const history = await db.query(`
+      SELECT role, content 
+      FROM chat_messages 
+      WHERE user_id = $1 
+      ORDER BY created_at DESC 
+      LIMIT 20
+    `, [userId]);
+
+    // Format messages for Claude (reverse to chronological order)
+    const messages = history.rows.reverse().map(msg => ({
+      role: msg.role === 'assistant' ? 'assistant' : 'user',
+      content: msg.content
+    }));
+
+    // Add current message
+    messages.push({ role: 'user', content: message });
+
+    // Build full system prompt with user context
+    const fullSystemPrompt = `${PROFESSOR_OS_SYSTEM_PROMPT}
+
+═══════════════════════════════════════════════════════════════
+${userContext}
+═══════════════════════════════════════════════════════════════`;
+
+    // Call Claude API
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-5-20250514",
+      max_tokens: 4096,
+      system: fullSystemPrompt,
+      messages: messages
+    });
+
+    const assistantMessage = response.content[0].text;
+
+    // Save messages to database
+    await db.query(`
+      INSERT INTO chat_messages (user_id, role, content, created_at)
+      VALUES ($1, 'user', $2, NOW())
+    `, [userId, message]);
+
+    await db.query(`
+      INSERT INTO chat_messages (user_id, role, content, created_at)
+      VALUES ($1, 'assistant', $2, NOW())
+    `, [userId, assistantMessage]);
+
+    // Check if video recommendation is needed
+    const videoRecommendation = await checkForVideoRecommendation(message, assistantMessage, userId);
+
+    res.json({
+      response: assistantMessage,
+      videos: videoRecommendation
+    });
+
+  } catch (error) {
+    console.error('Chat error:', error);
+    
+    // Retry logic for rate limits
+    if (error.status === 429) {
+      await sleep(2000);
+      // Retry once
+      try {
+        const retryResponse = await anthropic.messages.create({
+          model: "claude-sonnet-4-5-20250514",
+          max_tokens: 4096,
+          system: fullSystemPrompt,
+          messages: messages
+        });
+        return res.json({ response: retryResponse.content[0].text });
+      } catch (retryError) {
+        console.error('Retry failed:', retryError);
+      }
+    }
+
+    res.status(500).json({ 
+      error: 'Failed to process message',
+      response: "I'm having a brief connection issue. Give me one moment and try again."
+    });
+  }
+});
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+```
+
+═══════════════════════════════════════════════════════════════
+FIX 5: FIX VIDEO SEARCH
+═══════════════════════════════════════════════════════════════
+
+Video search must match user intent, not just keywords:
+
+```javascript
+async function checkForVideoRecommendation(userMessage, aiResponse, userId) {
+  // Check if user is asking for videos
+  const videoTriggers = [
+    'show me', 'video', 'videos', 'can you show', 'do you have',
+    'tutorial', 'how to', 'demonstrate', 'watch'
+  ];
+  
+  const needsVideo = videoTriggers.some(trigger => 
+    userMessage.toLowerCase().includes(trigger)
+  );
+
+  if (!needsVideo) return null;
+
+  // Extract what they're looking for
+  const searchTerms = extractTechniqueFromMessage(userMessage);
+  
+  if (!searchTerms) return null;
+
+  // Search videos with proper matching
+  const videos = await db.query(`
+    SELECT 
+      id, title, instructor, thumbnail, duration, 
+      youtube_id, quality_score, techniques
+    FROM videos
+    WHERE (
+      -- Match title
+      title ILIKE $1
+      -- Or match techniques array
+      OR EXISTS (
+        SELECT 1 FROM unnest(techniques) t 
+        WHERE t ILIKE $1
+      )
+    )
+    AND quality_score >= 7.0
+    ORDER BY quality_score DESC
+    LIMIT 3
+  `, [`%${searchTerms}%`]);
+
+  return videos.rows;
+}
+
+function extractTechniqueFromMessage(message) {
+  const lowerMessage = message.toLowerCase();
+  
+  // Common technique patterns
+  const techniques = [
+    'hip bump', 'hip bump sweep', 'kimura', 'armbar', 'arm bar',
+    'triangle', 'guillotine', 'rear naked', 'rnc', 'arm triangle',
+    'darce', 'anaconda', 'ezekiel', 'bow and arrow', 'collar choke',
+    'sweep', 'pass', 'guard', 'mount', 'back', 'escape',
+    'half guard', 'closed guard', 'open guard', 'butterfly',
+    'x guard', 'de la riva', 'spider guard', 'lasso',
+    'heel hook', 'knee bar', 'toe hold', 'leg lock',
+    'takedown', 'single leg', 'double leg', 'wrestling'
+  ];
+
+  for (const technique of techniques) {
+    if (lowerMessage.includes(technique)) {
+      return technique;
+    }
+  }
+
+  // Fallback: extract nouns after trigger words
+  const match = lowerMessage.match(/(?:show me|video on|videos on|how to)\s+(?:the\s+)?(.+?)(?:\?|$)/);
+  if (match) {
+    return match[1].trim();
+  }
+
+  return null;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+FIX 6: UPDATE USER PROFILE ON CONVERSATION
+═══════════════════════════════════════════════════════════════
+
+Extract and save user info as they share it:
+
+```javascript
+async function updateUserProfileFromMessage(userId, message) {
+  const lowerMessage = message.toLowerCase();
+  const updates = {};
+
+  // Belt rank detection
+  const beltMatch = lowerMessage.match(/(white|blue|purple|brown|black)\s*belt/);
+  if (beltMatch) {
+    updates.belt_rank = beltMatch[1];
+  }
+
+  // Experience detection
+  const expMatch = lowerMessage.match(/(\d+)\s*(?:years?|yrs?)/);
+  if (expMatch) {
+    updates.experience_years = parseInt(expMatch[1]);
+  }
+
+  // Training frequency
+  const freqMatch = lowerMessage.match(/(\d+)\s*(?:times?|x|days?)\s*(?:a|per)?\s*week/);
+  if (freqMatch) {
+    updates.training_frequency = `${freqMatch[1]}x per week`;
+  }
+
+  // Height
+  const heightMatch = lowerMessage.match(/(\d)['\s]*(\d+)|(\d+)['\s]*(\d+)/);
+  if (heightMatch || lowerMessage.match(/\d'?\d+"/)) {
+    // Parse height
+  }
+
+  // Weight
+  const weightMatch = lowerMessage.match(/(\d{2,3})\s*(?:lbs?|pounds?)/);
+  if (weightMatch) {
+    updates.weight = parseInt(weightMatch[1]);
+  }
+
+  // Flexibility
+  if (lowerMessage.includes('tight hips') || lowerMessage.includes('not flexible')) {
+    updates.flexibility = 'limited';
+  }
+
+  // Competition goals
+  if (lowerMessage.includes('compete') || lowerMessage.includes('tournament')) {
+    const timeMatch = lowerMessage.match(/(\d+)\s*(?:weeks?|months?)/);
+    if (timeMatch) {
+      updates.competition_goals = `Competition in ${timeMatch[0]}`;
+    }
+  }
+
+  // Gym description
+  if (lowerMessage.includes('gym') || lowerMessage.includes('academy')) {
+    updates.gym_description = message.substring(0, 200);
+  }
+
+  // Struggles
+  if (lowerMessage.includes('struggle') || lowerMessage.includes('sucks') || 
+      lowerMessage.includes('problem') || lowerMessage.includes('keep getting')) {
+    const currentWeaknesses = await db.query(
+      'SELECT weaknesses FROM users WHERE id = $1', [userId]
+    );
+    const existing = currentWeaknesses.rows[0]?.weaknesses || '';
+    updates.weaknesses = `${existing} | ${message.substring(0, 200)}`.substring(0, 500);
+  }
+
+  // Apply updates if any
+  if (Object.keys(updates).length > 0) {
+    const setClauses = Object.keys(updates).map((key, i) => `${key} = $${i + 2}`);
+    const values = [userId, ...Object.values(updates)];
+    
+    await db.query(`
+      UPDATE users 
+      SET ${setClauses.join(', ')}, updated_at = NOW()
+      WHERE id = $1
+    `, values);
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════
+FIX 7: NEVER SHOW RAW ERRORS TO USER
+═══════════════════════════════════════════════════════════════
+
+Update error handling to always return friendly message:
+
+```javascript
+// In catch block, NEVER return raw error details
+catch (error) {
+  console.error('Chat error:', error);
+  
+  // Always return friendly message
+  res.json({ 
+    response: "Give me just a second - let me gather my thoughts. Try sending that again.",
+    error: false // Don't expose error state to frontend
+  });
+}
+```
+
+═══════════════════════════════════════════════════════════════
+VERIFICATION STEPS
+═══════════════════════════════════════════════════════════════
+
+After implementing fixes, verify:
+
+1. Check which AI is being called:
+
+- Add console.log(“Calling Claude API…”) before API call
+- Should NOT see any OpenAI references in logs
+
+1. Check Professor OS prompt is loaded:
+
+- Add console.log(“System prompt length:”, fullSystemPrompt.length)
+- Should be 3000+ characters (not empty)
+
+1. Check user context is built:
+
+- Add console.log(“User context:”, userContext)
+- Should show user details after they share info
+
+1. Check video search:
+
+- Search for “hip bump” should return hip bump videos
+- NOT armbar or triangle videos
+
+1. Check no raw errors shown:
+
+- Force an error (disconnect API key temporarily)
+- User should see friendly message, not 429 error
+
+═══════════════════════════════════════════════════════════════
+AFTER FIXES: RE-RUN SIMULATION
+═══════════════════════════════════════════════════════════════
+
+Once all fixes are implemented:
+
+1. Restart the server
+1. Run: node test-user-simulation.js
+1. Save new output files
+1. Send back to Todd for analysis
+
+EXPECTED RESULTS AFTER FIX:
+
+✅ Responses should feel warm and personal
+✅ User context referenced naturally (“Since you mentioned…”)
+✅ Correct videos recommended (hip bump → hip bump videos)
+✅ No raw errors shown
+✅ Personality consistent throughout
+✅ Frustration handled empathetically
+
+IMPLEMENT ALL FIXES NOW. This is blocking beta launch.
+
+```
+---
+
+## **✅ AFTER AGENT IMPLEMENTS**
+
+Tell Agent:
+```
+
+After implementing all fixes:
+
+1. Restart the server
+1. Run the simulation again:
+   node test-user-simulation.js
+1. Save the new output files
+1. Show me the results
+
+```
+---
+
+**Copy the mega prompt above to Agent. Once fixes are implemented and simulation re-runs, send me the new output for analysis.** 🎯​​​​​​​​​​​​​​​​
+```

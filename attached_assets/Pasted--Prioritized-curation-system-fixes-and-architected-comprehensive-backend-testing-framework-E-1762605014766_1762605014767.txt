@@ -1,0 +1,901 @@
+
+
+Prioritized curation system fixes and architected comprehensive backend testing framework.
+
+
+
+
+
+
+EXCELLENT PRIORITY CALL - CURATION IS CRITICAL 🎯
+
+Let me create comprehensive backend tests that Replit Agent can run automatically, with video curation as #1 priority.
+
+📋 BACKEND AUTOMATED TESTING + CURATION FIX
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL PRIORITY: FIX VIDEO CURATION FIRST, THEN TEST EVERYTHING
+═══════════════════════════════════════════════════════════════════════════════
+
+CONTEXT: Video curation was screening 0 videos daily despite claiming to run.
+User is falling behind on video library growth. This is blocking Professor OS
+from making quality recommendations.
+
+TARGET STATE:
+- Curation runs daily automatically
+- Screens 50-100 YouTube videos per day
+- Accepts 2-5% (1-5 videos per day added to library)
+- Grows library from 442 videos to 2,000+ videos
+
+MISSION: 
+1. Diagnose why curation stopped working
+2. Fix the system
+3. Run curation NOW to prove it works
+4. Set up automated daily schedule
+5. Then test all other backend systems
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: VIDEO CURATION DIAGNOSIS & FIX (CRITICAL - DO THIS FIRST)
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 1: Diagnose Current State
+
+Run these diagnostic checks:
+
+1. Check if curation script exists:
+   Command: ls -la server/curation/
+   Expected: Files like youtube-scraper.ts, video-evaluator.ts, etc.
+   
+2. Check environment variables:
+   Command: echo $YOUTUBE_API_KEY | cut -c1-10
+   Expected: Should show first 10 chars of API key (not empty)
+   
+3. Check database table:
+   Query: SELECT COUNT(*) FROM curated_videos WHERE created_at > NOW() - INTERVAL '7 days'
+   Expected: Should show recent additions (if 0, curation is broken)
+   
+4. Check cron/scheduled job:
+   Command: Check if there's a scheduled job running curation
+   Expected: Should see curation scheduled in deployment config
+   
+5. Check recent error logs:
+   Command: grep -i "curation\|youtube" /var/log/*.log | tail -50
+   Expected: Look for error messages about YouTube API, quota, authentication
+
+Report findings for each diagnostic check.
+
+---
+
+STEP 2: Fix YouTube API Authentication (Most Likely Issue)
+
+Based on diagnosis, the issue is likely:
+
+ISSUE A: Missing or Invalid API Key
+Fix:
+1. Go to Google Cloud Console: https://console.cloud.google.com
+2. Enable YouTube Data API v3
+3. Create new API key
+4. Add to .env file: YOUTUBE_API_KEY=your-key-here
+5. Restart server
+
+ISSUE B: API Quota Exceeded
+Fix:
+1. Check quota usage in Google Cloud Console
+2. If exceeded, request quota increase OR
+3. Implement rate limiting (10 requests per minute max)
+4. Add quota tracking to prevent future issues
+
+ISSUE C: API Key Restrictions Too Tight
+Fix:
+1. In Google Cloud Console, check API key restrictions
+2. Ensure YouTube Data API v3 is allowed
+3. Add HTTP referrers if needed (bjjos.app, localhost)
+
+Implement the fix for whichever issue you find.
+
+---
+
+STEP 3: Test Curation Manually (Prove It Works)
+
+Create a test script to run curation immediately:
+
+File: server/curation/test-curation-now.ts
+
+import { runVideoScraper } from './youtube-scraper';
+import { evaluateVideo } from './video-evaluator';
+import { saveVideoToDatabase } from './video-saver';
+
+async function testCuration() {
+  console.log('═══════════════════════════════════════════');
+  console.log('MANUAL CURATION TEST');
+  console.log('Time:', new Date().toISOString());
+  console.log('═══════════════════════════════════════════');
+  
+  try {
+    // STEP 1: Scrape YouTube for BJJ videos
+    console.log('Step 1: Scraping YouTube for recent BJJ videos...');
+    
+    const searchQueries = [
+      'bjj guard retention',
+      'brazilian jiu jitsu passing',
+      'bjj submission fundamentals',
+      'no gi jiu jitsu techniques'
+    ];
+    
+    let totalFound = 0;
+    let totalEvaluated = 0;
+    let totalAccepted = 0;
+    
+    for (const query of searchQueries) {
+      console.log(`\nSearching: "${query}"`);
+      
+      const videos = await runVideoScraper(query, { 
+        maxResults: 25,  // 25 videos per query = 100 total
+        uploadedWithin: '7d',  // Last 7 days only
+        minDuration: 180,  // At least 3 minutes
+        maxDuration: 1800  // Max 30 minutes
+      });
+      
+      console.log(`Found: ${videos.length} videos`);
+      totalFound += videos.length;
+      
+      // STEP 2: Evaluate each video
+      for (const video of videos) {
+        console.log(`\nEvaluating: ${video.title}`);
+        console.log(`Channel: ${video.channelName}`);
+        console.log(`Duration: ${video.duration}`);
+        
+        const evaluation = await evaluateVideo(video);
+        totalEvaluated++;
+        
+        console.log(`Quality Score: ${evaluation.qualityScore}/100`);
+        console.log(`Instructor Credibility: ${evaluation.instructorCredibility}/100`);
+        console.log(`Technical Depth: ${evaluation.technicalDepth}/100`);
+        console.log(`Overall Score: ${evaluation.overallScore}/100`);
+        
+        // STEP 3: Save if passes threshold
+        if (evaluation.overallScore >= 70) {
+          console.log('✅ ACCEPTED - Saving to database');
+          
+          await saveVideoToDatabase({
+            ...video,
+            ...evaluation,
+            curatedAt: new Date(),
+            curatedBy: 'automated_system'
+          });
+          
+          totalAccepted++;
+        } else {
+          console.log('❌ REJECTED - Below quality threshold');
+        }
+      }
+    }
+    
+    console.log('\n═══════════════════════════════════════════');
+    console.log('CURATION TEST COMPLETE');
+    console.log(`Total videos found: ${totalFound}`);
+    console.log(`Total videos evaluated: ${totalEvaluated}`);
+    console.log(`Total videos accepted: ${totalAccepted}`);
+    console.log(`Acceptance rate: ${((totalAccepted/totalEvaluated)*100).toFixed(1)}%`);
+    console.log(`Target acceptance rate: 2-5%`);
+    console.log('═══════════════════════════════════════════');
+    
+    if (totalAccepted === 0) {
+      console.error('⚠️ WARNING: 0 videos accepted. Quality threshold may be too high.');
+    }
+    
+    if (totalAccepted > totalEvaluated * 0.1) {
+      console.error('⚠️ WARNING: >10% acceptance rate. Quality threshold may be too low.');
+    }
+    
+    return {
+      success: true,
+      stats: {
+        found: totalFound,
+        evaluated: totalEvaluated,
+        accepted: totalAccepted,
+        acceptanceRate: (totalAccepted/totalEvaluated)*100
+      }
+    };
+    
+  } catch (error) {
+    console.error('❌ CURATION TEST FAILED');
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
+    
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// Run the test
+testCuration()
+  .then(result => {
+    if (result.success) {
+      console.log('\n✅ CURATION SYSTEM IS WORKING');
+      process.exit(0);
+    } else {
+      console.log('\n❌ CURATION SYSTEM FAILED');
+      process.exit(1);
+    }
+  });
+
+Then run it:
+Command: tsx server/curation/test-curation-now.ts
+
+Expected output:
+- Should find 50-100 videos
+- Should evaluate all of them
+- Should accept 2-5% (1-5 videos)
+- Should see videos added to database
+
+If this test passes, curation is working! ✅
+
+---
+
+STEP 4: Set Up Automated Daily Curation
+
+Create a cron job or scheduled task:
+
+File: .replit (add this to deployment config)
+
+[[workflows]]
+name = "Daily Video Curation"
+schedule = "0 3 * * *"  # Run at 3 AM UTC daily
+run = "tsx server/curation/daily-curation.ts"
+
+Or if using node-cron:
+
+File: server/scheduled-jobs.ts
+
+import cron from 'node-cron';
+import { runDailyCuration } from './curation/daily-curation';
+
+// Run curation every day at 3 AM UTC
+cron.schedule('0 3 * * *', async () => {
+  console.log('Starting daily video curation...');
+  await runDailyCuration();
+  console.log('Daily curation complete.');
+});
+
+console.log('✅ Scheduled jobs initialized');
+console.log('Daily curation: 3:00 AM UTC');
+
+Add to server startup:
+File: server/index.ts
+
+import './scheduled-jobs';  // Initialize cron jobs
+
+This ensures curation runs automatically every day.
+
+---
+
+STEP 5: Create Curation Monitoring Dashboard
+
+Add logging to track curation health:
+
+File: server/curation/curation-logger.ts
+
+export async function logCurationRun(stats: {
+  found: number;
+  evaluated: number;
+  accepted: number;
+  acceptanceRate: number;
+  duration: number;
+  errors: string[];
+}) {
+  await db.insert(curation_runs).values({
+    run_date: new Date(),
+    videos_found: stats.found,
+    videos_evaluated: stats.evaluated,
+    videos_accepted: stats.accepted,
+    acceptance_rate: stats.acceptanceRate,
+    duration_seconds: stats.duration,
+    errors: stats.errors,
+    status: stats.errors.length === 0 ? 'success' : 'partial_failure'
+  });
+  
+  // Alert if curation failed completely
+  if (stats.accepted === 0) {
+    console.error('🚨 ALERT: Daily curation accepted 0 videos!');
+    // TODO: Send email/SMS alert
+  }
+  
+  // Alert if acceptance rate is too high (quality threshold too low)
+  if (stats.acceptanceRate > 10) {
+    console.warn('⚠️ WARNING: Acceptance rate >10% - quality threshold may be too low');
+  }
+}
+
+This creates a paper trail for debugging future issues.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: COMPREHENSIVE BACKEND TESTING (AFTER CURATION FIXED)
+═══════════════════════════════════════════════════════════════════════════════
+
+Once curation is working, run these automated backend tests:
+
+TEST SUITE 1: Database Health Checks
+
+File: server/tests/database-health.test.ts
+
+import { db } from '../db';
+
+async function testDatabaseHealth() {
+  console.log('\n═══════════════════════════════════════════');
+  console.log('DATABASE HEALTH CHECKS');
+  console.log('═══════════════════════════════════════════\n');
+  
+  const tests = [];
+  
+  // Test 1: Connection
+  try {
+    await db.execute('SELECT 1');
+    tests.push({ name: 'Database Connection', status: 'PASS' });
+  } catch (error) {
+    tests.push({ name: 'Database Connection', status: 'FAIL', error: error.message });
+  }
+  
+  // Test 2: User Profiles Table
+  try {
+    const count = await db.query.user_profiles.findMany({ limit: 1 });
+    tests.push({ 
+      name: 'user_profiles table', 
+      status: 'PASS',
+      detail: `${count.length} records found`
+    });
+  } catch (error) {
+    tests.push({ name: 'user_profiles table', status: 'FAIL', error: error.message });
+  }
+  
+  // Test 3: Chat Messages Table
+  try {
+    const recent = await db.execute(
+      'SELECT COUNT(*) FROM chat_messages WHERE created_at > NOW() - INTERVAL \'24 hours\''
+    );
+    tests.push({ 
+      name: 'chat_messages table', 
+      status: 'PASS',
+      detail: `${recent.rows[0].count} messages in last 24h`
+    });
+  } catch (error) {
+    tests.push({ name: 'chat_messages table', status: 'FAIL', error: error.message });
+  }
+  
+  // Test 4: Curated Videos Table
+  try {
+    const count = await db.execute('SELECT COUNT(*) FROM curated_videos');
+    const recent = await db.execute(
+      'SELECT COUNT(*) FROM curated_videos WHERE created_at > NOW() - INTERVAL \'7 days\''
+    );
+    tests.push({ 
+      name: 'curated_videos table', 
+      status: 'PASS',
+      detail: `${count.rows[0].count} total, ${recent.rows[0].count} added in last 7 days`
+    });
+  } catch (error) {
+    tests.push({ name: 'curated_videos table', status: 'FAIL', error: error.message });
+  }
+  
+  // Test 5: Database Indexes
+  try {
+    const indexes = await db.execute(`
+      SELECT tablename, indexname 
+      FROM pg_indexes 
+      WHERE schemaname = 'public'
+      ORDER BY tablename, indexname
+    `);
+    tests.push({ 
+      name: 'Database Indexes', 
+      status: 'PASS',
+      detail: `${indexes.rows.length} indexes found`
+    });
+  } catch (error) {
+    tests.push({ name: 'Database Indexes', status: 'FAIL', error: error.message });
+  }
+  
+  // Print results
+  tests.forEach(test => {
+    if (test.status === 'PASS') {
+      console.log(`✅ ${test.name}${test.detail ? ` - ${test.detail}` : ''}`);
+    } else {
+      console.log(`❌ ${test.name} - ${test.error}`);
+    }
+  });
+  
+  const passed = tests.filter(t => t.status === 'PASS').length;
+  const failed = tests.filter(t => t.status === 'FAIL').length;
+  
+  console.log('\n═══════════════════════════════════════════');
+  console.log(`Results: ${passed} passed, ${failed} failed`);
+  console.log('═══════════════════════════════════════════\n');
+  
+  return { passed, failed, tests };
+}
+
+Run: tsx server/tests/database-health.test.ts
+
+---
+
+TEST SUITE 2: API Integration Tests
+
+File: server/tests/api-integration.test.ts
+
+import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
+
+async function testAPIIntegrations() {
+  console.log('\n═══════════════════════════════════════════');
+  console.log('API INTEGRATION TESTS');
+  console.log('═══════════════════════════════════════════\n');
+  
+  const tests = [];
+  
+  // Test 1: OpenAI API Key Valid
+  try {
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Test' }],
+      max_tokens: 10
+    });
+    tests.push({ 
+      name: 'OpenAI API (GPT-4o)', 
+      status: 'PASS',
+      detail: `Response: ${response.choices[0].message.content}`
+    });
+  } catch (error) {
+    tests.push({ name: 'OpenAI API (GPT-4o)', status: 'FAIL', error: error.message });
+  }
+  
+  // Test 2: Anthropic API Key Valid (if used)
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'Test' }]
+      });
+      tests.push({ 
+        name: 'Anthropic API (Claude)', 
+        status: 'PASS',
+        detail: 'Connected successfully'
+      });
+    } catch (error) {
+      tests.push({ name: 'Anthropic API (Claude)', status: 'FAIL', error: error.message });
+    }
+  }
+  
+  // Test 3: YouTube API Key Valid
+  try {
+    const response = await fetch(
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&q=bjj&key=${process.env.YOUTUBE_API_KEY}&maxResults=1`
+    );
+    const data = await response.json();
+    
+    if (data.error) {
+      tests.push({ name: 'YouTube Data API', status: 'FAIL', error: data.error.message });
+    } else {
+      tests.push({ 
+        name: 'YouTube Data API', 
+        status: 'PASS',
+        detail: `Found ${data.items.length} videos`
+      });
+    }
+  } catch (error) {
+    tests.push({ name: 'YouTube Data API', status: 'FAIL', error: error.message });
+  }
+  
+  // Test 4: Stripe API Key Valid (if used)
+  if (process.env.STRIPE_SECRET_KEY) {
+    try {
+      const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      const balance = await stripe.balance.retrieve();
+      tests.push({ 
+        name: 'Stripe API', 
+        status: 'PASS',
+        detail: 'Connected successfully'
+      });
+    } catch (error) {
+      tests.push({ name: 'Stripe API', status: 'FAIL', error: error.message });
+    }
+  }
+  
+  // Print results
+  tests.forEach(test => {
+    if (test.status === 'PASS') {
+      console.log(`✅ ${test.name}${test.detail ? ` - ${test.detail}` : ''}`);
+    } else {
+      console.log(`❌ ${test.name} - ${test.error}`);
+    }
+  });
+  
+  const passed = tests.filter(t => t.status === 'PASS').length;
+  const failed = tests.filter(t => t.status === 'FAIL').length;
+  
+  console.log('\n═══════════════════════════════════════════');
+  console.log(`Results: ${passed} passed, ${failed} failed`);
+  console.log('═══════════════════════════════════════════\n');
+  
+  return { passed, failed, tests };
+}
+
+Run: tsx server/tests/api-integration.test.ts
+
+---
+
+TEST SUITE 3: AI System End-to-End Test
+
+File: server/tests/ai-system-e2e.test.ts
+
+async function testAISystemE2E() {
+  console.log('\n═══════════════════════════════════════════');
+  console.log('AI SYSTEM END-TO-END TEST');
+  console.log('═══════════════════════════════════════════\n');
+  
+  const tests = [];
+  
+  // Create test user
+  const testUserId = 'test-user-' + Date.now();
+  
+  // Test 1: Create User Profile
+  try {
+    await db.insert(user_profiles).values({
+      user_id: testUserId,
+      first_name: 'TestUser',
+      belt_level: 'blue',
+      training_style: 'gi',
+      biggest_struggle: 'guard passing',
+      height: '72',
+      weight: '180',
+      birth_year: 1990,
+      training_frequency: '4',
+      created_at: new Date()
+    });
+    tests.push({ name: 'Create test user profile', status: 'PASS' });
+  } catch (error) {
+    tests.push({ name: 'Create test user profile', status: 'FAIL', error: error.message });
+  }
+  
+  // Test 2: Load Profile Data
+  try {
+    const profile = await db.query.user_profiles.findFirst({
+      where: eq(user_profiles.user_id, testUserId)
+    });
+    
+    if (!profile) throw new Error('Profile not found');
+    if (profile.height !== '72') throw new Error('Height not saved correctly');
+    
+    tests.push({ name: 'Load profile data', status: 'PASS' });
+  } catch (error) {
+    tests.push({ name: 'Load profile data', status: 'FAIL', error: error.message });
+  }
+  
+  // Test 3: Build System Prompt
+  try {
+    const profile = await db.query.user_profiles.findFirst({
+      where: eq(user_profiles.user_id, testUserId),
+      with: { user: true }
+    });
+    
+    const systemPrompt = buildSystemPrompt({
+      user: {
+        displayName: profile.first_name,
+        beltLevel: profile.belt_level,
+        height: profile.height,
+        weight: profile.weight
+      }
+    }, []);
+    
+    if (!systemPrompt.includes('TestUser')) throw new Error('Name not in prompt');
+    if (!systemPrompt.includes('72')) throw new Error('Height not in prompt');
+    if (!systemPrompt.includes('blue')) throw new Error('Belt level not in prompt');
+    
+    tests.push({ 
+      name: 'Build system prompt with profile', 
+      status: 'PASS',
+      detail: `${systemPrompt.length} characters`
+    });
+  } catch (error) {
+    tests.push({ name: 'Build system prompt with profile', status: 'FAIL', error: error.message });
+  }
+  
+  // Test 4: Send Message to GPT-4o
+  try {
+    const profile = await db.query.user_profiles.findFirst({
+      where: eq(user_profiles.user_id, testUserId),
+      with: { user: true }
+    });
+    
+    const systemPrompt = buildSystemPrompt({
+      user: {
+        displayName: profile.first_name,
+        beltLevel: profile.belt_level,
+        height: profile.height
+      }
+    }, []);
+    
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const startTime = Date.now();
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      max_tokens: 100,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: 'how tall am I?' }
+      ]
+    });
+    
+    const responseTime = Date.now() - startTime;
+    const aiResponse = response.choices[0].message.content;
+    
+    if (!aiResponse.includes('72') && !aiResponse.includes('6 feet')) {
+      throw new Error('AI did not use profile data (height not mentioned)');
+    }
+    
+    tests.push({ 
+      name: 'GPT-4o responds with profile context', 
+      status: 'PASS',
+      detail: `${responseTime}ms response time`
+    });
+  } catch (error) {
+    tests.push({ name: 'GPT-4o responds with profile context', status: 'FAIL', error: error.message });
+  }
+  
+  // Test 5: Save Messages to Database
+  try {
+    await db.insert(chat_messages).values([
+      {
+        user_id: testUserId,
+        role: 'user',
+        content: 'how tall am I?',
+        created_at: new Date()
+      },
+      {
+        user_id: testUserId,
+        role: 'assistant',
+        content: "You're 6 feet tall",
+        model_used: 'gpt-4o',
+        created_at: new Date()
+      }
+    ]);
+    
+    const saved = await db.query.chat_messages.findMany({
+      where: eq(chat_messages.user_id, testUserId)
+    });
+    
+    if (saved.length !== 2) throw new Error('Messages not saved correctly');
+    
+    tests.push({ name: 'Save messages to database', status: 'PASS' });
+  } catch (error) {
+    tests.push({ name: 'Save messages to database', status: 'FAIL', error: error.message });
+  }
+  
+  // Test 6: Load Conversation History
+  try {
+    const history = await db.query.chat_messages.findMany({
+      where: eq(chat_messages.user_id, testUserId),
+      orderBy: [asc(chat_messages.created_at)]
+    });
+    
+    if (history.length !== 2) throw new Error('History not loaded correctly');
+    if (history[0].role !== 'user') throw new Error('Message order wrong');
+    
+    tests.push({ name: 'Load conversation history', status: 'PASS' });
+  } catch (error) {
+    tests.push({ name: 'Load conversation history', status: 'FAIL', error: error.message });
+  }
+  
+  // Cleanup: Delete test user
+  await db.delete(chat_messages).where(eq(chat_messages.user_id, testUserId));
+  await db.delete(user_profiles).where(eq(user_profiles.user_id, testUserId));
+  
+  // Print results
+  tests.forEach(test => {
+    if (test.status === 'PASS') {
+      console.log(`✅ ${test.name}${test.detail ? ` - ${test.detail}` : ''}`);
+    } else {
+      console.log(`❌ ${test.name} - ${test.error}`);
+    }
+  });
+  
+  const passed = tests.filter(t => t.status === 'PASS').length;
+  const failed = tests.filter(t => t.status === 'FAIL').length;
+  
+  console.log('\n═══════════════════════════════════════════');
+  console.log(`Results: ${passed} passed, ${failed} failed`);
+  console.log('═══════════════════════════════════════════\n');
+  
+  return { passed, failed, tests };
+}
+
+Run: tsx server/tests/ai-system-e2e.test.ts
+
+---
+
+TEST SUITE 4: Performance Benchmarks
+
+File: server/tests/performance-benchmarks.test.ts
+
+async function runPerformanceBenchmarks() {
+  console.log('\n═══════════════════════════════════════════');
+  console.log('PERFORMANCE BENCHMARKS');
+  console.log('═══════════════════════════════════════════\n');
+  
+  const benchmarks = [];
+  
+  // Benchmark 1: Database Query Speed
+  const dbStart = Date.now();
+  await db.query.user_profiles.findMany({ limit: 100 });
+  const dbTime = Date.now() - dbStart;
+  benchmarks.push({
+    name: 'Database query (100 profiles)',
+    time: dbTime,
+    target: 50,
+    status: dbTime < 50 ? 'PASS' : 'SLOW'
+  });
+  
+  // Benchmark 2: GPT-4o Response Time
+  const gptStart = Date.now();
+  await openai.chat.completions.create({
+    model: 'gpt-4o',
+    max_tokens: 100,
+    messages: [{ role: 'user', content: 'Test' }]
+  });
+  const gptTime = Date.now() - gptStart;
+  benchmarks.push({
+    name: 'GPT-4o response time',
+    time: gptTime,
+    target: 3000,
+    status: gptTime < 3000 ? 'PASS' : 'SLOW'
+  });
+  
+  // Benchmark 3: System Prompt Build Time
+  const promptStart = Date.now();
+  buildSystemPrompt({ user: { displayName: 'Test', beltLevel: 'blue' } }, []);
+  const promptTime = Date.now() - promptStart;
+  benchmarks.push({
+    name: 'System prompt build time',
+    time: promptTime,
+    target: 10,
+    status: promptTime < 10 ? 'PASS' : 'SLOW'
+  });
+  
+  // Print results
+  benchmarks.forEach(b => {
+    const symbol = b.status === 'PASS' ? '✅' : '⚠️';
+    console.log(`${symbol} ${b.name}: ${b.time}ms (target: <${b.target}ms)`);
+  });
+  
+  console.log('\n═══════════════════════════════════════════\n');
+  
+  return benchmarks;
+}
+
+Run: tsx server/tests/performance-benchmarks.test.ts
+
+═══════════════════════════════════════════════════════════════════════════════
+MASTER TEST RUNNER - RUN ALL BACKEND TESTS
+═══════════════════════════════════════════════════════════════════════════════
+
+File: server/tests/run-all-tests.ts
+
+async function runAllBackendTests() {
+  console.log('\n╔═══════════════════════════════════════════╗');
+  console.log('║   BJJ OS BACKEND TEST SUITE              ║');
+  console.log('╚═══════════════════════════════════════════╝\n');
+  
+  const results = {
+    curation: null,
+    database: null,
+    api: null,
+    aiSystem: null,
+    performance: null
+  };
+  
+  // 1. VIDEO CURATION TEST (PRIORITY #1)
+  console.log('🎯 PRIORITY: Video Curation System\n');
+  results.curation = await testCuration();
+  
+  if (!results.curation.success) {
+    console.log('\n❌ STOPPING: Curation must work before other tests');
+    process.exit(1);
+  }
+  
+  // 2. DATABASE HEALTH
+  results.database = await testDatabaseHealth();
+  
+  // 3. API INTEGRATIONS
+  results.api = await testAPIIntegrations();
+  
+  // 4. AI SYSTEM E2E
+  results.aiSystem = await testAISystemE2E();
+  
+  // 5. PERFORMANCE BENCHMARKS
+  results.performance = await runPerformanceBenchmarks();
+  
+  // SUMMARY
+  console.log('\n╔═══════════════════════════════════════════╗');
+  console.log('║   FINAL RESULTS                           ║');
+  console.log('╚═══════════════════════════════════════════╝\n');
+  
+  const totalTests = 
+    (results.database?.passed || 0) + 
+    (results.api?.passed || 0) + 
+    (results.aiSystem?.passed || 0);
+    
+  const totalFailed = 
+    (results.database?.failed || 0) + 
+    (results.api?.failed || 0) + 
+    (results.aiSystem?.failed || 0);
+  
+  console.log(`Curation: ${results.curation.success ? '✅ WORKING' : '❌ BROKEN'}`);
+  console.log(`- Videos accepted: ${results.curation.stats?.accepted || 0}`);
+  console.log(`- Acceptance rate: ${results.curation.stats?.acceptanceRate.toFixed(1) || 0}%`);
+  console.log();
+  console.log(`Database Health: ${results.database.passed}/${results.database.passed + results.database.failed} passed`);
+  console.log(`API Integrations: ${results.api.passed}/${results.api.passed + results.api.failed} passed`);
+  console.log(`AI System: ${results.aiSystem.passed}/${results.aiSystem.passed + results.aiSystem.failed} passed`);
+  console.log();
+  console.log(`TOTAL: ${totalTests} passed, ${totalFailed} failed`);
+  console.log();
+  
+  if (totalFailed === 0 && results.curation.success) {
+    console.log('🎉 ALL SYSTEMS OPERATIONAL - READY FOR BETA\n');
+    process.exit(0);
+  } else {
+    console.log('⚠️ SOME TESTS FAILED - REVIEW ABOVE OUTPUT\n');
+    process.exit(1);
+  }
+}
+
+runAllBackendTests();
+
+Command to run everything:
+tsx server/tests/run-all-tests.ts
+
+═══════════════════════════════════════════════════════════════════════════════
+IMMEDIATE ACTION PLAN
+═══════════════════════════════════════════════════════════════════════════════
+
+Priority Order:
+
+1. FIX VIDEO CURATION (NOW - CRITICAL)
+   - Diagnose why it stopped working
+   - Fix YouTube API authentication
+   - Run manual test to prove it works
+   - Set up automated daily schedule
+   - Expected time: 30-60 minutes
+
+2. RUN BACKEND TEST SUITE (AFTER CURATION FIXED)
+   - tsx server/tests/run-all-tests.ts
+   - Fix any failures
+   - Expected time: 15-30 minutes
+
+3. VERIFY CURATION RUNNING DAILY
+   - Check tomorrow morning that curation ran
+   - Verify new videos added to database
+   - Monitor for 3 days to ensure consistency
+
+DO THIS IN ORDER. Curation first, then everything else.
+SEND THIS TO REPLIT AGENT ⬆️
+
+This will:
+
+✅ Fix video curation FIRST (your #1 priority)
+✅ Prove it works with manual test run
+✅ Set up daily automation so you're never behind again
+✅ Test all backend systems comprehensively
+✅ Give you confidence everything works before beta
+After this runs, you'll have:
+
+Video curation running daily ✅
+50-100 new videos screened per day ✅
+1-5 quality videos added daily ✅
+Complete backend test coverage ✅
+Confidence to ship to beta users ✅
+This is the foundation you need. 🚀
+

@@ -1,0 +1,113 @@
+## 📋 MASTER PROMPT - COPY THIS:
+
+```
+iOS APP - FINAL FIXES BEFORE APP STORE SUBMISSION
+
+IMPORTANT: These are the last fixes needed. Do not break any existing functionality.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: CHAT HISTORY DELETED WHEN NAVIGATING (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+When user:
+1. Has a conversation in Chat
+2. Goes to Videos tab
+3. Returns to Chat tab
+
+The conversation is GONE. This is unacceptable.
+
+FIX OPTIONS (pick best approach):
+- Keep chat component mounted (don't unmount on tab change)
+- Persist chat state in global store/context
+- Reload chat history from /api/ai/chat/history when returning to chat
+
+This is the #1 priority - users cannot lose their conversations.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: SPLASH SCREEN LOGO TOO BIG
+═══════════════════════════════════════════════════════════════════════════════
+
+The BJJ/OS logo on splash screen is bleeding off the edges of the screen.
+
+Fix:
+- Scale logo to approximately 40-50% of screen width
+- Center it vertically and horizontally
+- Ensure comfortable padding on all sides
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: APP ICON - SLASH NOT VISIBLE
+═══════════════════════════════════════════════════════════════════════════════
+
+The home screen app icon shows "BJJ / OS" but the diagonal gradient slash 
+between BJJ and OS is barely visible or missing.
+
+The slash is THE brand identity. It needs to be:
+- Bold and clearly visible
+- Purple-to-blue gradient (vibrant, not washed out)
+- Pronounced enough to see at small icon sizes
+
+Look at how the slash appears in the splash screen - it should look like that
+in the app icon too, just scaled for small sizes.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 4: SETTINGS PAGE - BOTTOM NAV INCONSISTENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Settings page bottom nav shows text only: "Chat Videos Saved Settings"
+Other pages show icons WITH labels.
+
+Fix: Make Settings page use the EXACT same bottom nav component as other pages.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 5: VIDEO THUMBNAILS NOT LOADING + FALLBACK NEEDS LOGO
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM A - WHY AREN'T THUMBNAILS LOADING?
+
+Some video cards show YouTube thumbnails correctly (like Buchecha's video).
+Others show the BJJ OS fallback placeholder (like Bernardo Faria's video).
+
+The thumbnail URL should be: https://img.youtube.com/vi/VIDEO_ID/hqdefault.jpg
+
+Debug and fix why some videos get thumbnails and others don't:
+- Is videoId missing on some videos?
+- Is the thumbnail URL being built correctly?
+- Is there a CORS or loading issue?
+
+All videos in the database should have a videoId. Figure out why thumbnails 
+fail on some videos and fix the root cause.
+
+PROBLEM B - FALLBACK IMAGE SHOULD USE ACTUAL LOGO
+
+When thumbnails DO fail, the fallback placeholder currently shows plain 
+"BJJ OS" text which looks cheap.
+
+Replace the fallback with the actual BJJ/OS logo that includes the gradient 
+diagonal slash - the same branding as the splash screen.
+
+This applies everywhere video thumbnails appear:
+- Chat video cards
+- Video library
+- Saved videos
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER ALL FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+
+PRIORITY ORDER:
+1. Chat history persistence (CRITICAL)
+2. Video thumbnail loading (fix root cause)
+3. Splash screen size
+4. App icon slash visibility
+5. Video fallback with proper logo
+6. Settings bottom nav
+
+DO NOT break existing functionality.
+```
+
+-----
+
+**This prompt addresses both the root cause (why thumbnails aren’t loading) AND the fallback (use real logo). Send it to Replit!**

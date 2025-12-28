@@ -1,0 +1,762 @@
+# **🔍 ANALYSIS: REPLIT AGENT DID VIDEO LIBRARY, NOT ADMIN DASHBOARD**
+
+-----
+
+## **WHAT HAPPENED:**
+
+```
+✅ WHAT WAS COMPLETED:
+• Video Library page (user-facing)
+• Video card metadata (belt levels, gi/no-gi badges, duration, instructor names)
+• Filter functionality (All Belts, All Styles, Quality dropdown)
+• Video card visual improvements
+
+❌ WHAT WAS NOT COMPLETED:
+• Dev OS persistent memory (48-hour chat history)
+• Dev OS daily report button
+• Admin Dashboard redesign (hero metrics, curation stats)
+• Navigation cleanup (remove unused items)
+• System status cards
+• Quick Actions menu
+• Proactive system updates
+
+THE ISSUE:
+Replit Agent focused on the VIDEO LIBRARY improvements from earlier
+in the conversation, not the ADMIN DASHBOARD overhaul we just discussed.
+```
+
+-----
+
+## **WHY THIS HAPPENED:**
+
+The mega-prompt I gave you was comprehensive but Replit Agent likely:
+
+1. Saw multiple tasks in conversation history
+1. Chose to complete the video library work first
+1. Marked the job as “done” after that portion
+
+-----
+
+## **CORRECTED ADMIN-ONLY MEGA-PROMPT**
+
+**Copy this NEW prompt focused ONLY on admin changes:**
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+ADMIN DASHBOARD & DEV OS OVERHAUL - FOCUS ON ADMIN INTERFACE ONLY
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL: This task is ONLY for admin-facing pages. Do NOT touch user-facing
+pages like the video library. Only modify:
+• /admin/dashboard
+• /admin/dev-os  
+• Admin navigation sidebar
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: DEV OS (ADMIN TOOL) - PERSISTENT MEMORY & DAILY REPORTS
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT ISSUE:
+Dev OS at /admin/dev-os loses chat history when you navigate away.
+User wants to scroll back 48 hours and see all conversations.
+
+REQUIREMENTS:
+1. ✅ Store all Dev OS messages in database (persistent)
+2. ✅ Load last 48 hours on page load
+3. ✅ Add "📊 Daily Report" button to quick actions
+4. ✅ Add copy button to each message
+5. ✅ Implement proactive system updates (auto-post events to chat)
+6. ✅ Keep "Clear History" button (deletes all messages)
+
+STEP 1.1: Create Database Table
+
+```sql
+-- Create table for Dev OS message persistence
+CREATE TABLE IF NOT EXISTS dev_os_messages (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  role VARCHAR(20) NOT NULL, -- 'user', 'assistant', 'system'
+  content TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  metadata JSONB,
+  message_type VARCHAR(50) DEFAULT 'chat', -- 'chat', 'report', 'alert'
+  is_read BOOLEAN DEFAULT FALSE
+);
+
+CREATE INDEX idx_dev_os_messages_user_created 
+ON dev_os_messages(user_id, created_at DESC);
+
+-- Verify table exists
+SELECT COUNT(*) FROM dev_os_messages;
+```
+
+STEP 1.2: Update Dev OS Backend Endpoint
+
+Find the Dev OS endpoint (likely in server/routes/admin.ts) and update:
+
+```typescript
+// Load 48 hours of history
+app.get('/api/admin/dev-os/history', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    
+    const messages = await db.query.devOsMessages.findMany({
+      where: and(
+        eq(devOsMessages.userId, userId),
+        gte(devOsMessages.createdAt, twoDaysAgo)
+      ),
+      orderBy: [asc(devOsMessages.createdAt)],
+      limit: 200
+    });
+    
+    res.json({ messages });
+  } catch (error) {
+    console.error('Failed to load Dev OS history:', error);
+    res.status(500).json({ error: 'Failed to load history' });
+  }
+});
+
+// Send message and save to DB
+app.post('/api/admin/dev-os/chat', async (req, res) => {
+  try {
+    const { message } = req.body;
+    const userId = req.user.id;
+    
+    // Save user message
+    await db.insert(devOsMessages).values({
+      userId,
+      role: 'user',
+      content: message,
+      messageType: 'chat'
+    });
+    
+    // Get recent context (last 10 messages for Claude)
+    const recentMessages = await db.query.devOsMessages.findMany({
+      where: eq(devOsMessages.userId, userId),
+      orderBy: [desc(devOsMessages.createdAt)],
+      limit: 10
+    });
+    
+    // Call Claude with context
+    const claudeResponse = await callClaude({
+      messages: recentMessages.reverse().map(m => ({
+        role: m.role === 'system' ? 'user' : m.role,
+        content: m.content
+      }))
+    });
+    
+    // Save assistant response
+    const savedResponse = await db.insert(devOsMessages).values({
+      userId,
+      role: 'assistant',
+      content: claudeResponse.content,
+      messageType: 'chat'
+    }).returning();
+    
+    res.json({ success: true, message: savedResponse[0] });
+  } catch (error) {
+    console.error('Dev OS error:', error);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// Clear history
+app.post('/api/admin/dev-os/clear-history', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    await db.delete(devOsMessages).where(eq(devOsMessages.userId, userId));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to clear history' });
+  }
+});
+
+// Daily Report
+app.get('/api/admin/dev-os/daily-report', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Generate report with actual metrics
+    const userStats = await db.execute(sql`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN created_at::date = ${today} THEN 1 END) as new_today
+      FROM users
+    `);
+    
+    const videoStats = await db.execute(sql`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN created_at::date = ${today} THEN 1 END) as added_today
+      FROM videos
+    `);
+    
+    const curationStats = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(videos_added), 0) as saved,
+        COALESCE(SUM(videos_screened), 0) as searched,
+        COALESCE(SUM(youtube_api_calls), 0) as api_used
+      FROM curation_runs
+      WHERE run_date = ${today}
+    `);
+    
+    const report = `
+📊 DAILY REPORT - ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+
+👥 USERS
+• Total: ${userStats.rows[0].total}
+• New Today: ${userStats.rows[0].new_today}
+
+📹 VIDEO LIBRARY  
+• Total Videos: ${videoStats.rows[0].total}
+• Saved Today: ${curationStats.rows[0].saved}
+• Searched Today: ${curationStats.rows[0].searched}
+• Rejected Today: ${Number(curationStats.rows[0].searched) - Number(curationStats.rows[0].saved)}
+
+🔌 API USAGE
+• YouTube Quota: ${curationStats.rows[0].api_used} / 10,000 units (${Math.round(Number(curationStats.rows[0].api_used)/100)}%)
+
+⚙️ SYSTEM STATUS
+• Curation: ✅ Active
+• All systems operational
+    `.trim();
+    
+    // Save report as system message
+    await db.insert(devOsMessages).values({
+      userId,
+      role: 'system',
+      content: report,
+      messageType: 'report'
+    });
+    
+    res.json({ success: true, report });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate report' });
+  }
+});
+```
+
+STEP 1.3: Update Dev OS Frontend
+
+Find the Dev OS page component and update to load/display persistent history:
+
+```typescript
+// client/src/pages/admin/DevOS.tsx
+
+import { useEffect, useState, useRef } from 'react';
+
+export default function DevOS() {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef(null);
+  
+  // Load history on mount
+  useEffect(() => {
+    loadHistory();
+  }, []);
+  
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+  
+  async function loadHistory() {
+    try {
+      const response = await fetch('/api/admin/dev-os/history');
+      const data = await response.json();
+      setMessages(data.messages);
+    } catch (error) {
+      console.error('Failed to load history:', error);
+    }
+  }
+  
+  async function sendMessage() {
+    if (!input.trim()) return;
+    
+    const tempMessage = {
+      id: Date.now(),
+      role: 'user',
+      content: input,
+      createdAt: new Date().toISOString()
+    };
+    
+    setMessages(prev => [...prev, tempMessage]);
+    setInput('');
+    setLoading(true);
+    
+    try {
+      const response = await fetch('/api/admin/dev-os/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: input })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setMessages(prev => [...prev, data.message]);
+      }
+    } catch (error) {
+      console.error('Send failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  async function generateDailyReport() {
+    setLoading(true);
+    try {
+      await fetch('/api/admin/dev-os/daily-report');
+      await loadHistory(); // Reload to show new report
+    } catch (error) {
+      console.error('Report failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  async function clearHistory() {
+    if (!confirm('Clear all Dev OS history? Cannot be undone.')) return;
+    
+    try {
+      await fetch('/api/admin/dev-os/clear-history', { method: 'POST' });
+      setMessages([]);
+    } catch (error) {
+      console.error('Clear failed:', error);
+    }
+  }
+  
+  function copyMessage(content) {
+    navigator.clipboard.writeText(content);
+    // TODO: Show toast notification
+  }
+  
+  return (
+    <div className="dev-os-page">
+      <header>
+        <h1>Dev OS</h1>
+        <p>Ask about BJJ OS metrics, system health, or business data...</p>
+        <button onClick={clearHistory}>Clear History</button>
+      </header>
+      
+      <div className="quick-actions">
+        <button onClick={() => setInput('How many users signed up today?')}>
+          👥 Users Today
+        </button>
+        <button onClick={() => setInput("What's the current MRR?")}>
+          💰 Current MRR
+        </button>
+        <button onClick={() => setInput('How many videos were added this week?')}>
+          📹 Videos This Week
+        </button>
+        <button onClick={generateDailyReport} className="daily-report-btn">
+          📊 Daily Report
+        </button>
+        <button onClick={() => setInput('Are there any curation jobs running?')}>
+          ⚙️ Curation Status
+        </button>
+      </div>
+      
+      <div className="messages-container">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`message message-${msg.role}`}>
+            <div className="message-header">
+              <span className="role">
+                {msg.role === 'system' ? '🤖 SYSTEM' : 
+                 msg.role === 'user' ? 'YOU' : '🛡️ DEV OS'}
+              </span>
+              <span className="time">
+                {new Date(msg.createdAt).toLocaleTimeString()}
+              </span>
+            </div>
+            <div className="content">{msg.content}</div>
+            <button onClick={() => copyMessage(msg.content)} className="copy-btn">
+              📋 Copy
+            </button>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+      
+      <div className="input-container">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+          placeholder="Ask about metrics, system health, or business data..."
+          disabled={loading}
+        />
+        <button onClick={sendMessage} disabled={loading || !input.trim()}>
+          {loading ? '...' : '→'}
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: ADMIN DASHBOARD REDESIGN - REMOVE ZEROS, ADD HERO METRICS
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT ISSUES WITH /admin/dashboard:
+• Shows all zeros for metrics (Total Queries: 0, Engagement: 0, etc.)
+• Important metrics (MRR, Users, Videos) are small cards at bottom
+• No video curation breakdown
+• No trend indicators
+• “Grant Lifetime Access” button in wrong place
+
+NEW REQUIREMENTS:
+
+1. ✅ Remove ALL sections showing zeros
+1. ✅ Create hero metrics section (MRR, Users, Videos) at top
+1. ✅ Add video curation stats: Total, Saved Today, Searched Today, Rejected Today
+1. ✅ Add trend indicators (↑ ↓ →) with “vs yesterday”
+1. ✅ Keep Recent Signups, add quick action buttons
+1. ✅ Add System Status card
+
+STEP 2.1: Create New Admin Dashboard Component
+
+```typescript
+// client/src/pages/admin/Dashboard.tsx
+
+export default function AdminDashboard() {
+  const { data: metrics, isLoading } = useQuery({
+    queryKey: ['admin-dashboard-metrics'],
+    queryFn: () => fetch('/api/admin/dashboard/metrics').then(r => r.json())
+  });
+  
+  if (isLoading) return <div>Loading...</div>;
+  
+  return (
+    <div className="admin-dashboard">
+      {/* Header */}
+      <header className="dashboard-header">
+        <div>
+          <h1>Dashboard Overview</h1>
+          <p>BJJ OS Admin - Launch Day Ready</p>
+        </div>
+        <button 
+          onClick={() => navigate('/admin/lifetime')}
+          className="grant-lifetime-btn"
+        >
+          ⭐ Grant Lifetime Access
+        </button>
+      </header>
+      
+      {/* HERO METRICS - Most Important Numbers */}
+      <section className="hero-metrics">
+        <MetricCard
+          icon="💰"
+          title="MRR"
+          value={`$${metrics.mrr.toFixed(2)}`}
+          change={metrics.mrrChange}
+          trend={metrics.mrrTrend}
+        />
+        <MetricCard
+          icon="👥"
+          title="Total Users"
+          value={metrics.totalUsers}
+          change={metrics.usersChange}
+          trend={metrics.usersTrend}
+        />
+        <MetricCard
+          icon="📹"
+          title="Total Videos"
+          value={metrics.totalVideos}
+          change={metrics.videosChange}
+          trend={metrics.videosTrend}
+        />
+      </section>
+      
+      {/* VIDEO CURATION SECTION */}
+      <section className="curation-section">
+        <h2>📹 Video Curation</h2>
+        <div className="curation-grid">
+          <StatBox label="Total Videos" value={metrics.totalVideos} />
+          <StatBox label="Saved Today" value={metrics.videosSavedToday} />
+          <StatBox label="Searched Today" value={metrics.videosSearchedToday} />
+          <StatBox 
+            label="Rejected Today" 
+            value={metrics.videosSearchedToday - metrics.videosSavedToday} 
+          />
+        </div>
+      </section>
+      
+      {/* TWO COLUMN LAYOUT */}
+      <div className="dashboard-grid">
+        {/* Recent Signups */}
+        <section className="recent-signups-card">
+          <div className="section-header">
+            <h2>🆕 Recent Signups</h2>
+            <button onClick={() => navigate('/admin/users')}>
+              View All
+            </button>
+          </div>
+          {metrics.recentSignups.map(user => (
+            <div key={user.id} className="signup-row">
+              <div className="user-icon">👤</div>
+              <div className="user-details">
+                <div className="email">{user.email}</div>
+                <div className="time">{formatRelativeTime(user.createdAt)}</div>
+              </div>
+              <span className={`status-badge ${user.subscriptionStatus}`}>
+                {user.subscriptionStatus}
+              </span>
+              <div className="actions">
+                <button onClick={() => viewUser(user.id)}>View</button>
+                <button onClick={() => messageUser(user.id)}>Message</button>
+              </div>
+            </div>
+          ))}
+        </section>
+        
+        {/* System Status */}
+        <section className="system-status-card">
+          <h2>⚙️ System Status</h2>
+          <StatusItem 
+            label="Curation" 
+            value="✅ Active"
+            detail={`${metrics.curationRunsToday} / 9 runs today`}
+          />
+          <StatusItem
+            label="API Quota"
+            value={`${metrics.apiQuotaPercent}% used`}
+            detail={`${metrics.apiQuotaUsed} / 10,000 units`}
+          />
+          <StatusItem
+            label="Videos Today"
+            value={`+${metrics.videosSavedToday}`}
+            detail="Added to library"
+          />
+          <StatusItem
+            label="Errors"
+            value={metrics.errors === 0 ? 'None ✅' : `${metrics.errors} ⚠️`}
+            detail="All systems operational"
+          />
+          <div className="system-actions">
+            <button onClick={() => navigate('/admin/dev-os')}>Dev OS</button>
+            <button onClick={() => viewLogs()}>Logs</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ icon, title, value, change, trend }) {
+  return (
+    <div className="metric-card">
+      <div className="metric-icon">{icon}</div>
+      <div className="metric-content">
+        <div className="title">{title}</div>
+        <div className="value">{value}</div>
+        {change && (
+          <div className={`change ${trend}`}>
+            {trend === 'up' && '↑'}
+            {trend === 'down' && '↓'}
+            {trend === 'neutral' && '→'}
+            {' '}{change}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ label, value }) {
+  return (
+    <div className="stat-box">
+      <div className="stat-value">{value}</div>
+      <div className="stat-label">{label}</div>
+    </div>
+  );
+}
+
+function StatusItem({ label, value, detail }) {
+  return (
+    <div className="status-item">
+      <div className="status-label">{label}</div>
+      <div className="status-value">{value}</div>
+      <div className="status-detail">{detail}</div>
+    </div>
+  );
+}
+```
+
+STEP 2.2: Create Backend API for Dashboard Metrics
+
+```typescript
+// server/routes/admin.ts
+
+app.get('/api/admin/dashboard/metrics', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 24*60*60*1000).toISOString().split('T')[0];
+    
+    // Get user metrics
+    const users = await db.execute(sql`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN created_at::date = ${today} THEN 1 END) as today,
+        COUNT(CASE WHEN created_at::date = ${yesterday} THEN 1 END) as yesterday,
+        COUNT(CASE WHEN subscription_status = 'active' THEN 1 END) as active
+      FROM users
+    `);
+    
+    // Get video metrics
+    const videos = await db.execute(sql`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN created_at::date = ${today} THEN 1 END) as today,
+        COUNT(CASE WHEN created_at::date = ${yesterday} THEN 1 END) as yesterday
+      FROM videos
+    `);
+    
+    // Get curation metrics
+    const curation = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(videos_added), 0) as saved_today,
+        COALESCE(SUM(videos_screened), 0) as searched_today,
+        COALESCE(SUM(youtube_api_calls), 0) as api_used,
+        COUNT(*) as runs_today
+      FROM curation_runs
+      WHERE run_date = ${today}
+    `);
+    
+    // Get recent signups
+    const recentSignups = await db.query.users.findMany({
+      orderBy: [desc(users.createdAt)],
+      limit: 5,
+      columns: {
+        id: true,
+        email: true,
+        createdAt: true,
+        subscriptionStatus: true
+      }
+    });
+    
+    // Calculate MRR
+    const activeUsers = Number(users.rows[0].active);
+    const mrr = activeUsers * 14.99;
+    
+    // Calculate yesterday's MRR for trend
+    const yesterdayActive = await db.execute(sql`
+      SELECT COUNT(*) as count
+      FROM users
+      WHERE subscription_status = 'active' 
+        AND created_at < ${yesterday}
+    `);
+    const yesterdayMrr = Number(yesterdayActive.rows[0].count) * 14.99;
+    
+    // Build response
+    res.json({
+      // Hero metrics
+      mrr,
+      mrrChange: `+$${(mrr - yesterdayMrr).toFixed(2)} today`,
+      mrrTrend: mrr > yesterdayMrr ? 'up' : mrr < yesterdayMrr ? 'down' : 'neutral',
+      
+      totalUsers: Number(users.rows[0].total),
+      usersChange: `+${users.rows[0].today} today`,
+      usersTrend: Number(users.rows[0].today) > Number(users.rows[0].yesterday) ? 'up' :
+                  Number(users.rows[0].today) < Number(users.rows[0].yesterday) ? 'down' : 'neutral',
+      
+      totalVideos: Number(videos.rows[0].total),
+      videosChange: `+${videos.rows[0].today} today`,
+      videosTrend: Number(videos.rows[0].today) > Number(videos.rows[0].yesterday) ? 'up' :
+                   Number(videos.rows[0].today) < Number(videos.rows[0].yesterday) ? 'down' : 'neutral',
+      
+      // Video curation (as requested - no progress, just numbers)
+      videosSavedToday: Number(curation.rows[0].saved_today),
+      videosSearchedToday: Number(curation.rows[0].searched_today),
+      // Rejected calculated: searched - saved
+      
+      // System status
+      apiQuotaUsed: Number(curation.rows[0].api_used),
+      apiQuotaPercent: Math.round(Number(curation.rows[0].api_used) / 100),
+      curationRunsToday: Number(curation.rows[0].runs_today),
+      errors: 0,
+      
+      // Recent signups
+      recentSignups
+    });
+    
+  } catch (error) {
+    console.error('Dashboard metrics error:', error);
+    res.status(500).json({ error: 'Failed to load metrics' });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: NAVIGATION CLEANUP - REMOVE UNUSED ITEMS
+═══════════════════════════════════════════════════════════════════════════════
+
+REMOVE THESE NAVIGATION ITEMS:
+• Techniques
+• Chains
+• Instructors
+• Partnerships
+• Meta
+• Chat (move to user nav only)
+
+KEEP THESE 8 ITEMS:
+• Dashboard
+• Users
+• Videos
+• Dev OS (highlight this)
+• Referrals
+• Lifetime Access
+• Feedback
+• Flagged Accounts
+
+Find the admin navigation component and simplify to 8 items.
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After completion, verify:
+
+DEV OS:
+□ Messages persist across page refreshes
+□ Can scroll back 48+ hours
+□ Daily Report button generates report
+□ Copy button on each message
+□ Clear History button works
+
+ADMIN DASHBOARD:
+□ NO sections showing zeros
+□ Hero metrics (MRR, Users, Videos) at top with trends
+□ Video curation shows: Total, Saved Today, Searched Today, Rejected Today
+□ Recent Signups has View/Message buttons
+□ System Status shows curation status
+□ Grant Lifetime Access button in header
+
+NAVIGATION:
+□ Reduced to 8 items
+□ Removed: Techniques, Chains, Instructors, Partnerships, Meta, Chat
+
+═══════════════════════════════════════════════════════════════════════════════
+
+BEGIN ADMIN-ONLY IMPLEMENTATION NOW.
+
+Focus ONLY on admin pages:
+• /admin/dashboard
+• /admin/dev-os
+• Admin navigation
+
+Do NOT modify user-facing pages like /videos.
+
+Report back when complete.
+
+```
+---
+
+**This prompt is laser-focused on ONLY the admin interface improvements.** 
+
+**Paste this into Replit Agent now.** 🎯​​​​​​​​​​​​​​​​
+```

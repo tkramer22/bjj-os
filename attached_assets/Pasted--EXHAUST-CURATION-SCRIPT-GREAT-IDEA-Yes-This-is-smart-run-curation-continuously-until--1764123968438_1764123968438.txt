@@ -1,0 +1,616 @@
+# 🎯 **EXHAUST CURATION SCRIPT - GREAT IDEA**
+
+Yes! This is smart - run curation continuously until you hit YouTube API quota limits. Maximize library growth.
+
+-----
+
+## **📋 EXHAUST CURATION SCRIPT - COPY TO AGENT**
+
+```
+NEW FEATURE: Exhaust Curation Mode
+
+Todd wants a script that runs curation continuously until YouTube API quota is exhausted.
+
+PURPOSE:
+- Maximize library growth in one session
+- Use full YouTube API quota (10,000 units/day)
+- Run overnight or when Todd isn't actively working
+- Stop automatically when quota is hit
+
+═══════════════════════════════════════════════════════════════
+SCRIPT: exhaust-curation.js
+═══════════════════════════════════════════════════════════════
+
+Create this file in the project root:
+
+```javascript
+#!/usr/bin/env node
+
+/**
+ * EXHAUST CURATION SCRIPT
+ * 
+ * Runs curation continuously until:
+ * - YouTube API quota is exhausted
+ * - Max runs limit is reached
+ * - Manual stop signal received
+ * - Too many consecutive failures
+ * 
+ * Usage: node exhaust-curation.js [options]
+ * 
+ * Options:
+ *   --max-runs=N       Maximum curation runs (default: 50)
+ *   --delay=N          Seconds between runs (default: 60)
+ *   --stop-on-empty=N  Stop after N runs with 0 new videos (default: 3)
+ */
+
+const BASE_URL = process.env.APP_URL || 'https://bjjos.app';
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
+
+// Configuration
+const CONFIG = {
+  maxRuns: parseInt(process.argv.find(a => a.startsWith('--max-runs='))?.split('=')[1]) || 50,
+  delayBetweenRuns: parseInt(process.argv.find(a => a.startsWith('--delay='))?.split('=')[1]) || 60,
+  stopOnEmptyRuns: parseInt(process.argv.find(a => a.startsWith('--stop-on-empty='))?.split('=')[1]) || 3,
+  notifyEmail: process.env.ADMIN_EMAIL || 'todd@bjjos.app'
+};
+
+// Stats tracking
+const stats = {
+  startTime: new Date(),
+  totalRuns: 0,
+  successfulRuns: 0,
+  failedRuns: 0,
+  totalVideosAdded: 0,
+  totalVideosAnalyzed: 0,
+  consecutiveEmptyRuns: 0,
+  errors: [],
+  runHistory: []
+};
+
+// Logging helper
+function log(message, level = 'INFO') {
+  const timestamp = new Date().toISOString();
+  const prefix = {
+    'INFO': '📊',
+    'SUCCESS': '✅',
+    'WARNING': '⚠️',
+    'ERROR': '❌',
+    'START': '🚀',
+    'STOP': '🛑'
+  }[level] || '•';
+  
+  console.log(`[${timestamp}] ${prefix} ${message}`);
+}
+
+// Sleep helper
+function sleep(seconds) {
+  return new Promise(resolve => setTimeout(resolve, seconds * 1000));
+}
+
+// Run single curation
+async function runCuration() {
+  try {
+    log('Starting curation run...');
+    
+    const response = await fetch(`${BASE_URL}/api/admin/command`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${ADMIN_API_KEY}`
+      },
+      body: JSON.stringify({ command: 'run_curation' })
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`API error: ${response.status} - ${error}`);
+    }
+    
+    const result = await response.json();
+    
+    // Wait for curation to complete (poll for status)
+    const finalResult = await waitForCurationComplete(result.runId);
+    
+    return finalResult;
+    
+  } catch (error) {
+    throw error;
+  }
+}
+
+// Wait for curation run to complete
+async function waitForCurationComplete(runId, maxWaitMinutes = 15) {
+  const startWait = Date.now();
+  const maxWaitMs = maxWaitMinutes * 60 * 1000;
+  
+  while (Date.now() - startWait < maxWaitMs) {
+    try {
+      const response = await fetch(`${BASE_URL}/api/admin/curation/status/${runId}`, {
+        headers: {
+          'Authorization': `Bearer ${ADMIN_API_KEY}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Status check failed: ${response.status}`);
+      }
+      
+      const status = await response.json();
+      
+      if (status.status === 'completed') {
+        return {
+          success: true,
+          videosAnalyzed: status.videosAnalyzed || 0,
+          videosAdded: status.videosAdded || 0,
+          duration: status.duration || 0,
+          runId
+        };
+      }
+      
+      if (status.status === 'failed') {
+        return {
+          success: false,
+          error: status.error || 'Unknown error',
+          runId
+        };
+      }
+      
+      // Still running, wait and check again
+      await sleep(10);
+      
+    } catch (error) {
+      log(`Status check error: ${error.message}`, 'WARNING');
+      await sleep(10);
+    }
+  }
+  
+  return {
+    success: false,
+    error: 'Timeout waiting for curation to complete',
+    runId
+  };
+}
+
+// Check if we should stop
+function shouldStop(result) {
+  // Check for quota exhaustion
+  if (result.error && result.error.includes('quota')) {
+    log('YouTube API quota exhausted!', 'STOP');
+    return { stop: true, reason: 'QUOTA_EXHAUSTED' };
+  }
+  
+  // Check for rate limiting
+  if (result.error && result.error.includes('rate limit')) {
+    log('Rate limited by API', 'STOP');
+    return { stop: true, reason: 'RATE_LIMITED' };
+  }
+  
+  // Check for too many consecutive empty runs
+  if (stats.consecutiveEmptyRuns >= CONFIG.stopOnEmptyRuns) {
+    log(`${CONFIG.stopOnEmptyRuns} consecutive runs with 0 new videos`, 'STOP');
+    return { stop: true, reason: 'NO_NEW_CONTENT' };
+  }
+  
+  // Check for max runs
+  if (stats.totalRuns >= CONFIG.maxRuns) {
+    log(`Reached max runs limit (${CONFIG.maxRuns})`, 'STOP');
+    return { stop: true, reason: 'MAX_RUNS_REACHED' };
+  }
+  
+  // Check for too many failures
+  if (stats.failedRuns >= 5) {
+    log('Too many failed runs', 'STOP');
+    return { stop: true, reason: 'TOO_MANY_FAILURES' };
+  }
+  
+  return { stop: false };
+}
+
+// Send completion notification
+async function sendNotification(reason) {
+  const duration = Math.round((Date.now() - stats.startTime) / 1000 / 60);
+  
+  const summary = `
+EXHAUST CURATION COMPLETE
+
+Stop Reason: ${reason}
+Duration: ${duration} minutes
+Total Runs: ${stats.totalRuns}
+Successful: ${stats.successfulRuns}
+Failed: ${stats.failedRuns}
+
+RESULTS:
+Videos Analyzed: ${stats.totalVideosAnalyzed}
+Videos Added: ${stats.totalVideosAdded}
+Avg per Run: ${stats.successfulRuns > 0 ? (stats.totalVideosAdded / stats.successfulRuns).toFixed(1) : 0}
+
+RUN HISTORY:
+${stats.runHistory.map((r, i) => 
+  `  Run ${i + 1}: +${r.videosAdded} videos (${r.duration}s)`
+).join('\n')}
+
+${stats.errors.length > 0 ? `\nERRORS:\n${stats.errors.join('\n')}` : ''}
+  `.trim();
+  
+  log('\n' + summary, 'INFO');
+  
+  // Send email notification
+  try {
+    await fetch(`${BASE_URL}/api/admin/notify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${ADMIN_API_KEY}`
+      },
+      body: JSON.stringify({
+        to: CONFIG.notifyEmail,
+        subject: `BJJ OS: Exhaust Curation Complete - +${stats.totalVideosAdded} videos`,
+        body: summary
+      })
+    });
+    log('Email notification sent', 'SUCCESS');
+  } catch (error) {
+    log(`Failed to send email: ${error.message}`, 'WARNING');
+  }
+}
+
+// Main execution loop
+async function main() {
+  log('='.repeat(60), 'START');
+  log('EXHAUST CURATION STARTED', 'START');
+  log(`Max runs: ${CONFIG.maxRuns}`, 'INFO');
+  log(`Delay between runs: ${CONFIG.delayBetweenRuns}s`, 'INFO');
+  log(`Stop after empty runs: ${CONFIG.stopOnEmptyRuns}`, 'INFO');
+  log('='.repeat(60), 'START');
+  
+  let stopReason = null;
+  
+  while (!stopReason) {
+    stats.totalRuns++;
+    log(`\n--- RUN ${stats.totalRuns} ---`, 'INFO');
+    
+    try {
+      const result = await runCuration();
+      
+      if (result.success) {
+        stats.successfulRuns++;
+        stats.totalVideosAnalyzed += result.videosAnalyzed;
+        stats.totalVideosAdded += result.videosAdded;
+        
+        stats.runHistory.push({
+          run: stats.totalRuns,
+          videosAdded: result.videosAdded,
+          videosAnalyzed: result.videosAnalyzed,
+          duration: result.duration
+        });
+        
+        if (result.videosAdded === 0) {
+          stats.consecutiveEmptyRuns++;
+          log(`No new videos found (${stats.consecutiveEmptyRuns} consecutive)`, 'WARNING');
+        } else {
+          stats.consecutiveEmptyRuns = 0;
+          log(`Added ${result.videosAdded} videos!`, 'SUCCESS');
+        }
+        
+      } else {
+        stats.failedRuns++;
+        stats.errors.push(`Run ${stats.totalRuns}: ${result.error}`);
+        log(`Run failed: ${result.error}`, 'ERROR');
+      }
+      
+      // Check if we should stop
+      const stopCheck = shouldStop(result);
+      if (stopCheck.stop) {
+        stopReason = stopCheck.reason;
+        break;
+      }
+      
+      // Wait before next run
+      log(`Waiting ${CONFIG.delayBetweenRuns}s before next run...`, 'INFO');
+      await sleep(CONFIG.delayBetweenRuns);
+      
+    } catch (error) {
+      stats.failedRuns++;
+      stats.errors.push(`Run ${stats.totalRuns}: ${error.message}`);
+      log(`Run error: ${error.message}`, 'ERROR');
+      
+      // Check if quota error
+      if (error.message.includes('quota')) {
+        stopReason = 'QUOTA_EXHAUSTED';
+        break;
+      }
+      
+      // Wait longer after error
+      await sleep(CONFIG.delayBetweenRuns * 2);
+    }
+  }
+  
+  // Send completion notification
+  await sendNotification(stopReason);
+  
+  log('\n' + '='.repeat(60), 'STOP');
+  log('EXHAUST CURATION FINISHED', 'STOP');
+  log('='.repeat(60), 'STOP');
+  
+  process.exit(0);
+}
+
+// Handle graceful shutdown
+process.on('SIGINT', async () => {
+  log('\nReceived SIGINT, finishing up...', 'STOP');
+  await sendNotification('MANUAL_STOP');
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  log('\nReceived SIGTERM, finishing up...', 'STOP');
+  await sendNotification('MANUAL_STOP');
+  process.exit(0);
+});
+
+// Run
+main().catch(error => {
+  log(`Fatal error: ${error.message}`, 'ERROR');
+  process.exit(1);
+});
+```
+
+═══════════════════════════════════════════════════════════════
+ADD TO PACKAGE.JSON
+═══════════════════════════════════════════════════════════════
+
+```json
+{
+  "scripts": {
+    "exhaust-curation": "node exhaust-curation.js",
+    "exhaust-curation:max": "node exhaust-curation.js --max-runs=100 --delay=30",
+    "exhaust-curation:overnight": "node exhaust-curation.js --max-runs=200 --delay=120"
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════
+USAGE
+═══════════════════════════════════════════════════════════════
+
+BASIC (50 runs, 60s delay):
+
+```bash
+npm run exhaust-curation
+```
+
+AGGRESSIVE (100 runs, 30s delay):
+
+```bash
+npm run exhaust-curation:max
+```
+
+OVERNIGHT (200 runs, 2min delay):
+
+```bash
+npm run exhaust-curation:overnight
+```
+
+CUSTOM:
+
+```bash
+node exhaust-curation.js --max-runs=75 --delay=45 --stop-on-empty=5
+```
+
+═══════════════════════════════════════════════════════════════
+ADD COMMAND CENTER BUTTON
+═══════════════════════════════════════════════════════════════
+
+Add to Command Center UI:
+
+```jsx
+<div className="command-card exhaust-curation">
+  <div className="card-header">
+    <h3>🔥 Exhaust Curation</h3>
+    <span className="duration">Until quota exhausted</span>
+  </div>
+  <p className="description">
+    Run curation continuously until YouTube API quota is exhausted.
+    Best for overnight runs.
+  </p>
+  <div className="options">
+    <select value={exhaustMode} onChange={(e) => setExhaustMode(e.target.value)}>
+      <option value="standard">Standard (50 runs)</option>
+      <option value="aggressive">Aggressive (100 runs)</option>
+      <option value="overnight">Overnight (200 runs)</option>
+    </select>
+  </div>
+  <button 
+    onClick={startExhaustCuration}
+    disabled={exhaustRunning}
+    className="execute-btn warning"
+  >
+    {exhaustRunning ? 'Running...' : 'Start Exhaust Curation'}
+  </button>
+  {exhaustRunning && (
+    <div className="exhaust-status">
+      <p>Run {currentRun} of {maxRuns}</p>
+      <p>Videos added: {videosAdded}</p>
+      <button onClick={stopExhaustCuration} className="stop-btn">
+        Stop
+      </button>
+    </div>
+  )}
+</div>
+```
+
+═══════════════════════════════════════════════════════════════
+BACKEND ENDPOINT
+═══════════════════════════════════════════════════════════════
+
+Add endpoint to trigger exhaust curation:
+
+```javascript
+router.post('/api/admin/exhaust-curation', async (req, res) => {
+  const { mode = 'standard' } = req.body;
+  
+  const configs = {
+    standard: { maxRuns: 50, delay: 60 },
+    aggressive: { maxRuns: 100, delay: 30 },
+    overnight: { maxRuns: 200, delay: 120 }
+  };
+  
+  const config = configs[mode] || configs.standard;
+  
+  // Spawn background process
+  const { spawn } = require('child_process');
+  const child = spawn('node', [
+    'exhaust-curation.js',
+    `--max-runs=${config.maxRuns}`,
+    `--delay=${config.delay}`
+  ], {
+    detached: true,
+    stdio: 'ignore'
+  });
+  
+  child.unref();
+  
+  res.json({
+    success: true,
+    message: `Exhaust curation started in ${mode} mode`,
+    config
+  });
+});
+```
+
+═══════════════════════════════════════════════════════════════
+EXPECTED OUTPUT
+═══════════════════════════════════════════════════════════════
+
+When running:
+
+```
+[2025-11-22T10:30:00Z] 🚀 ============================================================
+[2025-11-22T10:30:00Z] 🚀 EXHAUST CURATION STARTED
+[2025-11-22T10:30:00Z] 📊 Max runs: 50
+[2025-11-22T10:30:00Z] 📊 Delay between runs: 60s
+[2025-11-22T10:30:00Z] 📊 Stop after empty runs: 3
+[2025-11-22T10:30:00Z] 🚀 ============================================================
+
+[2025-11-22T10:30:01Z] 📊 --- RUN 1 ---
+[2025-11-22T10:30:01Z] 📊 Starting curation run...
+[2025-11-22T10:38:15Z] ✅ Added 8 videos!
+[2025-11-22T10:38:15Z] 📊 Waiting 60s before next run...
+
+[2025-11-22T10:39:15Z] 📊 --- RUN 2 ---
+[2025-11-22T10:39:15Z] 📊 Starting curation run...
+[2025-11-22T10:47:30Z] ✅ Added 12 videos!
+[2025-11-22T10:47:30Z] 📊 Waiting 60s before next run...
+
+... (continues) ...
+
+[2025-11-22T14:22:00Z] 📊 --- RUN 35 ---
+[2025-11-22T14:22:00Z] 📊 Starting curation run...
+[2025-11-22T14:22:05Z] 🛑 YouTube API quota exhausted!
+
+EXHAUST CURATION COMPLETE
+
+Stop Reason: QUOTA_EXHAUSTED
+Duration: 232 minutes
+Total Runs: 35
+Successful: 33
+Failed: 2
+
+RESULTS:
+Videos Analyzed: 1,247
+Videos Added: 312
+Avg per Run: 9.5
+
+✅ Library grew from 650 to 962 videos!
+```
+
+═══════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════
+
+After implementation:
+
+1. ✅ exhaust-curation.js script in project root
+1. ✅ npm scripts for different modes
+1. ✅ Command Center button to trigger
+1. ✅ Email notification when complete
+1. ✅ Automatic stop on quota/errors
+1. ✅ Full stats tracking
+
+IMPLEMENT NOW.
+
+```
+---
+
+## **🎯 HOW TO USE IT**
+
+### **From Command Line (Replit Shell):**
+
+```bash
+# Standard (50 runs)
+npm run exhaust-curation
+
+# Aggressive (100 runs, faster)
+npm run exhaust-curation:max
+
+# Overnight (200 runs, slower)
+npm run exhaust-curation:overnight
+```
+
+### **From Command Center (After Implementation):**
+
+1. Go to Command Center
+1. Click “🔥 Exhaust Curation”
+1. Select mode (Standard/Aggressive/Overnight)
+1. Click “Start”
+1. Get email when done
+
+-----
+
+## **📊 EXPECTED RESULTS**
+
+### **YouTube API Quota:**
+
+**Daily Quota:** 10,000 units
+
+**Cost per search:** ~100 units
+**Searches per curation run:** ~20-40
+
+**Max runs before quota:** ~25-50 runs/day
+
+### **Video Growth:**
+
+**Per Run:** 8-12 videos (with expanded queries)
+
+**Exhaust Run (35 runs):**
+
+- 35 runs × 9 videos avg = **315 videos**
+- Library: 650 → 965 videos
+- **+48% growth in one session**
+
+-----
+
+## **💡 PRO TIP: RUN OVERNIGHT**
+
+Set it to run overnight when you’re not using the app:
+
+```bash
+# Start at 11pm, runs until quota exhausted (~4-6 hours)
+npm run exhaust-curation:overnight
+```
+
+Wake up to 300+ new videos in your library.
+
+-----
+
+## **✅ BOTTOM LINE**
+
+This script will:
+
+- ✅ Maximize your YouTube API quota usage
+- ✅ Add 200-400 videos per session
+- ✅ Stop automatically when done
+- ✅ Email you results
+- ✅ Run unattended (overnight)
+
+**Copy to Agent and get this implemented. Then run it tonight and wake up with a massive library.** 🚀​​​​​​​​​​​​​​​​

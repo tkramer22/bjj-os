@@ -1,0 +1,122 @@
+# **🚨 BUILD ERROR - YOUTUBE QUOTA MONITOR MODULE ISSUE** 🚨
+
+-----
+
+## **ISSUE IDENTIFIED:**
+
+```
+⚠️ Build failed
+
+Your deployment attempt had the following errors:
+
+• Build failed: esbuild cannot resolve './youtube-quota-monitor' module 
+  in server/utils/youtubeApi.ts
+
+• Missing file: server/utils/youtube-quota-monitor.ts does not exist
+
+• The youtube-quota-monitor module is imported but the file is located 
+  at server/youtube-quota-monitor.ts instead
+```
+
+-----
+
+## **THE PROBLEM:**
+
+The import path is wrong. The code is looking for:
+
+```
+server/utils/youtube-quota-monitor.ts
+```
+
+But the file is actually at:
+
+```
+server/youtube-quota-monitor.ts
+```
+
+-----
+
+## **QUICK FIX:**
+
+**Copy this and paste into Replit Agent:**
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+FIX BUILD ERROR - YOUTUBE QUOTA MONITOR IMPORT PATH
+═══════════════════════════════════════════════════════════════════════════════
+
+ISSUE: Import path incorrect in server/utils/youtubeApi.ts
+
+STEP 1: Locate the file with wrong import
+Find: server/utils/youtubeApi.ts
+
+STEP 2: Fix the import statement
+Look for:
+```typescript
+import { ... } from './youtube-quota-monitor';
+```
+
+Change to:
+
+```typescript
+import { ... } from '../youtube-quota-monitor';
+```
+
+The file is one directory up (server/youtube-quota-monitor.ts), not in
+the same directory (server/utils/).
+
+STEP 3: Verify the file exists
+Check that this file exists:
+
+```bash
+ls -la server/youtube-quota-monitor.ts
+```
+
+If it doesn’t exist, check:
+
+```bash
+find server/ -name "*youtube-quota*"
+```
+
+STEP 4: Alternative - Move the file
+If you prefer, move the file to match the import:
+
+```bash
+mv server/youtube-quota-monitor.ts server/utils/youtube-quota-monitor.ts
+```
+
+Then the original import path would be correct.
+
+STEP 5: After fix, rebuild
+The build should succeed once the import path is corrected.
+
+RECOMMENDATION: Fix the import path (change ./ to ../) rather than moving
+the file, as the file structure is already set up.
+
+Execute this fix now and report back.
+
+```
+---
+
+## **AGENT SUGGESTION:**
+
+The agent already suggested:
+> "Fix the import path in youtubeApi.ts to point to the correct location of youtube..."
+
+---
+
+## **AFTER THIS FIX:**
+```
+
+✅ Build will succeed
+✅ Deployment will complete
+✅ Can proceed with Stripe testing
+✅ No impact on Stripe integration work
+
+```
+---
+
+**This is a simple import path fix - paste the prompt above into Replit Agent and it'll be resolved in 30 seconds.** 🔧
+
+**Then the deployment will succeed and we can continue with Stripe testing.** ✅​​​​​​​​​​​​​​​​
+```

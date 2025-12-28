@@ -1,0 +1,460 @@
+```
+OVERNIGHT MISSION: Professor OS - Full System Validation & Enhancement
+Project Lead Authorization: Make BJJ OS launch-ready by morning
+
+You have 8 hours. This is the most important night for BJJ OS. Todd is launching tomorrow. Every system must work flawlessly. Users must be FLOORED.
+
+Reference: This app has 1,329+ curated videos, 212+ elite instructors, Claude Sonnet 4.5 backend, position-first video architecture, and combat sports news integration.
+
+═══════════════════════════════════════════════════════════════
+GOLDEN RULES - MEMORIZE THESE
+═══════════════════════════════════════════════════════════════
+
+1. CREATE CHECKPOINT before ANY code change - name them clearly
+2. DO NOT touch Stripe - it's working
+3. DO NOT touch video curation system - it's working  
+4. DO NOT touch signup/login flow - it's working
+5. If ANYTHING breaks, ROLLBACK immediately
+6. Test on LIVE bjjos.app, not localhost
+7. Every fix must be verified on deployed site before moving on
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: SYSTEM HEALTH CHECK (30 minutes)
+═══════════════════════════════════════════════════════════════
+
+VERIFY ALL SYSTEMS OPERATIONAL:
+
+1. DATABASE CONNECTIVITY
+   - Run: SELECT COUNT(*) FROM ai_video_knowledge
+   - Expected: 1,329+ videos
+   - Run: SELECT COUNT(DISTINCT instructor_name) FROM ai_video_knowledge  
+   - Expected: 212+ instructors
+   - Run: SELECT COUNT(*) FROM users
+   - Document current user count
+
+2. AI MODEL VERIFICATION
+   - Confirm Professor OS is using Claude Sonnet 4.5 (claude-sonnet-4-20250514)
+   - Show me the exact model string in the API call
+   - Confirm API key is valid and working
+
+3. SYSTEM PROMPT VERIFICATION
+   - Show me the first 500 characters of Professor OS system prompt
+   - Confirm it includes: personality traits, coaching philosophy, video recommendation logic
+   - Confirm it references the 1,300+ video library
+
+4. COMBAT SPORTS NEWS INTEGRATION
+   - Verify news scraping is active
+   - Run: SELECT * FROM combat_sports_news ORDER BY created_at DESC LIMIT 5
+   - Show me the 5 most recent news items
+   - Confirm news is being pulled from configured sources
+   - If NOT working: diagnose and fix - Professor OS should reference current events
+
+5. DATA PERSISTENCE CHECK
+   - Verify conversations are being saved
+   - Run: SELECT COUNT(*) FROM conversations WHERE created_at > NOW() - INTERVAL '24 hours'
+   - Verify user preferences are being saved
+   - Verify session data persists across page refreshes
+
+DOCUMENT: Create a system health report with all findings
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: PROFESSOR OS BASELINE TESTING (1 hour)
+═══════════════════════════════════════════════════════════════
+
+Run these 15 test queries. Record EXACT responses. Score each 1-10.
+
+POSITION-SPECIFIC TESTS (Video accuracy critical):
+
+TEST 1: "I keep getting stuck in bottom half guard"
+EXPECTED: 
+- Empathy ("Half guard bottom can be frustrating...")
+- Diagnostic question ("Are you getting flattened or is it the underhook battle?")
+- 2-3 half guard BOTTOM videos ONLY (Lucas Leite, Paul Schreiner, Lachlan Giles)
+- ZERO mount, side control, or other position videos
+SCORE: Relevance _/10, Personality _/10, Video Accuracy _/10
+
+TEST 2: "Triangle choke finish details"
+EXPECTED:
+- Technical advice on finishing (angle, squeeze, cutting)
+- Triangle FINISH videos, not setup videos
+- Danaher, Ryan, or other leg triangle specialists
+- ZERO other submission videos
+SCORE: Relevance _/10, Personality _/10, Video Accuracy _/10
+
+TEST 3: "Mount escapes when they're heavy"
+EXPECTED:
+- Acknowledges the weight/pressure challenge
+- Escape-specific techniques (elbow-knee, trap & roll)
+- Mount escape videos ONLY
+- ZERO mount attack videos
+SCORE: Relevance _/10, Personality _/10, Video Accuracy _/10
+
+TEST 4: "Knee cut pass"
+EXPECTED:
+- Technical breakdown of knee cut
+- JT Torres videos (he's known for this)
+- Guard passing videos ONLY
+- ZERO guard retention videos
+SCORE: Relevance _/10, Personality _/10, Video Accuracy _/10
+
+TEST 5: "Back escapes when they have both hooks"
+EXPECTED:
+- Specific to hooks-in back control
+- Escape methodology
+- Back escape videos ONLY
+- ZERO back attack videos
+SCORE: Relevance _/10, Personality _/10, Video Accuracy _/10
+
+COACHING INTELLIGENCE TESTS:
+
+TEST 6: "I'm a blue belt and I feel like I'm not improving"
+EXPECTED:
+- Emotional intelligence FIRST (plateau is normal, acknowledge frustration)
+- Ask about training frequency, focus areas
+- NOT immediate video dump
+- Actual coaching perspective
+SCORE: Coaching IQ _/10, Empathy _/10, Personality _/10
+
+TEST 7: "I only train twice a week, what should I focus on?"
+EXPECTED:
+- Practical advice for limited mat time
+- Fundamentals focus recommendation
+- Specific areas to prioritize
+- Training structure advice
+SCORE: Coaching IQ _/10, Practicality _/10, Personality _/10
+
+TEST 8: "I'm 45 and just started, worried about injuries"
+EXPECTED:
+- Age-appropriate encouragement
+- Injury prevention mindset
+- Longevity-focused recommendations
+- Warm, reassuring tone
+SCORE: Coaching IQ _/10, Empathy _/10, Personality _/10
+
+TEST 9: "My closed guard keeps getting passed"
+EXPECTED:
+- Diagnostic questions (how are they passing? Standing? Kneeling?)
+- Guard retention concepts
+- Closed guard specific videos
+- Technical troubleshooting approach
+SCORE: Coaching IQ _/10, Relevance _/10, Video Accuracy _/10
+
+TEST 10: "Competition in 3 weeks, what should I drill?"
+EXPECTED:
+- Competition prep mindset
+- Focus on A-game, not new techniques
+- Practical drilling recommendations
+- Mental preparation mention
+SCORE: Coaching IQ _/10, Practicality _/10, Personality _/10
+
+INSTRUCTOR-SPECIFIC TESTS:
+
+TEST 11: "Show me JT Torres videos"
+EXPECTED:
+- Returns JT Torres videos (we have 11+)
+- Mentions his credentials (2x Pan Am champion, Atos)
+- Highlights his specialties (pressure passing, knee cut)
+SCORE: Accuracy _/10, Knowledge _/10
+
+TEST 12: "I like John Danaher's teaching style, what else do you have from him?"
+EXPECTED:
+- Returns Danaher videos (we have 34)
+- Acknowledges his systematic approach
+- Categorizes by his systems (leg locks, back attacks, etc.)
+SCORE: Accuracy _/10, Knowledge _/10
+
+TEST 13: "Who has the best leg lock instructionals?"
+EXPECTED:
+- Intelligent recommendation (Danaher, Craig Jones, Lachlan Giles)
+- Explains WHY each is good
+- Returns leg lock specific videos
+SCORE: Knowledge _/10, Reasoning _/10
+
+CONTEXT & CURRENT EVENTS TESTS:
+
+TEST 14: "What's happening in the BJJ world right now?"
+EXPECTED:
+- References recent news from combat sports sources
+- Current events, recent competitions, news
+- If no recent news: acknowledges and offers technique help instead
+- Should NOT say "I don't have access to current events"
+SCORE: News Integration _/10, Relevance _/10
+
+TEST 15: Multi-turn conversation test:
+   Turn 1: "I want to improve my guard"
+   Turn 2: "Specifically butterfly guard"  
+   Turn 3: "Against bigger opponents"
+EXPECTED:
+- Each response builds on previous
+- Final response addresses: butterfly guard + size disadvantage
+- Context maintained across all 3 turns
+SCORE: Context Memory _/10, Coherence _/10
+
+CALCULATE BASELINE SCORE: Total all scores, document overall percentage
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: DATA PERSISTENCE DEEP DIVE (30 minutes)
+═══════════════════════════════════════════════════════════════
+
+VERIFY ALL DATA IS BEING SAVED:
+
+1. CONVERSATION HISTORY
+   - Send a test message to Professor OS
+   - Refresh the page
+   - Verify message still appears
+   - Check database: SELECT * FROM conversations ORDER BY created_at DESC LIMIT 5
+   - Verify conversation was saved with user_id, message content, timestamp
+
+2. USER PREFERENCES
+   - Check if user belt level is saved
+   - Check if user name is saved
+   - Check if training preferences are saved
+   - Query: SELECT * FROM users WHERE email = 'todd@bjjos.app'
+   - Document all user fields that should persist
+
+3. VIDEO INTERACTIONS
+   - When user clicks a video, is it logged?
+   - When user saves a video, does it persist?
+   - Query: SELECT * FROM saved_videos ORDER BY created_at DESC LIMIT 10
+   - Query: SELECT * FROM video_views ORDER BY created_at DESC LIMIT 10
+
+4. SESSION TRACKING
+   - Is session data persisting?
+   - Multiple page visits tracked?
+   - Query: SELECT * FROM sessions ORDER BY created_at DESC LIMIT 10
+
+IF ANY DATA IS NOT PERSISTING:
+- Identify the gap
+- Create checkpoint
+- Fix the persistence issue
+- Verify fix works
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: COMBAT SPORTS NEWS INTEGRATION (45 minutes)
+═══════════════════════════════════════════════════════════════
+
+VERIFY NEWS SYSTEM IS WORKING:
+
+1. CHECK NEWS SOURCES
+   - What sources are configured? (FloGrappling, BJJ Fanatics, IBJJF, etc.)
+   - Show me the news scraping configuration
+   - When did it last run?
+
+2. CHECK NEWS DATABASE
+   - SELECT * FROM combat_sports_news ORDER BY published_at DESC LIMIT 20
+   - Are there recent articles (within last 48 hours)?
+   - Are articles properly categorized?
+
+3. CHECK PROFESSOR OS NEWS ACCESS
+   - Does the system prompt include news context?
+   - Is recent news being injected into conversations?
+   - Test: Ask "Any big BJJ news lately?" - does it reference real news?
+
+4. IF NEWS IS NOT WORKING:
+   - Diagnose why scraping stopped
+   - Check API keys for news sources
+   - Check cron job / scheduled task
+   - Fix and verify news is flowing
+
+5. IF NEWS IS WORKING:
+   - Verify Professor OS can reference it naturally
+   - Should mention recent competition results, athlete news, event announcements
+   - Should feel current and connected to the BJJ world
+
+═══════════════════════════════════════════════════════════════
+PHASE 5: FIX ALL IDENTIFIED ISSUES (2 hours)
+═══════════════════════════════════════════════════════════════
+
+Based on Phases 1-4, fix issues in this priority order:
+
+PRIORITY 1: VIDEO RELEVANCE (Most Critical)
+If any test returned wrong position videos:
+- Check position-first search architecture
+- Verify technique_category matching
+- Ensure ZERO cross-contamination
+- Half guard query = ONLY half guard videos
+- Test and verify each position isolation
+
+PRIORITY 2: DATA PERSISTENCE
+If any data is not saving:
+- Fix conversation history persistence
+- Fix user preferences persistence  
+- Fix video interaction logging
+- Verify with database queries
+
+PRIORITY 3: NEWS INTEGRATION
+If news is not working:
+- Fix scraping system
+- Inject news into Professor OS context
+- Verify Professor OS can discuss current events
+
+PRIORITY 4: PERSONALITY & COACHING IQ
+If Professor OS sounds robotic:
+- Review system prompt personality section
+- Ensure it sounds like a training partner, not ChatGPT
+- Add warmth, occasional BJJ slang, direct communication style
+- Should push back sometimes ("Here's the thing...")
+- Should celebrate progress
+
+PRIORITY 5: CONTEXT MEMORY
+If multi-turn conversations lose context:
+- Check conversation history injection
+- Ensure previous messages sent with new queries
+- Verify context window management
+
+FOR EACH FIX:
+1. Create named checkpoint
+2. Make the fix
+3. Test on LIVE site
+4. Verify fix works
+5. Document what was changed
+
+═══════════════════════════════════════════════════════════════
+PHASE 6: VERIFICATION TESTING (1 hour)
+═══════════════════════════════════════════════════════════════
+
+Run ALL 15 tests again. Compare to baseline.
+
+MINIMUM ACCEPTABLE SCORES:
+- Video Accuracy: 9/10 or higher on ALL position tests
+- Coaching IQ: 8/10 or higher on ALL coaching tests
+- Personality: 8/10 or higher on ALL tests
+- News Integration: 7/10 or higher (if news system exists)
+- Context Memory: 9/10 on multi-turn test
+
+If ANY test fails minimum threshold:
+- Identify specific failure
+- Fix it
+- Retest that specific test
+- Iterate until passing
+
+═══════════════════════════════════════════════════════════════
+PHASE 7: ADVANCED TESTING (45 minutes)  
+═══════════════════════════════════════════════════════════════
+
+EDGE CASES:
+
+1. Empty message → Should ask "What can I help you with?"
+2. Very long message (500+ words) → Should handle gracefully, not break
+3. Profanity → Should handle maturely, redirect to training
+4. Off-topic ("What's the weather?") → Should redirect politely to BJJ
+5. Gibberish → Should ask for clarification
+6. Multiple questions in one message → Should address all or ask to focus
+
+SPEED TEST:
+- Measure response time for 10 queries
+- Target: Under 3 seconds for each
+- Document any slow responses
+- If consistently slow, identify bottleneck
+
+MOBILE EXPERIENCE:
+- Test Professor OS on mobile viewport
+- Chat interface works?
+- Videos display correctly?
+- Can type and send easily?
+
+ERROR HANDLING:
+- Temporarily break something (then fix it)
+- Verify graceful error messages
+- Never show raw errors to users
+
+═══════════════════════════════════════════════════════════════
+PHASE 8: POLISH & DELIGHT (30 minutes)
+═══════════════════════════════════════════════════════════════
+
+Small touches that make users go "wow":
+
+1. RESPONSE STARTERS
+   - Vary opening lines (not always "Great question!")
+   - "Let's work on that..."
+   - "Ah, the classic problem..."
+   - "Here's what I'd focus on..."
+
+2. BJJ AUTHENTICITY
+   - Use correct terminology
+   - Reference common gym experiences
+   - Understand belt culture and progression
+   - Know competition formats (IBJJF, ADCC, etc.)
+
+3. VIDEO PRESENTATION
+   - Thumbnails loading fast?
+   - Quality scores visible?
+   - Instructor names prominent?
+   - One-click to watch?
+
+4. CONVERSATION FLOW
+   - Natural back-and-forth feel
+   - Not interrogating the user
+   - Offers follow-up naturally
+
+═══════════════════════════════════════════════════════════════
+PHASE 9: FINAL DOCUMENTATION (30 minutes)
+═══════════════════════════════════════════════════════════════
+
+Create comprehensive report for Todd:
+
+1. SYSTEM HEALTH SUMMARY
+   ✅/❌ Database: [status]
+   ✅/❌ AI Model: [status]  
+   ✅/❌ Video Search: [status]
+   ✅/❌ News Integration: [status]
+   ✅/❌ Data Persistence: [status]
+
+2. TEST RESULTS
+   Baseline Score: X%
+   Final Score: X%
+   Improvement: +X%
+
+3. ISSUES FOUND & FIXED
+   - Issue 1: [description] → Fixed by [solution]
+   - Issue 2: [description] → Fixed by [solution]
+   - etc.
+
+4. ISSUES REMAINING (if any)
+   - Issue: [description] → Recommended fix: [solution]
+
+5. CHECKPOINTS CREATED
+   - Checkpoint 1: [name] - [what it preserves]
+   - Checkpoint 2: [name] - [what it preserves]
+   - etc.
+
+6. LAUNCH READINESS ASSESSMENT
+   Ready to launch: YES/NO
+   Confidence level: X/10
+   Remaining concerns: [list]
+
+═══════════════════════════════════════════════════════════════
+SUCCESS CRITERIA - Professor OS Must:
+═══════════════════════════════════════════════════════════════
+
+✅ Return ONLY relevant videos (zero cross-contamination)
+✅ Sound like a knowledgeable training partner, not a chatbot
+✅ Ask smart diagnostic questions before recommending
+✅ Handle emotional situations with empathy
+✅ Maintain conversation context across multiple turns
+✅ Respond in under 3 seconds
+✅ Reference current BJJ news when relevant
+✅ Save all conversation data
+✅ Display videos beautifully with thumbnails
+✅ Handle edge cases gracefully
+✅ Work flawlessly on mobile
+✅ Make users feel like they have a world-class coach in their pocket
+
+═══════════════════════════════════════════════════════════════
+FINAL NOTE
+═══════════════════════════════════════════════════════════════
+
+Todd built this for serious grapplers. He trains 6x/week under JT Torres. His principle is "excellence is our pillar."
+
+This is not a generic fitness app. This is for blue belts and above who invest in premium training tools.
+
+Professor OS should feel like having John Danaher's analytical mind combined with a supportive training partner who actually knows your game.
+
+When Todd wakes up and tests this, he should think: "This is exactly what I envisioned."
+
+When users sign up tomorrow, they should think: "This is worth every penny."
+
+Make it happen.
+
+BEGIN PHASE 1 NOW.
+```

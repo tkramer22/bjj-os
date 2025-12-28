@@ -1,0 +1,106 @@
+You’re right to question this. Something is fundamentally broken. Let’s force a complete verification.
+
+**Send this:**
+
+```
+CRITICAL: VERIFY THE ACTUAL DEPLOYED CODE
+
+I am STILL seeing:
+1. Double/repeated responses from Professor OS
+2. No chat history loading on app open
+3. Settings toolbar still text-only (no icons)
+
+NONE of the fixes are working. I need to verify what is ACTUALLY deployed.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION 1: IS THE NEW PROMPT ACTUALLY BEING USED?
+═══════════════════════════════════════════════════════════════════════════════
+
+Add this console.log to the FIRST line of buildSystemPrompt function:
+
+console.log('[PROMPT VERSION] Building system prompt - TRIMMED v2.0 - ' + new Date().toISOString());
+
+Also log the token count:
+console.log('[PROMPT TOKENS] Estimated tokens:', Math.ceil(systemPrompt.length / 4));
+
+Then check server logs when I send a message. If I don't see "TRIMMED v2.0", the old code is still running.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION 2: IS THERE DUPLICATE API CALLS?
+═══════════════════════════════════════════════════════════════════════════════
+
+In the chat API route (ai-chat-claude.ts or routes.ts), add:
+
+console.log('[CHAT API] Request received - ' + new Date().toISOString());
+console.log('[CHAT API] User ID:', userId);
+console.log('[CHAT API] Message:', message.substring(0, 50));
+
+Check if this logs TWICE for a single message. If yes, the frontend is calling the API twice.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION 3: IS STREAMING DUPLICATING?
+═══════════════════════════════════════════════════════════════════════════════
+
+In the streaming response handler, add:
+
+console.log('[STREAM] Chunk count:', chunkNumber++);
+console.log('[STREAM] Total length so far:', totalContent.length);
+
+Check if content is being sent twice.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION 4: CHECK FOR MULTIPLE AI INSTANCES
+═══════════════════════════════════════════════════════════════════════════════
+
+Is there more than one place that calls the Claude API?
+
+Run:
+grep -r "anthropic" server --include="*.ts" -l
+grep -r "claude" server --include="*.ts" -l
+grep -r "createMessage" server --include="*.ts" -l
+
+Show me ALL files that interact with Claude. There should be ONE.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION 5: SETTINGS BOTTOM NAV - NUCLEAR OPTION
+═══════════════════════════════════════════════════════════════════════════════
+
+This has failed 7 times. Do this:
+
+1. Find the Settings page file
+2. DELETE the entire bottom nav section
+3. COPY the exact bottom nav from ios-chat.tsx
+4. PASTE it into Settings
+5. Do NOT modify it
+
+Show me the file path and the copied code.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION 6: CHAT HISTORY LOADING
+═══════════════════════════════════════════════════════════════════════════════
+
+In mobile-chat.tsx or ios-chat.tsx, find the useEffect that loads history.
+
+Add:
+console.log('[HISTORY] useEffect triggered');
+console.log('[HISTORY] User ID:', userId);
+console.log('[HISTORY] Auth restored:', authRestored);
+
+Then:
+console.log('[HISTORY] API response:', response.status);
+console.log('[HISTORY] Messages loaded:', messages.length);
+
+I need to see these logs when the app opens.
+
+═══════════════════════════════════════════════════════════════════════════════
+ACTION REQUIRED
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Add ALL the console.logs above
+2. Republish
+3. Show me the server logs when I send ONE message
+4. Show me what you find for the Settings bottom nav
+5. Show me what you find for duplicate Claude API calls
+
+Do not say "fixed" - just add the logging and show me what's happening.
+```

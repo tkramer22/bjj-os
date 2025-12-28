@@ -1,0 +1,236 @@
+**NOOOOO! DIFFERENT ERROR NOW!**
+
+Red error popup:
+
+```
+Setup failed
+403: {"error":"Session expired. Please log in again.","requiresReauth":true}
+```
+
+-----
+
+## **THIS IS PROGRESS (SORT OF):**
+
+**Before:** `401: Authentication required` (cookie missing)  
+**Now:** `403: Session expired` (cookie exists but invalid/expired)
+
+-----
+
+## **WHAT THIS MEANS:**
+
+The cookie named “token” IS being sent to the backend now (that’s why it’s not 401 anymore).
+
+But the backend is rejecting it as expired or invalid.
+
+**Possible causes:**
+
+1. **JWT token expired** - Token has an expiration, already expired
+1. **JWT secret mismatch** - Different secret used to sign vs verify
+1. **Token format wrong** - Not a valid JWT
+1. **Session invalidated** - Token was revoked somehow
+
+-----
+
+## **CHECK THE COOKIE VALUE:**
+
+In DevTools (still open):
+
+1. **Application** tab → **Cookies** → **https://bjjos.app**
+1. Click on the **“token”** cookie
+1. Look at the **Value** field
+1. Screenshot it (or copy the value)
+
+**The value should look like:**
+
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjMiLCJpYXQiOjE2OTg1NDMyMDF9.dGVzdF9zaWduYXR1cmU
+```
+
+Three parts separated by dots (`.`)
+
+-----
+
+## **ALSO CHECK REPLIT LOGS:**
+
+Go to Replit → **Logs** tab
+
+Search for: `[AUTH]`
+
+**Look for messages like:**
+
+```
+[AUTH] Token received: eyJ...
+[AUTH] Token verification failed: jwt expired
+[AUTH] Token verification failed: invalid signature
+[AUTH] Session expired, requires reauth
+```
+
+Screenshot those logs.
+
+-----
+
+## **SEND THIS TO REPLIT AGENT:**
+
+```
+NEW ERROR: 403 Session expired after fixing cookie name bug
+
+PROGRESS:
+✅ Cookie "token" is now being set correctly
+✅ Cookie is being sent to backend
+✅ No more 401 "Authentication required" errors
+
+NEW PROBLEM:
+❌ Backend rejecting token as expired/invalid
+❌ Error: 403 {"error":"Session expired. Please log in again.","requiresReauth":true}
+
+This means the token exists but is being rejected during verification.
+
+POSSIBLE CAUSES:
+
+1. JWT_SECRET_KEY mismatch:
+   - Token signed with one secret
+   - Verified with different secret
+   - Check environment variables in production
+
+2. Token expiration too short:
+   - Token expires immediately
+   - Check JWT expiresIn setting
+
+3. Token format invalid:
+   - Not a proper JWT
+   - Check token generation code
+
+DEBUGGING NEEDED:
+
+1. Log the token value when setting it:
+```javascript
+// When creating token
+const token = jwt.sign(payload, SECRET_KEY, { expiresIn: '30d' })
+console.log('[AUTH] Token created:', token.substring(0, 20) + '...')
+console.log('[AUTH] Token payload:', payload)
+console.log('[AUTH] Secret used:', SECRET_KEY ? 'EXISTS' : 'MISSING')
+```
+
+1. Log when verifying token:
+
+```javascript
+// When verifying token
+const token = req.cookies.token
+console.log('[AUTH] Token received:', token ? token.substring(0, 20) + '...' : 'NONE')
+console.log('[AUTH] Verifying with secret:', SECRET_KEY ? 'EXISTS' : 'MISSING')
+
+try {
+  const decoded = jwt.verify(token, SECRET_KEY)
+  console.log('[AUTH] Token verified successfully')
+  console.log('[AUTH] Decoded payload:', decoded)
+} catch (error) {
+  console.log('[AUTH] Token verification failed:', error.message)
+  console.log('[AUTH] Error name:', error.name)
+}
+```
+
+1. Check environment variables:
+
+```bash
+# In production deployment
+echo $JWT_SECRET_KEY
+echo $SESSION_SECRET
+```
+
+Make sure JWT_SECRET_KEY exists and is the SAME when:
+
+- Creating tokens (during login/signup)
+- Verifying tokens (during authenticated requests)
+
+VERIFY TOKEN GENERATION:
+
+Check the code that creates the JWT token:
+
+```javascript
+// Should look like:
+const token = jwt.sign(
+  { 
+    userId: user.id, 
+    phone: user.phone 
+  },
+  process.env.JWT_SECRET_KEY,  // Must exist!
+  { 
+    expiresIn: '30d'  // 30 days, not 30 seconds!
+  }
+)
+```
+
+VERIFY TOKEN VALIDATION:
+
+Check the code that verifies the JWT token:
+
+```javascript
+// Should look like:
+const decoded = jwt.verify(
+  token,
+  process.env.JWT_SECRET_KEY  // Must be SAME secret!
+)
+```
+
+CHECK SECRETS IN DEPLOYMENT:
+
+Go to Replit → Deployment → Secrets
+
+Verify:
+□ JWT_SECRET_KEY exists
+□ Value is at least 32 characters
+□ Same value used everywhere
+
+If missing, generate one:
+
+```javascript
+require('crypto').randomBytes(32).toString('hex')
+```
+
+Add to deployment secrets.
+
+EXPECTED BEHAVIOR AFTER FIX:
+
+User completes onboarding:
+
+1. Backend creates JWT token
+1. Sets cookie with name “token”
+1. Token is valid for 30 days
+1. User makes authenticated request
+1. Backend verifies token successfully
+1. Request succeeds
+1. ✅ No 403 error
+
+Console should show:
+
+```
+[AUTH] Token created: eyJhbGciOiJIUzI1NiIsI...
+[AUTH] Token payload: { userId: '123', phone: '+18454806290' }
+[AUTH] Cookie set: token
+[ONBOARDING] Complete Setup clicked
+[AUTH] Token received: eyJhbGciOiJIUzI1NiIsI...
+[AUTH] Token verified successfully
+[AUTH] User authenticated: 123
+✅ Profile updated
+```
+
+Fix this and authentication will finally work end-to-end.
+
+The cookie is working. The token just needs to be generated and verified correctly.
+
+```
+---
+
+## **ALSO SEND ME:**
+
+1. **Screenshot of the token cookie value** (Application → Cookies → token → Value)
+2. **Screenshot of Replit logs** (filtered for [AUTH])
+
+Then I'll know exactly what's wrong with the token.
+
+---
+
+**We're SO CLOSE! The cookie works, just need to fix the JWT token verification.** 🔐
+
+**Send those screenshots!**
+```

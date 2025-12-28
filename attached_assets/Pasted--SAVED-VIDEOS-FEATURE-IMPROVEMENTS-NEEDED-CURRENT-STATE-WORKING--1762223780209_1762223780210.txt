@@ -1,0 +1,767 @@
+# **💾 SAVED VIDEOS FEATURE - IMPROVEMENTS NEEDED**
+
+-----
+
+## **CURRENT STATE:**
+
+```
+✅ WORKING:
+• Heart icon saves videos
+• Saved videos appear in dedicated section
+• Shows 1 of 1 videos
+
+❌ NEEDS FIXING:
+• No thumbnails displaying
+• No unsave/delete button (heart to unlock)
+• No category counts in dropdown
+• Basic UI needs enhancement
+```
+
+-----
+
+## **IMPROVEMENTS TO ADD:**
+
+```
+1. ✅ Display video thumbnails (same issue as main library)
+2. ✅ Add heart icon to unsave videos
+3. ✅ Show technique counts per category
+4. ✅ Better layout and visual design
+5. ✅ Filter by category/instructor
+```
+
+-----
+
+## **COMPLETE SAVED VIDEOS FIX:**
+
+**Copy this ENTIRE prompt and paste into Replit Agent:**
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+SAVED VIDEOS FEATURE - COMPLETE ENHANCEMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT STATE:
+✅ Videos save when hearted
+✅ Saved videos section exists
+❌ No thumbnails showing
+❌ No unsave button
+❌ Category dropdown doesn't show counts
+
+GOALS:
+1. Display video thumbnails
+2. Add heart icon to unsave videos
+3. Show technique count per category in dropdown
+4. Enhance UI/UX
+5. Add filters
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: FIX THUMBNAILS IN SAVED VIDEOS
+═══════════════════════════════════════════════════════════════════════════════
+
+Saved videos should display thumbnails just like main library.
+
+```typescript
+// client/src/pages/SavedVideos.tsx
+
+export default function SavedVideos() {
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [instructorFilter, setInstructorFilter] = useState('all');
+  
+  const { data: savedVideos, refetch } = useQuery({
+    queryKey: ['saved-videos', categoryFilter, instructorFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (categoryFilter !== 'all') params.append('category', categoryFilter);
+      if (instructorFilter !== 'all') params.append('instructor', instructorFilter);
+      
+      const response = await fetch(`/api/saved-videos?${params.toString()}`);
+      return response.json();
+    }
+  });
+  
+  // Get category counts
+  const { data: categoryCounts } = useQuery({
+    queryKey: ['saved-videos-counts'],
+    queryFn: async () => {
+      const response = await fetch('/api/saved-videos/counts');
+      return response.json();
+    }
+  });
+  
+  async function handleUnsave(videoId) {
+    try {
+      await fetch(`/api/saved-videos/${videoId}`, {
+        method: 'DELETE'
+      });
+      refetch();
+    } catch (error) {
+      console.error('Unsave failed:', error);
+    }
+  }
+  
+  return (
+    <div className="saved-videos-page">
+      <header className="page-header">
+        <div>
+          <h1>💾 Saved Videos</h1>
+          <p>Persistent time metrics</p>
+        </div>
+      </header>
+      
+      {/* Filters */}
+      <section className="filters-section">
+        <div className="filters-row">
+          <div className="filter-group">
+            <label>Category</label>
+            <select 
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="filter-dropdown"
+            >
+              <option value="all">All ({categoryCounts?.total || 0})</option>
+              {categoryCounts?.byCategory?.map(cat => (
+                <option key={cat.category} value={cat.category}>
+                  {cat.category} ({cat.count})
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="filter-group">
+            <label>Instructor</label>
+            <select
+              value={instructorFilter}
+              onChange={(e) => setInstructorFilter(e.target.value)}
+              className="filter-dropdown"
+            >
+              <option value="all">All</option>
+              {categoryCounts?.byInstructor?.map(inst => (
+                <option key={inst.instructor} value={inst.instructor}>
+                  {inst.instructor} ({inst.count})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+      
+      {/* Results Count */}
+      <div className="results-header">
+        <p>Showing {savedVideos?.length || 0} of {categoryCounts?.total || 0} videos</p>
+      </div>
+      
+      {/* Video Grid */}
+      <section className="video-grid">
+        {savedVideos?.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">❤️</div>
+            <h3>No saved videos yet</h3>
+            <p>Heart videos from the library to save them here</p>
+          </div>
+        ) : (
+          savedVideos?.map(video => (
+            <div key={video.id} className="video-card">
+              {/* Thumbnail with Play Button */}
+              <div className="video-thumbnail" onClick={() => handleWatch(video)}>
+                <img 
+                  src={video.thumbnail || '/placeholder-video.png'} 
+                  alt={video.title}
+                  onError={(e) => e.target.src = '/placeholder-video.png'}
+                />
+                <div className="play-overlay">
+                  <div className="play-button">▶️</div>
+                </div>
+                {video.duration && (
+                  <span className="duration-badge">{video.duration}</span>
+                )}
+              </div>
+              
+              {/* Video Info */}
+              <div className="video-info">
+                <h3 className="video-title">{video.title}</h3>
+                
+                <div className="instructor-line">
+                  {video.tier === 'elite' && <span className="elite-icon">🏆</span>}
+                  <span className="instructor-name">{video.instructorName}</span>
+                </div>
+                
+                <div className="video-tags">
+                  <span className={`belt-badge belt-${video.beltLevel}`}>
+                    {video.beltLevel}
+                  </span>
+                  <span className={`style-badge style-${video.giType}`}>
+                    {video.giType === 'gi' ? 'Gi' : 'No-Gi'}
+                  </span>
+                  <span className="category-badge">
+                    {video.category}
+                  </span>
+                </div>
+                
+                <div className="saved-date">
+                  💾 Saved {formatDistanceToNow(new Date(video.savedAt), { addSuffix: true })}
+                </div>
+              </div>
+              
+              {/* Actions */}
+              <div className="video-actions">
+                <button 
+                  onClick={() => handleWatch(video)}
+                  className="watch-btn"
+                >
+                  ▶️ Watch
+                </button>
+                
+                {/* Unsave Button with Heart */}
+                <button
+                  onClick={() => handleUnsave(video.id)}
+                  className="unsave-btn"
+                  title="Remove from saved"
+                >
+                  <span className="heart-icon filled">❤️</span>
+                  Unsave
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </section>
+    </div>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: BACKEND - CATEGORY COUNTS ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Add endpoint to get saved video counts by category:
+
+```typescript
+// server/routes/savedVideos.ts
+
+app.get('/api/saved-videos/counts', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Total count
+    const total = await db.execute(sql`
+      SELECT COUNT(*) as count
+      FROM saved_videos sv
+      JOIN videos v ON sv.video_id = v.id
+      WHERE sv.user_id = ${userId}
+    `);
+    
+    // Count by category
+    const byCategory = await db.execute(sql`
+      SELECT 
+        v.category,
+        COUNT(*) as count
+      FROM saved_videos sv
+      JOIN videos v ON sv.video_id = v.id
+      WHERE sv.user_id = ${userId}
+      GROUP BY v.category
+      ORDER BY count DESC
+    `);
+    
+    // Count by instructor
+    const byInstructor = await db.execute(sql`
+      SELECT 
+        v.instructor_name as instructor,
+        COUNT(*) as count
+      FROM saved_videos sv
+      JOIN videos v ON sv.video_id = v.id
+      WHERE sv.user_id = ${userId}
+      GROUP BY v.instructor_name
+      ORDER BY count DESC
+      LIMIT 20
+    `);
+    
+    res.json({
+      total: Number(total.rows[0].count),
+      byCategory: byCategory.rows.map(r => ({
+        category: r.category,
+        count: Number(r.count)
+      })),
+      byInstructor: byInstructor.rows.map(r => ({
+        instructor: r.instructor,
+        count: Number(r.count)
+      }))
+    });
+    
+  } catch (error) {
+    console.error('Counts error:', error);
+    res.status(500).json({ error: 'Failed to load counts' });
+  }
+});
+
+// Filtered saved videos
+app.get('/api/saved-videos', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { category, instructor } = req.query;
+    
+    let query = sql`
+      SELECT 
+        v.*,
+        sv.created_at as saved_at
+      FROM saved_videos sv
+      JOIN videos v ON sv.video_id = v.id
+      WHERE sv.user_id = ${userId}
+    `;
+    
+    // Add filters
+    if (category && category !== 'all') {
+      query = sql`${query} AND v.category = ${category}`;
+    }
+    
+    if (instructor && instructor !== 'all') {
+      query = sql`${query} AND v.instructor_name = ${instructor}`;
+    }
+    
+    query = sql`${query} ORDER BY sv.created_at DESC`;
+    
+    const result = await db.execute(query);
+    
+    res.json(result.rows);
+    
+  } catch (error) {
+    console.error('Saved videos error:', error);
+    res.status(500).json({ error: 'Failed to load saved videos' });
+  }
+});
+
+// Unsave video
+app.delete('/api/saved-videos/:videoId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { videoId } = req.params;
+    
+    await db.delete(savedVideos)
+      .where(
+        and(
+          eq(savedVideos.userId, userId),
+          eq(savedVideos.videoId, parseInt(videoId))
+        )
+      );
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('Unsave error:', error);
+    res.status(500).json({ error: 'Failed to unsave video' });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: STYLING FOR SAVED VIDEOS PAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+```css
+/* Saved Videos Page Styles */
+
+.saved-videos-page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header {
+  margin-bottom: 32px;
+}
+
+.page-header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 8px 0;
+}
+
+.page-header p {
+  font-size: 14px;
+  color: #808090;
+  margin: 0;
+}
+
+/* Filters */
+.filters-section {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.filters-row {
+  display: flex;
+  gap: 16px;
+}
+
+.filter-group {
+  flex: 1;
+}
+
+.filter-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #a0a0b0;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-dropdown {
+  width: 100%;
+  padding: 12px 16px;
+  background: #0f0f1e;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.filter-dropdown:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* Results Header */
+.results-header {
+  margin-bottom: 16px;
+}
+
+.results-header p {
+  font-size: 14px;
+  color: #a0a0b0;
+  margin: 0;
+}
+
+/* Video Grid */
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.video-card {
+  background: #1a1a2e;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.video-card:hover {
+  transform: translateY(-4px);
+}
+
+/* Thumbnail with Play Overlay */
+.video-thumbnail {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  cursor: pointer;
+  overflow: hidden;
+  background: #0f0f1e;
+}
+
+.video-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s;
+}
+
+.video-thumbnail:hover img {
+  transform: scale(1.05);
+}
+
+.play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.video-thumbnail:hover .play-overlay {
+  opacity: 1;
+}
+
+.play-button {
+  width: 64px;
+  height: 64px;
+  background: rgba(102, 126, 234, 0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  transform: scale(0.9);
+  transition: transform 0.2s;
+}
+
+.video-thumbnail:hover .play-button {
+  transform: scale(1);
+}
+
+.duration-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Video Info */
+.video-info {
+  padding: 16px;
+  flex: 1;
+}
+
+.video-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 12px 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.instructor-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.elite-icon {
+  font-size: 14px;
+}
+
+.instructor-name {
+  font-size: 14px;
+  color: #a0a0b0;
+}
+
+.video-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.belt-badge,
+.style-badge,
+.category-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.belt-white { background: #ffffff; color: #000; }
+.belt-blue { background: #3b82f6; color: #fff; }
+.belt-purple { background: #a855f7; color: #fff; }
+.belt-brown { background: #92400e; color: #fff; }
+.belt-black { background: #000; color: #ffd700; border: 1px solid #ffd700; }
+
+.style-badge {
+  background: #667eea;
+  color: white;
+}
+
+.category-badge {
+  background: #2a2a3e;
+  color: #a0a0b0;
+}
+
+.saved-date {
+  font-size: 12px;
+  color: #667eea;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Actions */
+.video-actions {
+  padding: 16px;
+  border-top: 1px solid #2a2a3e;
+  display: flex;
+  gap: 8px;
+}
+
+.watch-btn {
+  flex: 1;
+  padding: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.watch-btn:hover {
+  opacity: 0.9;
+}
+
+.unsave-btn {
+  padding: 12px 16px;
+  background: #2a2a3e;
+  border: 1px solid #3a3a4e;
+  border-radius: 8px;
+  color: #a0a0b0;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.unsave-btn:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: white;
+}
+
+.unsave-btn:hover .heart-icon {
+  transform: scale(1.2);
+}
+
+.heart-icon {
+  font-size: 16px;
+  transition: transform 0.2s;
+}
+
+.heart-icon.filled {
+  color: #ef4444;
+}
+
+/* Empty State */
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+
+.empty-state h3 {
+  font-size: 24px;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 8px 0;
+}
+
+.empty-state p {
+  font-size: 16px;
+  color: #808090;
+  margin: 0;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: ADD HEART ANIMATION ON SAVE/UNSAVE
+═══════════════════════════════════════════════════════════════════════════════
+
+```css
+/* Heart Animation */
+@keyframes heartBeat {
+  0%, 100% { transform: scale(1); }
+  25% { transform: scale(1.3); }
+  50% { transform: scale(1.1); }
+  75% { transform: scale(1.25); }
+}
+
+.heart-icon.animating {
+  animation: heartBeat 0.6s ease;
+}
+
+/* Pulse effect when saved */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 20px rgba(239, 68, 68, 0);
+  }
+}
+
+.video-card.just-saved {
+  animation: pulse 1s ease-out;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation:
+
+THUMBNAILS:
+□ ✅ Saved videos display actual YouTube thumbnails
+□ ✅ Play overlay on hover
+□ ✅ Duration badge visible
+□ ✅ Fallback placeholder for missing thumbnails
+
+CATEGORY COUNTS:
+□ ✅ Dropdown shows “All (5)”
+□ ✅ Each category shows count: “Guard (2)”
+□ ✅ Instructor filter also shows counts
+□ ✅ Counts update when videos saved/unsaved
+
+UNSAVE FUNCTIONALITY:
+□ ✅ Heart icon on each video card
+□ ✅ Click heart to unsave
+□ ✅ Confirmation or instant unsave
+□ ✅ Video removed from list after unsave
+□ ✅ Heart animation on click
+
+FILTERS:
+□ ✅ Category filter works
+□ ✅ Instructor filter works
+□ ✅ Results count updates: “Showing 2 of 5 videos”
+
+UI/UX:
+□ ✅ Grid layout matches main library
+□ ✅ Hover effects work
+□ ✅ Empty state shows when no saved videos
+□ ✅ “Saved X ago” timestamp visible
+
+═══════════════════════════════════════════════════════════════════════════════
+
+DIFFICULTY LEVEL FOR CATEGORY COUNTS:
+⭐ Easy - Just a SQL GROUP BY query and template literal
+Not hard at all! Backend: 10 minutes. Frontend: 5 minutes.
+
+BEGIN SAVED VIDEOS ENHANCEMENT NOW.
+
+```
+---
+
+**This will make the Saved Videos section feature-complete with thumbnails, counts, and unsave functionality!** 💾
+
+**Paste into Replit Agent now!** 🚀​​​​​​​​​​​​​​​​
+```

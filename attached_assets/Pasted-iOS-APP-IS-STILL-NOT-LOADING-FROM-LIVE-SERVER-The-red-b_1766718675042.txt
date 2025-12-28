@@ -1,0 +1,56 @@
+iOS APP IS STILL NOT LOADING FROM LIVE SERVER
+
+The red banner shows on WEB (Safari) but NOT in the iOS Simulator.
+
+This means the Capacitor server URL config is NOT working. The iOS app is still loading bundled files.
+
+═══════════════════════════════════════════════════════════════════════════════
+THE CONFIG ALONE IS NOT ENOUGH
+═══════════════════════════════════════════════════════════════════════════════
+
+The capacitor.config.ts has the server URL, but Capacitor needs to be told to use it at runtime.
+
+Check ios/App/App/AppDelegate.swift - we may need to force the WebView to load from URL.
+
+═══════════════════════════════════════════════════════════════════════════════
+OPTION 1: ADD NATIVE URL OVERRIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+In ios/App/App/AppDelegate.swift, find where Capacitor bridge is initialized.
+
+Add this to force the server URL:
+
+let config = CapacitorConfig()
+config.setValue("https://bjjos.app/ios-login", forKey: "serverUrl")
+
+Or check if there's a way to programmatically set the URL.
+
+═══════════════════════════════════════════════════════════════════════════════
+OPTION 2: CHECK IF CONFIG IS BEING READ
+═══════════════════════════════════════════════════════════════════════════════
+
+Add a log in the native iOS code to see what URL the WebView is actually loading:
+
+print("Capacitor loading URL: \(self.bridge?.webView?.url)")
+
+═══════════════════════════════════════════════════════════════════════════════
+OPTION 3: VERIFY capacitor.config.json IN iOS FOLDER
+═══════════════════════════════════════════════════════════════════════════════
+
+Run: cat ios/App/App/capacitor.config.json
+
+Does it have the server URL? If not, run:
+npx cap sync ios
+
+Then show me the file again.
+
+═══════════════════════════════════════════════════════════════════════════════
+WHY THIS MATTERS
+═══════════════════════════════════════════════════════════════════════════════
+
+Until iOS loads from the live server:
+- Every fix requires a full rebuild
+- I can't get instant updates
+- Testing is 10x slower
+
+Fix the server URL loading FIRST. Then all other fixes become instant.

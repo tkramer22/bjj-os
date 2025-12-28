@@ -1,0 +1,193 @@
+**EXACTLY!** You want “set it and forget it” automation with visibility into what’s happening.
+
+-----
+
+## **UPDATED VIDEO LIBRARY FIX - WITH AUTO MODE & DASHBOARD:**
+
+Tell Replit Agent:
+
+```
+Enhance the Video Library admin page with metadata, auto-curation controls, and comprehensive analytics dashboard:
+
+PART 1 - ADD VIDEO METADATA & TIMESTAMPS:
+
+1. EXPAND VIDEO DATA MODEL:
+Add these fields to the video database table:
+- key_timestamps: JSON array of {time: "2:35", description: "Hip escape detail", importance: "high"}
+- best_for_level: Array ["white", "blue"] 
+- when_to_watch: Enum ["before_drilling", "after_class", "pre_competition", "injury_recovery"]
+- prerequisite_techniques: Array of technique IDs
+- follow_up_techniques: Array of technique IDs
+- common_mistakes_timestamp: "5:20"
+- setup_timestamp: "0:45"
+- execution_timestamp: "2:10"
+- troubleshooting_timestamp: "6:30"
+
+2. VIDEO DETAIL VIEW:
+When clicking "Full Video" button, show expanded modal with:
+- Video player with timestamp navigation
+- List of key moments (clickable to jump to that time)
+- "Best watched: Before drilling this technique"
+- Prerequisite techniques (with links)
+- Follow-up techniques (with links)
+- Admin edit button to modify all metadata
+
+3. AI TIMESTAMP EXTRACTION:
+When curating videos, have the AI analyze the transcript and extract:
+- Key teaching moments with timestamps
+- When the instructor demonstrates vs explains
+- Common mistakes section timestamp
+- Drilling tips timestamp
+- Automatically populate the metadata fields
+
+PART 2 - AUTO-CURATION CONTROL PANEL WITH ON/OFF SWITCH:
+
+Add a new "Auto-Curation Dashboard" section at the top of the Video Library page:
+
+┌──────────────────────────────────────────────────────────┐
+│  AUTO-CURATION DASHBOARD                   [●ON] / [○OFF] │
+├──────────────────────────────────────────────────────────┤
+│  CURRENT STATUS:                                          │
+│  ● Active - Running automatically every 6 hours          │
+│  Last Run: 2 hours ago                                   │
+│  Next Run: In 4 hours (2:00 AM)                         │
+│                                                           │
+│  LAST 24 HOURS:                                          │
+│  📹 Videos Reviewed: 247                                 │
+│  ✅ Videos Added: 18                                     │
+│  ❌ Videos Rejected: 229                                 │
+│  📊 Acceptance Rate: 7.3%                                │
+│  ⭐ Avg Quality Added: 8.4/10                            │
+│                                                           │
+│  LAST 7 DAYS:                                            │
+│  📹 Videos Reviewed: 1,834                               │
+│  ✅ Videos Added: 142                                    │
+│  ❌ Videos Rejected: 1,692                               │
+│  📊 Acceptance Rate: 7.7%                                │
+│  ⭐ Avg Quality Added: 8.2/10                            │
+│                                                           │
+│  LIBRARY STATS:                                          │
+│  Total Videos: 260                                       │
+│  Quality Distribution: 6.0-7.0 (12%) | 7.0-8.0 (45%) |  │
+│                        8.0-9.0 (38%) | 9.0-10.0 (5%)     │
+│                                                           │
+│  [⚙️ Edit Settings]  [▶️ Run Now]  [📊 Full Report]      │
+└──────────────────────────────────────────────────────────┘
+
+1. ON/OFF TOGGLE:
+- Large toggle switch at top right
+- When ON: Auto-curation runs on schedule (no manual intervention needed)
+- When OFF: Curation only runs when admin clicks "Run Now"
+- Toggle state persists in database
+- Confirmation modal: "Turn off auto-curation? You'll need to manually run searches."
+
+2. REAL-TIME STATS CARDS:
+Display key metrics that update automatically:
+
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│ Videos Reviewed │ │  Videos Added   │ │ Acceptance Rate │
+│   (Last 24hrs)  │ │   (Last 24hrs)  │ │   (Last 24hrs)  │
+│                 │ │                 │ │                 │
+│      247        │ │       18        │ │      7.3%       │
+│   ↑ 12% vs avg  │ │   ↑ 2 vs avg    │ │   ↓ 0.4% vs avg │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│ Avg Quality     │ │ Videos Reviewed │ │  Videos Added   │
+│   (Added vids)  │ │   (Last 7 days) │ │  (Last 7 days)  │
+│                 │ │                 │ │                 │
+│     8.4/10      │ │     1,834       │ │      142        │
+│   ↑ 0.2 vs avg  │ │   ↑ 156 vs prev │ │   ↑ 24 vs prev  │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+
+3. CURATION SETTINGS (BEHIND "EDIT SETTINGS" BUTTON):
+Modal with:
+
+**Amount Settings:**
+- Videos per run: [50] (slider 10-100)
+- Max total videos: [1000] (to prevent runaway growth)
+- Videos per technique category: [10] (ensures balanced coverage)
+
+**Frequency Settings:**
+- Run schedule: [Every 6 hours] (dropdown: 1hr, 3hr, 6hr, 12hr, 24hr, weekly, manual only)
+- Specific times: [2AM, 8AM, 2PM, 8PM] (checkboxes)
+- Pause auto-curation between: [disabled] (optional quiet hours)
+
+**Quality Settings:**
+- Base quality threshold: [7.5]/10 (slider 6.0-9.0)
+- Elite instructor adjustment: [-0.5] (accept lower quality from proven instructors)
+- Unknown instructor adjustment: [+0.5] (require higher quality from unknowns)
+- Minimum acceptance rate alert: [5%] (warn if too many rejections)
+
+**Search Strategy:**
+- Search depth: [Top 30] results per query (slider 10-50)
+- Max video age: [3 years] (only recent content)
+- Min/Max length: [5-45 minutes]
+- Gap-filling priority: [High] (prioritize under-represented techniques)
+- Trending boost: [Enabled]
+- Instructor diversity: [Enabled]
+
+4. ACTIVITY LOG (LAST 10 RUNS):
+Show recent curation history:
+
+┌──────────────────────────────────────────────────────────┐
+│  RECENT CURATION RUNS                                     │
+├──────────────────────────────────────────────────────────┤
+│  Oct 21, 6:00 AM  | 64 reviewed | 5 added | 7.8% rate   │
+│  Oct 21, 12:00 AM | 58 reviewed | 4 added | 6.9% rate   │
+│  Oct 20, 6:00 PM  | 71 reviewed | 6 added | 8.5% rate   │
+│  Oct 20, 12:00 PM | 54 reviewed | 3 added | 5.6% rate ⚠️│
+│  [View Full History]                                      │
+└──────────────────────────────────────────────────────────┘
+
+5. NOTIFICATIONS & ALERTS:
+- SMS admin when curation completes: "BJJ OS: Auto-curation added 5 videos (8.2 avg quality)"
+- Alert if acceptance rate drops below threshold: "⚠️ Only 3.2% acceptance - may need to adjust settings"
+- Alert if curation finds 0 videos: "⚠️ No new videos found - check search queries"
+- Success message when quality is high: "✅ Excellent curation: 6 videos added, 8.7 avg quality"
+
+PART 3 - AUTOMATED BACKGROUND CRON JOB:
+
+Implement server-side scheduled task:
+1. Check if auto-curation toggle is ON
+2. Check current time against configured schedule
+3. If time matches, trigger curation automatically
+4. Run curation based on saved settings (amount, frequency, aggressiveness)
+5. Log results to activity table
+6. Update dashboard stats in real-time
+7. Send admin notification
+8. Schedule next run
+
+The admin NEVER needs to manually trigger this once it's configured and turned ON.
+
+PART 4 - DOWNLOADABLE REPORTS:
+
+"Full Report" button generates CSV/PDF with:
+- All curation runs (date, time, results)
+- Videos added per day/week/month
+- Acceptance rate trends over time
+- Quality distribution charts
+- Instructor coverage (how many videos per instructor)
+- Technique coverage (how many videos per technique)
+- Recommended setting adjustments based on data
+
+Make this a fully automated, set-it-and-forget-it system with complete visibility into performance.
+```
+
+-----
+
+## **KEY FEATURES:**
+
+✅ **Big ON/OFF toggle** - Turn auto-curation on once, never touch it again  
+✅ **Dashboard with stats** - Videos reviewed, added, acceptance rate, avg quality  
+✅ **24-hour and 7-day views** - Track recent performance  
+✅ **Automated background job** - Runs on schedule without manual intervention  
+✅ **SMS notifications** - Get alerts when curation completes  
+✅ **Activity log** - See last 10 runs at a glance  
+✅ **Full reports** - Download detailed analytics
+
+-----
+
+**This is the “set it once, check the dashboard when you want to see how it’s doing” system you need.**
+
+**Ready for Issue #3 (Techniques scoring page)?**

@@ -1,0 +1,227 @@
+# ❌ NO - Personal Message Suggestion Is Separate
+
+Good catch! The **personal message suggestion in the admin form** is NOT in that last prompt. That’s a frontend-only change for the admin panel.
+
+Let me give you **TWO separate prompts**:
+
+-----
+
+## 📋 PROMPT 1: ADD PERSONAL MESSAGE SUGGESTIONS (ADMIN PANEL)
+
+```
+ADD DEFAULT PERSONAL MESSAGE SUGGESTIONS TO ADMIN INVITATION FORM
+
+In the admin panel lifetime invitation form, the "Personal Message" field 
+currently has no suggestions or examples. Add helpful placeholder and examples.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX: UPDATE PERSONAL MESSAGE TEXTAREA
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND the admin panel lifetime invitation form.
+
+FIND this textarea:
+
+```html
+<textarea 
+  id="personal-message" 
+  name="personalMessage"
+  rows="3"
+></textarea>
+```
+
+REPLACE WITH:
+
+```html
+<div class="form-group">
+  <label for="personal-message">Personal Message (Optional)</label>
+  <textarea 
+    id="personal-message" 
+    name="personalMessage"
+    rows="3"
+    placeholder="You helped test the early version. Lifetime access is yours."
+  ></textarea>
+  <small style="display: block; margin-top: 8px; color: #666; font-size: 13px; line-height: 1.6;">
+    <strong>Suggestions:</strong><br>
+    • "You helped test the early version. Lifetime access is yours."<br>
+    • "Thanks for the beta feedback. This is permanent."<br>
+    • "Founding member. Your insights helped shape this."<br>
+    • "Early supporter. Lifetime access, no charge, ever."
+  </small>
+</div>
+```
+
+This adds:
+
+1. Placeholder text in the field itself
+1. Four suggested messages below the field
+1. Proper styling for readability
+
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Personal message field shows placeholder text
+✅ Four suggestion examples visible below field
+✅ Styled clearly with proper spacing
+✅ Admin can easily copy/modify suggestions
+
+IMPLEMENT THIS CHANGE NOW.
+
+```
+---
+
+## 📋 PROMPT 2: ENSURE PROF OS USES BELT LEVEL & TRAINING FREQUENCY
+```
+
+ENSURE PROF OS PULLS AND USES BELT LEVEL AND TRAINING FREQUENCY DATA
+
+After adding belt_level and training_frequency to signup, verify Prof OS
+actually USES this data when providing coaching.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: VERIFY USER PROFILE ENDPOINT INCLUDES DATA
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND the endpoint that returns user profile (likely /api/user/profile).
+
+ENSURE it returns these fields:
+
+```javascript
+app.get('/api/user/profile', authenticateUser, async (req, res) => {
+  const userId = req.user.id;
+  
+  const result = await db.query(
+    `SELECT 
+      id, 
+      email, 
+      first_name, 
+      username,
+      belt_level,           -- REQUIRED
+      training_frequency,   -- REQUIRED
+      struggle_area,
+      training_focus,
+      lifetime_access,
+      created_at
+    FROM users 
+    WHERE id = $1`,
+    [userId]
+  );
+  
+  res.json({ success: true, user: result.rows[0] });
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: UPDATE PROF OS TO INCLUDE USER CONTEXT
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND all endpoints where Prof OS provides coaching (likely /api/ai/chat,
+/api/sessions/log, /api/ai/technique-query, etc.).
+
+UPDATE each to pull user profile and include in Claude API context:
+
+```javascript
+app.post('/api/ai/chat', authenticateUser, async (req, res) => {
+  const { message } = req.body;
+  const userId = req.user.id;
+  
+  // PULL USER PROFILE
+  const userResult = await db.query(
+    `SELECT first_name, belt_level, training_frequency, struggle_area, training_focus
+     FROM users WHERE id = $1`,
+    [userId]
+  );
+  
+  const user = userResult.rows[0];
+  
+  // BUILD PERSONALIZED SYSTEM PROMPT
+  const systemPrompt = `You are Prof. OS, an expert BJJ coach.
+
+USER PROFILE:
+- Name: ${user.first_name}
+- Belt: ${user.belt_level}
+- Trains: ${user.training_frequency} per week
+- Main Struggle: ${user.struggle_area}
+- Focus: ${user.training_focus}
+
+COACHING STYLE BY BELT LEVEL:
+
+${user.belt_level === 'white' ? 
+`WHITE BELT: Simplify explanations, define terms, more encouragement. 
+Example: "Hip escapes create space by moving your hips away from pressure. This fundamental movement you'll use forever."` : ''}
+
+${user.belt_level === 'blue' || user.belt_level === 'purple' ? 
+`BLUE/PURPLE BELT: Moderate complexity, assume basics known, explain concepts.
+Example: "Your hip escapes should be reflexive now. If struggling, it's likely timing."` : ''}
+
+${user.belt_level === 'brown' || user.belt_level === 'black' ? 
+`BROWN/BLACK BELT: Advanced concepts, assume all knowledge, be direct.
+Example: "Guard retention struggles are rarely mechanics at brown belt - it's about reading the pass earlier."` : ''}
+
+Provide expert details regardless of belt, but adjust explanation complexity and encouragement.`;
+
+  // CALL CLAUDE WITH CONTEXT
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 2000,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: message }]
+  });
+  
+  res.json({ 
+    success: true, 
+    response: response.content[0].text 
+  });
+});
+```
+
+Apply this pattern to ALL Prof OS coaching endpoints.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: TEST PERSONALIZATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation:
+
+TEST 1: Create white belt account
+
+- Ask: “How do I escape side control?”
+- VERIFY: Simple explanation, defines terms, encouragement
+
+TEST 2: Create brown belt account
+
+- Ask same question
+- VERIFY: Advanced details, assumes knowledge, analytical
+
+TEST 3: Different training frequencies
+
+- User trains 1-2x/week → gets sustainable advice
+- User trains 5+x/week → gets intensive recommendations
+
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ User profile endpoint returns belt_level and training_frequency
+✅ All Prof OS endpoints pull user profile
+✅ System prompt includes personalized context
+✅ White belts get simpler explanations
+✅ Brown/Black belts get advanced analysis
+✅ Training frequency influences advice
+✅ All coaching features use personalized data
+
+IMPLEMENT THESE INTEGRATIONS NOW.
+
+```
+---
+
+## 🎯 WHICH TO SEND?
+
+**Send BOTH prompts to Replit Agent:**
+
+1. **First prompt** → Adds personal message suggestions to admin form
+2. **Second prompt** → Makes Prof OS actually use the belt level and training frequency data
+
+Or do you want me to combine them into ONE master prompt? Let me know! 🚀​​​​​​​​​​​​​​​​
+```

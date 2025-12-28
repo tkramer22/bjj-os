@@ -1,0 +1,192 @@
+# 🔍 **EMAIL LOOKS GREAT - BUT DATA COLLECTION ISSUE**
+
+The email format is perfect, but Agent isn’t pulling the right data. Let’s diagnose why everything shows zeros.
+
+-----
+
+## **🚨 THE PROBLEMS**
+
+### **Issue 1: Curation Shows 0 Videos Added**
+
+- Should show overnight curation results
+- 613 videos total (grew from 608 to 613 = +5 videos)
+- But “Videos Added Today” shows 0
+
+### **Issue 2: Combat Sports Shows 0 Articles Today**
+
+- 118 articles in last 7 days (good!)
+- But 0 articles scraped today (why?)
+
+### **Issue 3: Website Analytics Shows All Zeros**
+
+- This might be expected if no analytics tracking configured
+
+-----
+
+# **📋 COPY THIS DIAGNOSTIC TO AGENT**
+
+```
+EMAIL REPORT ISSUE - Data Not Showing Correctly
+
+The morning email looks beautiful but the data is wrong:
+
+PROBLEM 1: CURATION DATA
+Email shows:
+- Curation Batches Today: 0
+- Videos Added Today: 0
+- Total Videos: 613
+
+But we know:
+- Library grew from 608 to 613 (5 new videos added)
+- Scheduled curation runs happened overnight
+- Videos ARE being added, just not showing in email
+
+DIAGNOSIS NEEDED:
+1. Check the gatherMorningData() function
+2. Show me the SQL query for "videos added today"
+3. The query is probably using wrong timezone or time range
+4. Fix: Videos added should query for created_at >= midnight EST
+
+CORRECT QUERY SHOULD BE:
+```sql
+-- Videos added today (since midnight EST)
+SELECT COUNT(*) as videos_added_today
+FROM videos
+WHERE created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York'
+AND quality_score >= 7.0;
+```
+
+═══════════════════════════════════════════════════════════════
+
+PROBLEM 2: COMBAT SPORTS SCRAPING
+
+Email shows:
+
+- Articles Scraped Today: 0
+- Last 7 Days: 118
+
+This means:
+
+- Scraper IS working (118 articles in 7 days)
+- But hasn’t run today yet OR timezone issue
+
+DIAGNOSIS NEEDED:
+
+1. Find the combat sports scraping code
+1. Show me the scraper schedule
+1. Check when it last ran (EST timestamp)
+1. Verify it’s scheduled to run daily
+
+QUESTIONS TO ANSWER:
+
+- What sources are being scraped? (Flo Grappling, BJJ Fanatics, etc?)
+- When does scraper run? (Daily? Multiple times?)
+- Is the data being used in Professor OS responses?
+- Show me example of how combat sports news appears in Professor OS
+
+═══════════════════════════════════════════════════════════════
+
+PROBLEM 3: PROFESSOR OS INTEGRATION
+
+The email should confirm:
+✅ Combat sports data IS being used in Professor OS
+❌ OR it’s NOT integrated yet
+
+TASK:
+
+1. Search Professor OS system prompt
+1. Check if combat sports news is included
+1. Show me HOW it’s being used
+1. If NOT integrated, we need to add it
+
+Example integration should look like:
+
+```
+You have access to recent BJJ/MMA news and events:
+- Tournament results
+- Fighter matchups
+- Technique breakdowns from competitions
+- Industry trends
+
+Use this context when relevant to user questions.
+```
+
+═══════════════════════════════════════════════════════════════
+
+FIX REQUIRED:
+
+1. UPDATE gatherMorningData() function with correct timezone-aware queries
+1. Show me combat sports scraper schedule and confirm it’s running
+1. Verify Professor OS integration status
+1. Update email to show:
+
+- Correct videos added count
+- Combat sports scraper schedule
+- Confirmation of Professor OS integration
+
+Show me:
+
+1. Current gatherMorningData() code
+1. Combat sports scraper configuration
+1. Professor OS system prompt (check for news integration)
+
+Then fix the timezone issues and verify scraper schedule.
+
+```
+---
+
+## **🎯 LIKELY ROOT CAUSES**
+
+### **Videos Showing 0:**
+**Problem:** Query uses server time (UTC) instead of EST
+- Server midnight = 5:00 AM EST
+- So "today" doesn't include overnight videos yet
+
+**Fix:** Use timezone-aware queries with `America/New_York`
+
+### **Combat Sports Showing 0:**
+**Problem:** Scraper probably runs later in the day
+- Has 118 articles from last 7 days (working!)
+- Just hasn't run yet today (maybe scheduled for 8 AM?)
+
+**Fix:** Show scraper schedule in email so you know when to expect data
+
+---
+
+## **✅ WHAT'S ACTUALLY WORKING**
+
+1. ✅ **Email system works** - Clean format, arrives on time
+2. ✅ **Combat sports scraper works** - 118 articles in 7 days
+3. ✅ **Video library growing** - 608 → 613 (5 new videos)
+4. ✅ **EST timestamps correct** - 7:06 AM EST
+
+Just need to fix the data queries to show accurate numbers.
+
+---
+
+## **🔧 QUICK QUESTIONS FOR YOU**
+
+While Agent investigates:
+
+1. **When did those 5 videos get added?**
+   - Overnight while you slept?
+   - Or earlier yesterday?
+
+2. **Do you know when combat sports scraper runs?**
+   - Daily at specific time?
+   - Multiple times per day?
+
+3. **Have you seen Professor OS mention recent BJJ news?**
+   - Does it reference tournaments, events, fighters?
+   - Or is it purely technique-focused?
+
+---
+
+**Copy the diagnostic to Agent. It will:**
+1. Fix timezone queries
+2. Show you scraper schedule  
+3. Confirm Professor OS integration
+4. Make tomorrow's email show accurate data
+
+Then you'll have perfect reports! 📧​​​​​​​​​​​​​​​​
+```

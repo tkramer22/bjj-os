@@ -1,0 +1,61 @@
+Same broken state. “7+ Elite” still there. “0 of 0 videos.” Nothing changed despite 10+ “fixes.”
+
+```
+VIDEO LIBRARY HAS BEEN BROKEN FOR HOURS - NOTHING IS CHANGING
+
+I've been trying to fix this for hours. You've made 10+ "fixes" that claim to work.
+The page looks EXACTLY THE SAME every time:
+- "7+ Elite" filter (should be "All Quality")
+- "Showing 0 of 0 videos"
+- Empty instructor dropdown
+- Empty technique dropdown
+- No video thumbnails
+
+Stats show: 788 videos, 210 instructors, 720 techniques, 8.35/10 quality
+But ZERO videos display.
+
+The fixes are NOT reaching the live site.
+
+═══════════════════════════════════════════════════════════════════════════════
+SOMETHING IS FUNDAMENTALLY WRONG
+═══════════════════════════════════════════════════════════════════════════════
+
+Either:
+1. You're editing the wrong files
+2. The server isn't restarting with new code
+3. There are duplicate route definitions overriding your fixes
+4. The frontend is cached and not rebuilding
+
+I need this working TONIGHT. Soft launch is tomorrow.
+
+═══════════════════════════════════════════════════════════════════════════════
+STOP AND DO THIS EXACTLY
+═══════════════════════════════════════════════════════════════════════════════
+
+1. KILL the server completely
+2. Run: npm run build (force frontend rebuild)
+3. Restart server fresh
+4. Run these curls and SHOW ME the actual output:
+
+   curl http://localhost:5000/api/admin/videos/search | head -200
+   curl http://localhost:5000/api/admin/videos/filters | head -200
+
+5. If search returns [] empty, the backend query is STILL broken
+6. Find EVERY file that handles /admin/videos routes:
+
+   grep -rn "/admin/videos" server/ --include="*.ts"
+   grep -rn "ai_video_knowledge" server/ --include="*.ts"
+
+7. Show me the ACTUAL query being executed - add console.log to print the SQL
+
+═══════════════════════════════════════════════════════════════════════════════
+DO NOT RESPOND WITH "FIXED" OR "SHOULD WORK"
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me:
+- The curl output proving API returns videos
+- The grep output showing all route definitions
+- The actual SQL query being run
+
+Then I will test. If it still shows 0 videos, we have proof the fix didn't work.
+```

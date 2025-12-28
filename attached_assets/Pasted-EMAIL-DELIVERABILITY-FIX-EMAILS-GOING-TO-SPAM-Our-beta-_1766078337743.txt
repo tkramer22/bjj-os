@@ -1,0 +1,72 @@
+EMAIL DELIVERABILITY FIX - EMAILS GOING TO SPAM
+
+Our beta test emails are landing in junk/spam folders. Need to fix this.
+
+═══════════════════════════════════════════════════════════════════════════════
+1. CHECK CURRENT EMAIL SETUP
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me:
+- What service sends our emails? (Twilio SendGrid? Resend? NodeMailer?)
+- What "from" address are we using?
+- Is it authenticated with our domain (bjjos.app)?
+
+═══════════════════════════════════════════════════════════════════════════════
+2. SET UP EMAIL AUTHENTICATION (DNS RECORDS)
+═══════════════════════════════════════════════════════════════════════════════
+
+We need these DNS records on bjjos.app:
+
+SPF Record:
+- Type: TXT
+- Host: @
+- Value: "v=spf1 include:[email-provider] ~all"
+
+DKIM Record:
+- Type: TXT  
+- Host: [provided by email service]
+- Value: [provided by email service]
+
+DMARC Record:
+- Type: TXT
+- Host: _dmarc
+- Value: "v=DMARC1; p=none; rua=mailto:admin@bjjos.app"
+
+Show me exactly what records to add based on our email provider.
+
+═══════════════════════════════════════════════════════════════════════════════
+3. REVIEW EMAIL CONTENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me the current beta invite email template.
+
+Check for spam triggers:
+- Too many links?
+- Spammy words? (FREE, ACT NOW, LIMITED TIME)
+- ALL CAPS in subject?
+- Missing unsubscribe link?
+- Text-to-image ratio?
+
+═══════════════════════════════════════════════════════════════════════════════
+4. SEND FROM PROPER ADDRESS
+═══════════════════════════════════════════════════════════════════════════════
+
+Should be sending from:
+- hello@bjjos.app or
+- todd@bjjos.app or  
+- noreply@bjjos.app
+
+NOT from:
+- @gmail.com
+- @sendgrid.net
+- Any generic provider domain
+
+═══════════════════════════════════════════════════════════════════════════════
+5. TEST DELIVERABILITY
+═══════════════════════════════════════════════════════════════════════════════
+
+After fixes, test with:
+- mail-tester.com (gives spam score)
+- Send test to Gmail, Outlook, Yahoo and check inbox vs spam
+
+Give me the exact DNS records to add and any code changes needed.

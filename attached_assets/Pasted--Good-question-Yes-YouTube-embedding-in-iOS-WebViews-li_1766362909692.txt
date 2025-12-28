@@ -1,0 +1,167 @@
+**Good question.** Yes, YouTube embedding in iOS WebViews (like Capacitor uses) has known issues. Let me search for solutions.​​​​​​​​​​​​​​​​
+
+**Found the exact issue and solutions.** This is a well-known problem with Capacitor + YouTube on iOS.
+
+-----
+
+## 🔍 THE PROBLEM:
+
+YouTube videos embedded via `<iframe>` tags work flawlessly in Safari and other browsers, but fail with Error 153 when loaded inside an iOS WKWebView (which is what Capacitor uses). The root cause is missing or incorrect HTTP Referer headers. YouTube’s security requirements expect proper referrer information to validate embed requests. iOS WKWebView doesn’t automatically send these headers the same way regular browsers do, causing YouTube to reject the video loading request. 
+
+-----
+
+## ✅ SOLUTIONS (3 OPTIONS):
+
+### **Option 1: HTML Proxy Solution (Recommended - Most Reliable)**
+
+The reliable fix is to serve the video via a small “proxy” HTML page on your own domain that includes a proper referrer policy and loads the YouTube embed. 
+
+### **Option 2: Capacitor YouTube Player Plugin**
+
+There’s a plugin `@capgo/capacitor-youtube-player` that uses native WKWebView for iOS playback with direct YouTube iframe API integration and cookie support. 
+
+### **Option 3: Use Mobile YouTube URL**
+
+Try using ‘[m.youtube.com](http://m.youtube.com)’ instead of ‘[www.youtube.com](http://www.youtube.com)’ or ‘[youtube.com](http://youtube.com)’ 
+
+-----
+
+## 📋 COMPLETE PROMPT FOR REPLIT - COPY THIS:
+
+```
+iOS APP - FIX VIDEO PLAYBACK + LIBRARY ISSUES
+
+═══════════════════════════════════════════════════════════════════════════════
+1. VIDEO PLAYBACK ERROR (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+YouTube videos fail in iOS Capacitor apps due to missing HTTP Referer headers.
+This is a known issue with WKWebView.
+
+SOLUTION - Create an HTML Proxy Page:
+
+Create: public/youtube-proxy.html
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Video Player</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    #player {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <iframe 
+    id="player" 
+    allowfullscreen
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+  ></iframe>
+  <script>
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const videoId = urlParams.get('v');
+      
+      if (!videoId) {
+        document.body.innerHTML = '<div style="color: white; padding: 20px; text-align: center;">Error: Missing video ID</div>';
+        return;
+      }
+      
+      const iframe = document.getElementById('player');
+      const origin = encodeURIComponent(window.location.origin);
+      iframe.src = `https://www.youtube.com/embed/${videoId}?playsinline=1&rel=0&origin=${origin}&enablejsapi=1`;
+    })();
+  </script>
+</body>
+</html>
+```
+
+Then update the video player component to use this proxy:
+
+Instead of:
+
+  <iframe src="https://www.youtube.com/embed/VIDEO_ID" />
+
+Use:
+
+  <iframe src="https://bjjos.app/youtube-proxy.html?v=VIDEO_ID" />
+
+This serves the YouTube embed from your domain with proper referrer headers.
+
+═══════════════════════════════════════════════════════════════════════════════
+2. VIDEO LIBRARY NOT LOADING
+═══════════════════════════════════════════════════════════════════════════════
+
+The library page shows filters but “0 videos” / “No videos found”
+The database has 2210+ videos but they’re not displaying.
+
+CHECK AND FIX:
+
+- Is the /api/videos endpoint being called correctly?
+- Is the user authentication token being passed?
+- Are there any errors in the browser console?
+- Is there a filter that’s returning no results by default?
+
+Make sure the initial load shows ALL videos (or a paginated list), not filtered to empty.
+
+Debug by adding console.log to see:
+
+1. What API call is being made
+1. What response is being returned
+1. If videos exist in the response
+
+═══════════════════════════════════════════════════════════════════════════════
+3. SIMPLIFY BOTTOM NAVIGATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Remove “Progress” tab - not needed.
+
+Change from 5 tabs to 4 tabs:
+
+- Chat (Professor OS)
+- Videos (Library)
+- Saved
+- Settings
+
+═══════════════════════════════════════════════════════════════════════════════
+4. ALTERNATIVE: USE CAPACITOR YOUTUBE PLUGIN
+═══════════════════════════════════════════════════════════════════════════════
+
+If the proxy solution doesn’t work, install:
+
+npm install @capgo/capacitor-youtube-player
+npx cap sync
+
+Then use the plugin’s native player which handles iOS WebView issues.
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+
+Test:
+
+1. Videos load in library
+1. Tapping a video plays it without error
+1. Bottom nav has 4 tabs (no Progress)
+
+```
+---
+
+**Send this to Replit. The YouTube proxy solution is the most reliable fix used by many Capacitor apps!**
+```

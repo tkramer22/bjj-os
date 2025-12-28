@@ -1,0 +1,79 @@
+Got it. Two bugs to fix first, then we’ll fine-tune Professor OS responses.
+
+-----
+
+## Bug #1: Dropdown Filters Not Populating
+
+The “All Techniques (0)” and “All Instructors (0)” dropdowns are empty despite having 1,687 videos.
+
+## Bug #2: Chat History Deleted When Navigating Away
+
+When you leave chat to view library and come back, conversation is gone.
+
+-----
+
+**Send this to Replit Agent:**
+
+```
+FIX TWO CRITICAL BUGS
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG #1: VIDEO LIBRARY DROPDOWNS EMPTY
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+On bjjos.app/library, the filter dropdowns show:
+- "All Techniques (0)" 
+- "All Instructors (0)"
+
+But we have 1,687 videos in the database. The dropdowns should be populated with all unique techniques and instructors.
+
+FIX:
+1. Check the API endpoint that populates these dropdowns
+2. Query ai_video_knowledge for:
+   - DISTINCT technique_name or technique_type values
+   - DISTINCT instructor_name values
+3. Return counts for each
+4. Populate the dropdown options
+
+Expected result:
+- "All Techniques" dropdown shows: Triangle (45), Armbar (38), Guard Pass (92), etc.
+- "All Instructors" dropdown shows: John Danaher (52), Gordon Ryan (34), Marcelo Garcia (28), etc.
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG #2: CHAT HISTORY DISAPPEARS ON NAVIGATION
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+When user:
+1. Has a conversation with Professor OS
+2. Navigates to Video Library (or any other page)
+3. Returns to Chat
+
+The entire conversation history is GONE. This breaks continuity and loses context.
+
+FIX:
+1. Check how chat history is stored:
+   - Is it only in React state? (would explain the bug)
+   - Is it being saved to database?
+   
+2. Implement persistent chat storage:
+   - Save messages to database on each send/receive
+   - Load conversation history when chat component mounts
+   - Use user_id + session/conversation_id to retrieve
+
+3. Ensure conversation persists across:
+   - Page navigation
+   - Browser refresh
+   - Return visits
+
+The chat history is CRITICAL for Professor OS to remember context and provide personalized coaching.
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY: Fix both bugs before any other work.
+═══════════════════════════════════════════════════════════════════════════════
+```
+
+-----
+
+Once these are fixed, we’ll test Professor OS responses together and refine the personality. Let me know what Replit comes back with!​​​​​​​​​​​​​​​​

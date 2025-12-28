@@ -1,0 +1,68 @@
+Professor OS scored 95/100 - TARGET MET. 
+
+Fix these 5 minor edge cases:
+
+═══════════════════════════════════════════════════════════════
+FIX 1: COMBAT SPORTS - ALWAYS CONNECT TO TRAINING
+═══════════════════════════════════════════════════════════════
+
+Add to Professor OS system prompt under combat sports section:
+
+"When discussing competitors, instructors, or BJJ news:
+- ALWAYS end with a training connection or question about their game
+- Don't just state facts - make it useful for their development
+
+FAILED EXAMPLE:
+User: 'Bernardo Faria tips'
+Response: 'Bernardo's whole game is built on simple, high-percentage moves...'
+Problem: Just described Bernardo, didn't connect to user's training
+
+FIXED EXAMPLE:
+User: 'Bernardo Faria tips'
+Response: 'Bernardo's whole game is built on simple, high-percentage moves 
+that work at any level. His pressure passing is methodical - constant forward 
+pressure, never backing up. Since passing is your biggest struggle, start with 
+his over-under pass. Want me to find a video on it?'"
+
+═══════════════════════════════════════════════════════════════
+FIX 2: VIDEO REQUESTS - ALWAYS INCLUDE VIDEO TOKEN
+═══════════════════════════════════════════════════════════════
+
+Add to Professor OS system prompt under video section:
+
+"When user asks for videos (show me, video, videos, tutorial, instructional):
+- ALWAYS include at least one [VIDEO: Title by Instructor] token
+- Even if diagnosing first, include the video in the same response
+- Never respond to a video request without a video
+
+FAILED EXAMPLE:
+User: 'Videos on back control'
+Response: 'I bet you're losing the position when they start to escape. 
+Are you working on maintaining back control or attacking from there?'
+Problem: Asked question but NO VIDEO included
+
+FIXED EXAMPLE:
+User: 'Videos on back control'
+Response: 'I bet you're losing the position when they start to escape. 
+[VIDEO: Back Takes by John Danaher] [VIDEO: Back Control by Marcelo Garcia]
+Are you working on maintaining or finishing from there?'"
+
+═══════════════════════════════════════════════════════════════
+IMPLEMENTATION
+═══════════════════════════════════════════════════════════════
+
+These are prompt refinements only - no code changes needed.
+
+Add these rules to the Professor OS system prompt in buildSystemPrompt.ts:
+
+1. Under combat sports section, add the "always connect to training" rule
+2. Under video section, add the "always include video token" rule
+
+Then run 10 quick tests on:
+- "Bernardo Faria tips" (should end with training connection)
+- "What's happening in competitive BJJ?" (should end with training connection)
+- "Roger vs Gordon debate" (should include training value, not just question)
+- "Videos on back control" (should include [VIDEO:...] token)
+- "Side control escape video" (should include [VIDEO:...] token)
+
+All 5 should pass after this fix.

@@ -1,0 +1,263 @@
+# 🚨 MORE BUILD ERRORS - ADDITIONAL MISSING EXPORTS
+
+I see more issues now! Additional errors:
+
+**New Errors:**
+
+```
+- No matching export in shared/schema.ts for imports: stripeSubscriptions, videoLibrary, trainingLog, chatHistory
+- No matching export in server/email.ts for import: sendEmail
+- Build command failed during esbuild bundling of server/index.ts
+```
+
+-----
+
+## **🔧 COMPREHENSIVE FIX PROMPT:**
+
+Copy this and send to Replit Agent:
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════
+FIX ALL BUILD ERRORS - REMOVE NON-EXISTENT IMPORTS
+═══════════════════════════════════════════════════════════════
+
+MISSION:
+Fix all build errors by removing or fixing imports that reference non-existent exports. Get the build working immediately.
+
+CRITICAL ERRORS TO FIX:
+1. shared/schema.ts missing exports: stripeSubscriptions, videoLibrary, trainingLog, chatHistory
+2. server/email.ts missing export: sendEmail
+3. Build command failing on server/index.ts
+
+═══════════════════════════════════════════════════════════════
+STEP 1: FIX server/admin-email.ts
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/admin-email.ts
+
+FIND AND REMOVE these imports:
+```typescript
+import { stripeSubscriptions, videoLibrary, trainingLog, chatHistory } from '../shared/schema';
+import { sendEmail } from './email';
+```
+
+REPLACE WITH:
+
+```typescript
+// Tables not yet in schema - using direct queries instead
+// import { stripeSubscriptions, videoLibrary, trainingLog, chatHistory } from '../shared/schema';
+
+// Using Resend directly instead of sendEmail wrapper
+import { Resend } from 'resend';
+```
+
+FIND any code that uses these imports and COMMENT IT OUT or REPLACE with fallback:
+
+Example:
+
+```typescript
+// BEFORE (broken):
+const subscriptions = await db.select().from(stripeSubscriptions);
+
+// AFTER (working):
+// Subscription data not yet implemented
+const subscriptions = [];
+```
+
+═══════════════════════════════════════════════════════════════
+STEP 2: FIX server/email.ts OR CREATE IT
+═══════════════════════════════════════════════════════════════
+
+CHECK if /server/email.ts exists:
+
+IF IT EXISTS:
+
+- Make sure it exports sendEmail function
+- Add: export { sendEmail };
+
+IF IT DOESN’T EXIST:
+
+- Remove all imports of sendEmail from other files
+- Use Resend directly where needed
+
+RECOMMENDED: Use Resend directly in admin-email.ts:
+
+```typescript
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+async function sendAdminEmail(to: string, subject: string, html: string) {
+  try {
+    const result = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: to,
+      subject: subject,
+      html: html
+    });
+    return { success: true, result };
+  } catch (error) {
+    console.error('Email send error:', error);
+    return { success: false, error };
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════
+STEP 3: SIMPLIFY admin-email.ts TO MINIMAL VERSION
+═══════════════════════════════════════════════════════════════
+
+To get build working ASAP, replace content of /server/admin-email.ts with this minimal working version:
+
+```typescript
+import { Resend } from 'resend';
+import { db } from './db';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+export async function sendDailyAdminEmail() {
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.ADMIN_EMAILS?.split(',')[0];
+    
+    if (!adminEmail) {
+      console.log('No admin email configured');
+      return { success: false, error: 'No admin email' };
+    }
+
+    const date = new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>BJJ OS Daily Report</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #333;">🥋 BJJ OS Daily Report</h1>
+        <p style="color: #666;">${date}</p>
+        
+        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h2 style="margin-top: 0;">System Status</h2>
+          <p>✅ System operational</p>
+          <p>📊 Daily report generated successfully</p>
+        </div>
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+          <a href="https://bjjos.app/admin" style="display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
+            View Dashboard →
+          </a>
+        </div>
+
+        <p style="color: #999; font-size: 12px; margin-top: 40px;">
+          BJJ OS • ${new Date().toLocaleTimeString()}
+        </p>
+      </body>
+      </html>
+    `;
+
+    const result = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: adminEmail,
+      subject: `BJJ OS Daily Report - ${date}`,
+      html: html
+    });
+
+    console.log('✅ Daily admin email sent');
+    return { success: true, result };
+
+  } catch (error) {
+    console.error('❌ Failed to send daily email:', error);
+    return { success: false, error };
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════
+STEP 4: CHECK OTHER FILES FOR BROKEN IMPORTS
+═══════════════════════════════════════════════════════════════
+
+Search for any other files that import from admin-email.ts and make sure they still work after changes.
+
+Look in:
+
+- /server/index.ts
+- /server/cron/ files
+- Any scheduler files
+
+Make sure imports match what’s actually exported.
+
+═══════════════════════════════════════════════════════════════
+STEP 5: VERIFY CRON SETUP
+═══════════════════════════════════════════════════════════════
+
+CHECK /server/index.ts or main server file:
+
+Make sure the cron job is set up correctly:
+
+```typescript
+import cron from 'node-cron';
+import { sendDailyAdminEmail } from './admin-email';
+
+// Schedule daily email at 8 AM
+cron.schedule('0 8 * * *', async () => {
+  console.log('⏰ Running daily admin email at 8 AM');
+  await sendDailyAdminEmail();
+});
+```
+
+═══════════════════════════════════════════════════════════════
+STEP 6: REBUILD
+═══════════════════════════════════════════════════════════════
+
+After all changes:
+
+1. Save all files
+1. Click Republish
+1. Watch for errors
+1. Verify build succeeds
+
+═══════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════
+
+✅ No import errors from shared/schema.ts
+✅ No import errors from server/email.ts
+✅ Build completes without errors
+✅ App deploys successfully
+✅ Daily email function exists and can be called
+
+═══════════════════════════════════════════════════════════════
+CRITICAL NOTES
+═══════════════════════════════════════════════════════════════
+
+• Priority #1: Get build working
+• Use minimal working version first
+• Can add features back later once deployed
+• Remove ALL references to non-existent tables
+• Use Resend directly, don’t rely on email.ts wrapper
+• Keep it simple - just get it deploying
+
+START FIX NOW. Focus on getting a successful build before adding complexity.
+
+```
+---
+
+## ✅ **COMPREHENSIVE FIX READY!**
+
+**This will:**
+1. ✅ Remove all broken imports
+2. ✅ Provide minimal working email function
+3. ✅ Use Resend directly (no wrapper needed)
+4. ✅ Get your build deploying again
+5. ✅ Keep 8 AM schedule working
+
+**Copy the prompt above and send it to Replit Agent!** 🚀
+
+Once it's building again, we can add back the fancy features properly. Right now we just need to get it deployed!​​​​​​​​​​​​​​​​
+```

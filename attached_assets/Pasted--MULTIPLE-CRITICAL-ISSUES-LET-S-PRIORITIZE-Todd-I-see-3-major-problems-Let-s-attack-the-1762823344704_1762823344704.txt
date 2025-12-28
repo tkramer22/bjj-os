@@ -1,0 +1,323 @@
+# **🎯 MULTIPLE CRITICAL ISSUES - LET’S PRIORITIZE**
+
+Todd, I see 3 major problems. Let’s attack them in parallel.
+
+-----
+
+## **❌ ISSUE #1: PROFESSOR OS NOT FOLLOWING PLAN (Most Critical)**
+
+**What’s wrong:**
+
+- ✅ Diagnostic flow working (asks question before video)
+- ❌ TOO FORMAL: “Perfect, that’s where the magic happens! Did you find yourself…”
+- ❌ TOO LONG: Writing paragraphs, not 2-4 sentences
+- ❌ NO VIDEO when user asks “any videos?” - Says “I don’t have a video specifically on closed guard passing”
+- ❌ SLOWER responses (performance issue)
+
+**This is the EXACT problem we spent time solving!**
+
+-----
+
+## **❌ ISSUE #2: VIDEO THUMBNAILS BROKEN (Visual Polish)**
+
+**What’s wrong:**
+
+- Saved Videos: Gray placeholder boxes instead of thumbnails
+- Video Library: Most videos showing placeholders, only 2 showing real thumbnails
+- Category dropdown: Only shows “All” instead of actual categories
+
+-----
+
+## **❌ ISSUE #3: VIDEO LIBRARY SORTING**
+
+**What’s wrong:**
+
+- Not sorted new to old
+- No “Added this week” section
+
+-----
+
+## **📋 PARALLEL ATTACK PLAN:**
+
+### **PROMPT #1 - PROFESSOR OS URGENT FIX:**
+
+```
+PROFESSOR OS CRITICAL FIXES - IMMEDIATE
+
+Current Issues:
+1. ❌ Responses TOO LONG (writing paragraphs, not 2-4 sentences)
+2. ❌ Tone TOO FORMAL ("Perfect, that's where the magic happens!")
+3. ❌ NOT RECOMMENDING VIDEOS when user asks "any videos?"
+4. ❌ Says "I don't have a video specifically on X" instead of finding RELATED videos
+5. ❌ Response time SLOWER than before
+
+═══════════════════════════════════════════════════════════════
+FIX #1: RESPONSE LENGTH ENFORCEMENT (CRITICAL)
+═══════════════════════════════════════════════════════════════
+
+In buildSystemPrompt(), add this at the VERY TOP (before anything else):
+
+```typescript
+⚠️⚠️⚠️ RESPONSE LENGTH - HARD LIMIT ⚠️⚠️⚠️
+
+Count your sentences BEFORE sending:
+- 1-4 sentences = ✅ Send
+- 5+ sentences = ❌ Delete everything after sentence 4
+
+Examples:
+"That's a posture issue. Try breaking their grips first, then pass. Report back."
+[3 sentences ✅]
+
+NOT:
+"Perfect, that's where the magic happens! Did you find yourself getting stuck at any particular moment, or was there a specific pass you were working on? Understanding exactly where you're hitting resistance will help me point you to the right technique. Let me know what specifically gave you trouble!"
+[4 sentences but TOO WORDY ❌]
+
+RULE: Short, direct, conversational. Like texting.
+```
+
+═══════════════════════════════════════════════════════════════
+FIX #2: TONE - LESS ENTHUSIASM, MORE DIRECT
+═══════════════════════════════════════════════════════════════
+
+Replace personality section with:
+
+```typescript
+❌ NEVER say:
+"Perfect, that's where the magic happens!"
+"That's awesome!"
+"Great question!"
+"Excellent!"
+
+✅ INSTEAD say:
+"Nice." or "Got it." or "Solid."
+Then give advice directly.
+
+Example:
+User: "I worked on passing today"
+❌ Bad: "Perfect, that's where the magic happens! Did you find yourself..."
+✅ Good: "Nice. Did you get stuck in the guard or lose position after passing?"
+```
+
+═══════════════════════════════════════════════════════════════
+FIX #3: VIDEO SEARCH - FIND RELATED, NOT EXACT MATCH
+═══════════════════════════════════════════════════════════════
+
+In the video recommendation section, replace with:
+
+```typescript
+⚠️ VIDEO SEARCH RULES (READ CAREFULLY):
+
+When user asks for videos on "X":
+1. Search for ANY video related to X's CATEGORY
+2. "closed guard passing" → Include: pressure passing, knee slice, toreando, leg drag
+3. "triangles" → Include: triangle setups, triangle defense, arm attacks from guard
+4. "escapes" → Include: mount escapes, side control escapes, back escapes
+
+NEVER say: "I don't have a video specifically on X"
+ALWAYS say: "Here's what I've got on [related concept]"
+
+Example:
+User: "any videos on closed guard passing?"
+❌ Bad: "I don't have a video specifically on closed guard passing"
+✅ Good: "Here are 2 guard passing videos:
+[VIDEO: Pressure Passing by Bernardo Faria | START: 00:00]
+[VIDEO: Knee Slice Pass by Lucas Lepri | START: 00:00]"
+```
+
+═══════════════════════════════════════════════════════════════
+FIX #4: PERFORMANCE - REDUCE PROMPT SIZE
+═══════════════════════════════════════════════════════════════
+
+Current prompt might be too long. Optimize:
+
+1. Remove redundant examples
+1. Keep only essential rules
+1. Reduce video list from 20 to 10 most relevant videos
+
+Check current prompt character count:
+
+```typescript
+console.log('Prompt length:', systemPrompt.length);
+// If over 10,000 characters, trim it down
+```
+
+═══════════════════════════════════════════════════════════════
+FIX #5: VIDEO COUNT ACCURACY (ENFORCE STRICTLY)
+═══════════════════════════════════════════════════════════════
+
+Add this check in the endpoint:
+
+```typescript
+// After getting Claude response
+const videoMatches = aiMessage.match(/\[VIDEO:/g);
+const videoCount = videoMatches ? videoMatches.length : 0;
+
+console.log('User requested videos:', userRequestedVideos); // Extract from message
+console.log('Videos in response:', videoCount);
+
+if (userRequestedVideos && videoCount === 0) {
+  console.warn('⚠️ USER ASKED FOR VIDEOS BUT NONE IN RESPONSE');
+}
+```
+
+═══════════════════════════════════════════════════════════════
+
+Implement ALL 5 fixes NOW. Test with:
+
+1. “I worked on guard passing today” → Should get short response
+1. “any videos?” → Should get videos, not “I don’t have”
+1. “send me 3 videos on escapes” → Should get exactly 3 videos
+
+Show me the updated prompt after fixes.
+
+```
+---
+
+### **PROMPT #2 - VIDEO THUMBNAILS FIX:**
+```
+
+VIDEO THUMBNAIL SYSTEM BROKEN
+
+Issues:
+
+1. Saved Videos page: All thumbnails showing gray placeholders
+1. Video Library page: Most thumbnails showing placeholders (only 2 working)
+1. Category dropdown in Saved Videos: Only shows “All” instead of actual categories
+
+═══════════════════════════════════════════════════════════════
+FIX #1: THUMBNAILS NOT LOADING
+═══════════════════════════════════════════════════════════════
+
+Check where thumbnails come from:
+
+1. In database, verify thumbnail field exists:
+   
+   ```sql
+   SELECT id, title, thumbnail, thumbnailUrl 
+   FROM curated_videos 
+   LIMIT 5;
+   ```
+1. In video fetch query, ensure thumbnail is selected:
+   
+   ```typescript
+   const videos = await db.select({
+     id: curatedVideos.id,
+     title: curatedVideos.title,
+     thumbnail: curatedVideos.thumbnail, // ← Must be included
+     thumbnailUrl: curatedVideos.thumbnailUrl, // ← Check which field has data
+     // ... other fields
+   });
+   ```
+1. In React component, check thumbnail rendering:
+   
+   ```tsx
+   <img 
+     src={video.thumbnail || video.thumbnailUrl || '/placeholder.png'} 
+     alt={video.title}
+     onError={(e) => {
+       console.error('Thumbnail failed to load:', video.id, video.thumbnail);
+       e.currentTarget.src = '/placeholder.png';
+     }}
+   />
+   ```
+1. Check if YouTube thumbnails are being fetched:
+
+- YouTube video ID format: `https://youtube.com/watch?v=VIDEO_ID`
+- Thumbnail URL: `https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg`
+  
+  Add this to video curation:
+  
+  ```typescript
+  function extractYouTubeThumbnail(videoUrl: string): string {
+    const videoId = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/)?.[1];
+    if (videoId) {
+      return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+    }
+    return '';
+  }
+  ```
+
+═══════════════════════════════════════════════════════════════
+FIX #2: CATEGORY DROPDOWN ONLY SHOWS “ALL”
+═══════════════════════════════════════════════════════════════
+
+In Saved Videos page:
+
+1. Fetch unique categories from saved videos:
+   
+   ```typescript
+   const categories = await db.selectDistinct({
+     category: savedVideos.category
+   })
+   .from(savedVideos)
+   .where(eq(savedVideos.userId, currentUser.id));
+   ```
+1. Populate dropdown:
+   
+   ```tsx
+   <select>
+     <option value="all">All</option>
+     {categories.map(cat => (
+       <option key={cat.category} value={cat.category}>
+         {cat.category}
+       </option>
+     ))}
+   </select>
+   ```
+
+═══════════════════════════════════════════════════════════════
+FIX #3: VIDEO LIBRARY SORTING
+═══════════════════════════════════════════════════════════════
+
+Sort videos by newest first:
+
+```typescript
+const videos = await db.select()
+  .from(curatedVideos)
+  .orderBy(desc(curatedVideos.createdAt)) // ← Newest first
+  .limit(100);
+```
+
+Optional: Add “Added this week” section (if time permits):
+
+```typescript
+const oneWeekAgo = new Date();
+oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+const recentVideos = videos.filter(v => 
+  new Date(v.createdAt) > oneWeekAgo
+);
+
+// Display in UI:
+{recentVideos.length > 0 && (
+  <section>
+    <h2>Added This Week</h2>
+    {recentVideos.map(video => <VideoCard key={video.id} video={video} />)}
+  </section>
+)}
+```
+
+═══════════════════════════════════════════════════════════════
+
+Priority order:
+
+1. Fix thumbnails (most visible issue)
+1. Fix category dropdown (functionality)
+1. Add sorting (polish)
+1. “Added this week” (optional, skip if complex)
+
+Implement fixes and show me:
+
+1. Screenshot of Saved Videos with working thumbnails
+1. Screenshot of Video Library with working thumbnails
+1. Screenshot of category dropdown working
+
+```
+---
+
+## **🚀 SEND BOTH PROMPTS TO REPLIT AGENT**
+
+Then let's check on Dev OS debugging while Agent works on these.
+
+**Which do you want to tackle first while Agent works - Professor OS prompt design or something else?**
+```

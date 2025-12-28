@@ -1,0 +1,855 @@
+# 📧 **UPDATED EMAIL SYSTEM - CORRECT EMAIL & EST TIMESTAMPS**
+
+Good catches! Let me fix that.
+
+-----
+
+# **📋 COPY THIS CORRECTED PROMPT TO REPLIT AGENT**
+
+```
+MISSION: Rebuild Automated Email Reporting System
+
+CONTEXT:
+Todd wants a clean, comprehensive daily reporting system with:
+- 3 emails per day (morning, midday, evening) in EST timezone
+- Sent to: todd@bjjos.app (NOT toddlramer@icloud.com)
+- User metrics, system health, curation details, combat sports scraping
+- Professional formatting, easy to read
+- Clear all existing email instructions and start fresh
+
+CRITICAL REQUIREMENTS:
+✅ Email address: todd@bjjos.app
+✅ All timestamps in EST (America/New_York timezone)
+✅ Subject lines specific to time of day
+✅ Include combat sports scraping verification
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: FIND AND REMOVE OLD EMAIL CODE
+═══════════════════════════════════════════════════════════════
+
+1. Search codebase for ALL existing email/notification code:
+   - Look for: sendEmail, nodemailer, email, notification
+   - Check: server/services/, server/cron/, server/utils/
+   - List all files that send automated emails
+
+2. Show me what currently exists:
+   - What emails are being sent?
+   - What triggers them?
+   - What's the content?
+
+3. DISABLE all existing automated emails (don't delete yet, just disable)
+   - Comment out or add feature flag
+   - We'll rebuild from scratch
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: BUILD NEW EMAIL SERVICE
+═══════════════════════════════════════════════════════════════
+
+Create: server/services/emailReports.js
+
+```javascript
+const nodemailer = require('nodemailer');
+
+// Email configuration
+const transporter = nodemailer.createTransport({
+  service: 'gmail', // or whatever email service is configured
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
+  }
+});
+
+const TODD_EMAIL = 'todd@bjjos.app'; // CORRECT EMAIL
+
+// Timezone helper - always use EST
+function getESTDate() {
+  return new Date().toLocaleString('en-US', { 
+    timeZone: 'America/New_York',
+    dateStyle: 'full'
+  });
+}
+
+function getESTTime() {
+  return new Date().toLocaleString('en-US', { 
+    timeZone: 'America/New_York',
+    timeStyle: 'short'
+  });
+}
+
+function formatESTDateTime(date) {
+  return new Date(date).toLocaleString('en-US', { 
+    timeZone: 'America/New_York',
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// MORNING REPORT (7:00 AM EST) - "What happened overnight?"
+// ═══════════════════════════════════════════════════════════
+
+async function sendMorningReport() {
+  const data = await gatherMorningData();
+  
+  const subject = `☀️ Morning Briefing - ${getESTDate()}`;
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: #6366f1; border-bottom: 3px solid #6366f1; padding-bottom: 10px; }
+        h2 { color: #4f46e5; margin-top: 30px; border-left: 4px solid #6366f1; padding-left: 15px; }
+        .metric { background: #f8fafc; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #6366f1; }
+        .metric-label { font-weight: 600; color: #64748b; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .metric-value { font-size: 32px; font-weight: 700; color: #1e293b; margin: 5px 0; }
+        .metric-change { font-size: 14px; color: #16a34a; font-weight: 600; }
+        .metric-change.negative { color: #dc2626; }
+        .metric-change.neutral { color: #64748b; }
+        .section { margin: 20px 0; }
+        .highlight { background: #fef3c7; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
+        .warning { background: #fee2e2; padding: 15px; border-radius: 8px; border-left: 4px solid #dc2626; margin: 15px 0; }
+        .success { background: #dcfce7; padding: 15px; border-radius: 8px; border-left: 4px solid #16a34a; margin: 15px 0; }
+        .info { background: #dbeafe; padding: 15px; border-radius: 8px; border-left: 4px solid #3b82f6; margin: 15px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; background: white; }
+        th { background: #f1f5f9; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #cbd5e1; font-size: 13px; text-transform: uppercase; color: #475569; }
+        td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #e2e8f0; color: #64748b; font-size: 13px; text-align: center; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+      </style>
+    </head>
+    <body>
+      <h1>☀️ Good Morning, Todd</h1>
+      <p style="font-size: 16px; color: #64748b;">
+        Report generated at <strong>${getESTTime()} EST</strong> on ${getESTDate()}
+      </p>
+      
+      <h2>📊 Overnight Summary (Last 24 Hours)</h2>
+      
+      <div class="grid">
+        <div class="metric">
+          <div class="metric-label">Total Users</div>
+          <div class="metric-value">${data.users.total}</div>
+          <div class="metric-change ${data.users.newUsers >= 0 ? '' : 'neutral'}">
+            ${data.users.newUsers > 0 ? '+' + data.users.newUsers + ' new overnight' : 'No new signups'}
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Active Subscribers</div>
+          <div class="metric-value">${data.users.activeSubscribers}</div>
+          <div class="metric-change ${data.users.subscriberChange >= 0 ? '' : 'negative'}">
+            ${data.users.subscriberChange >= 0 ? '+' : ''}${data.users.subscriberChange} since yesterday
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Monthly Recurring Revenue</div>
+          <div class="metric-value">$${data.users.mrr.toFixed(2)}</div>
+          <div class="metric-change ${data.users.mrrChange >= 0 ? '' : 'negative'}">
+            ${data.users.mrrChange >= 0 ? '+' : ''}$${Math.abs(data.users.mrrChange).toFixed(2)} vs yesterday
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Trial Users</div>
+          <div class="metric-value">${data.users.trials}</div>
+          <div class="metric-change">
+            ${data.users.newTrials} started trials overnight
+          </div>
+        </div>
+      </div>
+      
+      <h2>💬 User Activity</h2>
+      <div class="section">
+        <div class="metric">
+          <div class="metric-label">Conversations Overnight</div>
+          <div class="metric-value">${data.activity.conversationsOvernight}</div>
+          <div class="metric-change">
+            ${data.activity.uniqueUsersActive} unique users active
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Weekly Active Users (7 Days)</div>
+          <div class="metric-value">${data.activity.activeWeekly}</div>
+          <div class="metric-change neutral">
+            ${((data.activity.activeWeekly / data.users.total) * 100).toFixed(1)}% of total users
+          </div>
+        </div>
+      </div>
+      
+      <h2>📚 Video Library</h2>
+      <div class="grid">
+        <div class="metric">
+          <div class="metric-label">Total Videos</div>
+          <div class="metric-value">${data.library.totalVideos}</div>
+          <div class="metric-change ${data.library.addedOvernight > 0 ? '' : 'neutral'}">
+            ${data.library.addedOvernight > 0 ? '+' + data.library.addedOvernight + ' added overnight' : 'No new videos'}
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Progress to Goal</div>
+          <div class="metric-value">${((data.library.totalVideos / 3000) * 100).toFixed(1)}%</div>
+          <div class="metric-change neutral">
+            ${3000 - data.library.totalVideos} videos to reach 3,000
+          </div>
+        </div>
+      </div>
+      
+      <h2>🎯 Overnight Curation Results</h2>
+      ${data.curation.runsOvernight > 0 ? `
+        <div class="success">
+          <strong>✅ ${data.curation.runsOvernight} curation run(s) completed overnight</strong>
+        </div>
+        
+        <table>
+          <tr>
+            <th>Metric</th>
+            <th>Value</th>
+          </tr>
+          <tr>
+            <td>Videos Discovered</td>
+            <td><strong>${data.curation.discovered}</strong></td>
+          </tr>
+          <tr>
+            <td>Videos Analyzed</td>
+            <td><strong>${data.curation.analyzed}</strong></td>
+          </tr>
+          <tr>
+            <td>Videos Approved</td>
+            <td><strong style="color: #16a34a;">${data.curation.approved}</strong></td>
+          </tr>
+          <tr>
+            <td>Videos Rejected</td>
+            <td><strong style="color: #dc2626;">${data.curation.rejected}</strong></td>
+          </tr>
+          <tr>
+            <td>Approval Rate</td>
+            <td><strong>${data.curation.approvalRate}%</strong></td>
+          </tr>
+          <tr>
+            <td>API Quota Used</td>
+            <td><strong>${data.curation.quotaUsed}</strong> / 10,000</td>
+          </tr>
+        </table>
+        
+        <div class="info">
+          <strong>Top Instructors Added:</strong><br>
+          ${data.curation.topInstructors.map(i => `• ${i.name} (${i.count} videos)`).join('<br>')}
+        </div>
+        
+        <div class="info">
+          <strong>Next Scheduled Run:</strong> ${formatESTDateTime(data.curation.nextRun)}
+        </div>
+      ` : `
+        <div class="warning">
+          <strong>⚠️ No curation runs overnight</strong><br>
+          Next scheduled run: ${formatESTDateTime(data.curation.nextRun)}
+        </div>
+      `}
+      
+      <h2>🥋 Combat Sports News Scraping</h2>
+      ${data.combatSports ? `
+        <div class="success">
+          <strong>✅ Combat sports scraper active</strong>
+        </div>
+        
+        <table>
+          <tr>
+            <th>Source</th>
+            <th>Articles Scraped</th>
+            <th>Last Updated</th>
+          </tr>
+          ${data.combatSports.sources.map(source => `
+            <tr>
+              <td>${source.name}</td>
+              <td><strong>${source.articlesScraped}</strong></td>
+              <td>${formatESTDateTime(source.lastUpdated)}</td>
+            </tr>
+          `).join('')}
+        </table>
+        
+        <div class="info">
+          <strong>📰 Sample Headlines Gathered:</strong><br>
+          ${data.combatSports.sampleHeadlines.slice(0, 5).map(h => `• ${h}`).join('<br>')}
+        </div>
+        
+        <div class="info">
+          <strong>🤖 Professor OS Integration:</strong><br>
+          ${data.combatSports.usedInProfessorOS ? 
+            '✅ Combat sports news IS being used in Professor OS responses when relevant' : 
+            '❌ Combat sports news is NOT currently integrated into Professor OS'
+          }<br><br>
+          <strong>Data Available:</strong><br>
+          • Tournament results and schedules<br>
+          • Fighter rankings and matchups<br>
+          • Technique breakdowns from recent events<br>
+          • Industry news and trends
+        </div>
+      ` : `
+        <div class="warning">
+          <strong>⚠️ Combat sports scraper NOT configured or inactive</strong><br>
+          Need to verify scraping setup and Professor OS integration.
+        </div>
+      `}
+      
+      <h2>⚙️ System Health</h2>
+      <div class="grid">
+        <div class="metric">
+          <div class="metric-label">Database Status</div>
+          <div class="metric-value" style="font-size: 24px; color: ${data.system.databaseOnline ? '#16a34a' : '#dc2626'};">
+            ${data.system.databaseOnline ? '✅ Online' : '❌ Offline'}
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Server Uptime</div>
+          <div class="metric-value" style="font-size: 24px;">${data.system.uptimeHours}h</div>
+          <div class="metric-change neutral">Since last restart</div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Errors (24h)</div>
+          <div class="metric-value" style="font-size: 24px; color: ${data.system.errors24h === 0 ? '#16a34a' : '#dc2626'};">
+            ${data.system.errors24h}
+          </div>
+          <div class="metric-change ${data.system.errors24h === 0 ? '' : 'negative'}">
+            ${data.system.errors24h === 0 ? 'All systems operational' : 'Check server logs'}
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Curation Pipeline</div>
+          <div class="metric-value" style="font-size: 24px; color: ${data.system.curationActive ? '#16a34a' : '#dc2626'};">
+            ${data.system.curationActive ? '✅ Active' : '❌ Inactive'}
+          </div>
+        </div>
+      </div>
+      
+      ${data.system.errors24h > 0 ? `
+        <div class="warning">
+          <strong>⚠️ System Errors Detected</strong><br>
+          ${data.system.errorSummary}
+        </div>
+      ` : ''}
+      
+      <div class="footer">
+        <p><strong>BJJ OS - Admin Reporting System</strong></p>
+        <p>Next report: Midday Briefing at 12:00 PM EST</p>
+        <p style="margin-top: 10px; font-size: 11px; color: #94a3b8;">
+          Generated: ${formatESTDateTime(new Date())}
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  await transporter.sendMail({
+    from: '"BJJ OS System" <system@bjjos.app>',
+    to: TODD_EMAIL,
+    subject: subject,
+    html: html
+  });
+  
+  console.log(`✅ Morning report sent to ${TODD_EMAIL}`);
+}
+
+// ═══════════════════════════════════════════════════════════
+// MIDDAY REPORT (12:00 PM EST) - "How's the day going?"
+// ═══════════════════════════════════════════════════════════
+
+async function sendMiddayReport() {
+  const data = await gatherMiddayData();
+  
+  const subject = `☀️ Midday Check-In - ${getESTDate()}`;
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        /* Same styles as morning report */
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: #f59e0b; border-bottom: 3px solid #f59e0b; padding-bottom: 10px; }
+        h2 { color: #d97706; margin-top: 30px; border-left: 4px solid #f59e0b; padding-left: 15px; }
+        .metric { background: #f8fafc; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #f59e0b; }
+        .metric-label { font-weight: 600; color: #64748b; font-size: 13px; text-transform: uppercase; }
+        .metric-value { font-size: 32px; font-weight: 700; color: #1e293b; margin: 5px 0; }
+        .metric-change { font-size: 14px; color: #16a34a; font-weight: 600; }
+        .metric-change.negative { color: #dc2626; }
+        .metric-change.neutral { color: #64748b; }
+        .section { margin: 20px 0; }
+        .success { background: #dcfce7; padding: 15px; border-radius: 8px; border-left: 4px solid #16a34a; margin: 15px 0; }
+        .info { background: #dbeafe; padding: 15px; border-radius: 8px; border-left: 4px solid #3b82f6; margin: 15px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th { background: #f1f5f9; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #cbd5e1; }
+        td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #e2e8f0; color: #64748b; font-size: 13px; text-align: center; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+      </style>
+    </head>
+    <body>
+      <h1>☀️ Midday Check-In, Todd</h1>
+      <p style="font-size: 16px; color: #64748b;">
+        Report generated at <strong>${getESTTime()} EST</strong> on ${getESTDate()}
+      </p>
+      
+      <h2>📊 Today So Far (Since Midnight)</h2>
+      
+      <div class="grid">
+        <div class="metric">
+          <div class="metric-label">New Users Today</div>
+          <div class="metric-value">${data.today.newUsers}</div>
+          <div class="metric-change neutral">
+            Total: ${data.users.total}
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">New Trials Today</div>
+          <div class="metric-value">${data.today.newTrials}</div>
+          <div class="metric-change">
+            ${data.today.trialConversions} converted to paid
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Conversations Today</div>
+          <div class="metric-value">${data.today.conversations}</div>
+          <div class="metric-change">
+            ${data.today.uniqueUsers} unique users active
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Videos Added Today</div>
+          <div class="metric-value">${data.today.videosAdded}</div>
+          <div class="metric-change neutral">
+            Library: ${data.library.totalVideos} total
+          </div>
+        </div>
+      </div>
+      
+      <h2>🎯 Curation Status</h2>
+      ${data.curation.runsToday > 0 ? `
+        <div class="success">
+          <strong>✅ ${data.curation.runsToday} curation runs completed today</strong>
+        </div>
+        
+        <div class="info">
+          <strong>Today's Stats:</strong><br>
+          • Discovered: ${data.curation.discovered} videos<br>
+          • Approved: ${data.curation.approved} (${data.curation.approvalRate}% rate)<br>
+          • Rejected: ${data.curation.rejected}<br>
+          • API Quota Used: ${data.curation.quotaUsed} / 10,000<br>
+          • Next run: ${formatESTDateTime(data.curation.nextRun)}
+        </div>
+      ` : `
+        <div class="info">
+          No curation runs yet today. Next scheduled: ${formatESTDateTime(data.curation.nextRun)}
+        </div>
+      `}
+      
+      <h2>📈 Week-to-Date Performance</h2>
+      <table>
+        <tr>
+          <th>Metric</th>
+          <th>This Week</th>
+          <th>Last Week</th>
+          <th>Change</th>
+        </tr>
+        <tr>
+          <td>New Users</td>
+          <td><strong>${data.week.newUsers}</strong></td>
+          <td>${data.lastWeek.newUsers}</td>
+          <td style="color: ${data.week.newUsers >= data.lastWeek.newUsers ? '#16a34a' : '#dc2626'};">
+            ${data.week.newUsers >= data.lastWeek.newUsers ? '+' : ''}${data.week.newUsers - data.lastWeek.newUsers}
+          </td>
+        </tr>
+        <tr>
+          <td>New Subscribers</td>
+          <td><strong>${data.week.newSubs}</strong></td>
+          <td>${data.lastWeek.newSubs}</td>
+          <td style="color: ${data.week.newSubs >= data.lastWeek.newSubs ? '#16a34a' : '#dc2626'};">
+            ${data.week.newSubs >= data.lastWeek.newSubs ? '+' : ''}${data.week.newSubs - data.lastWeek.newSubs}
+          </td>
+        </tr>
+        <tr>
+          <td>Videos Added</td>
+          <td><strong>${data.week.videosAdded}</strong></td>
+          <td>${data.lastWeek.videosAdded}</td>
+          <td style="color: ${data.week.videosAdded >= data.lastWeek.videosAdded ? '#16a34a' : '#dc2626'};">
+            ${data.week.videosAdded >= data.lastWeek.videosAdded ? '+' : ''}${data.week.videosAdded - data.lastWeek.videosAdded}
+          </td>
+        </tr>
+      </table>
+      
+      <div class="footer">
+        <p><strong>BJJ OS - Admin Reporting System</strong></p>
+        <p>Next report: Evening Wrap-Up at 9:00 PM EST</p>
+        <p style="margin-top: 10px; font-size: 11px; color: #94a3b8;">
+          Generated: ${formatESTDateTime(new Date())}
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  await transporter.sendMail({
+    from: '"BJJ OS System" <system@bjjos.app>',
+    to: TODD_EMAIL,
+    subject: subject,
+    html: html
+  });
+  
+  console.log(`✅ Midday report sent to ${TODD_EMAIL}`);
+}
+
+// ═══════════════════════════════════════════════════════════
+// EVENING REPORT (9:00 PM EST) - "How did today go?"
+// ═══════════════════════════════════════════════════════════
+
+async function sendEveningReport() {
+  const data = await gatherEveningData();
+  
+  const subject = `🌙 Evening Wrap-Up - ${getESTDate()}`;
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        /* Same styles but purple theme */
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: #8b5cf6; border-bottom: 3px solid #8b5cf6; padding-bottom: 10px; }
+        h2 { color: #7c3aed; margin-top: 30px; border-left: 4px solid #8b5cf6; padding-left: 15px; }
+        .metric { background: #f8fafc; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #8b5cf6; }
+        .metric-label { font-weight: 600; color: #64748b; font-size: 13px; text-transform: uppercase; }
+        .metric-value { font-size: 32px; font-weight: 700; color: #1e293b; margin: 5px 0; }
+        .metric-change { font-size: 14px; color: #16a34a; font-weight: 600; }
+        .metric-change.negative { color: #dc2626; }
+        .metric-change.neutral { color: #64748b; }
+        .section { margin: 20px 0; }
+        .success { background: #dcfce7; padding: 15px; border-radius: 8px; border-left: 4px solid #16a34a; margin: 15px 0; }
+        .info { background: #dbeafe; padding: 15px; border-radius: 8px; border-left: 4px solid #3b82f6; margin: 15px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th { background: #f1f5f9; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #cbd5e1; }
+        td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #e2e8f0; color: #64748b; font-size: 13px; text-align: center; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+      </style>
+    </head>
+    <body>
+      <h1>🌙 Evening Wrap-Up, Todd</h1>
+      <p style="font-size: 16px; color: #64748b;">
+        Report generated at <strong>${getESTTime()} EST</strong> on ${getESTDate()}
+      </p>
+      
+      <h2>📊 Today's Complete Summary</h2>
+      
+      <div class="grid">
+        <div class="metric">
+          <div class="metric-label">New Users Today</div>
+          <div class="metric-value">${data.today.newUsers}</div>
+          <div class="metric-change ${data.today.newUsers > 0 ? '' : 'neutral'}">
+            ${data.today.newUsers > 0 ? 'Great day!' : 'Slow signup day'}
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">New Subscribers Today</div>
+          <div class="metric-value">${data.today.newSubs}</div>
+          <div class="metric-change">
+            Revenue impact: +$${(data.today.newSubs * 14.99).toFixed(2)}/mo
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Total Conversations Today</div>
+          <div class="metric-value">${data.today.conversations}</div>
+          <div class="metric-change">
+            ${data.today.uniqueUsers} unique users engaged
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Videos Added Today</div>
+          <div class="metric-value">${data.today.videosAdded}</div>
+          <div class="metric-change neutral">
+            Total library: ${data.library.totalVideos}
+          </div>
+        </div>
+      </div>
+      
+      <h2>🎯 Today's Curation Performance</h2>
+      <div class="success">
+        <strong>${data.curation.runsToday} curation runs completed today</strong>
+      </div>
+      
+      <table>
+        <tr>
+          <th>Metric</th>
+          <th>Today</th>
+          <th>Yesterday</th>
+        </tr>
+        <tr>
+          <td>Videos Discovered</td>
+          <td><strong>${data.curation.discovered}</strong></td>
+          <td>${data.yesterday.curation.discovered}</td>
+        </tr>
+        <tr>
+          <td>Videos Approved</td>
+          <td><strong style="color: #16a34a;">${data.curation.approved}</strong></td>
+          <td>${data.yesterday.curation.approved}</td>
+        </tr>
+        <tr>
+          <td>Approval Rate</td>
+          <td><strong>${data.curation.approvalRate}%</strong></td>
+          <td>${data.yesterday.curation.approvalRate}%</td>
+        </tr>
+        <tr>
+          <td>API Quota Used</td>
+          <td><strong>${data.curation.quotaUsed}</strong> / 10,000</td>
+          <td>${data.yesterday.curation.quotaUsed} / 10,000</td>
+        </tr>
+      </table>
+      
+      <h2>📈 Growth Metrics</h2>
+      <div class="grid">
+        <div class="metric">
+          <div class="metric-label">Progress to 3,000 Videos</div>
+          <div class="metric-value">${((data.library.totalVideos / 3000) * 100).toFixed(1)}%</div>
+          <div class="metric-change neutral">
+            ${3000 - data.library.totalVideos} videos remaining
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">ETA to 3,000 Videos</div>
+          <div class="metric-value" style="font-size: 24px;">
+            ${data.library.daysToGoal} days
+          </div>
+          <div class="metric-change neutral">
+            At ${data.library.avgDailyGrowth} videos/day avg
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Monthly Recurring Revenue</div>
+          <div class="metric-value">$${data.users.mrr.toFixed(2)}</div>
+          <div class="metric-change ${data.users.mrrChange >= 0 ? '' : 'negative'}">
+            ${data.users.mrrChange >= 0 ? '+' : ''}$${Math.abs(data.users.mrrChange).toFixed(2)} today
+          </div>
+        </div>
+        
+        <div class="metric">
+          <div class="metric-label">Trial Conversion Rate (30d)</div>
+          <div class="metric-value">${data.users.conversionRate}%</div>
+          <div class="metric-change neutral">
+            Industry avg: 25-30%
+          </div>
+        </div>
+      </div>
+      
+      <h2>🏆 Today's Highlights</h2>
+      <div class="info">
+        <strong>Top Performing Content:</strong><br>
+        ${data.highlights.topVideos.map(v => `• ${v.title} (${v.views} views today)`).join('<br>')}
+      </div>
+      
+      <div class="info">
+        <strong>Most Active Users:</strong><br>
+        ${data.highlights.topUsers.map(u => `• ${u.name || 'User ' + u.id} (${u.conversations} conversations)`).join('<br>')}
+      </div>
+      
+      <h2>⚙️ System Health</h2>
+      <div class="success">
+        <strong>✅ All systems operational</strong><br>
+        • Database: Online<br>
+        • Curation Pipeline: Active<br>
+        • Professor OS: Responding in 1.5-2.5s<br>
+        • API Services: Healthy<br>
+        • No errors in last 24 hours
+      </div>
+      
+      <h2>🌅 Tomorrow's Schedule</h2>
+      <div class="info">
+        <strong>Overnight Curation Runs:</strong><br>
+        • 2:40 AM EST<br>
+        • 5:20 AM EST<br>
+        <br>
+        <strong>Tomorrow's Reports:</strong><br>
+        • Morning Briefing: 7:00 AM EST<br>
+        • Midday Check-In: 12:00 PM EST<br>
+        • Evening Wrap-Up: 9:00 PM EST
+      </div>
+      
+      <div class="footer">
+        <p><strong>BJJ OS - Admin Reporting System</strong></p>
+        <p>Next report: Morning Briefing at 7:00 AM EST tomorrow</p>
+        <p style="margin-top: 10px; font-size: 11px; color: #94a3b8;">
+          Generated: ${formatESTDateTime(new Date())}
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  await transporter.sendMail({
+    from: '"BJJ OS System" <system@bjjos.app>',
+    to: TODD_EMAIL,
+    subject: subject,
+    html: html
+  });
+  
+  console.log(`✅ Evening report sent to ${TODD_EMAIL}`);
+}
+
+// Data gathering functions (implement these based on your database schema)
+async function gatherMorningData() {
+  // TODO: Implement actual database queries
+  // This should query your database for all the metrics needed
+}
+
+async function gatherMiddayData() {
+  // TODO: Implement
+}
+
+async function gatherEveningData() {
+  // TODO: Implement
+}
+
+module.exports = {
+  sendMorningReport,
+  sendMiddayReport,
+  sendEveningReport
+};
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: IMPLEMENT DATA GATHERING FUNCTIONS
+═══════════════════════════════════════════════════════════════
+
+Create comprehensive database queries to gather all required data.
+Include:
+
+- User metrics (total, new, active, subscribers, trials, MRR)
+- Activity metrics (conversations, engagement)
+- Library metrics (total videos, growth rate, progress to goal)
+- Curation metrics (runs, discovered, approved, rejected, quota)
+- Combat sports scraping data and Professor OS integration status
+- System health (uptime, errors, status)
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: SET UP CRON JOBS
+═══════════════════════════════════════════════════════════════
+
+Add to server/cron/scheduler.js or server/index.js:
+
+```javascript
+const cron = require('node-cron');
+const { sendMorningReport, sendMiddayReport, sendEveningReport } = require('./services/emailReports');
+
+// Morning Report - 7:00 AM EST (12:00 PM UTC)
+cron.schedule('0 12 * * *', async () => {
+  console.log('📧 Sending morning report...');
+  await sendMorningReport();
+}, {
+  timezone: 'America/New_York'
+});
+
+// Midday Report - 12:00 PM EST (5:00 PM UTC)
+cron.schedule('0 17 * * *', async () => {
+  console.log('📧 Sending midday report...');
+  await sendMiddayReport();
+}, {
+  timezone: 'America/New_York'
+});
+
+// Evening Report - 9:00 PM EST (2:00 AM UTC next day)
+cron.schedule('0 2 * * *', async () => {
+  console.log('📧 Sending evening report...');
+  await sendEveningReport();
+}, {
+  timezone: 'America/New_York'
+});
+
+console.log('✅ Email reporting scheduled (EST timezone):');
+console.log('   - Morning: 7:00 AM');
+console.log('   - Midday: 12:00 PM');
+console.log('   - Evening: 9:00 PM');
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 5: COMBAT SPORTS SCRAPING VERIFICATION
+═══════════════════════════════════════════════════════════════
+
+1. Find combat sports scraping code
+
+- Search for: combat, sports, news, scraper, articles
+- Show me what exists
+
+1. Verify Professor OS integration
+
+- Check if combat sports data is in system prompts
+- Check if it’s being used in responses
+- Show me HOW it’s integrated
+
+1. Add to email report:
+
+- What sources are being scraped
+- How many articles gathered
+- Sample headlines
+- Confirmation it’s used in Professor OS
+- Example of how it appears in responses
+
+═══════════════════════════════════════════════════════════════
+PHASE 6: TEST & DEPLOY
+═══════════════════════════════════════════════════════════════
+
+1. Test email sending manually:
+   
+   ```javascript
+   await sendMorningReport(); // Test immediately
+   ```
+1. Verify email arrives at todd@bjjos.app
+1. Check all metrics are accurate
+1. Verify EST timestamps are correct
+1. Enable automated schedule
+
+═══════════════════════════════════════════════════════════════
+IMPLEMENTATION CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+[ ] Phase 1: Find and disable old email code
+[ ] Phase 2: Create new email service with 3 reports
+[ ] Phase 3: Implement data gathering functions
+[ ] Phase 4: Set up cron jobs with EST timezone
+[ ] Phase 5: Verify combat sports scraping integration
+[ ] Phase 6: Test and deploy
+[ ] Confirm todd@bjjos.app receives all emails
+[ ] Verify EST timestamps are accurate
+[ ] Validate all metrics are correct
+
+Execute all phases and report back when complete.
+Send me a test email immediately after implementation.
+
+```
+---
+
+## **🎯 EMAIL SCHEDULE (EST)**
+
+- **7:00 AM** - ☀️ Morning Briefing (overnight summary)
+- **12:00 PM** - ☀️ Midday Check-In (day progress)
+- **9:00 PM** - 🌙 Evening Wrap-Up (full day summary)
+
+---
+
+**Copy this to Agent. You'll get beautiful, comprehensive reports 3x daily at todd@bjjos.app with accurate EST timestamps.** 📧​​​​​​​​​​​​​​​​
+```

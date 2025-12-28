@@ -1,0 +1,939 @@
+# 🎯 THE MASTER PROMPT - BJJ OS VIDEO CURATION SYSTEM
+
+Copy this entire prompt and paste into Replit Agent:
+
+-----
+
+```
+IMPLEMENT THE COMPLETE WORLD-CLASS VIDEO CURATION SYSTEM:
+
+═══════════════════════════════════════════════════════════════
+PART 1: DUAL-AI ARCHITECTURE (GPT-4 + CLAUDE)
+═══════════════════════════════════════════════════════════════
+
+SYSTEM DESIGN:
+- GPT-4 (OpenAI): Fast pre-filtering, structured data extraction, search query generation
+- Claude (Anthropic): Deep quality analysis, user conversations, nuanced evaluation
+
+VIDEO PROCESSING PIPELINE (5 Stages):
+
+STAGE 1 - GPT-4o-mini Pre-Filter:
+- Input: 100 videos from YouTube search
+- Task: Metadata analysis (title/description)
+- Filters: clickbait detection, competition footage, vlogs, wrong language
+- Auto-reject videos with:
+  * Duration <3 min or >60 min
+  * Titles containing: INSANE, DESTROYS, BRUTAL, NASTY, CRAZY
+  * Keywords: highlights, tournament, match, vlog, rolling
+  * Channels: <10k subscribers (unless trusted instructor)
+  * Like ratio <1% (likes/views)
+  * Published before 2015
+- Cost: $0.01 per 100 videos
+- Time: 20 seconds
+- Output: ~40 videos pass to next stage
+
+STAGE 2 - GPT-4-turbo Structured Extraction:
+- Input: 40 videos from Stage 1
+- Task: Extract metadata in perfect JSON format
+- Use: response_format: { type: "json_object" }
+- Extract:
+  * technique: string (specific technique name)
+  * position: string (mount, guard, side control, etc)
+  * gi_or_nogi: "gi" | "nogi" | "both"
+  * target_belt_level: "white" | "blue" | "purple" | "brown" | "black" | "all"
+  * difficulty: "beginner" | "intermediate" | "advanced" | "expert"
+  * estimated_learning_time: number (hours to learn)
+- Cost: $0.20 per 40 videos
+- Time: 60 seconds
+- Output: 40 videos with structured metadata
+
+STAGE 3 - Claude Deep Analysis (12 Criteria):
+- Input: 40 videos with metadata
+- Task: Comprehensive quality evaluation
+- Evaluate each video on 12 criteria (0-10 scale):
+  1. Instructional Clarity - step-by-step breakdown, clear demos
+  2. Technique Accuracy - valid/effective technique, correct details
+  3. Production Quality - video/audio quality, camera angles
+  4. Demonstration Quality - slow demos, multiple angles, both sides shown
+  5. Common Mistakes Addressed - what NOT to do, beginner errors
+  6. Level Appropriateness - suitable for target belt level
+  7. Completeness - full technique (setup → execution → finish)
+  8. Instructor Communication - clear explanations, appropriate pacing
+  9. Uniqueness - adds value vs existing library, unique perspective
+  10. Practical Application - works in live rolling vs just drilling
+  11. Gi/No-Gi Clarity - clear if gi-specific, nogi-specific, or both
+  12. Safety - safety considerations mentioned, injury risk noted
+
+- Return JSON:
+  {
+    "scores": { clarity: X, accuracy: X, ... all 12 },
+    "overallQuality": X (weighted average),
+    "targetBeltLevel": "white|blue|purple|brown|black|all",
+    "techniqueCategory": "submission|sweep|pass|escape|guard|takedown",
+    "position": "specific position",
+    "giNoGi": "gi|nogi|both",
+    "keyDetails": ["detail 1", "detail 2", "detail 3"],
+    "commonMistakes": ["mistake 1", "mistake 2"],
+    "recommendationReason": "Why this video is valuable",
+    "redFlags": ["any safety/quality concerns"],
+    "estimatedWatchTime": X,
+    "difficultyLevel": "beginner|intermediate|advanced"
+  }
+
+- Quality Thresholds (based on instructor tier):
+  * Tier 1 instructors (Danaher, Lachlan, Gordon, Craig, Bernardo): 7.0+
+  * Tier 2 instructors (proven competitors): 7.5+
+  * Tier 3 instructors (respected black belts): 8.0+
+  * Tier 4 instructors (unknown): 8.5+
+
+- Cost: $2.00 per 40 videos
+- Time: 3 minutes
+- Output: ~15 videos score above threshold
+
+STAGE 4 - Claude Duplication Check:
+- Input: 15 high-quality videos
+- Task: Compare against existing library
+- For each video, query database for similar content:
+  * Same technique + position + belt level
+- Ask Claude: "Is this new video better/different/redundant vs existing?"
+- Decisions:
+  * Redundant → reject
+  * Better than existing → save, mark as premium
+  * Unique perspective → save as complementary
+  * Fills gap → save
+- Cost: $0.50 per 15 videos
+- Time: 45 seconds
+- Output: ~10 unique videos approved
+
+STAGE 5 - Save to Database:
+- Input: 10 approved videos
+- Save with complete metadata:
+  * All 12 quality scores
+  * Key details and common mistakes
+  * Timestamps (from Part 3)
+  * Instructor credibility tier
+  * Original language + translated transcript
+  * All extracted metadata
+
+TOTAL PIPELINE COST: ~$2.71 per 100 videos searched
+TOTAL PIPELINE TIME: ~5 minutes per 100 videos
+CONVERSION RATE: ~10% (only highest quality saved)
+
+═══════════════════════════════════════════════════════════════
+PART 2: MULTILINGUAL PROCESSING (PORTUGUESE ↔ ENGLISH)
+═══════════════════════════════════════════════════════════════
+
+LANGUAGE DETECTION:
+- Analyze: video title, description, channel location, audio language
+- Detect: Portuguese (pt), English (en), or other
+- Support: Both English and Portuguese content
+
+TRANSCRIPT ACQUISITION (2 methods):
+
+Method 1 - YouTube Auto-Captions (Free, Priority):
+- Try to download existing captions via YouTube API
+- Check for: Portuguese captions, English captions, auto-generated
+- Cost: Free
+- If available, use this first
+
+Method 2 - OpenAI Whisper Transcription (Fallback):
+- If no captions exist, use Whisper API
+- Extract audio from video
+- Transcribe with: model: "whisper-1", language: detected_language
+- Supports 99 languages including Portuguese
+- Highly accurate for Portuguese/English
+- Cost: $0.006 per minute (~$0.06 per 10-min video)
+
+TRANSLATION (Portuguese → English):
+
+Use GPT-4-turbo for high-quality translation:
+- System prompt: 
+  "You are a professional translator specializing in Brazilian Jiu-Jitsu terminology.
+  Translate Portuguese BJJ instruction to English while preserving:
+  - Technical accuracy of BJJ terms
+  - Instructor's teaching style and tone
+  - Cultural nuances and expressions
+  
+  IMPORTANT: Keep Portuguese BJJ terms when commonly used in English:
+  - 'gi' (not 'kimono')
+  - 'oss' (respectful acknowledgment)
+  - Position names that are universal
+  
+  Translate naturally, not word-for-word."
+
+- Input: Original Portuguese transcript
+- Output: Natural English translation with BJJ accuracy
+- Cost: ~$0.08 per translation (2000 tokens avg)
+
+BILINGUAL DATABASE STORAGE:
+Add columns to ai_video_knowledge table:
+- original_language: VARCHAR (en, pt, etc)
+- transcript_original: TEXT (Portuguese if applicable)
+- transcript_english: TEXT (English or translated)
+- is_translated: BOOLEAN
+- translation_quality_checked: BOOLEAN
+
+PORTUGUESE CONTENT DISCOVERY:
+
+Portuguese Search Queries (50+ variations):
+- Fundamental techniques:
+  * "finalização triângulo guarda fechada" (triangle from closed guard)
+  * "raspagem meia guarda" (half guard sweep)
+  * "passagem de guarda" (guard passing)
+  * "escapar da montada" (mount escape)
+  * "controle das costas" (back control)
+  * "defesa de guilotina" (guillotine defense)
+
+- Elite Brazilian instructors:
+  * "Buchecha técnica"
+  * "André Galvão passagem"
+  * "Paulo Miyao berimbolo"
+  * "Leandro Lo guarda"
+  * "Rodolfo Vieira finalização"
+  * "Rafael Mendes técnica"
+  * "Bernardo Faria"
+
+- Brazilian academies:
+  * "Alliance jiu jitsu técnica"
+  * "Atos jiu jitsu"
+  * "Gracie Barra técnica"
+  * "CheckMat jiu jitsu"
+
+- Specific Brazilian techniques:
+  * "guarda de lapela" (worm guard)
+  * "guarda x" (x-guard)
+  * "guarda aranha" (spider guard)
+  * "raspagem flor" (flower sweep)
+  * "pegada de kimono" (gi grips)
+
+- Competition terms:
+  * "técnica IBJF"
+  * "posição pontos CBJJ"
+  * "estratégia campeonato mundial"
+
+TARGET: 50+ Portuguese queries mixed into daily searches
+
+═══════════════════════════════════════════════════════════════
+PART 3: MAXIMUM AGGRESSIVE CURATION (MAX YOUTUBE API DAILY)
+═══════════════════════════════════════════════════════════════
+
+YOUTUBE API QUOTA MANAGEMENT:
+- Daily Quota: 10,000 units
+- Resets: Midnight Pacific Time
+- search.list (50 results): 100 units per search
+- videos.list (details): 1 unit per video
+- channels.list (instructor): 1 unit per channel
+
+OPTIMIZATION STRATEGY:
+- 90 searches/day × 100 units = 9,000 units
+- 1,000 video.list calls = 1,000 units
+- Total: 10,000 units (MAXED OUT)
+- Result: ~4,500 videos analyzed/day
+- With 10% conversion: ~450 videos saved/day
+- Hit 2,000 videos in: 4-5 days
+- Hit 5,000 videos in: 11-12 days
+
+AUTOMATED CRON SCHEDULE (every 90 minutes, 16x daily):
+
+Schedule:
+00:00 - 6 searches - Focus: Fundamentals (escapes, positions)
+01:30 - 6 searches - Focus: Submissions (chokes, armbars, kimuras)
+03:00 - 6 searches - Focus: Guard systems (closed, open, half)
+04:30 - 6 searches - Focus: Guard passing (pressure, speed, knee slice)
+06:00 - 6 searches - Focus: Sweeps (from all guards)
+07:30 - 6 searches - Focus: Takedowns (wrestling, judo)
+09:00 - 6 searches - Focus: No-gi specific techniques
+10:30 - 6 searches - Focus: Advanced guards (X, DLR, spider, butterfly)
+12:00 - 6 searches - Focus: Leg locks (defense, offense, entries)
+13:30 - 6 searches - Focus: Back attacks (taking back, control, finishes)
+15:00 - 6 searches - Focus: Wrestling for BJJ
+16:30 - 6 searches - Focus: Judo throws for BJJ
+18:00 - 6 searches - Focus: Defense systems
+19:30 - 6 searches - Focus: Portuguese content (Brazilian instructors)
+21:00 - 6 searches - Focus: Competition strategy
+22:30 - 6 searches - Focus: Concepts & theory
+
+Total: 96 searches × 100 units = 9,600 units
+Remaining: 400 units for video/channel metadata
+
+MASTER QUERY DATABASE (500+ queries):
+
+Generate with GPT-4:
+- Use GPT-4 to create 500+ unique search query variations
+- Include: alternative technique names, instructor names, time periods, languages
+- Rotate through queries systematically
+- Never repeat the same query within 7 days
+- Update query database weekly based on gap detection
+
+Query Categories:
+- Fundamentals: 100 queries
+- Submissions: 100 queries
+- Guards: 100 queries
+- Passing: 50 queries
+- No-gi: 50 queries
+- Advanced/Modern: 50 queries
+- Portuguese: 50 queries
+
+HIDDEN GEM DISCOVERY STRATEGIES:
+
+1. GPT-4 Query Generation (Gap-Based):
+- Analyze user questions for missing content
+- Example: "Users asking about worm guard 12 times, 0 videos"
+- Generate 50 creative search variations:
+  * "worm guard keenan cornelius"
+  * "lapel guard basics"
+  * "squid guard setup"
+  * "guarda de lapela" (Portuguese)
+  * "worm guard vs standing pass"
+  * Related channels/playlists
+
+2. Channel Deep Dives:
+- When excellent video found → search entire channel
+- Get all videos from that instructor
+- Often find 5-10 more gems from same source
+
+3. Related Video Chaining:
+- Use YouTube's relatedToVideoId parameter
+- Find similar content via YouTube's algorithm
+- Discover content in similar style/quality
+
+4. Playlist Mining:
+- Search for instructor-curated playlists
+- "BJJ fundamentals playlist"
+- "[Instructor name] full course"
+- Get all videos from organized playlists
+
+5. Comment Analysis (Advanced):
+- Read top comments on high-quality videos
+- Use GPT-4 to analyze: "Do comments indicate this helped users?"
+- Boost/penalize quality score based on community feedback
+
+DEDUPLICATION:
+- Track video_id to prevent duplicate processing
+- Same video found via multiple queries = process once
+- Check database before processing: "SELECT video_id WHERE video_id = $1"
+
+═══════════════════════════════════════════════════════════════
+PART 4: ADVANCED VIDEO INTELLIGENCE
+═══════════════════════════════════════════════════════════════
+
+1. TIMESTAMP EXTRACTION:
+
+Use Claude to analyze transcript and extract key moments:
+- Introduction (technique overview): timestamp
+- Setup phase (how to enter position): timestamp
+- Execution phase (performing technique): timestamp
+- Common mistakes section: timestamp
+- Troubleshooting tips: timestamp
+- Variations/alternatives: timestamp
+
+Save to database as JSON:
+{
+  "timestamps": {
+    "introduction": "0:15",
+    "setup": "1:30",
+    "execution": "3:45",
+    "mistakes": "7:20",
+    "troubleshooting": "9:10",
+    "variations": "11:30"
+  }
+}
+
+BILINGUAL TIMESTAMPS (for Portuguese videos):
+{
+  "timestamps_pt": {
+    "introduction": "0:15 - Introdução da técnica",
+    "setup": "1:30 - Preparação e controle",
+    ...
+  },
+  "timestamps_en": {
+    "introduction": "0:15 - Technique introduction",
+    "setup": "1:30 - Setup and control",
+    ...
+  }
+}
+
+Prof. OS usage: "Watch the setup at 1:30, then execution at 3:45"
+User saves 10-12 minutes per video by jumping to relevant sections
+
+2. INSTRUCTOR CREDIBILITY SYSTEM:
+
+Create instructor_credibility table:
+- instructor_name: VARCHAR
+- channel_id: VARCHAR
+- tier: INTEGER (1-4)
+- credentials: TEXT
+- competition_results: JSONB
+- teaching_lineage: VARCHAR (teacher's name)
+- students: JSONB (array of notable students)
+- quality_threshold: DECIMAL (7.0 - 8.5)
+- auto_approve: BOOLEAN
+
+Tier 1 (threshold 7.0, auto-approve):
+- John Danaher - "Multiple world champion coach, leg lock innovator"
+- Lachlan Giles - "ADCC medalist, PhD, systematic teacher"
+- Gordon Ryan - "ADCC champion, undefeated, proven teacher"
+- Craig Jones - "ADCC medalist, engaging instructor"
+- Bernardo Faria - "5x world champion, beginner-friendly"
+- Marcelo Garcia - "5x ADCC champion, legendary teacher"
+- Roger Gracie - "10x world champion, fundamental mastery"
+- Demian Maia - "UFC veteran, closed guard specialist"
+- Caio Terra - "12x world champion, technical precision"
+- Add 20+ more elite tier 1 instructors
+
+Tier 2 (threshold 7.5):
+- Proven world-level competitors with good teaching
+- ADCC/World championship medalists
+- Respected competitive black belts
+
+Tier 3 (threshold 8.0):
+- Respected black belts, good content
+- Known in community, solid teaching
+
+Tier 4 (threshold 8.5, manual review):
+- Unknown instructors
+- No competition credentials
+- Must be exceptionally good to pass
+
+INSTRUCTOR NETWORK MAPPING:
+Track relationships:
+{
+  "John Danaher": {
+    "students": ["Gordon Ryan", "Garry Tonon", "Nicky Ryan", "Nicky Rodriguez"],
+    "affiliations": ["Renzo Gracie NYC", "New Wave"],
+    "teaching_style": "systematic, detailed, conceptual"
+  }
+}
+
+Auto-boost: "This is Gordon Ryan's student → trust leg lock content"
+Auto-filter: "Claims to be Danaher black belt but not in database → flag"
+
+3. QUALITY TREND TRACKING:
+
+Monitor instructor quality over time:
+- Monthly aggregate: AVG(quality_score) per instructor
+- Detect declining quality → lower threshold
+- Detect improving quality → increase auto-approval
+- Flag for review if quality drops >15% in 3 months
+
+4. MULTI-ANGLE DETECTION:
+
+Sample video frames at intervals (30s, 90s, 150s)
+Use GPT-4 Vision API to analyze frames:
+"Does this video show the technique from multiple camera angles?"
+
+If multi-angle detected: quality_score += 1.0 bonus
+
+5. BEGINNER-FRIENDLY ANALYSIS:
+
+Analyze transcript for beginner-appropriateness:
+- Simple language (avoid jargon)
+- Slow, clear demonstrations
+- Explains WHY, not just HOW
+- Addresses common beginner mistakes
+- Shows from worst-case positions
+
+Tag: beginner_friendly: true/false
+White belts only see beginner_friendly: true initially
+
+6. DIFFICULTY RATING:
+
+Categorize techniques by difficulty:
+- beginner: escapes, basic positions, fundamental submissions
+- intermediate: guard systems, passing sequences, combinations
+- advanced: modern guards, complex entries, competition strategies
+- expert: leg locks, inversions, advanced concepts
+
+Progressive learning paths:
+- User masters "basic triangle" → recommend "triangle variations"
+- Don't recommend berimbolo to white belts
+
+7. SUCCESS PREDICTION MODEL:
+
+Predict if THIS user will succeed with THIS technique:
+
+function predictSuccess(user, video) {
+  const factors = {
+    beltMatch: user.belt === video.target_belt ? 1.0 : 0.5,
+    bodyTypeMatch: matchBodyType(user.body_type, video.technique_style),
+    priorSuccess: hasSuccessWithSimilar(user, video.technique_category),
+    communityData: getSuccessRateForDemographic(user.demographic, video.id)
+  };
+  
+  const probability = weightedAverage(factors);
+  
+  return probability > 0.60 ? { recommend: true, confidence: probability } : { recommend: false };
+}
+
+Only recommend if >60% predicted success
+
+8. VIDEO AGING ALGORITHM:
+
+Videos get stale over time (techniques evolve):
+- Fundamentals age slowly: freshness -= (yearsOld × 0.05)
+- Modern techniques age fast: freshness -= (yearsOld × 0.20)
+- Adjust: adjusted_quality = base_quality × freshness
+
+Re-evaluate library quarterly
+
+9. COMMUNITY VIDEO SUBMISSIONS:
+
+Allow users to submit great videos they found:
+- Add to user_submitted_videos table (status: pending_review)
+- Run through same 5-stage quality pipeline
+- If approved: credit user, add to library
+- Gamification: "You've helped add 5 videos to the library!"
+
+═══════════════════════════════════════════════════════════════
+PART 5: CONTINUOUS LEARNING & OPTIMIZATION
+═══════════════════════════════════════════════════════════════
+
+COMMUNITY FEEDBACK LOOP (Post-Save):
+
+After video is saved and recommended to users, track:
+- times_recommended: INTEGER
+- times_saved: INTEGER (user saves to personal library)
+- times_marked_helpful: INTEGER (👍 clicks)
+- times_marked_not_helpful: INTEGER (👎 clicks)
+- success_mentions: INTEGER (user says "I hit that technique!")
+- avg_watch_time: DECIMAL (how much of video users watch)
+
+Calculate metrics:
+- save_rate = times_saved / times_recommended
+- helpful_ratio = times_marked_helpful / (helpful + not_helpful)
+- engagement_rate = avg_watch_time / video_duration
+
+AUTO-DEMOTION (remove bad videos):
+IF helpful_ratio < 0.40 AND (helpful + not_helpful) >= 20:
+  - Mark video for removal
+  - Log reason: "Poor community feedback"
+  - Remove from active recommendations
+
+AUTO-PROMOTION (boost great videos):
+IF helpful_ratio > 0.90 AND (helpful + not_helpful) >= 50:
+  - Increase quality_score by +1.5
+  - Mark as "Community Verified"
+  - Prioritize in recommendations
+
+IF save_rate > 0.40:
+  - Mark as "Highly Saved"
+  - Boost ranking
+
+DYNAMIC QUALITY SCORING:
+
+Video quality evolves based on community data:
+
+function calculateDynamicQuality(video) {
+  let score = video.initial_ai_score; // 7.5
+  
+  // Community bonus
+  if (video.helpful_ratio > 0.85) score += 1.0;
+  
+  // Success correlation bonus
+  if (video.success_mentions > 5) score += 0.5;
+  
+  // Age penalty
+  const yearsOld = (Date.now() - video.upload_date) / (365 * 24 * 60 * 60 * 1000);
+  if (video.category === 'fundamentals') {
+    score -= (yearsOld * 0.05); // 5%/year
+  } else if (video.category === 'modern') {
+    score -= (yearsOld * 0.20); // 20%/year
+  }
+  
+  // Low engagement penalty
+  if (video.save_rate < 0.10 && video.times_recommended > 20) {
+    score -= 1.0;
+  }
+  
+  // Instructor bonus
+  if (video.instructor_tier === 1) score += 0.5;
+  
+  return Math.max(0, Math.min(10, score));
+}
+
+Run weekly recalculation of all video quality scores
+
+GAP DETECTION SYSTEM:
+
+Analyze all user questions across all conversations:
+- Extract technique mentions from Prof. OS chats
+- Build frequency table: technique → times_requested
+- Cross-reference with video library
+- Identify: "Users asking about worm guard 12 times, library has 0 videos"
+
+Generate targeted search queries to fill gaps:
+- High priority: times_requested > 10, videos = 0
+- Medium priority: times_requested > 5, videos < 3
+- Low priority: times_requested > 3, videos < 5
+
+Weekly gap analysis report:
+- Top 20 missing techniques
+- Trigger automatic curation for high-priority gaps
+
+SMART VIDEO RANKING (Personalized Recommendations):
+
+When Prof. OS recommends videos, rank by composite score:
+
+function rankVideosForUser(user, videos, technique) {
+  return videos.map(video => {
+    let score = 0;
+    
+    // Base quality (40% weight)
+    score += video.dynamic_quality * 0.40;
+    
+    // Community validation (30% weight)
+    score += video.helpful_ratio * 3.0 * 0.30;
+    
+    // User context match (20% weight)
+    const contextMatch = (
+      (user.belt === video.target_belt ? 1.0 : 0.5) +
+      matchBodyType(user, video) +
+      matchLearningStyle(user, video)
+    ) / 3;
+    score += contextMatch * 2.0 * 0.20;
+    
+    // Success correlation for demographic (10% weight)
+    const demographicSuccess = getSuccessRate(user.demographic, video.id);
+    score += demographicSuccess * 1.0 * 0.10;
+    
+    // Recency bonus (new successful videos)
+    if (video.upload_date > Date.now() - (90 * 24 * 60 * 60 * 1000)) {
+      if (video.helpful_ratio > 0.80) score += 0.5;
+    }
+    
+    return { ...video, personalized_score: score };
+  }).sort((a, b) => b.personalized_score - a.personalized_score);
+}
+
+Result: White belt sees different triangle video than purple belt
+        Stocky practitioner sees pressure passing, not speed passing
+        48-year-old sees technical over athletic
+
+═══════════════════════════════════════════════════════════════
+PART 6: MONITORING & DASHBOARD
+═══════════════════════════════════════════════════════════════
+
+ADMIN DASHBOARD (Real-time Curation Monitoring):
+
+Stats Cards:
+- Total videos in library: COUNT(*)
+- Videos added today: COUNT(WHERE created_at > today)
+- Videos added this week: COUNT(WHERE created_at > 7 days ago)
+- Average quality score: AVG(quality_score)
+- Average helpful ratio: AVG(helpful_ratio)
+- YouTube API quota used: current_units / 10000
+- YouTube API quota remaining: 10000 - current_units
+- Next quota reset: countdown to midnight PT
+- Estimated videos remaining today: (quota_remaining / 100) × 50 × 0.10
+
+Daily Additions Table:
+- Show last 50 videos added
+- Columns: title, instructor, quality_score, target_belt, technique, language, created_at
+- Filters: today, yesterday, last 7 days, last 30 days
+
+All Videos Table:
+- Paginated view of entire library
+- Filters:
+  * Technique category (submission, sweep, pass, etc)
+  * Position (mount, guard, side control, etc)
+  * Belt level (white, blue, purple, brown, black, all)
+  * Gi/No-gi (gi, nogi, both)
+  * Quality score range (7.0-10.0)
+  * Language (en, pt, all)
+  * Instructor tier (1-4)
+  * Date range
+- Search: by title, instructor, technique
+- Sort: by quality, helpful_ratio, times_recommended, created_at
+
+Actions:
+- "Run Curation Now" button (trigger immediate curation run)
+- Remove video (soft delete, mark as removed)
+- Flag for review (manual quality check)
+- View video details (full analysis, timestamps, community feedback)
+
+Curation Log (Last 24 hours):
+- Show each curation run with stats:
+  * Time started
+  * Videos searched
+  * Videos analyzed
+  * Videos saved
+  * Conversion rate
+  * API quota used
+  * Errors/warnings
+
+Gap Detection Report:
+- Top 20 most-requested techniques with insufficient videos
+- Shows: technique, times_requested, current_videos, priority
+- Action button: "Generate searches for this gap"
+
+ERROR HANDLING & RECOVERY:
+
+If API quota exceeded:
+- Log: "YouTube API quota exceeded at [time]"
+- Pause all curation until midnight PT reset
+- Send notification to admin
+- Resume automatically after reset
+
+If database errors:
+- Retry with exponential backoff: 1s, 2s, 4s, 8s, 16s
+- After 5 retries, queue for manual review
+- Log error with full context
+
+If AI analysis fails:
+- Try alternate model (GPT-4 → GPT-4o-mini, or vice versa)
+- If still fails, queue for manual review
+- Log video_id and error
+
+If Whisper transcription fails:
+- Try YouTube auto-captions as fallback
+- If both fail, mark as "transcript_unavailable"
+- Can still save based on metadata if quality threshold met
+
+Auto-recovery:
+- Check failed jobs queue every hour
+- Retry failed transcriptions (Whisper might have been down)
+- Retry failed AI analyses
+- Retry failed database saves
+
+OPTIMIZATION & AUTO-TUNING:
+
+Monitor conversion rate (videos saved / videos analyzed):
+- Target: 8-12% conversion rate
+- If < 8%: Quality threshold too high, loosen by -0.2
+- If > 15%: Quality threshold too low, tighten by +0.2
+- Adjust weekly based on 7-day rolling average
+
+Learn which search queries produce best results:
+- Track: query → videos_found → videos_saved → conversion_rate
+- Prioritize high-performing queries
+- Deprioritize low-performing queries (<5% conversion)
+- Update query database monthly
+
+A/B test video analysis prompts:
+- Test variations of the 12-criteria prompt
+- Measure: inter-rater reliability, community feedback correlation
+- Keep best-performing prompts
+
+═══════════════════════════════════════════════════════════════
+PART 7: DATABASE SCHEMA (Complete)
+═══════════════════════════════════════════════════════════════
+
+CREATE TABLE ai_video_knowledge (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  video_id VARCHAR(255) UNIQUE NOT NULL,
+  title TEXT NOT NULL,
+  instructor VARCHAR(255) NOT NULL,
+  instructor_id UUID REFERENCES instructor_credibility(id),
+  channel_id VARCHAR(255),
+  upload_date TIMESTAMP,
+  duration_seconds INTEGER,
+  
+  -- Language & Transcripts
+  original_language VARCHAR(10) DEFAULT 'en',
+  transcript_original TEXT,
+  transcript_english TEXT,
+  is_translated BOOLEAN DEFAULT false,
+  
+  -- Categorization
+  technique VARCHAR(255),
+  technique_category VARCHAR(100),
+  position VARCHAR(100),
+  gi_or_nogi VARCHAR(20),
+  target_belt_level VARCHAR(50),
+  difficulty_level VARCHAR(50),
+  
+  -- Quality Analysis (12 criteria)
+  score_clarity DECIMAL(3,1),
+  score_accuracy DECIMAL(3,1),
+  score_production DECIMAL(3,1),
+  score_demonstration DECIMAL(3,1),
+  score_mistakes DECIMAL(3,1),
+  score_level_appropriate DECIMAL(3,1),
+  score_completeness DECIMAL(3,1),
+  score_communication DECIMAL(3,1),
+  score_uniqueness DECIMAL(3,1),
+  score_practical DECIMAL(3,1),
+  score_gi_nogi_clarity DECIMAL(3,1),
+  score_safety DECIMAL(3,1),
+  
+  -- Overall Scores
+  initial_ai_score DECIMAL(3,1) NOT NULL,
+  dynamic_quality_score DECIMAL(3,1),
+  
+  -- Key Information
+  key_details JSONB,
+  common_mistakes JSONB,
+  recommendation_reason TEXT,
+  red_flags JSONB,
+  timestamps JSONB,
+  
+  -- Community Feedback
+  times_recommended INTEGER DEFAULT 0,
+  times_saved INTEGER DEFAULT 0,
+  times_marked_helpful INTEGER DEFAULT 0,
+  times_marked_not_helpful INTEGER DEFAULT 0,
+  helpful_ratio DECIMAL(3,2),
+  save_rate DECIMAL(3,2),
+  success_mentions INTEGER DEFAULT 0,
+  avg_watch_time_seconds INTEGER,
+  
+  -- Metadata
+  thumbnail_url TEXT,
+  video_url TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  last_quality_recalc TIMESTAMP,
+  status VARCHAR(50) DEFAULT 'active',
+  
+  -- Indexes for fast queries
+  INDEX idx_technique_category (technique_category),
+  INDEX idx_position (position),
+  INDEX idx_belt_level (target_belt_level),
+  INDEX idx_quality (dynamic_quality_score DESC),
+  INDEX idx_helpful_ratio (helpful_ratio DESC),
+  INDEX idx_language (original_language)
+);
+
+CREATE TABLE instructor_credibility (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instructor_name VARCHAR(255) UNIQUE NOT NULL,
+  channel_id VARCHAR(255),
+  tier INTEGER CHECK (tier BETWEEN 1 AND 4),
+  credentials TEXT,
+  competition_results JSONB,
+  teaching_lineage VARCHAR(255),
+  students JSONB,
+  affiliations JSONB,
+  teaching_style TEXT,
+  quality_threshold DECIMAL(3,1),
+  auto_approve BOOLEAN DEFAULT false,
+  avg_video_quality DECIMAL(3,1),
+  total_videos INTEGER DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE video_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  video_id UUID REFERENCES ai_video_knowledge(id),
+  feedback_type VARCHAR(20) CHECK (feedback_type IN ('helpful', 'not_helpful', 'saved')),
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(user_id, video_id, feedback_type)
+);
+
+CREATE TABLE user_submitted_videos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  video_url TEXT NOT NULL,
+  reason TEXT,
+  status VARCHAR(50) DEFAULT 'pending_review',
+  reviewed_by UUID,
+  review_notes TEXT,
+  approved BOOLEAN,
+  created_at TIMESTAMP DEFAULT NOW(),
+  reviewed_at TIMESTAMP
+);
+
+CREATE TABLE curation_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  started_at TIMESTAMP DEFAULT NOW(),
+  completed_at TIMESTAMP,
+  videos_searched INTEGER,
+  videos_analyzed INTEGER,
+  videos_saved INTEGER,
+  conversion_rate DECIMAL(4,2),
+  api_quota_used INTEGER,
+  errors JSONB,
+  focus_area VARCHAR(100),
+  status VARCHAR(50)
+);
+
+CREATE TABLE gap_detection (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  technique VARCHAR(255) NOT NULL,
+  times_requested INTEGER DEFAULT 0,
+  current_videos INTEGER DEFAULT 0,
+  priority_score DECIMAL(4,2),
+  status VARCHAR(50) DEFAULT 'active',
+  searches_generated JSONB,
+  last_updated TIMESTAMP DEFAULT NOW()
+);
+
+═══════════════════════════════════════════════════════════════
+PART 8: IMPLEMENTATION PRIORITIES
+═══════════════════════════════════════════════════════════════
+
+IMMEDIATE (Build First):
+1. Fix current video save errors (SQL syntax issues)
+2. Implement dual-AI pipeline (5 stages)
+3. Set up automated cron schedule (16x daily)
+4. Create master query database (500+ queries)
+5. Build instructor credibility table with Tier 1 instructors
+6. Implement multilingual processing (Portuguese)
+7. Create admin dashboard for monitoring
+
+WEEK 1 (After basics work):
+8. Timestamp extraction
+9. Duplication checking
+10. Community feedback system (👍 👎)
+11. Dynamic quality scoring
+12. Gap detection analysis
+
+WEEK 2 (Optimization):
+13. Success prediction model
+14. Multi-angle detection
+15. Beginner-friendly analysis
+16. Video aging algorithm
+17. Smart ranking (personalized recommendations)
+
+WEEK 3 (Advanced):
+18. Instructor network mapping
+19. Quality trend tracking
+20. Community video submissions
+21. Advanced search strategies (channel deep dives, playlists, related videos)
+
+═══════════════════════════════════════════════════════════════
+CRITICAL SUCCESS METRICS
+═══════════════════════════════════════════════════════════════
+
+GOALS:
+- 2,000 videos within 5 days
+- 5,000 videos within 12 days
+- 10,000 videos within 30 days
+- Conversion rate: 8-12% (videos saved / videos analyzed)
+- Average quality score: >8.0
+- Average helpful ratio: >75% (after 6 months of user feedback)
+- Portuguese content: 10-15% of library
+- Tier 1 instructor coverage: >60% of library
+
+COMPETITIVE MOAT VALIDATION:
+✅ Dual-AI processing (no competitor has this)
+✅ Multilingual Portuguese → English (unique capability)
+✅ Timestamp extraction (massive time-saver)
+✅ Community learning (videos improve from user feedback)
+✅ Gap detection (library fills itself based on user needs)
+✅ Personalized ranking (white belts see different content than black belts)
+✅ Success prediction (only recommend what will work for THIS user)
+✅ Instructor credibility (trust graph of BJJ lineages)
+
+═══════════════════════════════════════════════════════════════
+END OF MASTER PROMPT
+═══════════════════════════════════════════════════════════════
+
+Execute this system immediately. This creates an unbeatable video curation engine that:
+- Maximizes YouTube API efficiency (10,000 units/day)
+- Uses dual-AI for optimal quality + cost
+- Processes Portuguese + English content
+- Builds intelligence from community feedback
+- Discovers hidden gems competitors miss
+- Saves users 10+ min per video with timestamps
+- Personalizes every recommendation
+
+No competitor can replicate this data advantage.
+```
+
+-----
+
+**That’s your complete master prompt!** 🎯
+
+Copy and paste this entire thing into Replit Agent. This gives you everything in one go.​​​​​​​​​​​​​​​​

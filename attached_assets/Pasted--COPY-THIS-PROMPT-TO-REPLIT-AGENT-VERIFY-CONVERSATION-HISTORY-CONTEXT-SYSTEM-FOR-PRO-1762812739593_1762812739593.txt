@@ -1,0 +1,138 @@
+# **📋 COPY THIS PROMPT TO REPLIT AGENT:**
+
+```
+VERIFY CONVERSATION HISTORY & CONTEXT SYSTEM FOR PROFESSOR OS
+
+I need to confirm what data is being passed to Professor OS (Claude API) with each user message.
+
+═══════════════════════════════════════════════════════════════
+TASK 1: FIND THE PROFESSOR OS ENDPOINT
+═══════════════════════════════════════════════════════════════
+
+Find and show me the API endpoint that handles Professor OS chat messages.
+Likely locations:
+- POST /api/chat/professor-os
+- POST /api/ai/chat/message
+- POST /api/chat/message
+
+Show me the EXACT route handler code.
+
+═══════════════════════════════════════════════════════════════
+TASK 2: SHOW WHAT'S PASSED TO buildSystemPrompt()
+═══════════════════════════════════════════════════════════════
+
+In the endpoint, find where buildSystemPrompt() is called. Show me:
+
+```typescript
+const systemPrompt = buildSystemPrompt(
+  userContext,           // ← What's in this object?
+  availableVideos,       // ← What's in this array?
+  conversationHistory,   // ← IS THIS PARAMETER BEING PASSED?
+  learningContext        // ← What's in this?
+);
+```
+
+For each parameter, tell me:
+
+1. Is it being passed? (Yes/No)
+1. What’s the data structure?
+1. Show an example of the actual data
+
+═══════════════════════════════════════════════════════════════
+TASK 3: CONVERSATION HISTORY - CRITICAL CHECK
+═══════════════════════════════════════════════════════════════
+
+Specifically for conversationHistory:
+
+1. IS it being fetched from the database?
+
+- Show me the database query
+- Which table? (probably: messages, chat_messages, conversations)
+- Which fields are selected?
+
+1. How many past messages are included?
+
+- Should be last 20 messages
+- Is there a LIMIT clause?
+
+1. What format is the history in?
+
+- Plain text string?
+- JSON array of message objects?
+- Formatted conversation string?
+
+1. Show me an EXAMPLE of what conversationHistory looks like:
+   
+   ```
+   Example for a user with 3 previous messages
+   ```
+1. Is it being injected into the system prompt?
+
+- Search buildSystemPrompt() for where history is used
+- Show me that section of the prompt
+
+═══════════════════════════════════════════════════════════════
+TASK 4: ADD DEBUG LOGGING
+═══════════════════════════════════════════════════════════════
+
+Add this logging to the Professor OS endpoint (at the start of the handler):
+
+```typescript
+console.log('=== PROFESSOR OS REQUEST DEBUG ===');
+console.log('Timestamp:', new Date().toISOString());
+console.log('User:', userContext?.user?.displayName || 'Unknown');
+console.log('User ID:', userContext?.user?.id);
+console.log('Current message:', req.body.message);
+console.log('---');
+console.log('Conversation history exists?', !!conversationHistory);
+console.log('Conversation history length:', conversationHistory?.length || 0);
+if (conversationHistory) {
+  console.log('History preview (first 300 chars):', 
+    JSON.stringify(conversationHistory).slice(0, 300)
+  );
+}
+console.log('---');
+console.log('Available videos count:', availableVideos?.length || 0);
+console.log('Learning context exists?', !!learningContext);
+console.log('===================================');
+```
+
+═══════════════════════════════════════════════════════════════
+TASK 5: TEST THE LOGGING
+═══════════════════════════════════════════════════════════════
+
+After adding the logging:
+
+1. Send a test message to Professor OS
+1. Check the console/logs
+1. Copy the debug output and show it to me
+
+═══════════════════════════════════════════════════════════════
+CRITICAL QUESTIONS TO ANSWER:
+═══════════════════════════════════════════════════════════════
+
+✅ Is conversation history being passed to Claude? (Yes/No)
+✅ How many previous messages are included? (Number)
+✅ What format is the history in? (Text/JSON/Other)
+✅ Is the history visible in the system prompt sent to Claude? (Yes/No)
+
+Answer all 4 questions clearly.
+
+Implement the debug logging and show me the results NOW.
+
+```
+---
+
+## **🚀 NEXT STEPS:**
+
+1. **Copy the prompt above** and send it to Replit Agent
+2. **Wait for Agent's response** showing what's actually being passed
+3. **Screenshot the console output** after sending a test message
+4. **Show me the results**
+
+Then we'll know exactly what data Professor OS has access to, and I can build the **perfect intelligent prompt** that uses all available context.
+
+---
+
+**Ready to send it?** 🎯​​​​​​​​​​​​​​​​
+```

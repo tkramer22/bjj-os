@@ -1,0 +1,1275 @@
+# **🚀 OPTION C: PARALLEL EXECUTION - TWO PROMPTS**
+
+Todd, here are your two complete prompts. Open **two separate Replit Agent conversations** and paste one in each.
+
+-----
+
+## **📋 PROMPT #1: ANALYTICS FIX (Agent Conversation #1)**
+
+Copy this entire block:
+
+```
+═══════════════════════════════════════════════════════════════
+🔍 MISSION: AUDIT & FIX ANALYTICS DATA INTEGRITY
+═══════════════════════════════════════════════════════════════
+
+PROBLEM: Analytics showing 140K views but app is early stage
+- Numbers don't match business reality
+- Need to verify if tracking is real or just mock data
+- Need to implement time filtering (24h, 7d, 30d, all time)
+- Need working refresh button
+
+PRIORITY: HIGH - Critical for monitoring actual growth
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: INVESTIGATE EXISTING DATA (30 minutes)
+═══════════════════════════════════════════════════════════════
+
+STEP 1A: Check if page_views table exists
+
+Run this SQL query:
+
+```sql
+-- Check table existence and structure
+SELECT table_name, column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'page_views'
+ORDER BY ordinal_position;
+```
+
+If table DOESN’T exist → Skip to Phase 2 (implement tracking)
+If table EXISTS → Continue to Step 1B
+
+─────────────────────────────────────────────────────────────
+
+STEP 1B: Analyze existing data
+
+```sql
+-- Overview of data
+SELECT 
+  COUNT(*) as total_records,
+  MIN(created_at) as first_record,
+  MAX(created_at) as last_record,
+  COUNT(DISTINCT visitor_id) as unique_visitors,
+  COUNT(DISTINCT session_id) as unique_sessions,
+  COUNT(DISTINCT DATE(created_at)) as days_tracked
+FROM page_views;
+
+-- Check for suspicious patterns
+SELECT 
+  visitor_id,
+  COUNT(*) as view_count,
+  MIN(created_at) as first_view,
+  MAX(created_at) as last_view
+FROM page_views
+GROUP BY visitor_id
+HAVING COUNT(*) > 100
+ORDER BY view_count DESC
+LIMIT 10;
+
+-- Check geographic distribution
+SELECT 
+  country,
+  state,
+  COUNT(*) as views,
+  COUNT(DISTINCT visitor_id) as visitors
+FROM page_views
+GROUP BY country, state
+ORDER BY views DESC
+LIMIT 20;
+
+-- Check if bots are being tracked
+SELECT 
+  is_bot,
+  COUNT(*) as count,
+  COUNT(DISTINCT visitor_id) as unique_visitors
+FROM page_views
+GROUP BY is_bot;
+```
+
+DECISION TREE:
+
+IF total_records > 100K AND first_record before 2025:
+→ This is TEST/SEED data
+→ ACTION: Clean database (go to Step 1C)
+
+IF no is_bot column OR is_bot all false but suspicious patterns:
+→ Bot filtering not implemented
+→ ACTION: Implement bot detection (go to Phase 2)
+
+IF data looks legitimate (recent dates, reasonable patterns):
+→ Data is real
+→ ACTION: Skip to Phase 3 (add time filtering)
+
+─────────────────────────────────────────────────────────────
+
+STEP 1C: Clean fake/test data
+
+**CRITICAL: Ask me before running this - it deletes data!**
+
+If approved, run:
+
+```sql
+-- Option A: Nuclear option - delete everything
+TRUNCATE page_views;
+
+-- Option B: Keep last 30 days only
+DELETE FROM page_views 
+WHERE created_at < NOW() - INTERVAL '30 days';
+
+-- Option C: Keep recent legitimate traffic only
+DELETE FROM page_views 
+WHERE created_at < '2025-01-01'  -- Before actual launch
+   OR is_bot = true
+   OR referrer_url LIKE '%localhost%';
+```
+
+After cleaning, verify:
+
+```sql
+SELECT COUNT(*) FROM page_views;
+-- Should be 0 or small number
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: IMPLEMENT REAL TRACKING (45 minutes)
+═══════════════════════════════════════════════════════════════
+
+STEP 2A: Create page_views table (if doesn’t exist)
+
+```sql
+CREATE TABLE IF NOT EXISTS page_views (
+  id SERIAL PRIMARY KEY,
+  visitor_id VARCHAR(255) NOT NULL,
+  session_id VARCHAR(255),
+  user_id INTEGER REFERENCES bjj_users(id),
+  page_path VARCHAR(500) NOT NULL,
+  referrer_source VARCHAR(255),
+  referrer_url TEXT,
+  user_agent TEXT,
+  ip_address VARCHAR(45),
+  country VARCHAR(100),
+  state VARCHAR(100),
+  city VARCHAR(100),
+  device_type VARCHAR(50),
+  browser VARCHAR(100),
+  is_bot BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_page_views_created ON page_views(created_at);
+CREATE INDEX idx_page_views_visitor ON page_views(visitor_id);
+CREATE INDEX idx_page_views_path ON page_views(page_path);
+CREATE INDEX idx_page_views_is_bot ON page_views(is_bot);
+```
+
+Verify table created:
+
+```sql
+SELECT COUNT(*) FROM page_views;
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 2B: Install required packages
+
+```bash
+npm install ua-parser-js cookie-parser
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 2C: Create analytics tracking middleware
+
+File: `server/middleware/analytics.ts`
+
+```typescript
+import { db } from '../db';
+import { sql } from 'drizzle-orm';
+import UAParser from 'ua-parser-js';
+
+// Bot detection patterns
+const BOT_PATTERNS = [
+  /bot/i, /crawl/i, /spider/i, /curl/i, /wget/i,
+  /python/i, /java/i, /postman/i, /insomnia/i,
+  /axios/i, /fetch/i, /http/i
+];
+
+export async function trackPageView(req: any, res: any, next: any) {
+  // Skip API routes and assets
+  if (req.path.startsWith('/api/') || 
+      req.path.match(/\.(js|css|png|jpg|ico|svg)$/)) {
+    return next();
+  }
+  
+  // Skip in development if localhost
+  if (process.env.NODE_ENV === 'development' && 
+      (req.hostname === 'localhost' || req.hostname === '127.0.0.1')) {
+    console.log('⏭️  Skipping analytics for localhost');
+    return next();
+  }
+  
+  // Track asynchronously (don't block response)
+  setImmediate(() => {
+    trackView(req).catch(err => {
+      console.error('❌ Analytics tracking error:', err);
+    });
+  });
+  
+  next();
+}
+
+async function trackView(req: any) {
+  try {
+    const userAgent = req.headers['user-agent'] || '';
+    const parser = new UAParser(userAgent);
+    const device = parser.getResult();
+    
+    // Detect bots
+    const isBot = BOT_PATTERNS.some(pattern => pattern.test(userAgent));
+    
+    if (isBot) {
+      console.log('🤖 Bot detected, skipping:', userAgent.substring(0, 50));
+      return;
+    }
+    
+    // Get or create visitor ID
+    let visitorId = req.cookies?.visitor_id;
+    if (!visitorId) {
+      visitorId = generateVisitorId();
+      // Note: Can't set cookie here, already sent. Set in main middleware
+    }
+    
+    // Get or create session ID
+    let sessionId = req.cookies?.session_id;
+    if (!sessionId) {
+      sessionId = generateSessionId();
+    }
+    
+    // Get referrer
+    const referrer = req.headers.referer || req.headers.referrer || 'direct';
+    const referrerSource = getReferrerSource(referrer);
+    
+    // Get IP
+    const ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').split(',')[0].trim();
+    
+    // Save to database
+    await db.execute(sql`
+      INSERT INTO page_views (
+        visitor_id,
+        session_id,
+        user_id,
+        page_path,
+        referrer_source,
+        referrer_url,
+        user_agent,
+        ip_address,
+        device_type,
+        browser,
+        is_bot,
+        created_at
+      ) VALUES (
+        ${visitorId},
+        ${sessionId},
+        ${req.user?.id || null},
+        ${req.path},
+        ${referrerSource},
+        ${referrer},
+        ${userAgent},
+        ${ip},
+        ${device.device.type || 'desktop'},
+        ${device.browser.name || 'unknown'},
+        false,
+        NOW()
+      )
+    `);
+    
+    console.log('📊 Tracked:', req.path, '- Visitor:', visitorId.substring(0, 8));
+    
+  } catch (error) {
+    console.error('Failed to save page view:', error);
+  }
+}
+
+function generateVisitorId(): string {
+  return 'v_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+function generateSessionId(): string {
+  return 's_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+function getReferrerSource(referrer: string): string {
+  if (referrer === 'direct') return 'direct';
+  if (referrer.includes('google.com')) return 'google';
+  if (referrer.includes('facebook.com')) return 'facebook';
+  if (referrer.includes('instagram.com')) return 'instagram';
+  if (referrer.includes('twitter.com') || referrer.includes('t.co')) return 'twitter';
+  if (referrer.includes('reddit.com')) return 'reddit';
+  if (referrer.includes('youtube.com')) return 'youtube';
+  if (referrer.includes('linkedin.com')) return 'linkedin';
+  return 'referral';
+}
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 2D: Add tracking to server
+
+In `server/index.ts` or main server file:
+
+```typescript
+import cookieParser from 'cookie-parser';
+import { trackPageView } from './middleware/analytics';
+
+// Add cookie parser
+app.use(cookieParser());
+
+// Add analytics tracking BEFORE routes
+app.use(trackPageView);
+
+// Then your routes...
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 2E: Test tracking
+
+1. Visit homepage: <http://localhost:5000> (or production URL)
+1. Check database:
+
+```sql
+SELECT * FROM page_views 
+WHERE created_at > NOW() - INTERVAL '5 minutes'
+ORDER BY created_at DESC;
+```
+
+Should see your page view with:
+✅ visitor_id starting with ‘v_’
+✅ page_path = ‘/’
+✅ is_bot = false
+✅ Recent timestamp
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: ADD TIME FILTERING UI (30 minutes)
+═══════════════════════════════════════════════════════════════
+
+STEP 3A: Update analytics page component
+
+File: Find analytics page (likely `client/src/pages/admin/analytics.tsx`)
+
+Add time range state and controls:
+
+```typescript
+import { useState, useEffect } from 'react';
+
+type TimeRange = '24h' | '7d' | '30d' | 'all';
+
+export default function Analytics() {
+  const [timeRange, setTimeRange] = useState<TimeRange>('24h');
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  
+  useEffect(() => {
+    loadAnalytics();
+  }, [timeRange]);
+  
+  async function loadAnalytics() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/analytics?range=${timeRange}`);
+      const data = await res.json();
+      setAnalytics(data);
+      setLastUpdated(new Date());
+      console.log('✅ Analytics loaded:', data);
+    } catch (error) {
+      console.error('❌ Failed to load analytics:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  function handleRefresh() {
+    console.log('🔄 Refreshing analytics...');
+    loadAnalytics();
+  }
+  
+  function getTimeRangeLabel(): string {
+    switch(timeRange) {
+      case '24h': return 'Last 24 Hours';
+      case '7d': return 'Last 7 Days';
+      case '30d': return 'Last 30 Days';
+      case 'all': return 'All Time';
+    }
+  }
+  
+  return (
+    <div className="analytics-page">
+      <header className="analytics-header">
+        <div>
+          <h1>Website Analytics</h1>
+          <p>Track visitor stats, geographic breakdown, and top pages</p>
+        </div>
+        
+        <div className="controls">
+          <div className="time-selector">
+            <button 
+              className={timeRange === '24h' ? 'active' : ''}
+              onClick={() => setTimeRange('24h')}
+            >
+              24 Hours
+            </button>
+            <button 
+              className={timeRange === '7d' ? 'active' : ''}
+              onClick={() => setTimeRange('7d')}
+            >
+              Last Week
+            </button>
+            <button 
+              className={timeRange === '30d' ? 'active' : ''}
+              onClick={() => setTimeRange('30d')}
+            >
+              Last Month
+            </button>
+            <button 
+              className={timeRange === 'all' ? 'active' : ''}
+              onClick={() => setTimeRange('all')}
+            >
+              All Time
+            </button>
+          </div>
+          
+          <button 
+            className="refresh-btn"
+            onClick={handleRefresh}
+            disabled={loading}
+          >
+            {loading ? '⏳ Loading...' : '🔄 Refresh'}
+          </button>
+        </div>
+      </header>
+      
+      <p className="last-updated">
+        Last updated: {lastUpdated.toLocaleTimeString()}
+      </p>
+      
+      {analytics && (
+        <>
+          <div className="stats-grid">
+            <div className="stat-card">
+              <h3>Total Views ({getTimeRangeLabel()})</h3>
+              <div className="stat-value">{analytics.totalViews}</div>
+              <p>Page views in the {getTimeRangeLabel().toLowerCase()}</p>
+            </div>
+            
+            <div className="stat-card">
+              <h3>Unique Visitors</h3>
+              <div className="stat-value">{analytics.uniqueVisitors}</div>
+              <p>Distinct visitors {getTimeRangeLabel().toLowerCase()}</p>
+            </div>
+            
+            <div className="stat-card">
+              <h3>Active Sessions</h3>
+              <div className="stat-value">{analytics.activeSessions}</div>
+              <p>Active browsing sessions</p>
+            </div>
+          </div>
+          
+          {/* Rest of your analytics sections... */}
+        </>
+      )}
+    </div>
+  );
+}
+```
+
+Add CSS:
+
+```css
+.time-selector {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.time-selector button {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.time-selector button.active {
+  background: rgba(139, 92, 246, 0.2);
+  color: #8b5cf6;
+  font-weight: 600;
+}
+
+.time-selector button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.refresh-btn {
+  padding: 8px 16px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #8b5cf6;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.2);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.last-updated {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  margin: 12px 0;
+}
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 3B: Create backend analytics endpoint
+
+File: `server/routes/admin/analytics.ts`
+
+```typescript
+import { db } from '../../db';
+import { sql } from 'drizzle-orm';
+
+export async function getAnalytics(req: any, res: any) {
+  const range = req.query.range || '24h';
+  
+  console.log('📊 Getting analytics for range:', range);
+  
+  try {
+    const timeFilter = getTimeFilter(range);
+    const whereClause = timeFilter 
+      ? sql`WHERE is_bot = false AND created_at >= ${timeFilter}`
+      : sql`WHERE is_bot = false`;
+    
+    // Total views
+    const viewsResult = await db.execute(sql`
+      SELECT COUNT(*) as total
+      FROM page_views
+      ${whereClause}
+    `);
+    
+    // Unique visitors
+    const visitorsResult = await db.execute(sql`
+      SELECT COUNT(DISTINCT visitor_id) as unique_count
+      FROM page_views
+      ${whereClause}
+    `);
+    
+    // Active sessions (last 5 minutes)
+    const activeResult = await db.execute(sql`
+      SELECT COUNT(DISTINCT session_id) as active
+      FROM page_views
+      WHERE is_bot = false 
+        AND created_at >= NOW() - INTERVAL '5 minutes'
+    `);
+    
+    // Top pages
+    const topPagesResult = await db.execute(sql`
+      SELECT 
+        page_path,
+        COUNT(*) as views
+      FROM page_views
+      ${whereClause}
+      GROUP BY page_path
+      ORDER BY views DESC
+      LIMIT 10
+    `);
+    
+    // Traffic sources
+    const sourcesResult = await db.execute(sql`
+      SELECT 
+        referrer_source,
+        COUNT(*) as views
+      FROM page_views
+      ${whereClause}
+      GROUP BY referrer_source
+      ORDER BY views DESC
+      LIMIT 10
+    `);
+    
+    // State breakdown
+    const statesResult = await db.execute(sql`
+      SELECT 
+        state,
+        COUNT(*) as views,
+        COUNT(DISTINCT visitor_id) as visitors
+      FROM page_views
+      ${whereClause}
+        AND country = 'United States'
+      GROUP BY state
+      ORDER BY views DESC
+      LIMIT 20
+    `);
+    
+    // Country breakdown  
+    const countriesResult = await db.execute(sql`
+      SELECT 
+        country,
+        COUNT(*) as views,
+        COUNT(DISTINCT visitor_id) as visitors
+      FROM page_views
+      ${whereClause}
+      GROUP BY country
+      ORDER BY views DESC
+      LIMIT 20
+    `);
+    
+    const response = {
+      timeRange: range,
+      totalViews: parseInt(viewsResult.rows[0]?.total || 0),
+      uniqueVisitors: parseInt(visitorsResult.rows[0]?.unique_count || 0),
+      activeSessions: parseInt(activeResult.rows[0]?.active || 0),
+      topPages: topPagesResult.rows,
+      trafficSources: sourcesResult.rows,
+      stateBreakdown: statesResult.rows,
+      countryBreakdown: countriesResult.rows
+    };
+    
+    console.log('✅ Analytics response:', response);
+    res.json(response);
+    
+  } catch (error) {
+    console.error('❌ Analytics error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+function getTimeFilter(range: string): Date | null {
+  const now = new Date();
+  
+  switch(range) {
+    case '24h':
+      return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    case '7d':
+      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    case '30d':
+      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    case 'all':
+      return null;
+    default:
+      return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  }
+}
+```
+
+Add route in `server/routes.ts`:
+
+```typescript
+import { getAnalytics } from './routes/admin/analytics';
+
+app.get('/api/admin/analytics', requireAuth, requireAdmin, getAnalytics);
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: TESTING & VERIFICATION (15 minutes)
+═══════════════════════════════════════════════════════════════
+
+TEST 1: Verify tracking works
+
+1. Clear browser cookies
+1. Visit homepage
+1. Check database:
+
+```sql
+SELECT * FROM page_views 
+WHERE created_at > NOW() - INTERVAL '1 minute'
+ORDER BY created_at DESC
+LIMIT 5;
+```
+
+Should see your view with correct data.
+
+─────────────────────────────────────────────────────────────
+
+TEST 2: Verify analytics dashboard
+
+1. Go to /admin/analytics
+1. Should default to “24 Hours”
+1. Should show realistic numbers (small if just started tracking)
+1. Click “Last Week” - numbers should update
+1. Click “All Time” - should show all data
+1. Click “Refresh” - should reload data and update timestamp
+
+─────────────────────────────────────────────────────────────
+
+TEST 3: Verify bot filtering
+
+Run this query:
+
+```sql
+SELECT is_bot, COUNT(*) 
+FROM page_views 
+GROUP BY is_bot;
+```
+
+Should show:
+
+- is_bot = false: [your real traffic]
+- is_bot = true: 0 (or small number if bots visited)
+
+═══════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════
+
+When complete, show me:
+
+1. ✅ SQL query result showing page_views table structure
+1. ✅ SQL query showing sample data (last 10 views)
+1. ✅ Screenshot of analytics dashboard with time range selector
+1. ✅ Console logs from test page view
+1. ✅ Confirmation that refresh button works
+
+═══════════════════════════════════════════════════════════════
+
+CRITICAL: Analytics must show REAL data, not mock data.
+If early stage, showing 5 views is BETTER than showing 140K fake views.
+
+Start with Phase 1 investigation and report findings before proceeding.
+
+```
+---
+
+## **📋 PROMPT #2: MASS CURATION (Agent Conversation #2)**
+
+Copy this entire block:
+```
+
+═══════════════════════════════════════════════════════════════
+🎬 MISSION: RUN MASS VIDEO CURATION
+═══════════════════════════════════════════════════════════════
+
+GOAL: Curate 100+ high-quality BJJ instructional videos
+
+Current library: ~504 videos
+Target: 600+ videos
+Quality threshold: 7.0/10
+
+ESTIMATED TIME: 2-3 hours
+ESTIMATED COST: $20-30 in Claude API credits
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: SETUP & VERIFICATION (15 minutes)
+═══════════════════════════════════════════════════════════════
+
+STEP 1A: Verify current video count
+
+```sql
+SELECT 
+  COUNT(*) as total_videos,
+  COUNT(CASE WHEN quality_score >= 7.0 THEN 1 END) as high_quality,
+  COUNT(CASE WHEN quality_score < 7.0 THEN 1 END) as low_quality,
+  COUNT(CASE WHEN quality_score IS NULL THEN 1 END) as unscored
+FROM ai_video_knowledge;
+```
+
+Show me these numbers before proceeding.
+
+─────────────────────────────────────────────────────────────
+
+STEP 1B: Check YouTube scraper exists
+
+Verify file exists: `server/utils/youtubeScraper.ts`
+
+If it doesn’t exist, we need to create it. Let me know.
+
+─────────────────────────────────────────────────────────────
+
+STEP 1C: Check Claude video analyzer exists
+
+Verify file exists: `server/utils/videoCuration.ts` or similar
+
+If it doesn’t exist, we need to create it. Let me know.
+
+─────────────────────────────────────────────────────────────
+
+STEP 1D: Verify API keys
+
+Check environment variables:
+
+- YOUTUBE_API_KEY exists
+- ANTHROPIC_API_KEY exists
+
+Run this to verify:
+
+```bash
+echo $YOUTUBE_API_KEY | cut -c1-10
+echo $ANTHROPIC_API_KEY | cut -c1-10
+```
+
+Should show first 10 characters of each key.
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: CREATE MASS CURATION SCRIPT (30 minutes)
+═══════════════════════════════════════════════════════════════
+
+STEP 2A: Create curation script
+
+File: `server/scripts/mass-curation.ts`
+
+```typescript
+import { db } from '../db';
+import { sql, eq } from 'drizzle-orm';
+
+// Configuration
+const TARGET_VIDEO_COUNT = 600;
+const QUALITY_THRESHOLD = 7.0;
+const VIDEOS_PER_CHANNEL = 20;
+const VIDEOS_PER_SEARCH = 10;
+
+// Elite BJJ YouTube channels
+const ELITE_CHANNELS = [
+  { id: 'UCkDGEQdez8XbcHsytxYh-qA', name: 'Lachlan Giles' },
+  { id: 'UCQJq9p0gfV6Oq7pLKuMd44A', name: 'Bernardo Faria' },
+  { id: 'UCyMNqD7Lj8W4mjtQVq6xCvw', name: 'Knight Jiu Jitsu' },
+  { id: 'UCv2lXQkPgF4g50bq_AZqTRQ', name: 'Chewjitsu' },
+  { id: 'UC3VK_v9iE1V3kULM3wvfFmQ', name: 'BJJ Fanatics' },
+  { id: 'UCKWRlFr5Y6QO5cCJ6Pc_6Kw', name: 'Keenan Cornelius' },
+  { id: 'UCG_OdI3CqbvMv0y6C_7wvzQ', name: 'Grapplearts' },
+];
+
+// Technique search queries
+const SEARCH_QUERIES = [
+  'bjj guard passing tutorial',
+  'bjj triangle choke',
+  'bjj half guard sweeps',
+  'bjj mount escapes',
+  'bjj armbar tutorial',
+  'bjj back take',
+  'bjj guillotine choke',
+  'bjj kimura setup',
+  'bjj closed guard attacks',
+  'bjj butterfly guard',
+  'bjj x guard tutorial',
+  'bjj leg lock defense',
+];
+
+interface CurationStats {
+  screened: number;
+  accepted: number;
+  rejected: number;
+  duplicates: number;
+  errors: number;
+}
+
+async function runMassCuration() {
+  console.log('\n');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('🎬 STARTING MASS VIDEO CURATION');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('\n');
+  
+  const stats: CurationStats = {
+    screened: 0,
+    accepted: 0,
+    rejected: 0,
+    duplicates: 0,
+    errors: 0
+  };
+  
+  try {
+    // Check current count
+    const currentResult = await db.execute(sql`
+      SELECT COUNT(*) as count 
+      FROM ai_video_knowledge 
+      WHERE quality_score >= ${QUALITY_THRESHOLD}
+    `);
+    
+    const currentCount = parseInt(currentResult.rows[0].count);
+    const needed = TARGET_VIDEO_COUNT - currentCount;
+    
+    console.log('📊 CURRENT STATUS:');
+    console.log(`   High-quality videos: ${currentCount}`);
+    console.log(`   Target: ${TARGET_VIDEO_COUNT}`);
+    console.log(`   Need to add: ${needed}`);
+    console.log('\n');
+    
+    if (needed <= 0) {
+      console.log('🎯 Target already reached! No curation needed.');
+      return;
+    }
+    
+    // Phase 1: Curate from elite channels
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📺 PHASE 1: Elite Channel Curation');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('\n');
+    
+    for (const channel of ELITE_CHANNELS) {
+      if (currentCount + stats.accepted >= TARGET_VIDEO_COUNT) {
+        console.log('\n🎯 Target reached! Stopping curation.\n');
+        break;
+      }
+      
+      console.log(`\n📺 Processing channel: ${channel.name}`);
+      console.log(`   Fetching ${VIDEOS_PER_CHANNEL} recent videos...`);
+      
+      try {
+        // Fetch videos from channel
+        const videos = await fetchChannelVideos(channel.id, VIDEOS_PER_CHANNEL);
+        console.log(`   Found ${videos.length} videos\n`);
+        
+        // Curate each video
+        for (const video of videos) {
+          const result = await curateVideo(video, stats);
+          
+          if (stats.screened % 10 === 0) {
+            printProgress(stats, currentCount);
+          }
+          
+          if (currentCount + stats.accepted >= TARGET_VIDEO_COUNT) {
+            break;
+          }
+          
+          // Rate limiting
+          await sleep(1000); // 1 second between videos
+        }
+        
+      } catch (error) {
+        console.error(`   ❌ Error processing channel ${channel.name}:`, error.message);
+        stats.errors++;
+      }
+    }
+    
+    // Phase 2: Search-based curation (if needed)
+    if (currentCount + stats.accepted < TARGET_VIDEO_COUNT) {
+      console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('🔍 PHASE 2: Search-Based Curation');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('\n');
+      
+      for (const query of SEARCH_QUERIES) {
+        if (currentCount + stats.accepted >= TARGET_VIDEO_COUNT) {
+          console.log('\n🎯 Target reached! Stopping curation.\n');
+          break;
+        }
+        
+        console.log(`\n🔍 Searching: "${query}"`);
+        
+        try {
+          const videos = await searchYouTubeVideos(query, VIDEOS_PER_SEARCH);
+          console.log(`   Found ${videos.length} videos\n`);
+          
+          for (const video of videos) {
+            await curateVideo(video, stats);
+            
+            if (stats.screened % 10 === 0) {
+              printProgress(stats, currentCount);
+            }
+            
+            if (currentCount + stats.accepted >= TARGET_VIDEO_COUNT) {
+              break;
+            }
+            
+            await sleep(1000);
+          }
+          
+        } catch (error) {
+          console.error(`   ❌ Error searching "${query}":`, error.message);
+          stats.errors++;
+        }
+      }
+    }
+    
+    // Final summary
+    console.log('\n');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('✅ MASS CURATION COMPLETE');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log(`Screened:        ${stats.screened}`);
+    console.log(`Accepted:        ${stats.accepted} ✅`);
+    console.log(`Rejected:        ${stats.rejected} ❌`);
+    console.log(`Duplicates:      ${stats.duplicates} ⏭️`);
+    console.log(`Errors:          ${stats.errors} ⚠️`);
+    console.log(`Acceptance Rate: ${((stats.accepted / stats.screened) * 100).toFixed(1)}%`);
+    console.log(`Final Count:     ${currentCount + stats.accepted}`);
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('\n');
+    
+  } catch (error) {
+    console.error('\n❌ FATAL ERROR:', error);
+    console.error(error.stack);
+  }
+}
+
+async function curateVideo(videoData: any, stats: CurationStats): Promise<void> {
+  stats.screened++;
+  
+  try {
+    // Check if already exists
+    const existing = await db.execute(sql`
+      SELECT id FROM ai_video_knowledge 
+      WHERE youtube_id = ${videoData.id}
+      LIMIT 1
+    `);
+    
+    if (existing.rows.length > 0) {
+      console.log(`   ⏭️  Skip: Already in library (${videoData.title})`);
+      stats.duplicates++;
+      return;
+    }
+    
+    console.log(`   🔍 Analyzing: ${videoData.title.substring(0, 60)}...`);
+    
+    // Analyze with Claude
+    const analysis = await analyzeVideoWithClaude(videoData);
+    
+    // Log to curation_log
+    await db.execute(sql`
+      INSERT INTO curation_log (
+        video_id, video_title, screened, accepted, rejected,
+        quality_score, rejection_reason, created_at
+      ) VALUES (
+        ${videoData.id},
+        ${videoData.title},
+        true,
+        ${analysis.qualityScore >= QUALITY_THRESHOLD},
+        ${analysis.qualityScore < QUALITY_THRESHOLD},
+        ${analysis.qualityScore},
+        ${analysis.qualityScore < QUALITY_THRESHOLD ? analysis.reason : null},
+        NOW()
+      )
+    `);
+    
+    if (analysis.qualityScore >= QUALITY_THRESHOLD) {
+      // Add to video library
+      await db.execute(sql`
+        INSERT INTO ai_video_knowledge (
+          youtube_id, video_url, title, instructor_name,
+          technique_name, technique_type, belt_level,
+          quality_score, duration, thumbnail_url, created_at
+        ) VALUES (
+          ${videoData.id},
+          ${'https://youtube.com/watch?v=' + videoData.id},
+          ${videoData.title},
+          ${videoData.channelTitle},
+          ${analysis.technique || 'Unknown'},
+          ${analysis.category || 'general'},
+          ${analysis.beltLevel || ['white', 'blue', 'purple', 'brown', 'black']},
+          ${analysis.qualityScore},
+          ${videoData.duration || 0},
+          ${videoData.thumbnail},
+          NOW()
+        )
+      `);
+      
+      console.log(`   ✅ ACCEPTED: ${analysis.qualityScore.toFixed(1)}/10`);
+      stats.accepted++;
+    } else {
+      console.log(`   ❌ REJECTED: ${analysis.qualityScore.toFixed(1)}/10 - ${analysis.reason}`);
+      stats.rejected++;
+    }
+    
+  } catch (error) {
+    console.error(`   ⚠️  Error curating video:`, error.message);
+    stats.errors++;
+  }
+}
+
+function printProgress(stats: CurationStats, startCount: number) {
+  console.log('\n┌────────────────────────────────────┐');
+  console.log('│  📊 PROGRESS UPDATE                │');
+  console.log('├────────────────────────────────────┤');
+  console.log(`│  Screened:   ${stats.screened.toString().padEnd(20)} │`);
+  console.log(`│  Accepted:   ${stats.accepted.toString().padEnd(20)} │`);
+  console.log(`│  Rejected:   ${stats.rejected.toString().padEnd(20)} │`);
+  console.log(`│  Total now:  ${(startCount + stats.accepted).toString().padEnd(20)} │`);
+  console.log('└────────────────────────────────────┘\n');
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Import or implement these functions
+async function fetchChannelVideos(channelId: string, maxResults: number): Promise<any[]> {
+  // Implementation depends on your YouTube scraper
+  // Should return array of video objects with: id, title, channelTitle, thumbnail, duration
+  throw new Error('fetchChannelVideos not implemented - check youtubeScraper.ts');
+}
+
+async function searchYouTubeVideos(query: string, maxResults: number): Promise<any[]> {
+  // Implementation depends on your YouTube scraper
+  throw new Error('searchYouTubeVideos not implemented - check youtubeScraper.ts');
+}
+
+async function analyzeVideoWithClaude(videoData: any): Promise<any> {
+  // Implementation depends on your video analyzer
+  // Should return: { qualityScore, technique, category, beltLevel, reason }
+  throw new Error('analyzeVideoWithClaude not implemented - check videoCuration.ts');
+}
+
+// Run it
+runMassCuration()
+  .then(() => {
+    console.log('✅ Script completed successfully');
+    process.exit(0);
+  })
+  .catch(error => {
+    console.error('❌ Script failed:', error);
+    process.exit(1);
+  });
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 2B: Make script executable
+
+```bash
+chmod +x server/scripts/mass-curation.ts
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: EXECUTE CURATION (2-3 hours)
+═══════════════════════════════════════════════════════════════
+
+STEP 3A: Dry run first (test with 5 videos)
+
+Modify TARGET_VIDEO_COUNT to current + 5 for testing:
+
+```typescript
+const TARGET_VIDEO_COUNT = currentCount + 5; // Test with just 5 videos
+```
+
+Run:
+
+```bash
+npx tsx server/scripts/mass-curation.ts
+```
+
+Watch console output. Should see:
+
+- Videos being analyzed
+- Quality scores
+- Accept/reject decisions
+- Progress updates
+
+If test works, proceed to Step 3B.
+If errors, stop and show me error logs.
+
+─────────────────────────────────────────────────────────────
+
+STEP 3B: Full production run
+
+Change back to:
+
+```typescript
+const TARGET_VIDEO_COUNT = 600;
+```
+
+Run:
+
+```bash
+npx tsx server/scripts/mass-curation.ts
+```
+
+This will take 2-3 hours. Monitor console output.
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: VERIFICATION (10 minutes)
+═══════════════════════════════════════════════════════════════
+
+After curation completes, verify results:
+
+```sql
+-- Check final counts
+SELECT 
+  COUNT(*) as total,
+  COUNT(CASE WHEN quality_score >= 7.0 THEN 1 END) as high_quality,
+  AVG(quality_score) as avg_quality
+FROM ai_video_knowledge;
+
+-- Check recent additions
+SELECT 
+  title,
+  instructor_name,
+  quality_score,
+  created_at
+FROM ai_video_knowledge
+ORDER BY created_at DESC
+LIMIT 20;
+
+-- Check today's curation log
+SELECT 
+  COUNT(*) as screened,
+  SUM(CASE WHEN accepted THEN 1 ELSE 0 END) as accepted,
+  SUM(CASE WHEN rejected THEN 1 ELSE 0 END) as rejected,
+  ROUND(AVG(quality_score), 2) as avg_score
+FROM curation_log
+WHERE DATE(created_at) = CURRENT_DATE;
+```
+
+═══════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════
+
+When complete, show me:
+
+1. ✅ Final console output with stats summary
+1. ✅ SQL query results showing new video counts
+1. ✅ Top 10 newly added videos with quality scores
+1. ✅ Curation log summary (acceptance rate)
+1. ✅ Any errors encountered
+
+═══════════════════════════════════════════════════════════════
+
+CRITICAL NOTES:
+
+- This will use Claude API credits (~$20-30)
+- Takes 2-3 hours to complete
+- Monitors progress every 10 videos
+- Stops automatically when target reached
+- Handles errors gracefully (continues on failure)
+
+Ready to proceed? Start with Phase 1 verification.
+
+```
+---
+
+## **🎯 TODD - EXECUTION PLAN:**
+
+**NOW:**
+1. Open **two separate Replit Agent conversations**
+2. Paste **Prompt #1** in Agent #1 (Analytics fix)
+3. Paste **Prompt #2** in Agent #2 (Mass curation)
+4. Both will run in parallel
+
+**Agent #1** will finish in ~2 hours (analytics fix + testing)
+**Agent #2** will run for ~3 hours (curation takes time)
+
+**MONITORING:**
+- Check Agent #1 every 30 minutes for analytics progress
+- Check Agent #2 every hour for curation stats
+- Both will give you progress updates
+
+---
+
+**Ready to launch both? Copy the prompts and fire them off!** 🚀💪​​​​​​​​​​​​​​​​
+```

@@ -1,0 +1,940 @@
+# **📋 CORRECTED VIDEO CURATION METRICS - EXACTLY WHAT YOU WANT**
+
+-----
+
+## **PERFECT - HERE’S THE EXACT FORMAT:**
+
+```
+📹 VIDEO CURATION
+
+Total Videos: 355
+
+TODAY'S ACTIVITY:
+• Videos Saved: 47
+• Videos Searched: 500
+• Videos Rejected: 453
+
+That's it. Clean, simple, actionable.
+```
+
+-----
+
+## **UPDATED MEGA-PROMPT WITH CORRECT VIDEO METRICS:**
+
+**Copy this ENTIRE prompt and paste into Replit Agent:**
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+COMPREHENSIVE ADMIN OVERHAUL - DEV OS + DASHBOARD REDESIGN
+═══════════════════════════════════════════════════════════════════════════════
+
+MISSION: Complete redesign of admin experience with two major components:
+1. Dev OS (Agent OS) - Persistent memory, daily reports, proactive updates
+2. Admin Dashboard - Remove clutter, show actionable metrics, proper hierarchy
+
+This is a comprehensive overhaul. Take time to do it right.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: DEV OS (AGENT OS) - PERSISTENT MEMORY & PROACTIVE UPDATES
+═══════════════════════════════════════════════════════════════════════════════
+
+REQUIREMENTS:
+• 48-hour persistent chat history (database-backed)
+• Daily Report button for 24-hour summary
+• Copy functionality on all messages
+• Proactive system updates (auto-posts important events)
+• Never loses history unless user clicks "Clear History"
+• Auto-scroll to new messages
+• Unread message indicators
+
+STEP 1.1: Create Database Table for Persistent Messages
+
+```sql
+-- Store all Dev OS messages permanently
+CREATE TABLE IF NOT EXISTS dev_os_messages (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  role VARCHAR(20) NOT NULL, -- 'user', 'assistant', 'system'
+  content TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  metadata JSONB, -- Store report data, alert types, etc.
+  message_type VARCHAR(50) DEFAULT 'chat', -- 'chat', 'report', 'alert', 'system'
+  is_read BOOLEAN DEFAULT FALSE
+);
+
+CREATE INDEX idx_dev_os_messages_user_created 
+ON dev_os_messages(user_id, created_at DESC);
+
+CREATE INDEX idx_dev_os_messages_unread 
+ON dev_os_messages(user_id, is_read) 
+WHERE is_read = FALSE;
+
+-- Verify table created
+SELECT * FROM dev_os_messages LIMIT 1;
+```
+
+STEP 1.2: Create Backend Endpoints
+
+```typescript
+// server/routes/admin.ts
+
+import { db } from '../db';
+import { devOsMessages } from '../db/schema';
+import { eq, desc, gte } from 'drizzle-orm';
+
+// Load chat history (last 48 hours)
+app.get('/api/admin/dev-os/history', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    
+    const messages = await db.query.devOsMessages.findMany({
+      where: and(
+        eq(devOsMessages.userId, userId),
+        gte(devOsMessages.createdAt, twoDaysAgo)
+      ),
+      orderBy: [desc(devOsMessages.createdAt)],
+      limit: 200
+    });
+    
+    // Return in chronological order (oldest first)
+    res.json({ messages: messages.reverse() });
+  } catch (error) {
+    console.error('Failed to load history:', error);
+    res.status(500).json({ error: 'Failed to load history' });
+  }
+});
+
+// Send message and save to database
+app.post('/api/admin/dev-os/chat', async (req, res) => {
+  try {
+    const { message } = req.body;
+    const userId = req.user.id;
+    
+    if (!message) {
+      return res.status(400).json({ error: 'Message required' });
+    }
+    
+    // Save user message
+    const userMessage = await db.insert(devOsMessages).values({
+      userId,
+      role: 'user',
+      content: message,
+      messageType: 'chat'
+    }).returning();
+    
+    // Get recent context (last 10 messages)
+    const recentMessages = await db.query.devOsMessages.findMany({
+      where: eq(devOsMessages.userId, userId),
+      orderBy: [desc(devOsMessages.createdAt)],
+      limit: 10
+    });
+    
+    // Build context for Claude
+    const context = recentMessages.reverse().map(m => ({
+      role: m.role === 'system' ? 'user' : m.role,
+      content: m.content
+    }));
+    
+    // Call Claude API with context
+    const response = await callClaude({
+      system: DEV_OS_SYSTEM_PROMPT,
+      messages: context
+    });
+    
+    // Save assistant response
+    const assistantMessage = await db.insert(devOsMessages).values({
+      userId,
+      role: 'assistant',
+      content: response.content,
+      messageType: 'chat'
+    }).returning();
+    
+    res.json({
+      success: true,
+      message: assistantMessage[0]
+    });
+    
+  } catch (error) {
+    console.error('Dev OS error:', error);
+    res.status(500).json({ error: 'Failed to process message' });
+  }
+});
+
+// Clear history
+app.post('/api/admin/dev-os/clear-history', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    await db.delete(devOsMessages)
+      .where(eq(devOsMessages.userId, userId));
+    
+    res.json({ success: true, message: 'History cleared' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to clear history' });
+  }
+});
+
+// Daily Report
+app.get('/api/admin/dev-os/daily-report', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Generate comprehensive report
+    const report = await generateDailyReport();
+    
+    // Save as system message
+    await db.insert(devOsMessages).values({
+      userId,
+      role: 'system',
+      content: report,
+      messageType: 'report',
+      metadata: { reportDate: new Date().toISOString() }
+    });
+    
+    res.json({ success: true, report });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate report' });
+  }
+});
+
+// Generate daily report
+async function generateDailyReport(): Promise<string> {
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Get all metrics
+  const userStats = await db.execute(sql`
+    SELECT 
+      COUNT(*) as total_users,
+      COUNT(CASE WHEN created_at::date = ${today} THEN 1 END) as new_today,
+      COUNT(CASE WHEN subscription_status = 'trialing' THEN 1 END) as trial_users,
+      COUNT(CASE WHEN subscription_status = 'active' THEN 1 END) as active_users
+    FROM users
+  `);
+  
+  const videoStats = await db.execute(sql`
+    SELECT 
+      COUNT(*) as total_videos,
+      COUNT(CASE WHEN created_at::date = ${today} THEN 1 END) as added_today
+    FROM videos
+  `);
+  
+  const curationStats = await db.execute(sql`
+    SELECT 
+      COALESCE(SUM(videos_added), 0) as videos_saved,
+      COALESCE(SUM(videos_screened), 0) as videos_searched,
+      COALESCE(SUM(youtube_api_calls), 0) as api_used
+    FROM curation_runs
+    WHERE run_date = ${today}
+  `);
+  
+  const revenue = await db.execute(sql`
+    SELECT 
+      COUNT(CASE WHEN subscription_status = 'active' THEN 1 END) * 14.99 as mrr
+    FROM users
+  `);
+  
+  // Format report
+  const report = `
+📊 DAILY REPORT - ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+
+👥 USERS
+• Total: ${userStats.rows[0].total_users}
+• New Today: ${userStats.rows[0].new_today}
+• Trial: ${userStats.rows[0].trial_users}
+• Active Paying: ${userStats.rows[0].active_users}
+
+📹 VIDEO LIBRARY
+• Total Videos: ${videoStats.rows[0].total_videos}
+• Saved Today: ${curationStats.rows[0].videos_saved}
+• Searched Today: ${curationStats.rows[0].videos_searched}
+• Rejected Today: ${curationStats.rows[0].videos_searched - curationStats.rows[0].videos_saved}
+
+🔌 API USAGE
+• YouTube Quota: ${curationStats.rows[0].api_used} / 10,000 units (${Math.round(curationStats.rows[0].api_used/100)}%)
+
+💰 REVENUE
+• MRR: $${revenue.rows[0].mrr.toFixed(2)}
+
+⚙️ SYSTEM STATUS
+• Curation: ✅ Active
+• Errors: None
+• All systems operational
+  `.trim();
+  
+  return report;
+}
+
+// System event posting (called by background jobs)
+export async function postSystemUpdate(userId: number, content: string, type: string = 'alert') {
+  await db.insert(devOsMessages).values({
+    userId,
+    role: 'system',
+    content,
+    messageType: type,
+    metadata: { timestamp: new Date().toISOString() }
+  });
+}
+```
+
+STEP 1.3: Update Frontend for Persistent Chat
+
+```typescript
+// client/src/pages/admin/DevOS.tsx
+
+import { useEffect, useState, useRef } from 'react';
+
+interface Message {
+  id: number;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  createdAt: string;
+  messageType: string;
+}
+
+export default function DevOS() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Load history on mount
+  useEffect(() => {
+    loadHistory();
+  }, []);
+  
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+  
+  async function loadHistory() {
+    try {
+      const response = await fetch('/api/admin/dev-os/history');
+      const data = await response.json();
+      setMessages(data.messages);
+    } catch (error) {
+      console.error('Failed to load history:', error);
+    }
+  }
+  
+  async function sendMessage() {
+    if (!input.trim()) return;
+    
+    const userMessage = {
+      id: Date.now(),
+      role: 'user' as const,
+      content: input,
+      createdAt: new Date().toISOString(),
+      messageType: 'chat'
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setLoading(true);
+    
+    try {
+      const response = await fetch('/api/admin/dev-os/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: input })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setMessages(prev => [...prev, data.message]);
+      }
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  async function generateDailyReport() {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/admin/dev-os/daily-report');
+      const data = await response.json();
+      
+      if (data.success) {
+        // Reload history to see the new report
+        await loadHistory();
+      }
+    } catch (error) {
+      console.error('Failed to generate report:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  async function clearHistory() {
+    if (!confirm('Clear all Dev OS history? This cannot be undone.')) return;
+    
+    try {
+      await fetch('/api/admin/dev-os/clear-history', { method: 'POST' });
+      setMessages([]);
+    } catch (error) {
+      console.error('Failed to clear history:', error);
+    }
+  }
+  
+  function copyMessage(content: string) {
+    navigator.clipboard.writeText(content);
+    // Show toast notification
+  }
+  
+  return (
+    <div className="dev-os-page">
+      <header>
+        <h1>Dev OS</h1>
+        <p>Ask about BJJ OS metrics, system health, or business data...</p>
+        <button onClick={clearHistory} className="clear-history-btn">
+          Clear History
+        </button>
+      </header>
+      
+      {/* Quick Actions */}
+      <div className="quick-actions">
+        <button onClick={() => setInput('How many users signed up today?')}>
+          👥 Users Today
+        </button>
+        <button onClick={() => setInput("What's the current MRR?")}>
+          💰 Current MRR
+        </button>
+        <button onClick={() => setInput('How many videos were added this week?')}>
+          📹 Videos This Week
+        </button>
+        <button onClick={generateDailyReport} className="daily-report-btn">
+          📊 Daily Report
+        </button>
+        <button onClick={() => setInput("What's the trial conversion rate?")}>
+          📈 Trial Conversion
+        </button>
+        <button onClick={() => setInput('Are there any curation jobs running?')}>
+          ⚙️ Curation Status
+        </button>
+      </div>
+      
+      {/* Messages */}
+      <div className="messages-container">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`message message-${msg.role}`}>
+            <div className="message-header">
+              <span className="message-role">
+                {msg.role === 'system' ? '🤖 SYSTEM' : 
+                 msg.role === 'user' ? 'YOU' : '🛡️ DEV OS'}
+              </span>
+              <span className="message-time">
+                {new Date(msg.createdAt).toLocaleTimeString()}
+              </span>
+            </div>
+            <div className="message-content">{msg.content}</div>
+            <button 
+              onClick={() => copyMessage(msg.content)}
+              className="copy-btn"
+            >
+              📋 Copy
+            </button>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+      
+      {/* Input */}
+      <div className="input-container">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+          placeholder="Ask about BJJ OS metrics, system health, or business data..."
+          disabled={loading}
+        />
+        <button onClick={sendMessage} disabled={loading || !input.trim()}>
+          {loading ? '...' : '→'}
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+STEP 1.4: Background Job for Proactive Updates
+
+```typescript
+// server/jobs/systemMonitor.ts
+
+import { postSystemUpdate } from '../routes/admin';
+
+// Run every hour
+setInterval(async () => {
+  await checkForUpdates();
+}, 60 * 60 * 1000);
+
+async function checkForUpdates() {
+  const adminUsers = await db.query.users.findMany({
+    where: eq(users.role, 'admin')
+  });
+  
+  // Check for milestones
+  const videoCount = await db.select({ count: sql<number>`count(*)` }).from(videos);
+  const count = Number(videoCount[0].count);
+  
+  if (count % 100 === 0 && count > 0) {
+    // Milestone reached
+    for (const admin of adminUsers) {
+      await postSystemUpdate(
+        admin.id,
+        `🎉 Milestone: ${count} videos reached!\n\nProgress: ${count} / 2,000 (${Math.round(count/2000*100)}%)`,
+        'milestone'
+      );
+    }
+  }
+  
+  // Check API quota
+  const today = new Date().toISOString().split('T')[0];
+  const quotaUsed = await db.execute(sql`
+    SELECT COALESCE(SUM(youtube_api_calls), 0) as used
+    FROM curation_runs
+    WHERE run_date = ${today}
+  `);
+  
+  const used = Number(quotaUsed.rows[0].used);
+  if (used >= 8500 && used < 8600) { // Only alert once
+    for (const admin of adminUsers) {
+      await postSystemUpdate(
+        admin.id,
+        `⚠️ YouTube API quota at ${Math.round(used/100)}%\n\n${used} / 10,000 units used today`,
+        'alert'
+      );
+    }
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: ADMIN DASHBOARD COMPLETE REDESIGN
+═══════════════════════════════════════════════════════════════════════════════
+
+REQUIREMENTS:
+• Remove ALL metrics showing 0
+• Hero metrics section (MRR, Users, Videos)
+• Video curation: Total Videos, Saved Today, Searched Today, Rejected Today
+• Trend indicators (↑ ↓ →)
+• Clean, actionable layout
+• Quick Actions menu
+• Recent Signups with actions
+
+STEP 2.1: New Admin Dashboard Layout
+
+```typescript
+// client/src/pages/admin/Dashboard.tsx
+
+export default function AdminDashboard() {
+  const { data: metrics } = useQuery('/api/admin/dashboard/metrics');
+  
+  return (
+    <div className="admin-dashboard">
+      <header>
+        <h1>Dashboard Overview</h1>
+        <p>BJJ OS Admin - Launch Day Ready</p>
+        <button className="grant-lifetime-btn">⭐ Grant Lifetime Access</button>
+      </header>
+      
+      {/* HERO METRICS */}
+      <section className="hero-metrics">
+        <MetricCard
+          title="MRR"
+          value={`$${metrics.mrr.toFixed(2)}`}
+          change={metrics.mrrChange}
+          trend={metrics.mrrTrend}
+          icon="💰"
+        />
+        <MetricCard
+          title="Total Users"
+          value={metrics.totalUsers}
+          change={metrics.usersChange}
+          trend={metrics.usersTrend}
+          icon="👥"
+        />
+        <MetricCard
+          title="Total Videos"
+          value={metrics.totalVideos}
+          subtitle="No progress bars - you do the math"
+          change={metrics.videosChange}
+          trend={metrics.videosTrend}
+          icon="📹"
+        />
+      </section>
+      
+      {/* VIDEO CURATION */}
+      <section className="video-curation-section">
+        <h2>📹 Video Curation</h2>
+        <div className="curation-stats">
+          <StatBox
+            label="Total Videos"
+            value={metrics.totalVideos}
+          />
+          <StatBox
+            label="Saved Today"
+            value={metrics.videosSavedToday}
+          />
+          <StatBox
+            label="Searched Today"
+            value={metrics.videosSearchedToday}
+          />
+          <StatBox
+            label="Rejected Today"
+            value={metrics.videosSearchedToday - metrics.videosSavedToday}
+          />
+        </div>
+      </section>
+      
+      {/* TWO COLUMNS */}
+      <div className="dashboard-grid">
+        {/* LEFT: RECENT SIGNUPS */}
+        <section className="recent-signups">
+          <div className="section-header">
+            <h2>🆕 Recent Signups</h2>
+            <button onClick={() => navigate('/admin/users')}>
+              View All Users
+            </button>
+          </div>
+          <div className="signups-list">
+            {metrics.recentSignups.map(user => (
+              <div key={user.id} className="signup-item">
+                <div className="user-icon">👤</div>
+                <div className="user-info">
+                  <div className="user-email">{user.email}</div>
+                  <div className="user-time">
+                    {formatDistanceToNow(new Date(user.createdAt))} ago
+                  </div>
+                </div>
+                <div className="user-status">
+                  <span className={`status-badge ${user.subscriptionStatus}`}>
+                    {user.subscriptionStatus}
+                  </span>
+                </div>
+                <div className="user-actions">
+                  <button onClick={() => viewUser(user.id)}>View</button>
+                  <button onClick={() => messageUser(user.id)}>Message</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+        
+        {/* RIGHT: SYSTEM STATUS */}
+        <section className="system-status">
+          <h2>⚙️ System Status</h2>
+          <div className="status-grid">
+            <StatusItem
+              label="Curation"
+              value="✅ Active"
+              detail="9 runs/day, 500 videos/run"
+            />
+            <StatusItem
+              label="API Quota"
+              value={`${metrics.apiQuotaPercent}% used`}
+              detail={`${metrics.apiQuotaUsed} / 10,000 units`}
+            />
+            <StatusItem
+              label="Videos Today"
+              value={`+${metrics.videosSavedToday}`}
+              detail={`${metrics.curationRunsToday} runs completed`}
+            />
+            <StatusItem
+              label="Errors"
+              value={metrics.errors === 0 ? 'None ✅' : `${metrics.errors} ⚠️`}
+              detail="All systems operational"
+            />
+          </div>
+          <div className="system-actions">
+            <button onClick={() => navigate('/admin/dev-os')}>
+              View Dev OS
+            </button>
+            <button onClick={() => viewLogs()}>
+              System Logs
+            </button>
+          </div>
+        </section>
+      </div>
+      
+      {/* QUICK ACTIONS */}
+      <section className="quick-actions">
+        <h2>⚡ Quick Actions</h2>
+        <div className="action-grid">
+          <ActionCard
+            icon="👥"
+            title="User Management"
+            description="View and manage all users"
+            onClick={() => navigate('/admin/users')}
+          />
+          <ActionCard
+            icon="⭐"
+            title="Grant Lifetime"
+            description="Give lifetime access to users"
+            onClick={() => navigate('/admin/lifetime')}
+          />
+          <ActionCard
+            icon="📊"
+            title="Reports"
+            description="Generate reports and exports"
+            onClick={() => generateReport()}
+          />
+          <ActionCard
+            icon="🎬"
+            title="Trigger Curation"
+            description="Manually run video curation"
+            onClick={() => triggerCuration()}
+          />
+          <ActionCard
+            icon="📧"
+            title="Send Announcement"
+            description="Email all users"
+            onClick={() => sendAnnouncement()}
+          />
+          <ActionCard
+            icon="📈"
+            title="Analytics"
+            description="View detailed analytics"
+            onClick={() => navigate('/admin/analytics')}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MetricCard({ title, value, change, trend, icon, subtitle }) {
+  return (
+    <div className="metric-card">
+      <div className="metric-icon">{icon}</div>
+      <div className="metric-content">
+        <div className="metric-title">{title}</div>
+        <div className="metric-value">{value}</div>
+        {subtitle && <div className="metric-subtitle">{subtitle}</div>}
+        {change && (
+          <div className={`metric-change ${trend}`}>
+            {trend === 'up' && '↑'}
+            {trend === 'down' && '↓'}
+            {trend === 'neutral' && '→'}
+            {' '}
+            {change}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+STEP 2.2: Backend API for Dashboard Metrics
+
+```typescript
+// server/routes/admin.ts
+
+app.get('/api/admin/dashboard/metrics', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 24*60*60*1000).toISOString().split('T')[0];
+    
+    // Users
+    const users = await db.execute(sql`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN created_at::date = ${today} THEN 1 END) as today,
+        COUNT(CASE WHEN created_at::date = ${yesterday} THEN 1 END) as yesterday,
+        COUNT(CASE WHEN subscription_status = 'active' THEN 1 END) as active
+      FROM users
+    `);
+    
+    // Videos
+    const videos = await db.execute(sql`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN created_at::date = ${today} THEN 1 END) as today,
+        COUNT(CASE WHEN created_at::date = ${yesterday} THEN 1 END) as yesterday
+      FROM videos
+    `);
+    
+    // Curation
+    const curation = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(videos_added), 0) as saved_today,
+        COALESCE(SUM(videos_screened), 0) as searched_today,
+        COALESCE(SUM(youtube_api_calls), 0) as api_used,
+        COUNT(*) as runs_today
+      FROM curation_runs
+      WHERE run_date = ${today}
+    `);
+    
+    // Recent signups
+    const recentSignups = await db.query.users.findMany({
+      orderBy: [desc(users.createdAt)],
+      limit: 5
+    });
+    
+    // Calculate MRR
+    const mrr = Number(users.rows[0].active) * 14.99;
+    const yesterdayUsers = await db.execute(sql`
+      SELECT COUNT(CASE WHEN subscription_status = 'active' THEN 1 END) as active
+      FROM users
+      WHERE created_at < ${yesterday}
+    `);
+    const yesterdayMrr = Number(yesterdayUsers.rows[0].active) * 14.99;
+    
+    res.json({
+      // Hero metrics
+      mrr,
+      mrrChange: `+$${(mrr - yesterdayMrr).toFixed(2)} today`,
+      mrrTrend: mrr > yesterdayMrr ? 'up' : mrr < yesterdayMrr ? 'down' : 'neutral',
+      
+      totalUsers: Number(users.rows[0].total),
+      usersChange: `+${Number(users.rows[0].today)} today`,
+      usersTrend: Number(users.rows[0].today) > Number(users.rows[0].yesterday) ? 'up' : 
+                  Number(users.rows[0].today) < Number(users.rows[0].yesterday) ? 'down' : 'neutral',
+      
+      totalVideos: Number(videos.rows[0].total),
+      videosChange: `+${Number(videos.rows[0].today)} today`,
+      videosTrend: Number(videos.rows[0].today) > Number(videos.rows[0].yesterday) ? 'up' :
+                   Number(videos.rows[0].today) < Number(videos.rows[0].yesterday) ? 'down' : 'neutral',
+      
+      // Video curation (EXACTLY AS REQUESTED)
+      videosSavedToday: Number(curation.rows[0].saved_today),
+      videosSearchedToday: Number(curation.rows[0].searched_today),
+      // Rejected is calculated: searched - saved
+      
+      // System status
+      apiQuotaUsed: Number(curation.rows[0].api_used),
+      apiQuotaPercent: Math.round(Number(curation.rows[0].api_used) / 100),
+      curationRunsToday: Number(curation.rows[0].runs_today),
+      errors: 0, // TODO: Track errors
+      
+      // Recent signups
+      recentSignups
+    });
+    
+  } catch (error) {
+    console.error('Dashboard metrics error:', error);
+    res.status(500).json({ error: 'Failed to load metrics' });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: NAVIGATION CLEANUP
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 3.1: Simplified Navigation
+
+```typescript
+// client/src/components/AdminNav.tsx
+
+const ADMIN_NAV_ITEMS = [
+  // Core Operations
+  { path: '/admin/dashboard', icon: DashboardIcon, label: 'Dashboard' },
+  { path: '/admin/users', icon: UsersIcon, label: 'Users' },
+  { path: '/admin/video-management', icon: VideoIcon, label: 'Videos' },
+  
+  // Admin Tools
+  { path: '/admin/dev-os', icon: TerminalIcon, label: 'Dev OS', highlight: true },
+  { path: '/admin/referrals', icon: GiftIcon, label: 'Referrals' },
+  { path: '/admin/lifetime', icon: StarIcon, label: 'Lifetime Access' },
+  
+  // System
+  { path: '/admin/feedback', icon: FeedbackIcon, label: 'Feedback' },
+  { path: '/admin/flagged', icon: FlagIcon, label: 'Flagged Accounts' }
+];
+
+export function AdminNav() {
+  return (
+    <nav className="admin-nav">
+      <div className="admin-badge">
+        🛡️ Admin Mode
+      </div>
+      
+      <div className="nav-section">
+        <div className="nav-section-title">Core Operations</div>
+        {ADMIN_NAV_ITEMS.slice(0, 3).map(item => (
+          <NavItem key={item.path} {...item} />
+        ))}
+      </div>
+      
+      <div className="nav-section">
+        <div className="nav-section-title">Admin Tools</div>
+        {ADMIN_NAV_ITEMS.slice(3, 6).map(item => (
+          <NavItem key={item.path} {...item} />
+        ))}
+      </div>
+      
+      <div className="nav-section">
+        <div className="nav-section-title">System</div>
+        {ADMIN_NAV_ITEMS.slice(6).map(item => (
+          <NavItem key={item.path} {...item} />
+        ))}
+      </div>
+      
+      <button onClick={logout} className="logout-btn">
+        🚪 Logout
+      </button>
+    </nav>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL VALIDATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, verify:
+
+DEV OS:
+□ ✅ Chat history persists across sessions
+□ ✅ Can scroll back 48 hours
+□ ✅ Daily Report button works
+□ ✅ Copy button on each message
+□ ✅ System updates auto-post to chat
+□ ✅ Clear History button works
+
+ADMIN DASHBOARD:
+□ ✅ No zero-value metrics visible
+□ ✅ Hero metrics show MRR, Users, Videos
+□ ✅ Video curation shows: Total, Saved Today, Searched Today, Rejected Today
+□ ✅ Trend indicators show ↑ ↓ →
+□ ✅ Recent Signups has quick actions
+□ ✅ System Status card shows curation status
+□ ✅ Quick Actions menu functional
+
+NAVIGATION:
+□ ✅ Reduced to 8 items
+□ ✅ Grouped logically
+□ ✅ Admin badge visible
+□ ✅ Removed: Techniques, Chains, Instructors, Partnerships, Meta, Chat
+
+═══════════════════════════════════════════════════════════════════════════════
+
+BEGIN COMPREHENSIVE ADMIN OVERHAUL NOW.
+
+Take your time. This is a major improvement to the admin experience.
+Focus on functionality and UX, not visual design (already good).
+
+CRITICAL: Video curation metrics must show exactly:
+• Total Videos: X
+• Saved Today: Y
+• Searched Today: Z
+• Rejected Today: Z - Y
+
+No progress bars, no percentages, no “days to target” - just the raw numbers.
+
+Report back when complete with summary of changes made.
+
+```
+---
+
+**This is the complete mega-prompt. It fixes everything in one comprehensive update.** ✅
+
+**Ready to paste into Replit Agent?** 🚀​​​​​​​​​​​​​​​​
+```

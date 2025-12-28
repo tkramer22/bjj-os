@@ -1,0 +1,273 @@
+## 📋 COMPLETE iOS APP PROMPT - COPY AND SEND TO REPLIT:
+
+```
+iOS APP - COMPLETE AUTHENTICATION FLOW (APP STORE COMPLIANT - READER APP MODEL)
+
+We are using the "Reader App" model (like Netflix, Spotify, Kindle) to handle authentication.
+This means: LOGIN ONLY in-app, signup/payment happens on web.
+
+═══════════════════════════════════════════════════════════════════════════════
+OVERVIEW - HOW THE iOS APP WORKS
+═══════════════════════════════════════════════════════════════════════════════
+
+EVERY user who opens the app for the first time sees the same screen: LOGIN
+
+- If they have an account → enter email + password → logged in forever
+- If they don't have an account → they see text directing them to the website
+- Once logged in → they NEVER see login screen again (persistent auth)
+
+═══════════════════════════════════════════════════════════════════════════════
+1. SPLASH SCREEN - FIX SIZING
+═══════════════════════════════════════════════════════════════════════════════
+
+Current issue: BJJ OS logo is too large and gets cut off on mobile screens.
+
+FIX:
+- Make splash screen fully responsive to mobile viewport
+- BJJ OS logo must fit comfortably on ALL iPhone sizes (iPhone SE through Pro Max)
+- Center the logo vertically and horizontally
+- Add proper padding/margins so nothing touches screen edges
+- Professional appearance - nothing cropped or cut off
+- Splash displays for 1-2 seconds, then transitions to login or dashboard
+
+═══════════════════════════════════════════════════════════════════════════════
+2. iOS LOGIN SCREEN - APP STORE COMPLIANT (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+After splash screen, if user is NOT logged in, show this login screen:
+
+┌─────────────────────────────────────────┐
+│                                         │
+│            [BJJ OS LOGO]                │
+│         (properly sized)                │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ Email                           │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ Password                        │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│         [ Sign In ]                     │
+│                                         │
+│   Forgot password?                      │
+│                                         │
+│   ─────────────────────────────────     │
+│                                         │
+│   Don't have an account?                │
+│   Visit bjjos.app to get started        │
+│                                         │
+└─────────────────────────────────────────┘
+
+STRICT APP STORE COMPLIANCE RULES:
+
+DO INCLUDE:
+✅ BJJ OS logo (responsive, properly sized)
+✅ Email input field
+✅ Password input field
+✅ [Sign In] button
+✅ "Forgot password?" as clickable link (opens Safari to bjjos.app/forgot-password)
+✅ Plain text: "Don't have an account?"
+✅ Plain text: "Visit bjjos.app to get started"
+
+DO NOT INCLUDE:
+❌ No "Sign in with Apple" button
+❌ No "Sign Up" or "Create Account" button
+❌ No clickable link/button to signup page
+❌ No mention of pricing, subscription, free trial, or payment
+❌ The text "Visit bjjos.app to get started" must NOT be a clickable button or link
+❌ Do not make "bjjos.app" blue or underlined - plain text only
+
+WHY: We are using the "Reader App" model to avoid Apple's 30% fee. 
+Apple allows this but we cannot have any signup or payment functionality in-app.
+
+═══════════════════════════════════════════════════════════════════════════════
+3. PERSISTENT "FOREVER" LOGIN - iOS APP
+═══════════════════════════════════════════════════════════════════════════════
+
+Once a user logs in successfully on the iOS app, they stay logged in PERMANENTLY.
+
+IMPLEMENTATION:
+- Use @capacitor/preferences to store auth token securely on device
+- Token should NEVER expire on iOS app
+- On app launch: check for stored token → if valid, skip login entirely → go to dashboard
+- User only sees login screen again if: first time, manually logged out, or token revoked
+
+import { Preferences } from '@capacitor/preferences';
+
+// After successful login:
+await Preferences.set({ key: 'authToken', value: token });
+await Preferences.set({ key: 'userId', value: oderId });
+
+// On app launch:
+const { value: token } = await Preferences.get({ key: 'authToken' });
+if (token && isValidToken(token)) {
+  // Go directly to dashboard - skip login screen entirely
+} else {
+  // Show login screen
+}
+
+// On logout:
+await Preferences.remove({ key: 'authToken' });
+await Preferences.remove({ key: 'userId' });
+
+═══════════════════════════════════════════════════════════════════════════════
+4. SKIP LANDING PAGE - iOS APP NEVER SHOWS MARKETING PAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+The iOS app must NEVER show the marketing/landing page (the "Stop training blindly" page).
+
+Detect if running in Capacitor native app:
+
+import { Capacitor } from '@capacitor/core';
+const isNativeApp = Capacitor.isNativePlatform();
+
+If native app:
+- NOT logged in → Show LOGIN screen (not landing page)
+- Logged in → Show DASHBOARD (skip login entirely)
+
+The marketing landing page is for web visitors only, never for iOS app users.
+
+═══════════════════════════════════════════════════════════════════════════════
+5. HANDLE "NO PASSWORD SET" ERROR
+═══════════════════════════════════════════════════════════════════════════════
+
+Some existing web users only use email + verification code (no password set).
+
+When iOS login fails because password doesn't exist for that account, show:
+
+┌─────────────────────────────────────────┐
+│                                         │
+│   Password Not Set Up                   │
+│                                         │
+│   Your account uses email verification  │
+│   codes. To use the iOS app, you need   │
+│   to set up a password first.           │
+│                                         │
+│   Visit bjjos.app/settings to set up    │
+│   your password, then return here to    │
+│   sign in.                              │
+│                                         │
+│           [ OK ]                        │
+│                                         │
+└─────────────────────────────────────────┘
+
+Note: "bjjos.app/settings" is plain text, NOT a clickable link (App Store compliance).
+
+═══════════════════════════════════════════════════════════════════════════════
+6. LOGOUT FUNCTIONALITY - iOS APP
+═══════════════════════════════════════════════════════════════════════════════
+
+In Settings within the app, include a Logout option.
+
+When user taps Logout:
+- Clear auth token from Capacitor Preferences
+- Clear any cached user data
+- Return to login screen
+
+After logout, they will need to enter email + password again to log back in.
+
+═══════════════════════════════════════════════════════════════════════════════
+7. USER FLOWS SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+FLOW A - NEW USER (no account):
+1. Downloads app from App Store
+2. Opens app → Splash screen (1-2 sec)
+3. Sees login screen
+4. Reads "Visit bjjos.app to get started"
+5. Manually opens Safari, types bjjos.app
+6. Signs up and subscribes on website
+7. Sets password in Settings on web
+8. Returns to iOS app
+9. Enters email + password → logs in
+10. Never sees login screen again (persistent auth)
+
+FLOW B - EXISTING USER (has password):
+1. Opens app → Splash screen (1-2 sec)
+2. Sees login screen
+3. Enters email + password
+4. Logs in → goes to dashboard
+5. Never sees login screen again (persistent auth)
+
+FLOW C - EXISTING USER (no password set yet):
+1. Opens app → Splash screen (1-2 sec)
+2. Sees login screen
+3. Enters email + password
+4. Error: "Password Not Set Up" message
+5. Goes to bjjos.app/settings on web
+6. Creates password
+7. Returns to app, enters email + password
+8. Logs in → goes to dashboard
+9. Never sees login screen again (persistent auth)
+
+FLOW D - RETURNING USER (already logged in):
+1. Opens app → Splash screen (1-2 sec)
+2. App checks stored auth token
+3. Token valid → goes directly to dashboard
+4. Never sees login screen (already authenticated)
+
+FLOW E - USER LOGGING OUT:
+1. User taps Logout in Settings
+2. Auth token cleared
+3. Returns to login screen
+4. Must enter email + password to log back in
+
+═══════════════════════════════════════════════════════════════════════════════
+8. WEB FEATURES (SECONDARY PRIORITY - DO AFTER iOS IS WORKING)
+═══════════════════════════════════════════════════════════════════════════════
+
+After iOS app is complete, implement these web features:
+
+A) PASSWORD MANAGEMENT IN SETTINGS (WEB)
+
+In Settings > Security, add:
+
+IF user has NO password:
+- "Set Up Password" section
+- New Password field
+- Confirm Password field
+- [Create Password] button
+- Note: "Required for iOS app login"
+
+IF user HAS password:
+- "Change Password" section  
+- Current Password field
+- New Password field
+- Confirm New Password field
+- [Update Password] button
+
+B) FORGOT PASSWORD FLOW (WEB)
+
+Step 1: Enter email → [Send Reset Code]
+Step 2: Enter verification code from email → [Verify]
+Step 3: Enter new password + confirm → [Save Password]
+
+C) PASSWORD REQUIREMENTS:
+- Minimum 8 characters
+- At least 1 number
+- At least 1 special character
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+1. 🔴 Fix splash screen sizing (logo cut off)
+2. 🔴 iOS login screen (App Store compliant - no signup button, plain text only)
+3. 🔴 Skip landing page on iOS (never show marketing page)
+4. 🔴 Persistent "forever" login on iOS
+5. 🔴 Handle "no password set" error message
+6. 🟡 Logout functionality
+7. 🟡 Web: Password setup in Settings
+8. 🟡 Web: Change password in Settings
+9. 🟡 Web: Forgot password flow
+
+Complete items 1-6 first (iOS app), then items 7-9 (web features).
+
+After iOS changes are complete, I will need to rebuild the app in Xcode to test.
+```
+
+-----
+
+**This is the complete prompt. Copy and send to Replit when it finishes the current task.**

@@ -1,0 +1,909 @@
+# **FINAL MEGA TEST - COMPREHENSIVE SYSTEM CHECK** ✅
+
+-----
+
+**Copy this entire prompt and paste into Replit Agent:**
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+BJJ OS - FINAL PRE-LAUNCH MEGA TEST
+COMPREHENSIVE SYSTEM VALIDATION
+═══════════════════════════════════════════════════════════════════════════════
+
+MISSION: Perform exhaustive end-to-end testing of EVERY system component before
+launch. Test as if 50 users are hitting the system simultaneously. Validate all
+critical paths. Report detailed results.
+
+This is the final gate before launch. Be thorough. Test everything.
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 1: CORE FUNCTIONALITY
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 1.1: DATABASE HEALTH CHECK
+Run these queries and report execution times:
+
+```sql
+-- Test 1: Video search with index
+EXPLAIN ANALYZE SELECT * FROM videos 
+WHERE instructor_name = 'Gordon Ryan' 
+LIMIT 20;
+
+-- Test 2: User lookup with index  
+EXPLAIN ANALYZE SELECT * FROM users 
+WHERE email = 'test@example.com';
+
+-- Test 3: Message history with index
+EXPLAIN ANALYZE SELECT * FROM messages 
+WHERE user_id = (SELECT id FROM users LIMIT 1)
+ORDER BY created_at DESC 
+LIMIT 50;
+
+-- Test 4: Subscription lookup
+EXPLAIN ANALYZE SELECT * FROM subscriptions 
+WHERE status = 'active' 
+LIMIT 100;
+
+-- Test 5: Video count
+SELECT COUNT(*) as total_videos FROM videos;
+
+-- Test 6: User count  
+SELECT COUNT(*) as total_users FROM users;
+
+-- Test 7: Active subscriptions
+SELECT COUNT(*) as active_subs FROM subscriptions 
+WHERE status = 'active';
+```
+
+EXPECTED RESULTS:
+✅ All queries use indexes (no “Seq Scan”)
+✅ Execution time <10ms each
+✅ Video count ~2,000
+✅ Users and subscriptions match current state
+
+REPORT:
+
+- Query execution times
+- Whether indexes are being used
+- Current counts (videos, users, subscriptions)
+
+───────────────────────────────────────────────────────────────────────────────
+
+TEST 1.2: CACHE SYSTEM HEALTH
+Test Redis caching is working:
+
+```typescript
+// Test cache connection
+import { CacheService } from './server/services/cache';
+
+async function testCache() {
+  console.log('Testing Redis cache connection...');
+  
+  // Test 1: Set and get
+  const testKey = 'test-key-' + Date.now();
+  await CacheService.getOrSet(
+    testKey,
+    async () => ({ message: 'Cache is working!' }),
+    60
+  );
+  
+  const cached = await CacheService.getOrSet(
+    testKey,
+    async () => ({ message: 'Should not fetch this' }),
+    60
+  );
+  
+  console.log('Cache test result:', cached);
+  
+  // Test 2: Get cache stats
+  const stats = await CacheService.getStats();
+  console.log('Cache stats:', stats);
+  
+  return {
+    cacheWorking: cached.message === 'Cache is working!',
+    stats
+  };
+}
+
+testCache();
+```
+
+EXPECTED RESULTS:
+✅ Cache connection successful
+✅ First call fetches data
+✅ Second call returns cached data
+✅ Stats show cache is healthy
+
+REPORT:
+
+- Cache connection status
+- Test passed/failed
+- Current cache stats
+
+───────────────────────────────────────────────────────────────────────────────
+
+TEST 1.3: RATE LIMITING VALIDATION
+Test that rate limits are active:
+
+Check these endpoints have rate limiting:
+
+1. /api/professor-os/chat - Should have messageLimiter
+1. /api/signup - Should have signupLimiter
+1. /api/* - Should have generalLimiter
+
+VERIFICATION:
+
+- Check server/routes.ts or server/index.ts
+- Confirm middleware is applied
+- Report which endpoints are protected
+
+EXPECTED RESULTS:
+✅ All critical endpoints have rate limiting
+✅ Limits configured correctly (10/day free, 100/day paid)
+✅ Signup limited to 3/hour per IP
+
+REPORT:
+
+- List of protected endpoints
+- Rate limit configurations
+- Any endpoints missing protection
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 2: USER SIGNUP FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 2.1: SIGNUP VALIDATION
+Test signup endpoint with various inputs:
+
+```bash
+# Test 1: Valid signup
+curl -X POST http://localhost:5000/api/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test1@loadtest.com","password":"TestPass123!"}'
+
+# Test 2: Invalid email
+curl -X POST http://localhost:5000/api/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"notanemail","password":"TestPass123!"}'
+
+# Test 3: Weak password
+curl -X POST http://localhost:5000/api/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test2@loadtest.com","password":"weak"}'
+
+# Test 4: SQL injection attempt
+curl -X POST http://localhost:5000/api/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@test.com","password":"pass' OR '1'='1"}'
+
+# Test 5: Duplicate email
+curl -X POST http://localhost:5000/api/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test1@loadtest.com","password":"TestPass123!"}'
+```
+
+EXPECTED RESULTS:
+✅ Test 1: Success (201 status, returns token)
+✅ Test 2: Rejected (400 status, “Invalid email”)
+✅ Test 3: Rejected (400 status, “Weak password”)
+✅ Test 4: Safely handled (no SQL injection)
+✅ Test 5: Rejected (400 status, “Email exists”)
+
+REPORT:
+
+- HTTP status codes for each test
+- Error messages returned
+- Response times
+- Any security concerns
+
+───────────────────────────────────────────────────────────────────────────────
+
+TEST 2.2: CONCURRENT SIGNUP STRESS TEST
+Simulate 20 users signing up simultaneously:
+
+Create test script:
+
+```javascript
+async function stressTestSignups() {
+  const signups = [];
+  
+  for (let i = 0; i < 20; i++) {
+    signups.push(
+      fetch('http://localhost:5000/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: `loadtest${i}_${Date.now()}@test.com`,
+          password: 'TestPass123!'
+        })
+      })
+    );
+  }
+  
+  const start = Date.now();
+  const results = await Promise.all(signups);
+  const duration = Date.now() - start;
+  
+  const successful = results.filter(r => r.status === 201).length;
+  
+  return {
+    totalTime: duration,
+    successful: successful,
+    failed: 20 - successful,
+    avgTimePerSignup: duration / 20
+  };
+}
+
+stressTestSignups();
+```
+
+EXPECTED RESULTS:
+✅ All 20 signups successful
+✅ Total time <3 seconds
+✅ Average time <150ms per signup
+✅ No database errors
+
+REPORT:
+
+- Total execution time
+- Successful vs failed signups
+- Average time per signup
+- Any errors encountered
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 3: PROFESSOR OS
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 3.1: PROFESSOR OS RESPONSE TEST
+Test Professor OS with 5 different queries:
+
+```javascript
+const testQueries = [
+  "What's the best way to pass half guard?",
+  "How do I defend the armbar from mount?",
+  "Explain the difference between gi and no-gi BJJ",
+  "What should a white belt focus on?",
+  "How do I improve my guard retention?"
+];
+
+async function testProfessorOS() {
+  const results = [];
+  
+  for (const query of testQueries) {
+    const start = Date.now();
+    
+    const response = await fetch('http://localhost:5000/api/professor-os/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer [TEST_USER_TOKEN]'
+      },
+      body: JSON.stringify({
+        message: query,
+        userContext: {
+          belt: 'blue',
+          weight: 155,
+          gym: 'test'
+        }
+      })
+    });
+    
+    const duration = Date.now() - start;
+    const data = await response.json();
+    
+    results.push({
+      query,
+      responseTime: duration,
+      responseLength: data.response?.length || 0,
+      cached: data.cached || false,
+      success: response.status === 200
+    });
+  }
+  
+  return results;
+}
+
+testProfessorOS();
+```
+
+EXPECTED RESULTS:
+✅ All 5 queries return responses
+✅ First query: 1-3 seconds (Claude API call)
+✅ Repeated query: <500ms (cached)
+✅ Response quality: Relevant and helpful
+✅ No errors or timeouts
+
+REPORT:
+
+- Response time for each query
+- Which responses were cached
+- Response length (should be substantial, 200+ chars)
+- Quality assessment (does it make sense?)
+
+───────────────────────────────────────────────────────────────────────────────
+
+TEST 3.2: VIDEO RECOMMENDATIONS
+Test video recommendation system:
+
+```javascript
+async function testVideoRecommendations() {
+  const techniques = [
+    'guard-passing',
+    'submissions',
+    'takedowns',
+    'escapes',
+    'guard-retention'
+  ];
+  
+  const results = [];
+  
+  for (const technique of techniques) {
+    const start = Date.now();
+    
+    const response = await fetch(
+      `http://localhost:5000/api/videos/search?technique=${technique}&limit=20`
+    );
+    
+    const duration = Date.now() - start;
+    const data = await response.json();
+    
+    results.push({
+      technique,
+      responseTime: duration,
+      videosFound: data.videos?.length || 0,
+      cached: data.cached || false,
+      topInstructor: data.videos?.[0]?.instructor_name || 'none',
+      avgCredibility: data.videos?.reduce((sum, v) => sum + v.instructor_credibility, 0) / data.videos?.length || 0
+    });
+  }
+  
+  return results;
+}
+
+testVideoRecommendations();
+```
+
+EXPECTED RESULTS:
+✅ All searches return results
+✅ First search: 50-200ms (database)
+✅ Second search: <50ms (cached)
+✅ Videos sorted by credibility (high credibility first)
+✅ Top instructors are legitimate (Gordon Ryan, Lachlan Giles, etc.)
+
+REPORT:
+
+- Response times (first vs cached)
+- Number of videos found per technique
+- Top instructors for each technique
+- Average credibility scores
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 4: ADMIN DASHBOARD & DEV OS
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 4.1: ADMIN PAGE ACCESS
+Test admin authentication and access:
+
+```javascript
+// Test 1: Non-admin cannot access
+const nonAdminResponse = await fetch('http://localhost:5000/admin', {
+  headers: { 'Authorization': 'Bearer [REGULAR_USER_TOKEN]' }
+});
+
+// Test 2: Admin can access
+const adminResponse = await fetch('http://localhost:5000/admin', {
+  headers: { 'Authorization': 'Bearer [ADMIN_USER_TOKEN]' }
+});
+
+console.log('Non-admin access:', nonAdminResponse.status); // Should be 403
+console.log('Admin access:', adminResponse.status); // Should be 200
+```
+
+EXPECTED RESULTS:
+✅ Non-admin users blocked (403 Forbidden)
+✅ Admin users granted access (200 OK)
+✅ Admin page loads correctly
+
+REPORT:
+
+- Authentication working correctly
+- Admin page accessible
+- Any access control issues
+
+───────────────────────────────────────────────────────────────────────────────
+
+TEST 4.2: DEV OS QUERY TEST
+Test Dev OS with actual queries:
+
+```javascript
+const devOSQueries = [
+  "What's the system status?",
+  "How many users signed up today?",
+  "Show me video curation stats",
+  "What's the current MRR?",
+  "Are there any errors in the system?"
+];
+
+async function testDevOS() {
+  const results = [];
+  
+  for (const query of devOSQueries) {
+    const response = await fetch('http://localhost:5000/api/admin/dev-os/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer [ADMIN_TOKEN]'
+      },
+      body: JSON.stringify({
+        message: query,
+        conversationHistory: []
+      })
+    });
+    
+    const data = await response.json();
+    
+    results.push({
+      query,
+      gotResponse: !!data.response,
+      responseLength: data.response?.length || 0,
+      containsData: data.response?.includes('users') || data.response?.includes('videos')
+    });
+  }
+  
+  return results;
+}
+
+testDevOS();
+```
+
+EXPECTED RESULTS:
+✅ All queries return intelligent responses
+✅ Responses contain actual data (not generic)
+✅ Dev OS accesses real system metrics
+✅ Response format is clear and actionable
+
+REPORT:
+
+- Dev OS response quality
+- Whether responses contain real data
+- Any errors or missing functionality
+
+───────────────────────────────────────────────────────────────────────────────
+
+TEST 4.3: METRICS VERIFICATION
+Verify current system metrics are accurate:
+
+Query and report:
+
+```sql
+-- Today's activity
+SELECT 
+  (SELECT COUNT(*) FROM users WHERE DATE(created_at) = CURRENT_DATE) as signups_today,
+  (SELECT COUNT(*) FROM videos WHERE DATE(created_at) = CURRENT_DATE) as videos_added_today,
+  (SELECT COUNT(*) FROM messages WHERE DATE(created_at) = CURRENT_DATE) as messages_today,
+  (SELECT COUNT(*) FROM users) as total_users,
+  (SELECT COUNT(*) FROM videos) as total_videos,
+  (SELECT COUNT(*) FROM subscriptions WHERE status = 'active') as active_subs,
+  (SELECT COUNT(*) * 30 FROM subscriptions WHERE status = 'active') as current_mrr;
+```
+
+EXPECTED DATA:
+✅ Total videos: ~2,000
+✅ Total users: Current count
+✅ Active subs: Current count
+✅ MRR calculation: Accurate
+
+REPORT:
+
+- All current metrics
+- Growth since yesterday
+- System health indicators
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 5: PERFORMANCE UNDER LOAD
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 5.1: CONCURRENT USER SIMULATION
+Simulate 30 concurrent users performing various actions:
+
+```javascript
+async function simulateConcurrentUsers() {
+  const users = [];
+  
+  // Create 30 concurrent user sessions
+  for (let i = 0; i < 30; i++) {
+    users.push((async () => {
+      // Sign up
+      const signup = await fetch('http://localhost:5000/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: `concurrent${i}_${Date.now()}@test.com`,
+          password: 'TestPass123!'
+        })
+      });
+      
+      const { token } = await signup.json();
+      
+      // Send Professor OS message
+      const message = await fetch('http://localhost:5000/api/professor-os/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: "What should I work on as a beginner?",
+          userContext: { belt: 'white', weight: 170 }
+        })
+      });
+      
+      // Search videos
+      const videos = await fetch('http://localhost:5000/api/videos/search?technique=guard-passing');
+      
+      return {
+        signupSuccess: signup.status === 201,
+        messageSuccess: message.status === 200,
+        videoSuccess: videos.status === 200
+      };
+    })());
+  }
+  
+  const start = Date.now();
+  const results = await Promise.all(users);
+  const duration = Date.now() - start;
+  
+  const successful = results.filter(r => 
+    r.signupSuccess && r.messageSuccess && r.videoSuccess
+  ).length;
+  
+  return {
+    totalTime: duration,
+    successful: successful,
+    failed: 30 - successful,
+    successRate: (successful / 30 * 100).toFixed(1) + '%'
+  };
+}
+
+simulateConcurrentUsers();
+```
+
+EXPECTED RESULTS:
+✅ 29-30 successful (>95% success rate)
+✅ Total time <30 seconds
+✅ No timeouts or server errors
+✅ System remains responsive
+
+REPORT:
+
+- Total execution time
+- Success rate
+- Any errors encountered
+- System performance under load
+
+───────────────────────────────────────────────────────────────────────────────
+
+TEST 5.2: CACHE PERFORMANCE UNDER LOAD
+Test cache hit rate with repeated queries:
+
+```javascript
+async function testCachePerformance() {
+  // Test 1: First query (cache miss)
+  const firstQuery = Date.now();
+  await fetch('http://localhost:5000/api/videos/search?technique=submissions');
+  const firstDuration = Date.now() - firstQuery;
+  
+  // Test 2: Same query 10 times (cache hits)
+  const cacheTests = [];
+  for (let i = 0; i < 10; i++) {
+    cacheTests.push(
+      fetch('http://localhost:5000/api/videos/search?technique=submissions')
+    );
+  }
+  
+  const cacheStart = Date.now();
+  await Promise.all(cacheTests);
+  const cacheDuration = Date.now() - cacheStart;
+  const avgCached = cacheDuration / 10;
+  
+  return {
+    firstQueryTime: firstDuration,
+    avgCachedQueryTime: avgCached,
+    speedup: (firstDuration / avgCached).toFixed(1) + 'x faster',
+    cacheWorking: avgCached < firstDuration / 2
+  };
+}
+
+testCachePerformance();
+```
+
+EXPECTED RESULTS:
+✅ First query: 50-200ms
+✅ Cached queries: <50ms average
+✅ Cache provides 3-10x speedup
+✅ Cache hit rate >80% on repeated queries
+
+REPORT:
+
+- Cache performance metrics
+- Speed improvement from caching
+- Cache working correctly: YES/NO
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 6: ERROR HANDLING & MONITORING
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 6.1: SENTRY ERROR CAPTURE
+Test that errors are properly logged:
+
+```javascript
+// Trigger a test error
+fetch('http://localhost:5000/api/test-error', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ triggerError: true })
+});
+
+// Check Sentry dashboard (manual verification needed)
+console.log('Test error triggered. Check Sentry dashboard:');
+console.log('https://sentry.io/organizations/[YOUR-ORG]/issues/');
+```
+
+MANUAL VERIFICATION:
+☐ Go to Sentry dashboard
+☐ Verify test error appears
+☐ Check error details are captured
+☐ Verify performance data is tracked
+
+REPORT:
+
+- Sentry receiving errors: YES/NO
+- Error details captured correctly: YES/NO
+- Performance monitoring active: YES/NO
+
+───────────────────────────────────────────────────────────────────────────────
+
+TEST 6.2: GRACEFUL DEGRADATION
+Test system handles failures gracefully:
+
+```javascript
+// Test 1: Cache fails - should fall back to database
+// Test 2: Database slow - should still respond (might be slower)
+// Test 3: Claude API timeout - should return error gracefully
+
+// These are harder to test automatically
+// Check error handling in code manually
+```
+
+CODE REVIEW CHECKLIST:
+☐ All database calls have try-catch
+☐ All API calls have timeout handlers
+☐ All cache calls have fallback to database
+☐ User-facing errors are friendly (not technical)
+☐ All errors logged to Sentry
+
+REPORT:
+
+- Error handling comprehensive: YES/NO
+- Graceful degradation implemented: YES/NO
+- Any gaps in error handling
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL REPORT TEMPLATE
+═══════════════════════════════════════════════════════════════════════════════
+
+After completing all tests, provide this comprehensive report:
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+BJJ OS FINAL PRE-LAUNCH TEST RESULTS
+═══════════════════════════════════════════════════════════════════════════════
+
+EXECUTIVE SUMMARY:
+System Status: [READY / NOT READY]
+Critical Issues: [COUNT]
+Warnings: [COUNT]
+Tests Passed: [X/Y]
+Overall Grade: [A/B/C/D/F]
+
+───────────────────────────────────────────────────────────────────────────────
+TEST SUITE 1: CORE FUNCTIONALITY
+───────────────────────────────────────────────────────────────────────────────
+✅/❌ Database Health: [PASS/FAIL]
+  - Query performance: [Xms average]
+  - Indexes working: [YES/NO]
+  - Current metrics: [X users, Y videos, Z subs]
+
+✅/❌ Cache System: [PASS/FAIL]
+  - Redis connected: [YES/NO]
+  - Cache hit rate: [X%]
+  - Performance improvement: [Xx faster]
+
+✅/❌ Rate Limiting: [PASS/FAIL]
+  - Endpoints protected: [X/Y]
+  - Limits configured: [YES/NO]
+  - Security: [PASS/FAIL]
+
+───────────────────────────────────────────────────────────────────────────────
+TEST SUITE 2: USER SIGNUP FLOW
+───────────────────────────────────────────────────────────────────────────────
+✅/❌ Signup Validation: [PASS/FAIL]
+  - Valid signups work: [YES/NO]
+  - Invalid inputs rejected: [YES/NO]
+  - SQL injection blocked: [YES/NO]
+  - Response time: [Xms]
+
+✅/❌ Concurrent Signups: [PASS/FAIL]
+  - 20 simultaneous signups: [X successful]
+  - Total time: [Xs]
+  - Average per signup: [Xms]
+
+───────────────────────────────────────────────────────────────────────────────
+TEST SUITE 3: PROFESSOR OS
+───────────────────────────────────────────────────────────────────────────────
+✅/❌ Response Quality: [PASS/FAIL]
+  - All queries answered: [YES/NO]
+  - Response time (first): [Xs]
+  - Response time (cached): [Xms]
+  - Quality assessment: [GOOD/FAIR/POOR]
+
+✅/❌ Video Recommendations: [PASS/FAIL]
+  - Search working: [YES/NO]
+  - Cache working: [YES/NO]
+  - Credibility sorting: [YES/NO]
+  - Top instructors legitimate: [YES/NO]
+
+───────────────────────────────────────────────────────────────────────────────
+TEST SUITE 4: ADMIN & DEV OS
+───────────────────────────────────────────────────────────────────────────────
+✅/❌ Admin Access Control: [PASS/FAIL]
+  - Non-admins blocked: [YES/NO]
+  - Admins can access: [YES/NO]
+
+✅/❌ Dev OS Intelligence: [PASS/FAIL]
+  - Queries answered: [X/Y]
+  - Real data returned: [YES/NO]
+  - Metrics accurate: [YES/NO]
+
+✅/❌ Current Metrics:
+  - Total users: [X]
+  - Total videos: [X]
+  - Active subscriptions: [X]
+  - Current MRR: $[X]
+  - Signups today: [X]
+  - Videos added today: [X]
+
+───────────────────────────────────────────────────────────────────────────────
+TEST SUITE 5: PERFORMANCE UNDER LOAD
+───────────────────────────────────────────────────────────────────────────────
+✅/❌ Concurrent Users: [PASS/FAIL]
+  - 30 concurrent sessions: [X successful]
+  - Success rate: [X%]
+  - Total time: [Xs]
+  - System remained responsive: [YES/NO]
+
+✅/❌ Cache Performance: [PASS/FAIL]
+  - Cache hit rate: [X%]
+  - Speed improvement: [Xx faster]
+  - Working correctly: [YES/NO]
+
+───────────────────────────────────────────────────────────────────────────────
+TEST SUITE 6: ERROR HANDLING & MONITORING
+───────────────────────────────────────────────────────────────────────────────
+✅/❌ Sentry Monitoring: [PASS/FAIL]
+  - Errors captured: [YES/NO]
+  - Performance tracked: [YES/NO]
+  - Dashboard accessible: [YES/NO]
+
+✅/❌ Graceful Degradation: [PASS/FAIL]
+  - Error handling comprehensive: [YES/NO]
+  - Fallbacks implemented: [YES/NO]
+
+───────────────────────────────────────────────────────────────────────────────
+CRITICAL ISSUES (MUST FIX BEFORE LAUNCH):
+───────────────────────────────────────────────────────────────────────────────
+[List any critical issues found, or "NONE" if all clear]
+
+───────────────────────────────────────────────────────────────────────────────
+WARNINGS (SHOULD FIX BUT NOT BLOCKING):
+───────────────────────────────────────────────────────────────────────────────
+[List any warnings, or "NONE" if all clear]
+
+───────────────────────────────────────────────────────────────────────────────
+PERFORMANCE SUMMARY:
+───────────────────────────────────────────────────────────────────────────────
+Database Queries: [Xms average]
+Professor OS Responses: [Xs first call, Xms cached]
+Video Searches: [Xms first call, Xms cached]
+Concurrent User Capacity: [X users]
+Cache Hit Rate: [X%]
+Success Rate Under Load: [X%]
+
+───────────────────────────────────────────────────────────────────────────────
+LAUNCH READINESS ASSESSMENT:
+───────────────────────────────────────────────────────────────────────────────
+
+Can handle JT Torres launch (500-1000 signups in 24 hours): [YES/NO]
+Can handle 50 concurrent signups: [YES/NO]
+Can handle 100 concurrent users: [YES/NO]
+Security hardened: [YES/NO]
+Monitoring active: [YES/NO]
+Caching optimized: [YES/NO]
+
+FINAL VERDICT: [READY TO LAUNCH / NEEDS FIXES]
+
+[If READY]: The system is production-ready and can confidently handle launch day traffic.
+
+[If NEEDS FIXES]: The following issues must be addressed before launch: [list]
+
+───────────────────────────────────────────────────────────────────────────────
+RECOMMENDATIONS:
+───────────────────────────────────────────────────────────────────────────────
+[Any final recommendations for launch day monitoring or improvements]
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF REPORT
+═══════════════════════════════════════════════════════════════════════════════
+```
+
+───────────────────────────────────────────────────────────────────────────────
+EXECUTION INSTRUCTIONS
+───────────────────────────────────────────────────────────────────────────────
+
+1. Run all tests sequentially
+1. Log all results in detail
+1. If a test fails, log the error and continue
+1. Generate the comprehensive final report
+1. Be thorough - this is the final gate before launch
+1. Test as if the system is already under load
+
+This is production. Take your time. Test everything.
+Excellence is the pillar.
+
+BEGIN TESTING NOW.
+
+```
+---
+
+# **INSTRUCTIONS FOR YOU:**
+
+1. **Paste the entire prompt above into Replit Agent**
+
+2. **Let it run** (will take 10-20 minutes)
+
+3. **While it's running**, prepare for your personal test:
+   - Have your phone ready to sign up
+   - Open admin panel in one tab
+   - Open bjjos.app in incognito in another tab
+   - Prepare to test the full flow
+
+4. **After Replit Agent finishes:**
+   - Review the comprehensive report
+   - Fix any critical issues (unlikely)
+   - Then do your personal walkthrough
+
+5. **Your personal test checklist:**
+```
+
+☐ Sign up as new user (use your personal email)
+☐ Send Professor OS 3-5 different questions
+☐ Search for videos (guard passing, submissions, escapes)
+☐ Check if responses are fast (<2 seconds)
+☐ Open admin panel - check Dev OS
+☐ Ask Dev OS: “How many users signed up today?”
+☐ Ask Dev OS: “How many videos do we have?”
+☐ Ask Dev OS: “What’s the system status?”
+☐ Check that everything feels fast and professional
+
+```
+---
+
+**This is the most thorough pre-launch test possible.**
+
+**When both tests pass (Replit Agent + Your personal test):**
+**→ You're 100% ready to text JT.** ✅
+
+**Let's do this.** 🚀​​​​​​​​​​​​​​​​
+```

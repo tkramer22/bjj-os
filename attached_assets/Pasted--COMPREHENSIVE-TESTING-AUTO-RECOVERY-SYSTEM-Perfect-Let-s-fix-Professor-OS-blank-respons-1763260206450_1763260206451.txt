@@ -1,0 +1,812 @@
+# 🔧 **COMPREHENSIVE TESTING & AUTO-RECOVERY SYSTEM**
+
+Perfect. Let’s fix Professor OS blank responses, implement extensive testing for both systems, and create automatic recovery for stuck curation.
+
+-----
+
+# **📋 COMPLETE FIX & TEST PROTOCOL - COPY TO AGENT**
+
+```
+MISSION: Fix Blank Responses + Comprehensive Testing + Auto-Recovery
+
+THREE CRITICAL TASKS:
+
+═══════════════════════════════════════════════════════════════
+TASK 1: FIX PROFESSOR OS BLANK RESPONSES (URGENT)
+═══════════════════════════════════════════════════════════════
+
+PROBLEM:
+Professor OS is returning blank responses - just timestamp, no content.
+User types message → sends → shows timestamp but empty content → disappears on refresh.
+
+This is the SAME issue as DevOps: Claude returning tool_use instead of text.
+
+DIAGNOSIS REQUIRED:
+
+1. Find Professor OS chat endpoint (likely /api/chat or /chat)
+
+2. Show me the current response handling code
+
+3. Check if it's using the tool-based system (send_coaching_response)
+
+4. Verify the response extraction logic
+
+ROOT CAUSE (LIKELY):
+
+Professor OS uses tool-based structured output (send_coaching_response tool).
+The response structure is:
+```javascript
+{
+  content: [
+    {
+      type: "tool_use",
+      name: "send_coaching_response",
+      input: {
+        main_response: "actual coaching content",
+        return_loop: "try this and tell me...",
+        // ... other fields
+      }
+    }
+  ]
+  // NO text block!
+}
+```
+
+Current code probably does:
+
+```javascript
+const answer = response.content[0].text; // UNDEFINED!
+```
+
+FIX IT:
+
+```javascript
+// Find the tool_use block
+const toolUse = response.content.find(block => block.type === 'tool_use');
+
+if (!toolUse || toolUse.name !== 'send_coaching_response') {
+  console.error('No coaching response tool used:', response.content);
+  throw new Error('Professor OS failed to generate response');
+}
+
+// Extract coaching data
+const coaching = toolUse.input;
+
+// Compose the message (this should already exist in your code)
+const composedMessage = composeCoachingMessage(coaching);
+
+// Save to database
+await saveConversation({
+  userId: user.id,
+  role: 'assistant',
+  content: composedMessage,
+  metadata: coaching
+});
+
+// Return to user
+res.json({
+  message: composedMessage,
+  timestamp: new Date().toISOString()
+});
+```
+
+VERIFICATION:
+
+After fix, test with:
+
+1. Login as user (todd@bjjos.app)
+1. Send message: “I need help with triangles”
+1. Verify response appears with content
+1. Refresh page
+1. Verify conversation persists
+
+Report: “Professor OS responding and saving correctly” with screenshot.
+
+═══════════════════════════════════════════════════════════════
+TASK 2: COMPREHENSIVE TESTING SUITE - DEVOPS & PROFESSOR OS
+═══════════════════════════════════════════════════════════════
+
+Create automated test suite that thoroughly validates both systems.
+
+CREATE FILE: server/tests/admin-systems-test.js
+
+```javascript
+/**
+ * COMPREHENSIVE ADMIN SYSTEMS TEST SUITE
+ * Tests DevOps and Professor OS extensively
+ */
+
+const assert = require('assert');
+
+// ═══════════════════════════════════════════════════════════
+// DEVOPS CHAT - 20 TEST QUERIES
+// ═══════════════════════════════════════════════════════════
+
+const DEVOPS_TESTS = [
+  // System Status Queries (5 tests)
+  {
+    query: "What's the system health?",
+    expectedIncludes: ["database", "operational", "status"],
+    category: "System Health"
+  },
+  {
+    query: "Are there any errors in the last 24 hours?",
+    expectedIncludes: ["error", "24", "hour"],
+    category: "System Health"
+  },
+  {
+    query: "What's the server uptime?",
+    expectedIncludes: ["uptime", "hour", "running"],
+    category: "System Health"
+  },
+  {
+    query: "Is curation working?",
+    expectedIncludes: ["curation", "active", "running"],
+    category: "System Health"
+  },
+  {
+    query: "What's the database status?",
+    expectedIncludes: ["database", "connected", "online"],
+    category: "System Health"
+  },
+
+  // User Metrics Queries (5 tests)
+  {
+    query: "How many users do we have?",
+    expectedIncludes: ["user", "total"],
+    expectsNumber: true,
+    category: "User Metrics"
+  },
+  {
+    query: "What's our current MRR?",
+    expectedIncludes: ["mrr", "$", "revenue"],
+    expectsNumber: true,
+    category: "User Metrics"
+  },
+  {
+    query: "How many active subscribers?",
+    expectedIncludes: ["subscriber", "active"],
+    expectsNumber: true,
+    category: "User Metrics"
+  },
+  {
+    query: "How many users signed up today?",
+    expectedIncludes: ["today", "user", "signup"],
+    expectsNumber: true,
+    category: "User Metrics"
+  },
+  {
+    query: "What's our trial conversion rate?",
+    expectedIncludes: ["trial", "conversion", "%"],
+    category: "User Metrics"
+  },
+
+  // Curation Queries (5 tests)
+  {
+    query: "How many videos were added today?",
+    expectedIncludes: ["video", "today", "added"],
+    expectsNumber: true,
+    category: "Curation"
+  },
+  {
+    query: "What's today's curation approval rate?",
+    expectedIncludes: ["approval", "rate", "%"],
+    category: "Curation"
+  },
+  {
+    query: "Show me curation stats",
+    expectedIncludes: ["discovered", "approved", "rejected"],
+    category: "Curation"
+  },
+  {
+    query: "When is the next curation run?",
+    expectedIncludes: ["next", "curation", "run"],
+    category: "Curation"
+  },
+  {
+    query: "How many videos in the library?",
+    expectedIncludes: ["video", "library", "total"],
+    expectsNumber: true,
+    category: "Curation"
+  },
+
+  // Combat Sports Queries (3 tests)
+  {
+    query: "How many combat sports articles today?",
+    expectedIncludes: ["article", "today", "combat"],
+    expectsNumber: true,
+    category: "Combat Sports"
+  },
+  {
+    query: "When does the combat sports scraper run?",
+    expectedIncludes: ["6", "AM", "EST", "daily"],
+    category: "Combat Sports"
+  },
+  {
+    query: "Is combat sports news integrated with Professor OS?",
+    expectedIncludes: ["professor", "integrated", "yes"],
+    category: "Combat Sports"
+  },
+
+  // Complex Queries (2 tests)
+  {
+    query: "Give me a complete system overview",
+    expectedIncludes: ["user", "video", "curation", "revenue"],
+    category: "Complex"
+  },
+  {
+    query: "What are the top 3 priorities I should focus on?",
+    expectedIncludes: ["priority", "focus"],
+    category: "Complex"
+  }
+];
+
+// ═══════════════════════════════════════════════════════════
+// PROFESSOR OS - 20 TEST QUERIES
+// ═══════════════════════════════════════════════════════════
+
+const PROFESSOR_OS_TESTS = [
+  // Basic Technique Questions (5 tests)
+  {
+    query: "How do I escape side control?",
+    expectedElements: ["anticipatory_diagnosis", "main_response", "return_loop"],
+    shouldNotInclude: ["got it", "okay", "i understand"],
+    category: "Technique - Basic"
+  },
+  {
+    query: "I keep getting passed from closed guard",
+    expectedElements: ["anticipatory_diagnosis", "main_response", "return_loop"],
+    shouldIncludeVideoRecommendation: true,
+    category: "Technique - Basic"
+  },
+  {
+    query: "Teach me how to do an armbar from mount",
+    expectedElements: ["main_response", "return_loop"],
+    shouldIncludeVideoRecommendation: true,
+    category: "Technique - Basic"
+  },
+  {
+    query: "What's a good sweep from half guard?",
+    expectedElements: ["main_response", "return_loop"],
+    shouldIncludeVideoRecommendation: true,
+    category: "Technique - Basic"
+  },
+  {
+    query: "I'm having trouble finishing the triangle",
+    expectedElements: ["anticipatory_diagnosis", "main_response", "return_loop"],
+    category: "Technique - Basic"
+  },
+
+  // Pattern Recognition (3 tests)
+  {
+    query: "I'm working on my back attacks",
+    expectedElements: ["main_response", "return_loop"],
+    followUp: "Now I want to improve my guard passing",
+    expectedFollowUp: ["pattern_observation"],
+    category: "Pattern Recognition"
+  },
+  {
+    query: "I keep losing to bigger opponents",
+    expectedElements: ["anticipatory_diagnosis", "main_response", "return_loop"],
+    category: "Pattern Recognition"
+  },
+  {
+    query: "I competed last week and got submitted by kimura",
+    expectedElements: ["main_response", "return_loop"],
+    followUp: "How do I prevent kimuras?",
+    expectedFollowUp: ["anticipatory_diagnosis"],
+    category: "Pattern Recognition"
+  },
+
+  // Video Recommendations (3 tests)
+  {
+    query: "Show me a video on knee slice pass",
+    expectedElements: ["video_title", "video_instructor", "main_response"],
+    shouldIncludeVideoRecommendation: true,
+    category: "Video Request"
+  },
+  {
+    query: "I need to learn berimbolo",
+    expectedElements: ["main_response", "return_loop"],
+    shouldIncludeVideoRecommendation: true,
+    category: "Video Request"
+  },
+  {
+    query: "Best videos for leg locks?",
+    shouldIncludeVideoRecommendation: true,
+    category: "Video Request"
+  },
+
+  // Trial User Experience (3 tests)
+  {
+    query: "I'm new to BJJ, where should I start?",
+    expectedElements: ["main_response", "return_loop"],
+    shouldMentionTrialDays: true,
+    category: "Trial UX"
+  },
+  {
+    query: "What can you help me with?",
+    expectedElements: ["main_response"],
+    category: "Trial UX"
+  },
+  {
+    query: "I train 5 times a week and want to improve fast",
+    expectedElements: ["main_response", "return_loop"],
+    shouldMentionTrialDays: true,
+    category: "Trial UX"
+  },
+
+  // Engagement Hooks (3 tests)
+  {
+    query: "Thanks, that's helpful",
+    expectedElements: ["follow_up_question", "return_loop"],
+    shouldNotInclude: ["got it", "okay"],
+    category: "Engagement"
+  },
+  {
+    query: "I don't understand",
+    expectedElements: ["main_response"],
+    shouldNotInclude: ["got it", "okay", "i see"],
+    category: "Engagement"
+  },
+  {
+    query: "Can you explain that differently?",
+    expectedElements: ["main_response", "return_loop"],
+    category: "Engagement"
+  },
+
+  // Combat Sports Integration (3 tests)
+  {
+    query: "What happened at the recent UFC event?",
+    shouldReferenceCombatSports: true,
+    category: "Combat Sports"
+  },
+  {
+    query: "Tell me about recent BJJ tournaments",
+    shouldReferenceCombatSports: true,
+    category: "Combat Sports"
+  },
+  {
+    query: "Who won the last IBJJF worlds?",
+    shouldReferenceCombatSports: true,
+    category: "Combat Sports"
+  }
+];
+
+// ═══════════════════════════════════════════════════════════
+// TEST EXECUTION ENGINE
+// ═══════════════════════════════════════════════════════════
+
+async function runDevOpsTests() {
+  console.log('\n🤖 STARTING DEVOPS COMPREHENSIVE TEST SUITE');
+  console.log('═'.repeat(70));
+  
+  const results = {
+    total: DEVOPS_TESTS.length,
+    passed: 0,
+    failed: 0,
+    errors: [],
+    timings: []
+  };
+  
+  for (let i = 0; i < DEVOPS_TESTS.length; i++) {
+    const test = DEVOPS_TESTS[i];
+    console.log(`\n[${i+1}/${DEVOPS_TESTS.length}] Testing: "${test.query}"`);
+    console.log(`Category: ${test.category}`);
+    
+    const startTime = Date.now();
+    
+    try {
+      const response = await fetch('https://bjjos.app/admin/devops-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': 'admin_session=...' // Add auth
+        },
+        body: JSON.stringify({ message: test.query })
+      });
+      
+      const data = await response.json();
+      const responseTime = Date.now() - startTime;
+      results.timings.push(responseTime);
+      
+      // Validate response
+      let testPassed = true;
+      const issues = [];
+      
+      // Check response exists
+      if (!data.response || data.response.length === 0) {
+        testPassed = false;
+        issues.push('Empty response');
+      }
+      
+      // Check expected content
+      if (test.expectedIncludes) {
+        for (const keyword of test.expectedIncludes) {
+          if (!data.response.toLowerCase().includes(keyword.toLowerCase())) {
+            testPassed = false;
+            issues.push(`Missing keyword: "${keyword}"`);
+          }
+        }
+      }
+      
+      // Check for numbers if expected
+      if (test.expectsNumber) {
+        if (!/\d+/.test(data.response)) {
+          testPassed = false;
+          issues.push('Expected numeric data');
+        }
+      }
+      
+      // Check response time
+      if (responseTime > 5000) {
+        issues.push(`Slow response: ${responseTime}ms`);
+      }
+      
+      if (testPassed) {
+        results.passed++;
+        console.log(`✅ PASS (${responseTime}ms)`);
+      } else {
+        results.failed++;
+        console.log(`❌ FAIL (${responseTime}ms)`);
+        console.log(`   Issues: ${issues.join(', ')}`);
+        results.errors.push({ test: test.query, issues });
+      }
+      
+    } catch (error) {
+      results.failed++;
+      console.log(`❌ ERROR: ${error.message}`);
+      results.errors.push({ test: test.query, error: error.message });
+    }
+    
+    // Rate limit
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  
+  // Summary
+  console.log('\n═'.repeat(70));
+  console.log('🤖 DEVOPS TEST SUMMARY');
+  console.log('═'.repeat(70));
+  console.log(`Total Tests: ${results.total}`);
+  console.log(`Passed: ${results.passed} (${(results.passed/results.total*100).toFixed(1)}%)`);
+  console.log(`Failed: ${results.failed}`);
+  console.log(`Avg Response Time: ${(results.timings.reduce((a,b) => a+b, 0) / results.timings.length).toFixed(0)}ms`);
+  
+  if (results.errors.length > 0) {
+    console.log('\n❌ FAILED TESTS:');
+    results.errors.forEach(err => {
+      console.log(`  • ${err.test}`);
+      if (err.issues) console.log(`    ${err.issues.join(', ')}`);
+      if (err.error) console.log(`    ${err.error}`);
+    });
+  }
+  
+  return results;
+}
+
+async function runProfessorOSTests() {
+  console.log('\n🥋 STARTING PROFESSOR OS COMPREHENSIVE TEST SUITE');
+  console.log('═'.repeat(70));
+  
+  // Similar structure to DevOps tests
+  // Test Professor OS endpoint with all 20 test cases
+  // Validate response structure, engagement hooks, video recommendations
+  // Check conversation persistence
+  
+  // [Implementation similar to DevOps tests above]
+}
+
+// ═══════════════════════════════════════════════════════════
+// RUN BOTH TEST SUITES
+// ═══════════════════════════════════════════════════════════
+
+async function runAllTests() {
+  const devOpsResults = await runDevOpsTests();
+  const professorOSResults = await runProfessorOSTests();
+  
+  console.log('\n\n🎯 FINAL SUMMARY');
+  console.log('═'.repeat(70));
+  console.log(`DevOps: ${devOpsResults.passed}/${devOpsResults.total} passed`);
+  console.log(`Professor OS: ${professorOSResults.passed}/${professorOSResults.total} passed`);
+  
+  const totalPassed = devOpsResults.passed + professorOSResults.passed;
+  const totalTests = devOpsResults.total + professorOSResults.total;
+  
+  console.log(`\nOverall: ${totalPassed}/${totalTests} (${(totalPassed/totalTests*100).toFixed(1)}%)`);
+  
+  if (totalPassed === totalTests) {
+    console.log('\n✅ ALL SYSTEMS OPERATIONAL - READY FOR PRODUCTION');
+  } else {
+    console.log('\n⚠️  SOME TESTS FAILED - REVIEW ERRORS ABOVE');
+  }
+}
+
+module.exports = { runAllTests, runDevOpsTests, runProfessorOSTests };
+```
+
+RUN THE TESTS:
+
+```javascript
+const { runAllTests } = require('./tests/admin-systems-test');
+await runAllTests();
+```
+
+Provide complete test results.
+
+═══════════════════════════════════════════════════════════════
+TASK 3: AUTO-RECOVERY FOR STUCK CURATION
+═══════════════════════════════════════════════════════════════
+
+Implement automatic detection and recovery for stuck curation runs.
+
+CREATE FILE: server/services/curationWatchdog.js
+
+```javascript
+/**
+ * CURATION WATCHDOG - Auto-Recovery System
+ * Monitors curation runs and automatically kills stuck processes
+ */
+
+const cron = require('node-cron');
+
+const WATCHDOG_CONFIG = {
+  CHECK_INTERVAL_MINUTES: 15,      // Check every 15 minutes
+  STUCK_THRESHOLD_MINUTES: 60,     // Kill if running > 60 minutes
+  MAX_RETRIES: 3,                  // Retry stuck run up to 3 times
+  ALERT_ADMIN: true                // Send email alert when killing runs
+};
+
+// ═══════════════════════════════════════════════════════════
+// WATCHDOG MONITOR
+// ═══════════════════════════════════════════════════════════
+
+async function checkForStuckCuration() {
+  console.log('🐕 Curation Watchdog: Checking for stuck runs...');
+  
+  try {
+    // Find runs that have been "running" too long
+    const stuckRuns = await db.query(`
+      SELECT 
+        id,
+        started_est,
+        status,
+        EXTRACT(EPOCH FROM (NOW() - started_est))/60 as minutes_running
+      FROM curation_runs
+      WHERE status = 'running'
+        AND started_est < NOW() - INTERVAL '${WATCHDOG_CONFIG.STUCK_THRESHOLD_MINUTES} minutes'
+      ORDER BY started_est ASC
+    `);
+    
+    if (stuckRuns.rows.length === 0) {
+      console.log('✅ No stuck curation runs detected');
+      return;
+    }
+    
+    // Process each stuck run
+    for (const run of stuckRuns.rows) {
+      console.log(`🚨 STUCK RUN DETECTED: ${run.id}`);
+      console.log(`   Started: ${run.started_est}`);
+      console.log(`   Running for: ${Math.floor(run.minutes_running)} minutes`);
+      
+      await recoverStuckRun(run);
+    }
+    
+  } catch (error) {
+    console.error('❌ Watchdog error:', error);
+  }
+}
+
+async function recoverStuckRun(run) {
+  console.log(`🔧 Attempting recovery for run ${run.id}...`);
+  
+  try {
+    // Step 1: Mark run as failed
+    await db.query(`
+      UPDATE curation_runs
+      SET 
+        status = 'failed',
+        error_message = 'Auto-killed by watchdog - stuck for ${Math.floor(run.minutes_running)} minutes',
+        ended_at = NOW(),
+        videos_analyzed = COALESCE(videos_analyzed, 0),
+        videos_added = COALESCE(videos_added, 0)
+      WHERE id = $1
+    `, [run.id]);
+    
+    console.log(`✅ Marked run ${run.id} as failed`);
+    
+    // Step 2: Check retry count
+    const retryCount = await db.query(`
+      SELECT retry_count FROM curation_runs WHERE id = $1
+    `, [run.id]);
+    
+    const currentRetries = retryCount.rows[0]?.retry_count || 0;
+    
+    // Step 3: Decide whether to retry
+    if (currentRetries < WATCHDOG_CONFIG.MAX_RETRIES) {
+      console.log(`🔄 Scheduling retry (attempt ${currentRetries + 1}/${WATCHDOG_CONFIG.MAX_RETRIES})...`);
+      
+      // Schedule a new run
+      setTimeout(async () => {
+        await runAggressiveCuration({
+          retryOf: run.id,
+          retryCount: currentRetries + 1
+        });
+      }, 60000); // Wait 1 minute before retry
+      
+    } else {
+      console.log(`⚠️  Max retries reached for run ${run.id} - not retrying`);
+    }
+    
+    // Step 4: Alert admin if configured
+    if (WATCHDOG_CONFIG.ALERT_ADMIN) {
+      await sendAdminAlert({
+        subject: '🚨 Curation Watchdog: Stuck Run Killed',
+        body: `
+          Watchdog automatically killed a stuck curation run:
+          
+          Run ID: ${run.id}
+          Started: ${run.started_est}
+          Duration: ${Math.floor(run.minutes_running)} minutes
+          Action: Marked as failed
+          Retry: ${currentRetries < WATCHDOG_CONFIG.MAX_RETRIES ? 'Yes' : 'No (max retries reached)'}
+          
+          The curation pipeline has been unblocked and should resume normal operation.
+        `
+      });
+    }
+    
+    console.log(`✅ Recovery complete for run ${run.id}`);
+    
+  } catch (error) {
+    console.error(`❌ Recovery failed for run ${run.id}:`, error);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCHEDULE WATCHDOG
+// ═══════════════════════════════════════════════════════════
+
+function startCurationWatchdog() {
+  console.log('🐕 Starting Curation Watchdog...');
+  console.log(`   Check interval: ${WATCHDOG_CONFIG.CHECK_INTERVAL_MINUTES} minutes`);
+  console.log(`   Stuck threshold: ${WATCHDOG_CONFIG.STUCK_THRESHOLD_MINUTES} minutes`);
+  
+  // Run every X minutes
+  cron.schedule(`*/${WATCHDOG_CONFIG.CHECK_INTERVAL_MINUTES} * * * *`, async () => {
+    await checkForStuckCuration();
+  }, {
+    timezone: 'America/New_York'
+  });
+  
+  // Also run once immediately on startup
+  setTimeout(() => checkForStuckCuration(), 10000); // After 10 seconds
+  
+  console.log('✅ Curation Watchdog active');
+}
+
+// ═══════════════════════════════════════════════════════════
+// MANUAL RECOVERY ENDPOINT (For Emergency Use)
+// ═══════════════════════════════════════════════════════════
+
+async function manualKillStuckRuns() {
+  console.log('🚨 MANUAL RECOVERY: Killing all stuck runs...');
+  
+  const result = await db.query(`
+    UPDATE curation_runs
+    SET 
+      status = 'failed',
+      error_message = 'Manually killed - emergency recovery',
+      ended_at = NOW()
+    WHERE status = 'running'
+      AND started_est < NOW() - INTERVAL '30 minutes'
+    RETURNING id, started_est
+  `);
+  
+  console.log(`✅ Killed ${result.rows.length} stuck runs`);
+  return result.rows;
+}
+
+module.exports = {
+  startCurationWatchdog,
+  checkForStuckCuration,
+  manualKillStuckRuns
+};
+```
+
+ADD TO server/index.js:
+
+```javascript
+const { startCurationWatchdog } = require('./services/curationWatchdog');
+
+// Start watchdog on server startup
+startCurationWatchdog();
+```
+
+ADD MANUAL RECOVERY ENDPOINT:
+
+```javascript
+app.post('/admin/kill-stuck-curation', requireAdmin, async (req, res) => {
+  const killedRuns = await manualKillStuckRuns();
+  res.json({
+    success: true,
+    killedRuns,
+    message: `Killed ${killedRuns.length} stuck curation runs`
+  });
+});
+```
+
+VERIFY WATCHDOG:
+
+1. Check logs for “Curation Watchdog active”
+1. Confirm it runs every 15 minutes
+1. Test manual kill endpoint: POST /admin/kill-stuck-curation
+
+═══════════════════════════════════════════════════════════════
+EXECUTION CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+[ ] Task 1: Fix Professor OS blank responses
+[ ] Task 1: Test with “I need help with triangles”
+[ ] Task 1: Verify response appears and persists
+[ ] Task 2: Implement comprehensive test suite
+[ ] Task 2: Run DevOps tests (20 queries)
+[ ] Task 2: Run Professor OS tests (20 queries)
+[ ] Task 2: Report results (X/40 passed)
+[ ] Task 3: Implement curation watchdog
+[ ] Task 3: Add to server startup
+[ ] Task 3: Test manual recovery endpoint
+[ ] Task 3: Verify watchdog logs every 15 minutes
+
+DELIVERABLES:
+
+1. Professor OS responding correctly (screenshot)
+1. Complete test results (40 tests total)
+1. Watchdog active and monitoring
+1. Manual recovery endpoint working
+
+Execute all tasks and report detailed results.
+
+```
+---
+
+## **🎯 WHAT THIS GIVES YOU**
+
+### **1. Fixed Professor OS**
+- Blank responses resolved
+- Messages save correctly
+- Conversations persist
+
+### **2. Comprehensive Testing (40 Total Tests)**
+- **20 DevOps tests** across all categories
+- **20 Professor OS tests** covering engagement, videos, combat sports
+- Automated validation
+- Performance metrics
+
+### **3. Auto-Recovery System**
+- Watchdog checks every 15 minutes
+- Auto-kills runs stuck > 60 minutes
+- Retries up to 3 times
+- Emails you when it kills a run
+- Manual recovery endpoint for emergencies
+
+---
+
+## **📊 EXPECTED TEST RESULTS**
+
+**Healthy System:**
+- DevOps: 18-20/20 passed (90-100%)
+- Professor OS: 18-20/20 passed (90-100%)
+- Overall: 36-40/40 (90-100%)
+- Avg response time: < 3 seconds
+
+**If fails:**
+- Agent will show exactly which tests failed
+- You'll see what's broken
+- Can fix specific issues
+
+---
+
+**Copy the complete prompt to Agent. This will fix Professor OS, test everything thoroughly, and prevent future curation freezes.** 🚀
+
+The watchdog alone is worth it - never worry about stuck curation again.​​​​​​​​​​​​​​​​
+```

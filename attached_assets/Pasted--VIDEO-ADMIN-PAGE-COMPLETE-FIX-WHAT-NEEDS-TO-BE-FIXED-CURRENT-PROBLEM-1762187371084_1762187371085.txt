@@ -1,0 +1,817 @@
+# **📹 VIDEO ADMIN PAGE - COMPLETE FIX**
+
+-----
+
+## **WHAT NEEDS TO BE FIXED:**
+
+```
+CURRENT PROBLEMS:
+1. ❌ Admin controls exposed (Content-First, Old Curator buttons)
+2. ❌ Automated Curation Controls section visible
+3. ❌ Quality Threshold slider (should be admin-only, separate page)
+4. ❌ "Run Curation Now" button (belongs in Dev OS or Dashboard)
+5. ❌ Dropdowns don't filter anything
+6. ❌ Mixed admin/user interface
+
+TARGET STATE:
+Clean admin video management page with:
+✅ Video statistics (Total, Added Today, Searched Today, Rejected Today)
+✅ List of all videos with admin actions
+✅ Working search and filters
+✅ Delete, Edit, Quality adjust options
+✅ No curation controls (those belong in Dev OS)
+```
+
+-----
+
+## **COMPLETE VIDEO ADMIN PAGE FIX PROMPT:**
+
+**Copy this ENTIRE prompt and paste into Replit Agent:**
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+ADMIN VIDEO MANAGEMENT PAGE - COMPLETE REDESIGN
+═══════════════════════════════════════════════════════════════════════════════
+
+MISSION: Transform /admin/videos or /admin/video-management into a clean
+admin interface for managing the video library. Remove all curation controls
+(those belong in Dev OS). Focus on video management, search, and admin actions.
+
+CRITICAL: This is the ADMIN page, NOT the user-facing /videos page.
+Do NOT modify /videos (user page) - only modify the admin video management page.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: REMOVE ALL CURATION CONTROLS FROM VIDEO PAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+REMOVE THESE ELEMENTS:
+❌ "Content-First (20x5)" button
+❌ "Old Curator" button  
+❌ "Automated Curation Controls" section
+❌ "Automatic Curation" toggle
+❌ "Manual Review Mode" toggle
+❌ "Quality Threshold" slider
+❌ "Run Curation Now" button
+❌ "Last run: Never" status
+
+REASON: Curation controls belong in Dev OS, not video management.
+Admin should manage existing videos here, not trigger curation.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: CREATE NEW ADMIN VIDEO MANAGEMENT LAYOUT
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+// client/src/pages/admin/VideoManagement.tsx
+
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+
+export default function AdminVideoManagement() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [beltFilter, setBeltFilter] = useState('all');
+  const [styleFilter, setStyleFilter] = useState('all');
+  const [qualityFilter, setQualityFilter] = useState('all');
+  
+  const { data: stats } = useQuery({
+    queryKey: ['video-stats'],
+    queryFn: () => fetch('/api/admin/videos/stats').then(r => r.json())
+  });
+  
+  const { data: videos, refetch } = useQuery({
+    queryKey: ['admin-videos', searchQuery, beltFilter, styleFilter, qualityFilter],
+    queryFn: () => fetch(
+      `/api/admin/videos?` +
+      `search=${encodeURIComponent(searchQuery)}` +
+      `&belt=${beltFilter}` +
+      `&style=${styleFilter}` +
+      `&quality=${qualityFilter}`
+    ).then(r => r.json())
+  });
+  
+  return (
+    <div className="admin-video-management">
+      {/* Header */}
+      <header className="page-header">
+        <div>
+          <h1>Video Library Management</h1>
+          <p>Manage curated BJJ technique videos</p>
+        </div>
+      </header>
+      
+      {/* Statistics Cards */}
+      <section className="video-stats">
+        <StatCard
+          label="Total Videos"
+          value={stats?.totalVideos || 0}
+          icon="📹"
+        />
+        <StatCard
+          label="Added Today"
+          value={stats?.addedToday || 0}
+          icon="✅"
+          trend="up"
+        />
+        <StatCard
+          label="Searched Today"
+          value={stats?.searchedToday || 0}
+          icon="🔍"
+        />
+        <StatCard
+          label="Rejected Today"
+          value={(stats?.searchedToday || 0) - (stats?.addedToday || 0)}
+          icon="❌"
+        />
+      </section>
+      
+      {/* Search and Filters */}
+      <section className="search-filters">
+        <div className="search-box">
+          <input
+            type="text"
+            placeholder="Search videos by title, instructor, or technique..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="search-input"
+          />
+        </div>
+        
+        <div className="filters">
+          <select 
+            value={beltFilter} 
+            onChange={(e) => setBeltFilter(e.target.value)}
+            className="filter-select"
+          >
+            <option value="all">All Belts</option>
+            <option value="white">White Belt</option>
+            <option value="blue">Blue Belt</option>
+            <option value="purple">Purple Belt</option>
+            <option value="brown">Brown Belt</option>
+            <option value="black">Black Belt</option>
+          </select>
+          
+          <select
+            value={styleFilter}
+            onChange={(e) => setStyleFilter(e.target.value)}
+            className="filter-select"
+          >
+            <option value="all">All Styles</option>
+            <option value="gi">Gi</option>
+            <option value="nogi">No-Gi</option>
+            <option value="both">Both</option>
+          </select>
+          
+          <select
+            value={qualityFilter}
+            onChange={(e) => setQualityFilter(e.target.value)}
+            className="filter-select"
+          >
+            <option value="all">All Quality</option>
+            <option value="9+">Elite (9+)</option>
+            <option value="8+">High (8+)</option>
+            <option value="7+">Good (7+)</option>
+            <option value="6+">Acceptable (6+)</option>
+          </select>
+        </div>
+      </section>
+      
+      {/* Video List */}
+      <section className="video-list">
+        <div className="list-header">
+          <h2>Videos ({videos?.length || 0})</h2>
+          <button onClick={() => refetch()} className="refresh-btn">
+            🔄 Refresh
+          </button>
+        </div>
+        
+        <div className="video-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Thumbnail</th>
+                <th>Title</th>
+                <th>Instructor</th>
+                <th>Belt</th>
+                <th>Style</th>
+                <th>Quality</th>
+                <th>Added</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {videos?.map(video => (
+                <VideoRow 
+                  key={video.id} 
+                  video={video}
+                  onDelete={() => handleDelete(video.id)}
+                  onEdit={() => handleEdit(video.id)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon, trend }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-icon">{icon}</div>
+      <div className="stat-content">
+        <div className="stat-label">{label}</div>
+        <div className="stat-value">{value}</div>
+      </div>
+      {trend && <div className="stat-trend">{trend === 'up' ? '↑' : '↓'}</div>}
+    </div>
+  );
+}
+
+function VideoRow({ video, onDelete, onEdit }) {
+  const [showActions, setShowActions] = useState(false);
+  
+  return (
+    <tr className="video-row">
+      <td>
+        <img 
+          src={video.thumbnail} 
+          alt={video.title}
+          className="video-thumbnail"
+        />
+      </td>
+      <td className="video-title">
+        <a href={video.url} target="_blank" rel="noopener noreferrer">
+          {video.title}
+        </a>
+      </td>
+      <td>{video.instructorName}</td>
+      <td>
+        <span className={`belt-badge belt-${video.beltLevel}`}>
+          {video.beltLevel}
+        </span>
+      </td>
+      <td>
+        <span className={`style-badge style-${video.giType}`}>
+          {video.giType === 'gi' ? 'Gi' : 'No-Gi'}
+        </span>
+      </td>
+      <td>
+        <span className="quality-score">
+          {video.credibilityScore}/10
+        </span>
+      </td>
+      <td className="added-date">
+        {formatDistanceToNow(new Date(video.createdAt), { addSuffix: true })}
+      </td>
+      <td className="actions">
+        <button 
+          onClick={() => window.open(video.url, '_blank')}
+          className="action-btn view-btn"
+        >
+          👁️ View
+        </button>
+        <button 
+          onClick={onEdit}
+          className="action-btn edit-btn"
+        >
+          ✏️ Edit
+        </button>
+        <button 
+          onClick={onDelete}
+          className="action-btn delete-btn"
+        >
+          🗑️ Delete
+        </button>
+      </td>
+    </tr>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: CREATE BACKEND API FOR ADMIN VIDEO MANAGEMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+// server/routes/admin.ts
+
+// Get video statistics
+app.get('/api/admin/videos/stats', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Total videos
+    const totalVideos = await db.select({ count: sql<number>`count(*)` })
+      .from(videos);
+    
+    // Videos added today
+    const addedToday = await db.select({ count: sql<number>`count(*)` })
+      .from(videos)
+      .where(sql`DATE(created_at) = ${today}`);
+    
+    // Curation stats for today
+    const curationStats = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(videos_added), 0) as added,
+        COALESCE(SUM(videos_screened), 0) as searched
+      FROM curation_runs
+      WHERE run_date = ${today}
+    `);
+    
+    res.json({
+      totalVideos: Number(totalVideos[0].count),
+      addedToday: Number(curationStats.rows[0].added),
+      searchedToday: Number(curationStats.rows[0].searched)
+    });
+    
+  } catch (error) {
+    console.error('Video stats error:', error);
+    res.status(500).json({ error: 'Failed to load stats' });
+  }
+});
+
+// Get filtered videos
+app.get('/api/admin/videos', async (req, res) => {
+  try {
+    const { search, belt, style, quality } = req.query;
+    
+    let query = db.select().from(videos);
+    
+    // Apply search filter
+    if (search && search !== '') {
+      query = query.where(
+        or(
+          sql`LOWER(title) LIKE ${`%${search.toLowerCase()}%`}`,
+          sql`LOWER(instructor_name) LIKE ${`%${search.toLowerCase()}%`}`
+        )
+      );
+    }
+    
+    // Apply belt filter
+    if (belt && belt !== 'all') {
+      query = query.where(eq(videos.beltLevel, belt));
+    }
+    
+    // Apply style filter
+    if (style && style !== 'all') {
+      if (style === 'both') {
+        // No filter for "both"
+      } else {
+        query = query.where(eq(videos.giType, style));
+      }
+    }
+    
+    // Apply quality filter
+    if (quality && quality !== 'all') {
+      const minQuality = parseFloat(quality.replace('+', ''));
+      query = query.where(gte(videos.credibilityScore, minQuality));
+    }
+    
+    // Order by most recent first
+    query = query.orderBy(desc(videos.createdAt));
+    
+    const results = await query;
+    
+    res.json(results);
+    
+  } catch (error) {
+    console.error('Video fetch error:', error);
+    res.status(500).json({ error: 'Failed to load videos' });
+  }
+});
+
+// Delete video (admin only)
+app.delete('/api/admin/videos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await db.delete(videos).where(eq(videos.id, parseInt(id)));
+    
+    res.json({ success: true, message: 'Video deleted' });
+    
+  } catch (error) {
+    console.error('Video delete error:', error);
+    res.status(500).json({ error: 'Failed to delete video' });
+  }
+});
+
+// Update video (admin only)
+app.patch('/api/admin/videos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    await db.update(videos)
+      .set(updates)
+      .where(eq(videos.id, parseInt(id)));
+    
+    res.json({ success: true, message: 'Video updated' });
+    
+  } catch (error) {
+    console.error('Video update error:', error);
+    res.status(500).json({ error: 'Failed to update video' });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: IMPLEMENT WORKING FILTERS
+═══════════════════════════════════════════════════════════════════════════════
+
+Ensure filters trigger API calls with proper query parameters:
+
+```typescript
+// When filter changes, refetch with new parameters
+useEffect(() => {
+  refetch();
+}, [searchQuery, beltFilter, styleFilter, qualityFilter]);
+
+// Build query URL with all filters
+const buildQueryUrl = () => {
+  const params = new URLSearchParams();
+  if (searchQuery) params.append('search', searchQuery);
+  if (beltFilter !== 'all') params.append('belt', beltFilter);
+  if (styleFilter !== 'all') params.append('style', styleFilter);
+  if (qualityFilter !== 'all') params.append('quality', qualityFilter);
+  return `/api/admin/videos?${params.toString()}`;
+};
+```
+
+Verify backend SQL queries actually filter results:
+
+- Search: Use LIKE with LOWER() for case-insensitive
+- Belt: Use eq() for exact match
+- Style: Use eq() for gi/nogi
+- Quality: Use gte() for minimum score
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: ADD ADMIN ACTIONS (DELETE, EDIT)
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+async function handleDelete(videoId: number) {
+  if (!confirm('Delete this video? This cannot be undone.')) return;
+  
+  try {
+    const response = await fetch(`/api/admin/videos/${videoId}`, {
+      method: 'DELETE'
+    });
+    
+    if (response.ok) {
+      // Show success toast
+      refetch(); // Reload video list
+    } else {
+      // Show error toast
+    }
+  } catch (error) {
+    console.error('Delete failed:', error);
+  }
+}
+
+async function handleEdit(videoId: number) {
+  // Open edit modal with video details
+  const video = videos.find(v => v.id === videoId);
+  
+  // Show modal with form to edit:
+  // - Title
+  // - Instructor name
+  // - Belt level
+  // - Gi/No-Gi
+  // - Quality score
+  // - Tags/categories
+  
+  // On submit, call PATCH endpoint
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: STYLING FOR ADMIN VIDEO PAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+```css
+/* Admin Video Management Styles */
+
+.admin-video-management {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.page-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+}
+
+.page-header p {
+  font-size: 14px;
+  color: #a0a0b0;
+  margin: 4px 0 0 0;
+}
+
+/* Statistics Cards */
+.video-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stat-icon {
+  font-size: 32px;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #808090;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+}
+
+.stat-trend {
+  font-size: 20px;
+  color: #4ade80;
+}
+
+/* Search and Filters */
+.search-filters {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.search-box {
+  margin-bottom: 16px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: #0f0f1e;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+}
+
+.filter-select {
+  padding: 10px 16px;
+  background: #0f0f1e;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* Video Table */
+.video-list {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.list-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+}
+
+.refresh-btn {
+  padding: 8px 16px;
+  background: #667eea;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.video-table {
+  overflow-x: auto;
+}
+
+.video-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.video-table th {
+  text-align: left;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #a0a0b0;
+  border-bottom: 1px solid #2a2a3e;
+}
+
+.video-table td {
+  padding: 12px;
+  border-bottom: 1px solid #2a2a3e;
+}
+
+.video-thumbnail {
+  width: 120px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.video-title a {
+  color: white;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.video-title a:hover {
+  color: #667eea;
+}
+
+.belt-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.belt-white { background: #ffffff; color: #000; }
+.belt-blue { background: #3b82f6; color: #fff; }
+.belt-purple { background: #a855f7; color: #fff; }
+.belt-brown { background: #92400e; color: #fff; }
+.belt-black { background: #000000; color: #ffd700; }
+
+.style-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #667eea;
+  color: white;
+}
+
+.quality-score {
+  font-weight: 600;
+  color: #4ade80;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.view-btn {
+  background: #667eea;
+  color: white;
+}
+
+.edit-btn {
+  background: #f59e0b;
+  color: white;
+}
+
+.delete-btn {
+  background: #ef4444;
+  color: white;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 7: VERIFY FILTERS WORK
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, test each filter:
+
+SEARCH:
+□ Type “guard” → Shows only videos with “guard” in title/instructor
+□ Type “Gordon Ryan” → Shows only his videos
+□ Clear search → Shows all videos
+
+BELT FILTER:
+□ Select “White Belt” → Shows only white belt videos
+□ Select “Black Belt” → Shows only black belt videos
+□ Select “All Belts” → Shows all videos
+
+STYLE FILTER:
+□ Select “Gi” → Shows only gi videos
+□ Select “No-Gi” → Shows only no-gi videos
+□ Select “Both” → Shows all videos
+
+QUALITY FILTER:
+□ Select “Elite (9+)” → Shows only 9.0+ videos
+□ Select “Good (7+)” → Shows 7.0+ videos
+□ Select “All Quality” → Shows all videos
+
+COMBINED FILTERS:
+□ Search “guard” + Belt “Blue” + Style “Gi” → Shows filtered results
+□ All filters work together correctly
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After completion, verify:
+
+REMOVED:
+□ ❌ Content-First button gone
+□ ❌ Old Curator button gone
+□ ❌ Automated Curation Controls section gone
+□ ❌ Quality Threshold slider gone
+□ ❌ Run Curation Now button gone
+
+ADDED:
+□ ✅ Video stats (Total, Added Today, Searched Today, Rejected Today)
+□ ✅ Search box works
+□ ✅ Belt filter works
+□ ✅ Style filter works
+□ ✅ Quality filter works
+□ ✅ Video table shows all videos
+□ ✅ Delete button works
+□ ✅ Edit button works (or opens modal)
+□ ✅ View button opens YouTube
+
+FUNCTIONALITY:
+□ ✅ Filters update results in real-time
+□ ✅ Multiple filters work together
+□ ✅ Admin can manage videos easily
+□ ✅ No curation controls visible
+
+═══════════════════════════════════════════════════════════════════════════════
+
+BEGIN ADMIN VIDEO PAGE REDESIGN NOW.
+
+This is the admin page for VIDEO MANAGEMENT only.
+Do NOT touch /videos (user page).
+Only modify /admin/videos or /admin/video-management.
+
+Report back when complete with confirmation that:
+
+1. Curation controls removed
+1. Filters working
+1. Admin actions functional
+
+```
+---
+
+**This prompt will transform the admin video page into a clean management interface with working filters and no curation controls.** 🎯
+
+**Paste this into Replit Agent now!** 🚀​​​​​​​​​​​​​​​​
+```

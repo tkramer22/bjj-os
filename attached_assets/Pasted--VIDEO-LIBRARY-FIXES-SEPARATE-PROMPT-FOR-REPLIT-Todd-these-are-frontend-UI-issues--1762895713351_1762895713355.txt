@@ -1,0 +1,300 @@
+# **🎯 VIDEO LIBRARY FIXES - SEPARATE PROMPT FOR REPLIT**
+
+Todd, these are **frontend/UI issues** - separate from the Professor OS learning system Agent is building. Let me give you a focused prompt to fix these.
+
+-----
+
+## **📋 SEND THIS TO REPLIT AGENT (NEW CONVERSATION):**
+
+```
+═══════════════════════════════════════════════════════════════
+🎯 FIX VIDEO LIBRARY UX ISSUES
+═══════════════════════════════════════════════════════════════
+
+CRITICAL ISSUES TO FIX:
+
+ISSUE 1: Videos without thumbnails showing in "Highest Quality"
+ISSUE 2: Sort options need refinement (remove quality, keep useful ones)
+ISSUE 3: Missing video duration display on saved videos
+ISSUE 4: Technique dropdown doesn't persist selection
+ISSUE 5: Need instructor search/filter
+
+═══════════════════════════════════════════════════════════════
+FIX 1: HIDE VIDEOS WITHOUT THUMBNAILS
+═══════════════════════════════════════════════════════════════
+
+Problem: Videos with missing thumbnails (gray placeholder) appear in library
+
+Solution: Filter them out in the query
+
+File: Wherever video library query happens (likely `server/routes.ts` or video API)
+
+```typescript
+// Find the video library query
+// Add filter for thumbnailUrl
+
+const videos = await db.select()
+  .from(aiVideoKnowledge)
+  .where(
+    and(
+      sql`${aiVideoKnowledge.thumbnailUrl} IS NOT NULL`,
+      sql`${aiVideoKnowledge.thumbnailUrl} != ''`,
+      sql`${aiVideoKnowledge.qualityScore} IS NOT NULL`
+    )
+  )
+  .orderBy(/* sorting logic */)
+  .limit(500);
+```
+
+TEST: After fix, “Highest Quality” should show NO gray placeholder videos.
+
+═══════════════════════════════════════════════════════════════
+FIX 2: SIMPLIFIED SORT OPTIONS
+═══════════════════════════════════════════════════════════════
+
+Current options:
+
+- Newest First ✅ KEEP
+- Highest Quality ❌ REMOVE (or fix to hide no-thumbnail videos first)
+- All ❓ UNCLEAR
+
+New options should be:
+
+1. Newest First (default) - Sort by upload/added date
+1. Most Watched - Sort by view count
+1. By Instructor - Search/filter by instructor name
+
+File: `client/src/pages/library.tsx` (or wherever filters are)
+
+```typescript
+// Replace sort dropdown with:
+
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest First' },
+  { value: 'popular', label: 'Most Watched' },
+  { value: 'instructor', label: 'By Instructor' }
+];
+
+// Update query logic:
+function getSortQuery(sortBy: string) {
+  switch(sortBy) {
+    case 'newest':
+      return desc(aiVideoKnowledge.createdAt);
+    case 'popular':
+      return desc(aiVideoKnowledge.viewCount); // or videoInteractions count
+    case 'instructor':
+      // Show instructor search input instead of sorting
+      return null;
+    default:
+      return desc(aiVideoKnowledge.createdAt);
+  }
+}
+```
+
+REMOVE these filters entirely:
+
+- ❌ “All Belts” dropdown (not useful - users at their level already)
+- ❌ “All Types” dropdown (doesn’t persist anyway)
+
+═══════════════════════════════════════════════════════════════
+FIX 3: ADD INSTRUCTOR SEARCH
+═══════════════════════════════════════════════════════════════
+
+When user selects “By Instructor” sort:
+
+- Show search input: “Search by instructor name…”
+- Filter videos by instructor_name field
+- Show instructor name prominently on each video card
+
+```typescript
+// Add instructor filter state
+const [instructorFilter, setInstructorFilter] = useState('');
+
+// Add to query
+const videos = await db.select()
+  .from(aiVideoKnowledge)
+  .where(
+    instructorFilter 
+      ? sql`LOWER(${aiVideoKnowledge.instructorName}) LIKE ${`%${instructorFilter.toLowerCase()}%`}`
+      : undefined
+  );
+
+// UI component
+{sortBy === 'instructor' && (
+  <input
+    type="text"
+    placeholder="Search by instructor name..."
+    value={instructorFilter}
+    onChange={(e) => setInstructorFilter(e.target.value)}
+    className="instructor-search"
+  />
+)}
+```
+
+═══════════════════════════════════════════════════════════════
+FIX 4: VIDEO DURATION ON SAVED VIDEOS
+═══════════════════════════════════════════════════════════════
+
+Problem: Saved videos don’t show video length
+
+File: Saved videos component (likely `client/src/pages/saved-videos.tsx`)
+
+```typescript
+// Ensure duration is fetched from database
+const savedVideos = await db.select({
+  id: savedVideos.id,
+  videoId: savedVideos.videoId,
+  title: aiVideoKnowledge.title,
+  instructor: aiVideoKnowledge.instructorName,
+  thumbnailUrl: aiVideoKnowledge.thumbnailUrl,
+  duration: aiVideoKnowledge.duration, // ADD THIS
+  // ... other fields
+})
+.from(savedVideos)
+.join(aiVideoKnowledge, eq(savedVideos.videoId, aiVideoKnowledge.id));
+
+// Display duration on video card
+<div className="video-card">
+  <img src={thumbnailUrl} />
+  {duration && (
+    <span className="duration-badge">
+      {formatDuration(duration)}
+    </span>
+  )}
+  <h3>{title}</h3>
+  <p>{instructor}</p>
+</div>
+
+// Helper function
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+```
+
+Add CSS for duration badge:
+
+```css
+.duration-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+FIX 5: TECHNIQUE DROPDOWN PERSISTENCE
+═══════════════════════════════════════════════════════════════
+
+Problem: Technique dropdown selection doesn’t stick
+
+This is likely a state management issue.
+
+File: Video library component
+
+```typescript
+// Use proper state management
+const [selectedTechnique, setSelectedTechnique] = useState<string>('all');
+
+// Persist to URL params (optional but good UX)
+const searchParams = new URLSearchParams(window.location.search);
+useEffect(() => {
+  const technique = searchParams.get('technique');
+  if (technique) {
+    setSelectedTechnique(technique);
+  }
+}, []);
+
+// Update URL when technique changes
+function handleTechniqueChange(technique: string) {
+  setSelectedTechnique(technique);
+  
+  // Update URL
+  const newParams = new URLSearchParams(searchParams);
+  newParams.set('technique', technique);
+  window.history.pushState(null, '', `?${newParams.toString()}`);
+  
+  // Refetch videos
+  fetchVideos({ technique });
+}
+
+// Dropdown component
+<select 
+  value={selectedTechnique}
+  onChange={(e) => handleTechniqueChange(e.target.value)}
+>
+  <option value="all">All Techniques</option>
+  <option value="guard">Guard</option>
+  <option value="passing">Passing</option>
+  <option value="submissions">Submissions</option>
+  <option value="escapes">Escapes</option>
+  {/* ... */}
+</select>
+```
+
+═══════════════════════════════════════════════════════════════
+SUMMARY OF CHANGES
+═══════════════════════════════════════════════════════════════
+
+✅ Hide videos without thumbnails (add WHERE filter)
+✅ Simplify sort to: Newest, Most Watched, By Instructor
+✅ Add instructor search when “By Instructor” selected
+✅ Show video duration on saved videos
+✅ Fix technique dropdown state persistence
+✅ Remove Belt filter (not useful)
+✅ Remove Type filter (not working anyway)
+
+═══════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+After implementing, verify:
+
+1. ✅ “Newest First” shows videos with thumbnails only
+1. ✅ “Most Watched” shows popular videos (if view tracking exists)
+1. ✅ “By Instructor” shows search input and filters correctly
+1. ✅ Saved videos display duration badge (e.g., “12:45”)
+1. ✅ Technique dropdown selection persists when switching tabs
+1. ✅ No gray placeholder thumbnails appear anywhere
+1. ✅ Video count shows accurate number (e.g., “487 videos” if 13 removed)
+
+═══════════════════════════════════════════════════════════════
+
+Implement all 5 fixes and show me test results for each.
+
+```
+---
+
+## **🎯 TODD - HERE'S WHAT TO DO:**
+
+1. **Open NEW Replit Agent conversation** (don't interrupt Professor OS work)
+2. **Paste the prompt above**
+3. **Let it fix the video library UX**
+
+Meanwhile, the other Agent continues building Professor OS learning system.
+
+---
+
+## **⚡ QUICK SUMMARY OF FIXES:**
+
+| Issue | Fix |
+|-------|-----|
+| Gray thumbnails showing | Filter WHERE thumbnailUrl NOT NULL |
+| Sort options confusing | Keep: Newest, Most Watched, By Instructor |
+| No instructor search | Add search input when "By Instructor" selected |
+| Missing duration on saved | Add duration field + badge overlay |
+| Technique dropdown resets | Fix state persistence + URL params |
+
+---
+
+**These are fast fixes - should take Agent 15-20 minutes.** 💪
+
+Want me to refine any part of this prompt?​​​​​​​​​​​​​​​​
+```

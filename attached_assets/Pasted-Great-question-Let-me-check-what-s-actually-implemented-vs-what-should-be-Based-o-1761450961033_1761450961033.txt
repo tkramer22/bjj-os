@@ -1,0 +1,60 @@
+Great question! Let me check what’s actually implemented vs what should be.​​​​​​​​​​​​​​​​
+
+Based on your project documentation, **Prof. OS is NOT fully learning from conversations yet**. Here’s what’s happening:
+
+## Current State ❌
+
+Your system has the **database tables** designed (`ai_conversation_learning`), but from what I can see, it’s likely only:
+
+- Saving conversations to the database
+- Loading recent session data as context
+- NOT actively analyzing patterns across conversations
+- NOT building a cumulative learning profile
+
+## What SHOULD Be Happening ✅
+
+Prof. OS should be:
+
+1. **Saving every conversation** to `ai_conversation_learning` table
+1. **Extracting key insights** from each chat (techniques mentioned, struggles, wins, injuries)
+1. **Building a cumulative profile** that includes:
+
+- Techniques they consistently struggle with
+- Techniques they’re improving on
+- Recurring questions (shows knowledge gaps)
+- Injuries mentioned (safety filtering)
+- Training partners mentioned (context)
+
+1. **Injecting this learned data** into every new conversation
+
+-----
+
+## Here’s what to prompt Replit Agent:
+
+```
+Verify that Prof. OS is actually LEARNING from past conversations, not just storing them:
+
+1. Check if conversations are being saved to the database with extracted insights (techniques mentioned, struggles, successes, injuries, patterns)
+
+2. Verify that when Prof. OS responds, it's loading and using:
+   - All past conversations from this user
+   - Extracted patterns from their training history
+   - Saved videos they've bookmarked
+   - Techniques they've marked as "working on"
+   - Recurring struggles mentioned across sessions
+
+3. Add a "context injection" function that builds a comprehensive user profile before EVERY Prof. OS response:
+   - "User has mentioned struggling with X in 5 different sessions"
+   - "User saved videos about Y technique 3 times"
+   - "User successfully hit Z technique in sparring (mentioned 2 weeks ago)"
+
+4. Show me in the logs what context is being sent to Claude API when Prof. OS responds - I should see the user's full training history, not just the current question.
+
+5. Add an admin debug endpoint: GET /api/admin/user-context/:userId that shows me everything Prof. OS "knows" about a specific user.
+```
+
+-----
+
+This will ensure Prof. OS is truly personalized and learning, not just responding generically based on the current question.
+
+Want me to break this down into smaller steps, or just paste that whole prompt into Replit Agent?​​​​​​​​​​​​​​​​

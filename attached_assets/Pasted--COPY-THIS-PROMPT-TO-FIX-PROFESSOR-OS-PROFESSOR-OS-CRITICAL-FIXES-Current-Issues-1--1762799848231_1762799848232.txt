@@ -1,0 +1,120 @@
+# **📋 COPY THIS PROMPT TO FIX PROFESSOR OS:**
+
+```
+PROFESSOR OS CRITICAL FIXES
+
+Current Issues:
+1. Not recommending videos (says "I don't have a specific video" when we have 442+ videos in database)
+2. Responses feel generic, not using the full 8K character system prompt
+3. Not following diagnostic flow (should ask questions before giving solutions)
+4. Saying user's height isn't set when it should know from profile
+5. Not using personality guidelines (too formal, not conversational)
+
+ROOT CAUSE:
+The buildSystemPrompt() function is NOT being called or NOT loading properly. The chat endpoint is using a basic prompt instead of the comprehensive 6,000-8,000 character system prompt with:
+- User profile data
+- Top 30 videos from database
+- Personality guidelines
+- Diagnostic flow rules
+- Response length rules
+
+REQUIRED FIX:
+
+1. Verify buildSystemPrompt() exists and is being called:
+   ```typescript
+   // In the /api/chat/professor-os endpoint
+   console.log('Building system prompt...');
+   const systemPrompt = await buildSystemPrompt(userId);
+   console.log('System prompt length:', systemPrompt.length, 'characters');
+   // MUST show 6000-8000 characters, if less than 2000 it's broken
+```
+
+1. Ensure buildSystemPrompt() loads:
+
+- Complete user profile (height, weight, belt, goals, injuries)
+- User table data (email, username, created_at)
+- Top 30 videos from curated_videos table ordered by quality_score DESC
+- Days since user joined calculation
+- User’s age from birth_year
+
+1. The system prompt MUST include these sections:
+
+- User Profile (500 chars)
+- Core Philosophy (400 chars)
+- Personality Guidelines (800 chars)
+- Response Length Rules (600 chars)
+- Video Recommendation Rules (1200 chars)
+- Available Video Library - formatted list of 30 videos (2000 chars)
+- Off-topic Handling (400 chars)
+- Context Awareness (400 chars)
+- Physical Stats (300 chars)
+
+1. Video recommendations must:
+
+- Only recommend videos that exist in the top 30 list
+- Format: [VIDEO: Title by Instructor | START: MM:SS]
+- Only offer videos AFTER diagnostic questioning
+- Never recommend videos on greetings or casual chat
+
+1. Response personality must:
+
+- Be SHORT (2-4 sentences for first response)
+- Use contractions (you’re, let’s, what’s)
+- Be direct and conversational
+- NO corporate speak
+- NO “Got it, Todd!” style enthusiasm
+
+1. Diagnostic flow must:
+
+- User mentions problem → Ask ONE diagnostic question
+- Wait for answer (don’t recommend videos yet)
+- User answers → Give specific advice OR offer video
+- Never skip to solutions immediately
+
+TEST AFTER FIX:
+Send these queries and verify responses:
+
+Test 1: “hey what’s up”
+Expected: Short friendly response, NO videos
+Bad: If recommends videos or is overly formal
+
+Test 2: “how tall am I?”
+Expected: “You’re 6 feet” (direct answer from profile)
+Bad: “Your height isn’t set” or “I don’t have that information”
+
+Test 3: “I’m struggling with guard passing”
+Expected: “Guard passing getting you? What’s the main issue - getting stuck in closed guard or losing position?”
+Bad: Immediately gives numbered list or recommends videos without asking
+
+Test 4: “I want a video on triangles”
+Expected: [VIDEO: Triangle Choke from Closed Guard by John Danaher]
+Bad: “I don’t have a specific video” when we have 442 videos
+
+CRITICAL:
+Log the system prompt length to console on every request.
+If it’s less than 6000 characters, the system is NOT working.
+If it’s 6000-8000 characters, the system IS working.
+
+Fix this now and show me the console log output proving the prompt length is correct.
+
+```
+---
+
+## **🎯 WHAT THIS WILL FIX:**
+
+**Before (Current - Broken):**
+- ❌ "I don't have a specific video on half guard sweeps"
+- ❌ "Your height isn't set in your profile, Todd"
+- ❌ Generic, formal responses
+- ❌ No personality
+
+**After (Fixed):**
+- ✅ [VIDEO: Half Guard Sweeps by Bernardo Faria]
+- ✅ "You're 6 feet"
+- ✅ Short, conversational responses
+- ✅ Asks questions before giving solutions
+
+---
+
+**🚀 Send that prompt to Replit Agent, then test Professor OS again while I wait for you to open the admin area!**
+```

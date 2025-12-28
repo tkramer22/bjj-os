@@ -1,0 +1,141 @@
+```
+COMPLETE REFERRAL SYSTEM - Tracking + Discounts + Free Month + Stripe Integration
+
+PART 1: REFERRAL CODE CREATION (Update existing)
+
+When creating a referral code, add these fields:
+
+INFLUENCER SIDE:
+- Referral Code (e.g., JTORRES)
+- Influencer Name
+- Commission Rate (%)
+
+USER BENEFIT SIDE (NEW):
+- Discount Type dropdown:
+  * None
+  * Percentage off first month
+  * Fixed dollar amount off
+  * Free trial extension (days)
+  * Free first month
+  * Free X months
+
+- Discount Value field:
+  * If percentage: enter number (e.g., 50 for 50% off)
+  * If fixed amount: enter dollars (e.g., 10 for $10 off)
+  * If trial extension: enter days (e.g., 7 for 7 extra days)
+  * If free months: enter number (e.g., 1 for 1 free month)
+
+PART 2: STRIPE INTEGRATION
+
+When referral code is created:
+1. Automatically create matching Stripe Coupon
+2. Store Stripe coupon ID in database linked to referral code
+3. Coupon settings based on discount type:
+   - Percentage off → Stripe percent_off coupon, duration: once
+   - Fixed amount → Stripe amount_off coupon, duration: once
+   - Free month → Stripe 100% off coupon, duration: 1 month
+   - Free X months → Stripe 100% off coupon, duration: X months
+   - Trial extension → Extend trial_period_days in subscription
+
+When user signs up with code:
+1. Validate code exists and is active
+2. Show user what they get: "You're getting [benefit]!"
+3. Apply Stripe coupon to their checkout session
+4. Record referral in database
+5. Track in Stripe metadata: referral_code, influencer_name
+
+PART 3: USER TRACKING DATABASE
+
+Store on each user:
+- referral_code_used
+- referred_by_influencer
+- referral_signup_date
+- discount_type_received
+- discount_value_received
+- discount_amount_saved (actual dollar value)
+- stripe_coupon_applied
+
+PART 4: ADMIN DASHBOARD - /admin/referrals
+
+TAB 1: REFERRAL CODES
+Table showing all codes:
+| Code | Influencer | Commission | User Benefit | Times Used | Revenue | Status |
+| JTORRES | JT Torres | 20% | Free month | 15 | $450 | Active |
+| FRIENDS | Friends & Family | 0% | 50% off | 8 | $120 | Active |
+
+Actions: Edit, Deactivate, View Users
+
+TAB 2: REFERRED USERS
+Table showing all referred signups:
+| User Email | Code Used | Influencer | Discount Got | Signup Date | Status | Revenue | Commission Owed |
+| john@email.com | JTORRES | JT Torres | Free month | Dec 12 | Active | $14.99 | $3.00 |
+
+Filters: By code, By influencer, By date, By status
+
+TAB 3: INFLUENCER PAYOUTS
+Summary per influencer:
+| Influencer | Total Referrals | Active Subs | Total Revenue | Commission Earned | Pending Payout |
+| JT Torres | 15 | 12 | $450 | $90 | $90 |
+
+Export to CSV for payments
+
+TAB 4: ANALYTICS
+- Signups by referral code (chart)
+- Conversion rate by code
+- Most effective codes
+- Revenue by influencer
+- Discount cost (how much given away)
+
+PART 5: SIGNUP FLOW CHANGES
+
+Step 1: User enters email
+Step 2: "Have a referral code?" input field
+Step 3: If code entered:
+   - Validate code
+   - Show: "Code applied! You're getting [1 month free / 50% off / etc.]"
+   - Green checkmark
+Step 4: Stripe checkout with coupon auto-applied
+Step 5: After signup, record all referral data
+
+PART 6: NOTIFICATIONS
+
+Email me when:
+- Someone signs up with a referral code
+- Include: user email, code, influencer, discount applied, subscription value
+
+Daily summary email:
+- Total referral signups today
+- By code breakdown
+- Commission accrued today
+
+PART 7: QUICK CREATE CODES FOR LAUNCH
+
+After building this, create these codes:
+
+1. Code: JTORRES
+   Influencer: JT Torres
+   Commission: 20%
+   User gets: Free first month
+
+2. Code: ASCENSION
+   Influencer: Ascension Jujitsu
+   Commission: 15%
+   User gets: Free first month
+
+3. Code: FRIENDS
+   Influencer: Friends & Family
+   Commission: 0%
+   User gets: 50% off first month
+
+4. Code: BETA
+   Influencer: Beta Testers
+   Commission: 0%
+   User gets: Free first month
+
+5. Code: LIFETIME
+   Influencer: Lifetime Access
+   Commission: 0%
+   User gets: Free 12 months
+
+Build all of this with full Stripe integration. Test with a new signup using code BETA before confirming complete.
+```

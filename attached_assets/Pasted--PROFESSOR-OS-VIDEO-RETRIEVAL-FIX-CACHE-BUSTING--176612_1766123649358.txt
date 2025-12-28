@@ -1,0 +1,280 @@
+```
+PROFESSOR OS VIDEO RETRIEVAL FIX + CACHE BUSTING
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: CACHE BUSTING (Ensure users always get latest version)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. VITE BUILD CONFIG
+Update vite.config.ts to add content hashes to all output files:
+
+build: {
+  rollupOptions: {
+    output: {
+      entryFileNames: 'assets/[name]-[hash].js',
+      chunkFileNames: 'assets/[name]-[hash].js',
+      assetFileNames: 'assets/[name]-[hash].[ext]'
+    }
+  }
+}
+
+2. HTML META TAGS
+Add to index.html in the <head>:
+
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
+3. VERSION ENDPOINT
+Create GET /api/version that returns:
+{
+  "version": "6.0.2",
+  "buildTime": "<current timestamp>",
+  "features": ["semantic-search", "full-field-injection", "perspective-filtering"]
+}
+
+4. FRONTEND VERSION CHECK
+On app load, fetch /api/version and compare to stored version in localStorage.
+If mismatch, show toast: "New version available" with refresh button.
+Store new version after refresh.
+
+5. SERVICE WORKER (if exists)
+Update to use networkFirst for all /api/* routes.
+On new deployment, trigger skipWaiting() and clients.claim().
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: VIDEO RETRIEVAL DIAGNOSTIC + FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: User asked about "clamping and collapsing knee shield" (half guard PASSING) and got a closed guard video (completely different position and intent).
+
+## STEP 1: ADD PERSPECTIVE DETECTION
+
+The semantic search currently detects position but NOT perspective (top vs bottom).
+
+"Knee shield" videos could be:
+- How to PLAY knee shield (bottom/guard retention) 
+- How to PASS/COLLAPSE knee shield (top/passer)
+
+These are OPPOSITE perspectives. We need to detect which one the user wants.
+
+Add perspective detection to the query analysis:
+
+```javascript
+// In the semantic search / query analysis function
+async function analyzeUserQuery(message: string) {
+  // Existing detections
+  const position = detectPosition(message); // half_guard, closed_guard, etc.
+  const intent = detectIntent(message); // pass, sweep, escape, submit, retain
+  
+  // NEW: Add perspective detection
+  const perspective = detectPerspective(message, intent);
+  
+  return { position, intent, perspective };
+}
+
+function detectPerspective(message: string, intent: string): 'top' | 'bottom' | 'both' {
+  const lowerMessage = message.toLowerCase();
+  
+  // TOP/PASSER indicators
+  const topIndicators = [
+    'pass', 'passing', 'smash', 'crush', 'collapse', 'kill', 'flatten',
+    'pressure', 'get around', 'beat', 'defeat', 'counter', 'stop their',
+    'open their', 'break their', 'against', 'vs'
+  ];
+  
+  // BOTTOM/GUARD indicators  
+  const bottomIndicators = [
+    'retain', 'retention', 'keep', 'maintain', 'hold', 'sweep', 'submit from',
+    'attack from', 'play', 'playing', 'my guard', 'from guard', 'off my back',
+    'when im on bottom', 'recover'
+  ];
+  
+  const hasTopIndicator = topIndicators.some(ind => lowerMessage.includes(ind));
+  const hasBottomIndicator = bottomIndicators.some(ind => lowerMessage.includes(ind));
+  
+  // Intent-based defaults
+  if (intent === 'pass' || intent === 'pressure') return 'top';
+  if (intent === 'sweep' || intent === 'retain' || intent === 'submit') return 'bottom';
+  if (intent === 'escape') return 'bottom'; // escaping = you're on bottom
+  
+  // Keyword-based
+  if (hasTopIndicator && !hasBottomIndicator) return 'top';
+  if (hasBottomIndicator && !hasTopIndicator) return 'bottom';
+  
+  return 'both'; // ambiguous, return both perspectives
+}
+```
+
+## STEP 2: ADD PERSPECTIVE FIELD TO VIDEO KNOWLEDGE
+
+Check if ai_video_knowledge has a perspective field. If not, add it:
+
+```sql
+ALTER TABLE ai_video_knowledge 
+ADD COLUMN IF NOT EXISTS perspective TEXT DEFAULT 'both';
+
+-- perspective values: 'top', 'bottom', 'both', 'neutral'
+```
+
+Then run a batch update to classify existing videos:
+
+```javascript
+// Classify videos by perspective based on existing data
+async function classifyVideoPerspectives() {
+  const videos = await db.select().from(aiVideoKnowledge);
+  
+  for (const video of videos) {
+    let perspective = 'both';
+    
+    const title = (video.title || '').toLowerCase();
+    const techniques = (video.techniques_covered || '').toLowerCase();
+    const description = (video.description || '').toLowerCase();
+    const combined = `${title} ${techniques} ${description}`;
+    
+    // PASSING videos = top perspective
+    if (combined.includes('pass') || combined.includes('passing') || 
+        combined.includes('smash') || combined.includes('pressure') ||
+        combined.includes('how to beat') || combined.includes('counter')) {
+      perspective = 'top';
+    }
+    
+    // GUARD videos = bottom perspective
+    if (combined.includes('sweep') || combined.includes('retain') ||
+        combined.includes('attack from') || combined.includes('guard game') ||
+        combined.includes('submissions from')) {
+      perspective = 'bottom';
+    }
+    
+    // ESCAPE videos = bottom perspective (you're escaping from bad position)
+    if (combined.includes('escape') || combined.includes('get out of')) {
+      perspective = 'bottom';
+    }
+    
+    await db.update(aiVideoKnowledge)
+      .set({ perspective })
+      .where(eq(aiVideoKnowledge.id, video.id));
+  }
+  
+  console.log('Perspective classification complete');
+}
+```
+
+## STEP 3: UPDATE VIDEO RETRIEVAL TO FILTER BY PERSPECTIVE
+
+Find the function that retrieves videos for Professor OS and add perspective filtering:
+
+```javascript
+async function getRelevantVideos(userId: string, query: string) {
+  // Analyze the query
+  const { position, intent, perspective } = await analyzeUserQuery(query);
+  
+  console.log('[VIDEO RETRIEVAL]', { query, position, intent, perspective });
+  
+  // Build the filter
+  let videoQuery = db.select().from(aiVideoKnowledge);
+  
+  // Filter by position if detected
+  if (position && position !== 'unknown') {
+    videoQuery = videoQuery.where(
+      or(
+        ilike(aiVideoKnowledge.primary_position, `%${position}%`),
+        ilike(aiVideoKnowledge.secondary_positions, `%${position}%`)
+      )
+    );
+  }
+  
+  // NEW: Filter by perspective
+  if (perspective !== 'both') {
+    videoQuery = videoQuery.where(
+      or(
+        eq(aiVideoKnowledge.perspective, perspective),
+        eq(aiVideoKnowledge.perspective, 'both')
+      )
+    );
+  }
+  
+  // Order by relevance score
+  videoQuery = videoQuery.orderBy(desc(aiVideoKnowledge.relevance_score));
+  
+  // Limit to top 30
+  videoQuery = videoQuery.limit(30);
+  
+  const videos = await videoQuery;
+  
+  console.log('[VIDEO RETRIEVAL] Found', videos.length, 'videos');
+  console.log('[VIDEO RETRIEVAL] Top 5:', videos.slice(0, 5).map(v => ({
+    title: v.title,
+    position: v.primary_position,
+    perspective: v.perspective,
+    score: v.relevance_score
+  })));
+  
+  return videos;
+}
+```
+
+## STEP 4: ADD LOGGING FOR DEBUGGING
+
+Add temporary logging so we can trace issues:
+
+```javascript
+// In the Professor OS chat endpoint
+app.post('/api/professor-os/chat', async (req, res) => {
+  const { message, userId } = req.body;
+  
+  console.log('═══════════════════════════════════════════════');
+  console.log('[PROF OS] New query:', message);
+  console.log('[PROF OS] User:', userId);
+  
+  // Get relevant videos
+  const videos = await getRelevantVideos(userId, message);
+  
+  console.log('[PROF OS] Videos selected:', videos.length);
+  console.log('[PROF OS] Video titles:', videos.slice(0, 5).map(v => v.title));
+  
+  // Build system prompt with videos
+  const systemPrompt = buildSystemPrompt(userContext, videos, history);
+  
+  console.log('[PROF OS] System prompt length:', systemPrompt.length);
+  console.log('═══════════════════════════════════════════════');
+  
+  // Continue with Claude API call...
+});
+```
+
+## STEP 5: TEST THE FIX
+
+After implementing, test with these queries:
+
+1. “How do I collapse the knee shield?”
+   → Should return: half guard PASSING videos (top perspective)
+   → Should NOT return: knee shield retention videos (bottom perspective)
+1. “How do I retain my knee shield?”
+   → Should return: half guard RETENTION videos (bottom perspective)
+   → Should NOT return: passing videos
+1. “Escaping side control”
+   → Should return: side control ESCAPE videos (bottom perspective)
+   → Should NOT return: side control attacks/maintenance (top perspective)
+
+Log the results and confirm correct videos are being retrieved.
+
+═══════════════════════════════════════════════════════════════════════════════
+SUMMARY OF CHANGES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. ✅ Cache busting (vite config, meta tags, version endpoint, frontend check)
+1. ✅ Perspective detection function (analyzes if user wants top or bottom content)
+1. ✅ Perspective field on ai_video_knowledge table
+1. ✅ Batch classification of existing videos
+1. ✅ Updated video retrieval to filter by perspective
+1. ✅ Logging for debugging
+
+This fix is ADDITIVE - does not modify Professor OS prompt or break existing functionality.
+It only improves WHICH videos get selected before Claude sees them.
+
+Implement all parts and show me the test results.
+
+```
+
+```

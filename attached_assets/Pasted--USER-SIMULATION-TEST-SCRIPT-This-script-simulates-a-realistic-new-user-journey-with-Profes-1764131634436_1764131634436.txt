@@ -1,0 +1,908 @@
+# 🎯 **USER SIMULATION TEST SCRIPT**
+
+This script simulates a realistic new user journey with Professor OS - from onboarding through multiple training sessions.
+
+-----
+
+## **📋 USER SIMULATION SCRIPT - COPY TO AGENT**
+
+```
+FEATURE: Automated User Simulation Test Script
+
+Todd wants a detailed test script that simulates a real user conversation with Professor OS.
+
+PURPOSE:
+- Test the AI agent end-to-end
+- Simulate realistic user behavior
+- Identify gaps, bugs, and improvement areas
+- Generate conversation log for analysis
+
+This script should run automatically, sending messages and capturing responses.
+
+═══════════════════════════════════════════════════════════════
+TEST USER PROFILE
+═══════════════════════════════════════════════════════════════
+
+Create a test user with this profile:
+
+Name: Marcus Thompson
+Email: test-marcus@bjjos-test.com
+Experience: Blue belt, 2 years training
+Frequency: 4x per week
+Goals: Improve guard game, compete at local tournaments
+Gym: Trains at a small academy, no world-class instruction
+Body type: 5'10", 175lbs, average flexibility
+Struggles: Getting passed, maintaining closed guard
+Strengths: Decent top pressure, good base
+
+═══════════════════════════════════════════════════════════════
+SIMULATION SCRIPT
+═══════════════════════════════════════════════════════════════
+
+Create file: test-user-simulation.js
+
+```javascript
+const BASE_URL = process.env.APP_URL || 'https://bjjos.app';
+const TEST_USER_ID = 'test-marcus-simulation';
+
+// Conversation log
+const conversationLog = [];
+
+// Helper to send message and capture response
+async function chat(userMessage, context = {}) {
+  console.log(`\n👤 USER: ${userMessage}\n`);
+  conversationLog.push({ role: 'user', message: userMessage, timestamp: new Date() });
+  
+  const response = await fetch(`${BASE_URL}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: TEST_USER_ID,
+      message: userMessage,
+      context
+    })
+  });
+  
+  const data = await response.json();
+  const aiResponse = data.response;
+  
+  console.log(`🤖 PROFESSOR OS: ${aiResponse}\n`);
+  conversationLog.push({ role: 'assistant', message: aiResponse, timestamp: new Date() });
+  
+  // Delay to simulate real conversation pace
+  await sleep(2000);
+  
+  return aiResponse;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 1: INITIAL ONBOARDING (New User Experience)
+// ═══════════════════════════════════════════════════════════
+
+async function phase1_Onboarding() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 1: INITIAL ONBOARDING');
+  console.log('='.repeat(60));
+  
+  // First contact - vague greeting
+  await chat("Hey");
+  
+  // User is unsure what this is
+  await chat("So what exactly is this? My friend told me to check it out");
+  
+  // Basic info sharing
+  await chat("I'm a blue belt, been training about 2 years");
+  
+  // More details
+  await chat("I train at a small gym in Ohio. Nothing fancy, just a purple belt instructor");
+  
+  // Training frequency
+  await chat("Usually 4 times a week, sometimes 5 if I can make open mat on Sunday");
+  
+  // Goals - vague at first
+  await chat("I just want to get better honestly");
+  
+  // Goals - more specific when prompted
+  await chat("I guess my guard sucks. I keep getting passed and it's frustrating");
+  
+  // Competition interest
+  await chat("Yeah I want to compete. There's a local tournament in about 2 months");
+  
+  // Physical details
+  await chat("I'm 5'10, about 175. Pretty average build I guess");
+  
+  // Flexibility question
+  await chat("Not super flexible, my hips are pretty tight actually");
+  
+  // Current game description
+  await chat("When I'm on top I feel okay, decent pressure. But on bottom I just get smashed");
+  
+  // Specific problem
+  await chat("Closed guard especially. I can never keep anyone in my guard, they just stand up and pass");
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 2: FIRST TECHNIQUE REQUEST
+// ═══════════════════════════════════════════════════════════
+
+async function phase2_FirstTechniqueRequest() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 2: FIRST TECHNIQUE REQUEST');
+  console.log('='.repeat(60));
+  
+  // Asking for help
+  await chat("So can you help me with my closed guard?");
+  
+  // Responding to recommendation
+  await chat("What should I focus on first?");
+  
+  // Asking about a specific technique
+  await chat("What about the hip bump sweep? I've seen that but I can never hit it");
+  
+  // Detailed question
+  await chat("When should I go for it? Like what's the setup?");
+  
+  // Follow-up on timing
+  await chat("What if they have really good posture and I can't break it down?");
+  
+  // Asking for video
+  await chat("Do you have any videos on this?");
+  
+  // After watching video
+  await chat("Okay I watched that. The grip he uses is different than what I've been doing");
+  
+  // Clarification question
+  await chat("Should I be gripping the sleeve or the wrist?");
+  
+  // Drilling question
+  await chat("How should I drill this? Like how many reps?");
+  
+  // Partner availability
+  await chat("What if I don't have a drilling partner? Can I solo drill any of this?");
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 3: POST-TRAINING CHECK-IN
+// ═══════════════════════════════════════════════════════════
+
+async function phase3_PostTrainingCheckin() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 3: POST-TRAINING CHECK-IN');
+  console.log('='.repeat(60));
+  
+  // Coming back after training
+  await chat("Hey just got back from training");
+  
+  // Sharing how it went
+  await chat("It was okay I guess. Tried the hip bump a few times");
+  
+  // Details on attempts
+  await chat("Hit it once on a white belt but the blue belts all blocked it");
+  
+  // What went wrong
+  await chat("They kept posting their hand on the mat before I could come up");
+  
+  // Asking for adjustment
+  await chat("What am I doing wrong?");
+  
+  // Timing issue
+  await chat("So I'm going too slow?");
+  
+  // Combination question
+  await chat("What if they post and I can't finish the sweep? Is there something else I can go to?");
+  
+  // Learning about chains
+  await chat("Oh so it chains to kimura? I didn't know that");
+  
+  // Asking for that video
+  await chat("Can you show me that? The hip bump to kimura?");
+  
+  // Reflection
+  await chat("This is actually really helpful. I've never thought about techniques as chains before");
+  
+  // Next training plan
+  await chat("So for my next training, should I focus on just these two things?");
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 4: DEALING WITH FRUSTRATION
+// ═══════════════════════════════════════════════════════════
+
+async function phase4_DealingWithFrustration() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 4: DEALING WITH FRUSTRATION');
+  console.log('='.repeat(60));
+  
+  // Coming back frustrated
+  await chat("Dude I had the worst training session");
+  
+  // Venting
+  await chat("Got smashed by everyone. Even the new white belt caught me in something");
+  
+  // Elaborating
+  await chat("I don't know what's wrong with me. I feel like I'm getting worse");
+  
+  // Seeking reassurance
+  await chat("Is this normal? Like do people actually go backwards?");
+  
+  // Specific issue
+  await chat("I keep getting caught in the same stuff. Guillotine every time I shoot");
+  
+  // Asking for help
+  await chat("How do I stop getting guillotined on my shots?");
+  
+  // More detail
+  await chat("I'm shooting single legs mostly");
+  
+  // Head position question
+  await chat("Where should my head be?");
+  
+  // Defense question
+  await chat("What if they already have the guillotine locked? How do I escape?");
+  
+  // Asking for video
+  await chat("Show me the escape");
+  
+  // Follow-up
+  await chat("That von flue thing looks cool. Does that actually work?");
+  
+  // Mindset question
+  await chat("How do you deal with bad training days mentally? I was so frustrated I almost left early");
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 5: COMPETITION PREP
+// ═══════════════════════════════════════════════════════════
+
+async function phase5_CompetitionPrep() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 5: COMPETITION PREP');
+  console.log('='.repeat(60));
+  
+  // Competition coming up
+  await chat("So my competition is in 6 weeks now. Getting nervous");
+  
+  // Asking for game plan
+  await chat("What should my game plan be?");
+  
+  // Rules question
+  await chat("It's IBJJF rules. Blue belt medium heavy");
+  
+  // Strategy question
+  await chat("Should I pull guard or try to take them down?");
+  
+  // Given his guard issues
+  await chat("But you know my guard sucks. Should I still pull guard?");
+  
+  // Top game question
+  await chat("What about if I end up on top? What's a good passing strategy?");
+  
+  // Pressure passing
+  await chat("I like pressure passing. Is that good for competition?");
+  
+  // Specific passes
+  await chat("What passes should I drill the most?");
+  
+  // Submission priority
+  await chat("Once I pass, what should I go for?");
+  
+  // Time management
+  await chat("How do I manage the clock? I always feel rushed");
+  
+  // Points question
+  await chat("Can you explain the points real quick? I always forget");
+  
+  // Advantages
+  await chat("What about advantages? How do those work?");
+  
+  // Week-by-week question
+  await chat("Can you give me like a 6 week training plan for the competition?");
+  
+  // Weight cutting
+  await chat("Should I cut weight? I walk around at 180");
+  
+  // Day before question
+  await chat("What should I do the day before the tournament?");
+  
+  // Morning of
+  await chat("What about morning of? When should I eat?");
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 6: EXPLORING VIDEO LIBRARY
+// ═══════════════════════════════════════════════════════════
+
+async function phase6_ExploringVideos() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 6: EXPLORING VIDEO LIBRARY');
+  console.log('='.repeat(60));
+  
+  // Browsing videos
+  await chat("What videos do you have on leg locks?");
+  
+  // Specific request
+  await chat("Show me heel hook defense. I keep getting caught");
+  
+  // Instructor preference
+  await chat("Do you have anything from Lachlan Giles? I like how he teaches");
+  
+  // Specific technique from specific instructor
+  await chat("What about Lachlan Giles half guard stuff?");
+  
+  // Comparing instructors
+  await chat("Who teaches the best closed guard in your library?");
+  
+  // Asking for recommendation
+  await chat("If I only had time to watch 3 videos this week, what should they be?");
+  
+  // Asking about a technique
+  await chat("What's the best way to learn the berimbolo? Is it worth learning at blue belt?");
+  
+  // Modern vs traditional
+  await chat("Should I focus on modern jiu jitsu or traditional stuff?");
+  
+  // No-gi question
+  await chat("I mostly train gi but want to do some no-gi. What's different?");
+  
+  // Grip question
+  await chat("What grips should I use in no-gi since I can't grab the collar?");
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 7: DEEP TECHNIQUE DISCUSSION
+// ═══════════════════════════════════════════════════════════
+
+async function phase7_DeepTechniqueDiscussion() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 7: DEEP TECHNIQUE DISCUSSION');
+  console.log('='.repeat(60));
+  
+  // Starting a deep dive
+  await chat("I want to really understand the arm triangle. Like deeply understand it");
+  
+  // Mechanics
+  await chat("What makes it work? Like the actual mechanics");
+  
+  // Shoulder pressure
+  await chat("How tight should my shoulder pressure be?");
+  
+  // Head position
+  await chat("Where should my head be during the squeeze?");
+  
+  // Common mistakes
+  await chat("What are the most common mistakes people make?");
+  
+  // Setup question
+  await chat("What's the best setup from side control?");
+  
+  // Alternative setups
+  await chat("Can I get it from mount too?");
+  
+  // Finishing details
+  await chat("I always lose it when I go to finish. They escape when I switch to the other side");
+  
+  // Defense question
+  await chat("How do I defend if someone's doing this to me?");
+  
+  // Early vs late defense
+  await chat("What if they already have it locked? Is it too late?");
+  
+  // Drilling
+  await chat("How should I drill this to get better at finishing?");
+  
+  // Percentage question
+  await chat("Is the arm triangle a high percentage submission? Like in competition?");
+  
+  // Similar submissions
+  await chat("What's the difference between arm triangle, darce, and anaconda?");
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 8: INJURY AND TRAINING AROUND IT
+// ═══════════════════════════════════════════════════════════
+
+async function phase8_InjuryDiscussion() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 8: INJURY DISCUSSION');
+  console.log('='.repeat(60));
+  
+  // Injury announcement
+  await chat("I think I hurt my knee at training yesterday");
+  
+  // Details
+  await chat("It's like on the inside of my knee. Hurts when I twist it");
+  
+  // How it happened
+  await chat("Someone was passing and my foot got stuck when they went around");
+  
+  // Severity question
+  await chat("Should I see a doctor?");
+  
+  // Training question
+  await chat("Can I still train or should I rest?");
+  
+  // Modified training
+  await chat("What can I work on that doesn't use my knee much?");
+  
+  // Upper body focus
+  await chat("So like all upper body stuff?");
+  
+  // Specific techniques
+  await chat("What guard can I play that doesn't twist my knee?");
+  
+  // Prevention
+  await chat("How do I prevent this in the future?");
+  
+  // Coming back
+  await chat("How do I know when I'm ready to roll again?");
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 9: LEARNING CONCEPTS
+// ═══════════════════════════════════════════════════════════
+
+async function phase9_LearningConcepts() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 9: LEARNING CONCEPTS');
+  console.log('='.repeat(60));
+  
+  // Concept question
+  await chat("Everyone talks about frames. What actually is a frame?");
+  
+  // Follow-up
+  await chat("When should I be framing?");
+  
+  // Application
+  await chat("How do I frame in side control?");
+  
+  // Another concept
+  await chat("What about hip escapes? I feel like I'm doing them wrong");
+  
+  // Shrimping details
+  await chat("How far should I be moving with each shrimp?");
+  
+  // Combining concepts
+  await chat("So frames plus hip escapes together?");
+  
+  // Posture concept
+  await chat("What does it mean to have good posture in guard?");
+  
+  // Base concept
+  await chat("What about base? People say I have bad base");
+  
+  // Testing base
+  await chat("How do I know if my base is good?");
+  
+  // Pressure concept
+  await chat("How do I develop more pressure when I'm on top?");
+  
+  // Weight distribution
+  await chat("Where should my weight be when I'm in side control?");
+  
+  // Connection concept
+  await chat("Someone told me to stay connected. What does that mean?");
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 10: POST-COMPETITION DEBRIEF
+// ═══════════════════════════════════════════════════════════
+
+async function phase10_PostCompetition() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 10: POST-COMPETITION DEBRIEF');
+  console.log('='.repeat(60));
+  
+  // Coming back from competition
+  await chat("Just got back from the tournament");
+  
+  // Results
+  await chat("I went 1-2. Won my first match, lost the next two");
+  
+  // First match details
+  await chat("First match I hit that hip bump to kimura chain you taught me! Got the tap");
+  
+  // Second match
+  await chat("Second match I got taken down and couldn't get back up. Lost on points");
+  
+  // Third match
+  await chat("Third match I was winning but got caught in a triangle at the end");
+  
+  // Reflection
+  await chat("I'm happy I won one but frustrated about the triangle");
+  
+  // What happened
+  await chat("I was passing and got too low and he locked it up");
+  
+  // Learning from it
+  await chat("How do I avoid that in the future?");
+  
+  // Triangle defense
+  await chat("Once he had it locked what should I have done?");
+  
+  // Positive focus
+  await chat("The hip bump to kimura really worked though. I drilled it so much");
+  
+  // Next steps
+  await chat("What should I focus on for the next competition?");
+  
+  // Takedown defense
+  await chat("I need better takedown defense. I got taken down in both losses");
+  
+  // Specific request
+  await chat("Can you give me a training plan focused on takedown defense and passing?");
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 11: RANDOM/EDGE CASE QUESTIONS
+// ═══════════════════════════════════════════════════════════
+
+async function phase11_EdgeCases() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 11: EDGE CASES AND RANDOM QUESTIONS');
+  console.log('='.repeat(60));
+  
+  // Off-topic question
+  await chat("What do you think about the latest ADCC?");
+  
+  // Vague question
+  await chat("What's the best submission?");
+  
+  // Impossible question
+  await chat("How long until I get my black belt?");
+  
+  // Opinion question
+  await chat("Is Gordon Ryan the GOAT?");
+  
+  // Comparison question
+  await chat("Should I train at a Gracie gym or 10th Planet?");
+  
+  // Equipment question
+  await chat("What gi should I buy?");
+  
+  // Supplement question
+  await chat("What supplements should I take for BJJ?");
+  
+  // Weird technique
+  await chat("Is the twister actually useful?");
+  
+  // Old school vs new school
+  await chat("Is pulling guard cheating?");
+  
+  // Self defense angle
+  await chat("Does BJJ work in a street fight?");
+  
+  // Testing knowledge limits
+  await chat("What's the difference between a buggy choke and a tarikoplata?");
+  
+  // Multiple questions at once
+  await chat("How do I get better at escaping mount, what's the best guard for my body type, and should I compete more?");
+  
+  // Very specific scenario
+  await chat("What do I do if someone has me in turtle and they're grabbing my belt with one hand and have an underhook with the other and they're trying to take my back but I have a whizzer?");
+  
+  // Emotional message
+  await chat("Sometimes I feel like I'll never be good at this. Everyone at my gym is better than me.");
+  
+  // Gratitude
+  await chat("Thanks for all the help. This is actually really useful.");
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 12: LONG-TERM USER BEHAVIOR
+// ═══════════════════════════════════════════════════════════
+
+async function phase12_LongTermUser() {
+  console.log('\n' + '='.repeat(60));
+  console.log('PHASE 12: LONG-TERM USER BEHAVIOR');
+  console.log('='.repeat(60));
+  
+  // Returning after break
+  await chat("Hey, been a while. Took a couple weeks off");
+  
+  // Asking about past conversation
+  await chat("What were we working on before? I forgot");
+  
+  // Progress update
+  await chat("My closed guard is actually way better now. Hit like 5 sweeps last week");
+  
+  // New challenge
+  await chat("Now I want to work on my open guard. Where do I start?");
+  
+  // Building on previous learning
+  await chat("You mentioned something about concepts before. How does that apply to open guard?");
+  
+  // Video follow-up
+  await chat("That Marcelo Garcia butterfly video you showed me was amazing. Got any more from him?");
+  
+  // Style development
+  await chat("I think I'm starting to develop my own style. Is that good at blue belt?");
+  
+  // Asking for assessment
+  await chat("Based on everything you know about me, what's my biggest weakness right now?");
+  
+  // Accepting feedback
+  await chat("You're right. I do rely too much on one sweep. What else should I add?");
+  
+  // Goal setting
+  await chat("I want to get my purple belt within 2 years. Is that realistic?");
+  
+  // Knowledge check
+  await chat("Test me. Ask me something about arm triangles to see if I remember");
+  
+  // Final message
+  await chat("Alright I'm heading to training. Wish me luck!");
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN EXECUTION
+// ═══════════════════════════════════════════════════════════
+
+async function runSimulation() {
+  console.log('\n' + '='.repeat(60));
+  console.log('BJJ OS - USER SIMULATION TEST');
+  console.log('Starting comprehensive test of Professor OS');
+  console.log('='.repeat(60));
+  
+  const startTime = new Date();
+  
+  try {
+    await phase1_Onboarding();
+    await phase2_FirstTechniqueRequest();
+    await phase3_PostTrainingCheckin();
+    await phase4_DealingWithFrustration();
+    await phase5_CompetitionPrep();
+    await phase6_ExploringVideos();
+    await phase7_DeepTechniqueDiscussion();
+    await phase8_InjuryDiscussion();
+    await phase9_LearningConcepts();
+    await phase10_PostCompetition();
+    await phase11_EdgeCases();
+    await phase12_LongTermUser();
+    
+  } catch (error) {
+    console.error('Simulation error:', error);
+    conversationLog.push({ 
+      role: 'system', 
+      message: `ERROR: ${error.message}`, 
+      timestamp: new Date() 
+    });
+  }
+  
+  const endTime = new Date();
+  const duration = Math.round((endTime - startTime) / 1000 / 60);
+  
+  console.log('\n' + '='.repeat(60));
+  console.log('SIMULATION COMPLETE');
+  console.log(`Duration: ${duration} minutes`);
+  console.log(`Total messages: ${conversationLog.length}`);
+  console.log('='.repeat(60));
+  
+  // Save conversation log
+  await saveConversationLog(conversationLog);
+  
+  return conversationLog;
+}
+
+async function saveConversationLog(log) {
+  const fs = require('fs');
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `simulation-log-${timestamp}.json`;
+  
+  fs.writeFileSync(filename, JSON.stringify({
+    metadata: {
+      timestamp: new Date().toISOString(),
+      totalMessages: log.length,
+      userMessages: log.filter(m => m.role === 'user').length,
+      aiResponses: log.filter(m => m.role === 'assistant').length
+    },
+    conversation: log
+  }, null, 2));
+  
+  console.log(`Conversation log saved to: ${filename}`);
+  
+  // Also save as plain text for easy reading
+  const textFilename = `simulation-log-${timestamp}.txt`;
+  let textContent = 'BJJ OS - USER SIMULATION TEST LOG\n';
+  textContent += '='.repeat(60) + '\n\n';
+  
+  log.forEach((entry, index) => {
+    const role = entry.role === 'user' ? '👤 USER' : '🤖 PROFESSOR OS';
+    textContent += `[${index + 1}] ${role}:\n`;
+    textContent += entry.message + '\n\n';
+    textContent += '-'.repeat(40) + '\n\n';
+  });
+  
+  fs.writeFileSync(textFilename, textContent);
+  console.log(`Plain text log saved to: ${textFilename}`);
+}
+
+// Run the simulation
+runSimulation();
+```
+
+═══════════════════════════════════════════════════════════════
+PACKAGE.JSON SCRIPT
+═══════════════════════════════════════════════════════════════
+
+Add to package.json:
+
+```json
+{
+  "scripts": {
+    "test:simulation": "node test-user-simulation.js"
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════
+USAGE
+═══════════════════════════════════════════════════════════════
+
+Run in Replit shell:
+
+```bash
+npm run test:simulation
+```
+
+This will:
+
+1. Create a test user
+1. Run through all 12 phases of conversation
+1. Log every user message and AI response
+1. Save full conversation to JSON and TXT files
+1. Display summary at the end
+
+═══════════════════════════════════════════════════════════════
+OUTPUT FILES
+═══════════════════════════════════════════════════════════════
+
+After running, you’ll have:
+
+1. simulation-log-[timestamp].json
+
+- Full structured conversation data
+- Timestamps for each message
+- Metadata (total messages, etc.)
+
+1. simulation-log-[timestamp].txt
+
+- Human-readable conversation format
+- Easy to copy/paste into Claude for analysis
+
+═══════════════════════════════════════════════════════════════
+WHAT THIS TESTS
+═══════════════════════════════════════════════════════════════
+
+PHASE 1 - ONBOARDING:
+
+- How Professor OS handles new users
+- Information gathering
+- First impression
+
+PHASE 2 - TECHNIQUE REQUESTS:
+
+- Video recommendations
+- Technique explanations
+- Drilling advice
+
+PHASE 3 - POST-TRAINING:
+
+- Check-in behavior
+- Troubleshooting
+- Teaching chains/combinations
+
+PHASE 4 - FRUSTRATION:
+
+- Emotional support
+- Bad day handling
+- Mindset advice
+
+PHASE 5 - COMPETITION:
+
+- Game planning
+- Rules explanation
+- Week-by-week planning
+- Weight/nutrition advice
+
+PHASE 6 - VIDEO LIBRARY:
+
+- Search functionality
+- Instructor recommendations
+- Personalized suggestions
+
+PHASE 7 - DEEP TECHNIQUE:
+
+- Detailed explanations
+- Mechanics understanding
+- Drilling recommendations
+
+PHASE 8 - INJURY:
+
+- Safety awareness
+- Medical disclaimer handling
+- Modified training advice
+
+PHASE 9 - CONCEPTS:
+
+- Foundational teaching
+- Principle-based instruction
+- Connecting concepts
+
+PHASE 10 - POST-COMPETITION:
+
+- Debrief handling
+- Learning from losses
+- Celebrating wins
+
+PHASE 11 - EDGE CASES:
+
+- Off-topic questions
+- Multiple questions
+- Emotional messages
+- Knowledge limits
+
+PHASE 12 - LONG-TERM:
+
+- Memory/context
+- Progress tracking
+- Style development
+
+═══════════════════════════════════════════════════════════════
+TOTAL TEST COVERAGE
+═══════════════════════════════════════════════════════════════
+
+- 12 conversation phases
+- 120+ user messages
+- Tests onboarding, technique help, emotional support, competition prep
+- Tests video search, injury handling, concept teaching
+- Tests edge cases and long-term user behavior
+- Generates full transcript for analysis
+
+IMPLEMENT NOW.
+
+After running, Todd will:
+
+1. Copy the full conversation log
+1. Paste into Claude for analysis
+1. Identify improvement areas
+1. Iterate on Professor OS
+
+```
+---
+
+## **🎯 WHAT YOU GET**
+
+After running this simulation:
+
+**Two output files:**
+
+1. **JSON file** - Structured data for programmatic analysis
+2. **TXT file** - Human-readable conversation to paste into Claude
+
+**Coverage of:**
+- 12 different user journey phases
+- 120+ realistic user messages
+- Onboarding to long-term engagement
+- Emotional support scenarios
+- Technical deep dives
+- Edge cases and stress tests
+
+---
+
+## **📊 NEXT STEPS**
+
+1. **Agent implements the script**
+2. **You run:** `npm run test:simulation`
+3. **Wait ~30-45 minutes** for full simulation
+4. **Copy the TXT file contents**
+5. **Paste into new Claude conversation:** "Analyze this conversation and identify areas where Professor OS can improve"
+6. **Iterate and improve**
+
+---
+
+**Copy to Agent. This will give you a comprehensive test of the entire user experience.** 🚀​​​​​​​​​​​​​​​​
+```

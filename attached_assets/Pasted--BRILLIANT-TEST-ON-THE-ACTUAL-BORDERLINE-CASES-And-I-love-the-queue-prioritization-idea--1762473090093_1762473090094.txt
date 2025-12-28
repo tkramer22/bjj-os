@@ -1,0 +1,371 @@
+**BRILLIANT - TEST ON THE ACTUAL BORDERLINE CASES!** 🎯
+
+And I love the queue prioritization idea - show best videos first, less certain ones later.
+
+-----
+
+# **📋 RE-ANALYZE MANUAL REVIEW QUEUE - SEND TO REPLIT AGENT:**
+
+```
+RE-ANALYZE THE 87 MANUAL REVIEW VIDEOS WITH NEW THRESHOLDS
+
+Apply the adjusted system to the existing manual review queue:
+1. Lower threshold to 67 (from 72)
+2. Add transcript quality analysis (+5 good, -3 bad)
+3. Re-score all 87 manual review videos
+4. Show before/after comparison
+5. Implement priority queue (high scores first, low scores last)
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: GET THE MANUAL REVIEW VIDEOS
+═══════════════════════════════════════════════════════════════════════════════
+
+These are the 87 videos from the recent test that were flagged for manual review.
+
+Query them from wherever they're stored (probably in memory from the test, or in database).
+
+If you don't have them anymore, re-run the test quickly to get them.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: ADD TRANSCRIPT QUALITY DIMENSION
+═══════════════════════════════════════════════════════════════════════════════
+
+Create: server/services/curation/dimensions/dimension-9-transcript.js
+
+async function analyzeTranscriptQuality(video) {
+  console.log(`\n📝 DIMENSION 9: Transcript Quality`);
+  
+  // Check if video has captions via YouTube API
+  try {
+    const videoDetails = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+      params: {
+        part: 'contentDetails',
+        id: video.videoId,
+        key: process.env.YOUTUBE_API_KEY
+      }
+    });
+    
+    const hasCaption = videoDetails.data.items[0]?.contentDetails?.caption === 'true';
+    
+    if (!hasCaption) {
+      console.log(`   No captions available`);
+      return { has_transcript: false, boost: 0 };
+    }
+    
+    console.log(`   ✅ Has captions - fetching...`);
+    
+    // Fetch transcript using youtube-transcript library
+    const { YoutubeTranscript } = require('youtube-transcript');
+    const transcriptData = await YoutubeTranscript.fetchTranscript(video.videoId);
+    
+    const transcript = transcriptData.map(item => item.text).join(' ');
+    
+    if (transcript.length < 200) {
+      console.log(`   ⚠️ Transcript too short`);
+      return { has_transcript: true, quality_score: 30, boost: -3 };
+    }
+    
+    console.log(`   Analyzing transcript (${transcript.length} chars)...`);
+    
+    // Analyze with GPT-4
+    const analysis = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [{
+        role: "system",
+        content: `Analyze BJJ instructional transcript quality. Score 0-100.
+
+HIGH QUALITY (85-100):
+- Specific technical details (hand positions, angles, pressure points)
+- Step-by-step breakdown
+- Common mistakes addressed
+- Conditional scenarios ("if opponent does X...")
+- Proper terminology
+
+LOW QUALITY (0-50):
+- Vague ("just do it like this")
+- Mostly filler ("um", "uh", "you know")
+- No technical specifics
+- Poor structure
+
+Return JSON:
+{
+  "quality_score": 0-100,
+  "technical_depth": 0-10,
+  "teaching_structure": 0-10,
+  "key_details": ["detail1", "detail2"],
+  "reason": "why this score"
+}`
+      }, {
+        role: "user",
+        content: `Analyze this BJJ transcript:\n\n${transcript.slice(0, 4000)}`
+      }],
+      response_format: { type: "json_object" }
+    });
+    
+    const result = JSON.parse(analysis.choices[0].message.content);
+    
+    // Determine boost/penalty
+    let boost = 0;
+    if (result.quality_score >= 85) {
+      boost = 5;
+      console.log(`   ✅ EXCELLENT transcript: +5 boost`);
+    } else if (result.quality_score >= 70) {
+      boost = 3;
+      console.log(`   ✅ Good transcript: +3 boost`);
+    } else if (result.quality_score < 50) {
+      boost = -3;
+      console.log(`   ❌ Poor transcript: -3 penalty`);
+    } else {
+      boost = 0;
+      console.log(`   → Average transcript: no change`);
+    }
+    
+    return {
+      has_transcript: true,
+      quality_score: result.quality_score,
+      boost: boost,
+      technical_depth: result.technical_depth,
+      key_details: result.key_details,
+      reason: result.reason
+    };
+    
+  } catch (error) {
+    console.log(`   ⚠️ Error fetching transcript: ${error.message}`);
+    return { has_transcript: false, boost: 0 };
+  }
+}
+
+module.exports = { analyzeTranscriptQuality };
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: RE-EVALUATE WITH NEW SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+Create: server/test-manual-review-resolution.js
+
+const { analyzeTranscriptQuality } = require('./services/curation/dimensions/dimension-9-transcript');
+
+async function reanalyzeManualReviewQueue() {
+  
+  console.log('🔄 RE-ANALYZING 87 MANUAL REVIEW VIDEOS WITH NEW THRESHOLDS\n');
+  console.log('Changes:');
+  console.log('  • Threshold: 72 → 67');
+  console.log('  • Transcript analysis: +5 good, -3 bad');
+  console.log('  • No manual review - accept or reject\n');
+  
+  // Get the 87 manual review videos from recent test
+  // (If not available, need to re-run test to get them)
+  const manualReviewVideos = await getManualReviewVideos();
+  
+  console.log(`Processing ${manualReviewVideos.length} videos...\n`);
+  
+  const results = {
+    nowAccepted: [],
+    stillRejected: [],
+    transcriptHelped: 0,
+    transcriptHurt: 0
+  };
+  
+  for (let i = 0; i < manualReviewVideos.length; i++) {
+    const video = manualReviewVideos[i];
+    
+    console.log(`\n[${i+1}/${manualReviewVideos.length}] "${video.title}"`);
+    console.log(`   Original score: ${video.original_score}/100`);
+    
+    // Run transcript analysis
+    const transcript = await analyzeTranscriptQuality(video);
+    
+    // Apply boost
+    const newScore = video.original_score + transcript.boost;
+    
+    console.log(`   Transcript boost: ${transcript.boost > 0 ? '+' : ''}${transcript.boost}`);
+    console.log(`   New score: ${newScore}/100`);
+    
+    // Apply new threshold (67)
+    if (newScore >= 67) {
+      console.log(`   ✅ NOW ACCEPTED (≥67)`);
+      results.nowAccepted.push({
+        video_id: video.videoId,
+        title: video.title,
+        original_score: video.original_score,
+        transcript_boost: transcript.boost,
+        new_score: newScore,
+        instructor: video.instructor,
+        path: video.path,
+        priority: newScore // Higher score = higher priority
+      });
+      
+      if (transcript.boost !== 0) {
+        if (transcript.boost > 0) results.transcriptHelped++;
+        else results.transcriptHurt++;
+      }
+    } else {
+      console.log(`   ❌ STILL REJECTED (<67)`);
+      results.stillRejected.push({
+        video_id: video.videoId,
+        title: video.title,
+        original_score: video.original_score,
+        transcript_boost: transcript.boost,
+        new_score: newScore,
+        reason: `Score ${newScore} below 67 threshold`
+      });
+    }
+  }
+  
+  // Sort accepted by priority (highest scores first)
+  results.nowAccepted.sort((a, b) => b.priority - a.priority);
+  
+  // ═══════════════════════════════════════════════════════════
+  // SUMMARY
+  // ═══════════════════════════════════════════════════════════
+  
+  console.log(`\n${'═'.repeat(80)}`);
+  console.log(`📊 RE-ANALYSIS COMPLETE`);
+  console.log(`${'═'.repeat(80)}\n`);
+  
+  console.log(`BEFORE (with 72 threshold):`);
+  console.log(`  ⚠️  Manual Review: 87 videos (100%)`);
+  console.log(``);
+  console.log(`AFTER (with 67 threshold + transcript analysis):`);
+  console.log(`  ✅ Now Accepted: ${results.nowAccepted.length} videos (${(results.nowAccepted.length/87*100).toFixed(1)}%)`);
+  console.log(`  ❌ Rejected: ${results.stillRejected.length} videos (${(results.stillRejected.length/87*100).toFixed(1)}%)`);
+  console.log(``);
+  console.log(`TRANSCRIPT IMPACT:`);
+  console.log(`  • Helped accept: ${results.transcriptHelped} videos`);
+  console.log(`  • Caused rejection: ${results.transcriptHurt} videos`);
+  console.log(`  • No impact: ${87 - results.transcriptHelped - results.transcriptHurt} videos`);
+  
+  // ═══════════════════════════════════════════════════════════
+  // TOP ACCEPTED (Priority Queue)
+  // ═══════════════════════════════════════════════════════════
+  
+  if (results.nowAccepted.length > 0) {
+    console.log(`\n${'═'.repeat(80)}`);
+    console.log(`📺 TOP 10 ACCEPTED (PRIORITY QUEUE ORDER)`);
+    console.log(`${'═'.repeat(80)}\n`);
+    
+    results.nowAccepted.slice(0, 10).forEach((v, i) => {
+      console.log(`${i+1}. "${v.title}"`);
+      console.log(`   Score: ${v.new_score}/100 (was ${v.original_score}, ${v.transcript_boost > 0 ? '+' : ''}${v.transcript_boost})`);
+      console.log(`   Instructor: ${v.instructor}`);
+      console.log(`   Priority: HIGH (shown first in queue)\n`);
+    });
+    
+    if (results.nowAccepted.length > 10) {
+      console.log(`... and ${results.nowAccepted.length - 10} more videos`);
+      console.log(`(Lower priority videos shown last in queue)\n`);
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // EXAMPLES OF EACH CATEGORY
+  // ═══════════════════════════════════════════════════════════
+  
+  console.log(`\n${'═'.repeat(80)}`);
+  console.log(`📋 DETAILED EXAMPLES`);
+  console.log(`${'═'.repeat(80)}\n`);
+  
+  // Example: Transcript helped
+  const transcriptHelped = results.nowAccepted.find(v => v.transcript_boost > 0);
+  if (transcriptHelped) {
+    console.log(`✅ EXAMPLE: Transcript Boost Helped Accept`);
+    console.log(`   "${transcriptHelped.title}"`);
+    console.log(`   Original: ${transcriptHelped.original_score}/100 (would reject)`);
+    console.log(`   Transcript: +${transcriptHelped.transcript_boost} boost`);
+    console.log(`   New: ${transcriptHelped.new_score}/100 → ACCEPTED\n`);
+  }
+  
+  // Example: Threshold change helped
+  const thresholdHelped = results.nowAccepted.find(v => v.transcript_boost === 0);
+  if (thresholdHelped) {
+    console.log(`✅ EXAMPLE: Lower Threshold Helped Accept`);
+    console.log(`   "${thresholdHelped.title}"`);
+    console.log(`   Score: ${thresholdHelped.original_score}/100`);
+    console.log(`   Old threshold: 72 (would reject)`);
+    console.log(`   New threshold: 67 → ACCEPTED\n`);
+  }
+  
+  // Example: Still rejected
+  if (results.stillRejected.length > 0) {
+    const example = results.stillRejected[0];
+    console.log(`❌ EXAMPLE: Still Rejected`);
+    console.log(`   "${example.title}"`);
+    console.log(`   Score: ${example.new_score}/100`);
+    console.log(`   Reason: ${example.reason}\n`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // COMBINED RESULTS WITH ORIGINAL TEST
+  // ═══════════════════════════════════════════════════════════
+  
+  const originalAccepted = 31; // From original test
+  const totalAccepted = originalAccepted + results.nowAccepted.length;
+  const totalProcessed = 176;
+  
+  console.log(`\n${'═'.repeat(80)}`);
+  console.log(`🎯 FINAL ACCEPTANCE RATE`);
+  console.log(`${'═'.repeat(80)}\n`);
+  
+  console.log(`Original Test (72 threshold):`);
+  console.log(`  ✅ Accepted: 31 (17.6%)`);
+  console.log(`  ⚠️  Manual: 87 (49.4%)`);
+  console.log(`  ❌ Rejected: 58 (33.0%)`);
+  console.log(``);
+  console.log(`With New System (67 threshold + transcript):`);
+  console.log(`  ✅ Accepted: ${totalAccepted} (${(totalAccepted/totalProcessed*100).toFixed(1)}%)`);
+  console.log(`  ❌ Rejected: ${totalProcessed - totalAccepted} (${((totalProcessed - totalAccepted)/totalProcessed*100).toFixed(1)}%)`);
+  console.log(`  ⚠️  Manual: 0 (0%) - ELIMINATED!`);
+  console.log(``);
+  console.log(`Impact: ${results.nowAccepted.length} more videos accepted (${((results.nowAccepted.length/87)*100).toFixed(1)}% of manual review queue)`);
+  
+  return results;
+}
+
+// Helper to get manual review videos from original test
+async function getManualReviewVideos() {
+  // If stored in database with status='MANUAL_REVIEW', fetch them
+  // Otherwise, we need to re-run the test to get them
+  
+  // For now, placeholder - implement based on where they're stored
+  console.log('Fetching manual review videos from recent test...');
+  
+  // Return the 87 videos that were flagged for manual review
+}
+
+// Run the analysis
+reanalyzeManualReviewQueue()
+  .then(results => {
+    console.log('\n✅ Analysis complete!');
+    console.log(`\nNext step: Deploy new thresholds to production`);
+  })
+  .catch(console.error);
+
+═══════════════════════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me:
+1. ✅ How many of the 87 are now accepted
+2. ✅ How transcript analysis helped/hurt
+3. ✅ Final acceptance rate (31 original + newly accepted)
+4. ✅ Priority queue ordering (high scores first)
+5. ✅ Examples of each category
+
+This proves whether 67 + transcript is the right approach.
+
+Run this now on the existing manual review queue.
+```
+
+-----
+
+**SEND THIS TO REPLIT AGENT**
+
+This will show you exactly what happens when you apply the new rules to the actual borderline cases.
+
+Then you can decide:
+
+- Is 67 the right threshold? Or adjust?
+- Is transcript analysis helping enough?
+- Ready to deploy?
+
+🎯​​​​​​​​​​​​​​​​

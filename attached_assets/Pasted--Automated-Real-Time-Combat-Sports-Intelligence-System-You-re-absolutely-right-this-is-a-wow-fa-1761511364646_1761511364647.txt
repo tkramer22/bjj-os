@@ -1,0 +1,1242 @@
+# Automated Real-Time Combat Sports Intelligence System
+
+You’re absolutely right - this is a “wow factor” feature that sets you apart. Let me build you a production-ready scraping system.
+
+-----
+
+# The Vision: Subtle Intelligence That Impresses
+
+**The Experience:**
+
+```
+User: "Been working on triangles lately"
+
+Prof. OS: "Nice! Triangles are having a moment right now. Mikey Musumeci just hit a crazy modified triangle at ONE Championship last weekend - broke it down to attacking from unconventional angles. 
+
+Your closed guard triangle is already 82% success rate. Want to explore some of those angle variations?"
+
+[User thinks: "Wait, Prof. OS watches fights? That's sick."]
+```
+
+**Key: Reference naturally, don’t force it. It’s ambient intelligence.**
+
+-----
+
+# Architecture Overview
+
+```
+┌─────────────────────────────────────────────┐
+│   DAILY SCRAPER (Runs 3am)                  │
+│   - Scrapes 15+ sources                     │
+│   - Filters for relevance                   │
+│   - Generates embeddings                    │
+│   - Stores in vector DB                     │
+└─────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────┐
+│   VECTOR DATABASE (PostgreSQL + pgvector)   │
+│   - 90 days of rolling content              │
+│   - Semantic search enabled                 │
+│   - Categorized & scored                    │
+└─────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────┐
+│   INTELLIGENT RETRIEVAL                     │
+│   - Contextual to user conversation         │
+│   - Recent events (7 days)                  │
+│   - High relevance only (>0.8 similarity)   │
+└─────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────┐
+│   PROF. OS INTEGRATION                      │
+│   - References naturally (not forced)       │
+│   - Cites source casually                   │
+│   - Ties to user's training                 │
+└─────────────────────────────────────────────┘
+```
+
+-----
+
+# Part 1: Data Sources (What We’ll Scrape)
+
+## BJJ Sources (High Priority)
+
+```javascript
+const BJJ_SOURCES = {
+  
+  // Competition results
+  competitions: [
+    {
+      name: 'FloGrappling Events',
+      url: 'https://www.flograppling.com/events',
+      scrapeType: 'html',
+      frequency: 'daily',
+      priority: 'high',
+      selectors: {
+        events: '.event-card',
+        title: '.event-title',
+        date: '.event-date',
+        results: '.event-results'
+      }
+    },
+    {
+      name: 'IBJJF Results',
+      url: 'https://ibjjf.com/events',
+      scrapeType: 'html',
+      frequency: 'daily',
+      priority: 'high'
+    },
+    {
+      name: 'ADCC',
+      url: 'https://adcc.com/news',
+      scrapeType: 'html',
+      frequency: 'daily',
+      priority: 'high'
+    },
+    {
+      name: 'Smoothcomp',
+      url: 'https://smoothcomp.com/en/calendar',
+      scrapeType: 'api', // Has API
+      frequency: 'daily',
+      priority: 'medium'
+    }
+  ],
+  
+  // News sites
+  news: [
+    {
+      name: 'BJJ Heroes News',
+      url: 'https://www.bjjheroes.com/news',
+      scrapeType: 'rss',
+      rssUrl: 'https://www.bjjheroes.com/feed',
+      frequency: 'daily',
+      priority: 'high'
+    },
+    {
+      name: 'BJJEE',
+      url: 'https://www.bjjee.com/',
+      scrapeType: 'rss',
+      rssUrl: 'https://www.bjjee.com/feed/',
+      frequency: 'daily',
+      priority: 'high'
+    },
+    {
+      name: 'Grappling Insider',
+      url: 'https://www.grappling-insider.com/',
+      scrapeType: 'rss',
+      rssUrl: 'https://www.grappling-insider.com/feed/',
+      frequency: 'daily',
+      priority: 'medium'
+    },
+    {
+      name: 'FloGrappling Articles',
+      url: 'https://www.flograppling.com/articles',
+      scrapeType: 'html',
+      frequency: 'daily',
+      priority: 'high'
+    }
+  ],
+  
+  // Social (API-based)
+  social: [
+    {
+      name: 'Reddit r/bjj',
+      source: 'reddit',
+      subreddit: 'bjj',
+      scrapeType: 'api',
+      filter: 'top posts last 24h with >50 upvotes',
+      frequency: 'daily',
+      priority: 'medium'
+    },
+    {
+      name: 'Instagram BJJ Hashtags',
+      source: 'instagram',
+      hashtags: ['#bjj', '#jiujitsu', '#adcc', '#ibjjf'],
+      scrapeType: 'api',
+      filter: 'influencer accounts only (>10K followers)',
+      frequency: 'daily',
+      priority: 'low' // Nice to have
+    }
+  ],
+  
+  // YouTube (for meta trends)
+  video: [
+    {
+      name: 'FloGrappling Channel',
+      channelId: 'UC5Xj9kVKwK1xFtVXm7NXyCA',
+      scrapeType: 'youtube_api',
+      filter: 'competition footage, technique breakdowns',
+      frequency: 'daily',
+      priority: 'medium'
+    },
+    {
+      name: 'Gordon Ryan Channel',
+      channelId: 'UCl_rTF_JMt7yINFDI6p25Ig',
+      scrapeType: 'youtube_api',
+      frequency: 'daily',
+      priority: 'low'
+    }
+  ]
+};
+```
+
+## MMA/UFC Sources (High Priority)
+
+```javascript
+const MMA_SOURCES = {
+  
+  // Official sources
+  official: [
+    {
+      name: 'UFC News',
+      url: 'https://www.ufc.com/news',
+      scrapeType: 'rss',
+      rssUrl: 'https://www.ufc.com/rss/news',
+      frequency: 'daily',
+      priority: 'high'
+    },
+    {
+      name: 'UFC Events',
+      url: 'https://www.ufc.com/events',
+      scrapeType: 'html',
+      frequency: 'daily',
+      priority: 'high'
+    }
+  ],
+  
+  // MMA news sites
+  news: [
+    {
+      name: 'MMA Fighting',
+      url: 'https://www.mmafighting.com/',
+      scrapeType: 'rss',
+      rssUrl: 'https://www.mmafighting.com/rss/current',
+      frequency: 'daily',
+      priority: 'high'
+    },
+    {
+      name: 'MMA Junkie',
+      url: 'https://mmajunkie.usatoday.com/',
+      scrapeType: 'rss',
+      rssUrl: 'https://mmajunkie.usatoday.com/feed',
+      frequency: 'daily',
+      priority: 'high'
+    },
+    {
+      name: 'Bloody Elbow',
+      url: 'https://www.bloodyelbow.com/',
+      scrapeType: 'rss',
+      rssUrl: 'https://www.bloodyelbow.com/rss/current',
+      frequency: 'daily',
+      priority: 'medium'
+    },
+    {
+      name: 'Sherdog',
+      url: 'https://www.sherdog.com/news/',
+      scrapeType: 'rss',
+      rssUrl: 'https://www.sherdog.com/rss/news.xml',
+      frequency: 'daily',
+      priority: 'medium'
+    }
+  ],
+  
+  // Reddit
+  social: [
+    {
+      name: 'Reddit r/MMA',
+      source: 'reddit',
+      subreddit: 'mma',
+      scrapeType: 'api',
+      filter: 'top posts last 24h with >100 upvotes',
+      frequency: 'daily',
+      priority: 'medium'
+    },
+    {
+      name: 'Reddit r/UFC',
+      source: 'reddit',
+      subreddit: 'ufc',
+      scrapeType: 'api',
+      frequency: 'daily',
+      priority: 'low'
+    }
+  ]
+};
+```
+
+-----
+
+# Part 2: Database Schema
+
+```sql
+-- Main news table
+CREATE TABLE combat_sports_news (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  -- Content
+  title TEXT NOT NULL,
+  summary TEXT,                      -- AI-generated summary if full content too long
+  full_content TEXT,
+  url TEXT UNIQUE,                   -- Prevent duplicates
+  
+  -- Semantic search
+  embedding VECTOR(1536),            -- OpenAI embedding
+  
+  -- Classification
+  sport VARCHAR(20),                 -- 'bjj', 'mma', 'ufc', 'grappling'
+  content_type VARCHAR(50),          -- 'competition_result', 'news', 'technique_breakdown', 'athlete_interview'
+  
+  -- Entities (extracted)
+  athletes TEXT[],                   -- ['Gordon Ryan', 'Felipe Pena']
+  competitions TEXT[],               -- ['ADCC 2025', 'UFC 300']
+  techniques TEXT[],                 -- ['triangle', 'rear_naked_choke', 'heel_hook']
+  gyms TEXT[],                       -- ['AOJ', 'Atos', 'New Wave']
+  
+  -- Source metadata
+  source_name VARCHAR(100),
+  source_type VARCHAR(50),           -- 'rss', 'html_scrape', 'api', 'manual'
+  scraped_at TIMESTAMP,
+  
+  -- Temporal
+  published_date TIMESTAMP,          -- When article was published
+  event_date DATE,                   -- If about specific event/fight
+  
+  -- Relevance scoring
+  importance_score INT,              -- 1-10, algorithmic
+  engagement_score INT,              -- Social engagement (upvotes, shares)
+  recency_score DECIMAL,             -- Decays over time
+  
+  -- Quality control
+  is_verified BOOLEAN DEFAULT false, -- Manual verification
+  is_duplicate BOOLEAN DEFAULT false,
+  duplicate_of UUID REFERENCES combat_sports_news(id),
+  
+  -- Lifecycle
+  expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '90 days',
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Indexes for performance
+CREATE INDEX idx_news_embedding ON combat_sports_news USING ivfflat (embedding vector_cosine_ops);
+CREATE INDEX idx_news_published ON combat_sports_news(published_date DESC);
+CREATE INDEX idx_news_sport ON combat_sports_news(sport);
+CREATE INDEX idx_news_expires ON combat_sports_news(expires_at) WHERE expires_at > NOW();
+CREATE INDEX idx_news_url ON combat_sports_news(url);
+
+-- GiST index for array searching
+CREATE INDEX idx_news_athletes ON combat_sports_news USING gin(athletes);
+CREATE INDEX idx_news_techniques ON combat_sports_news USING gin(techniques);
+CREATE INDEX idx_news_competitions ON combat_sports_news USING gin(competitions);
+
+-- Full text search
+CREATE INDEX idx_news_fulltext ON combat_sports_news USING gin(to_tsvector('english', title || ' ' || COALESCE(summary, '')));
+
+-- Entity extraction tracking
+CREATE TABLE news_entity_extraction_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  news_id UUID REFERENCES combat_sports_news(id),
+  extracted_athletes TEXT[],
+  extracted_techniques TEXT[],
+  extracted_competitions TEXT[],
+  extraction_confidence DECIMAL,
+  extracted_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Scraper health monitoring
+CREATE TABLE scraper_health (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_name VARCHAR(100),
+  last_successful_scrape TIMESTAMP,
+  last_failed_scrape TIMESTAMP,
+  failure_count INT DEFAULT 0,
+  last_error TEXT,
+  articles_scraped_today INT DEFAULT 0,
+  is_healthy BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+-----
+
+# Part 3: The Scraper System
+
+## Core Scraper Service
+
+```javascript
+// services/combatSportsScraper.js
+
+import axios from 'axios';
+import * as cheerio from 'cheerio';
+import Parser from 'rss-parser';
+import { OpenAI } from 'openai';
+import { db } from '../db';
+
+const rssParser = new Parser();
+const openai = new OpenAI();
+
+export class CombatSportsScraper {
+  
+  constructor() {
+    this.sources = [...BJJ_SOURCES, ...MMA_SOURCES];
+    this.scrapedToday = 0;
+    this.errors = [];
+  }
+  
+  // Main scraping orchestrator
+  async scrapeAll() {
+    console.log('🔍 Starting daily combat sports scrape...');
+    
+    const results = {
+      success: [],
+      failed: [],
+      totalArticles: 0
+    };
+    
+    for (const source of this.sources) {
+      try {
+        console.log(`Scraping: ${source.name}`);
+        
+        let articles = [];
+        
+        switch(source.scrapeType) {
+          case 'rss':
+            articles = await this.scrapeRSS(source);
+            break;
+          case 'html':
+            articles = await this.scrapeHTML(source);
+            break;
+          case 'api':
+            articles = await this.scrapeAPI(source);
+            break;
+        }
+        
+        // Process each article
+        for (const article of articles) {
+          await this.processArticle(article, source);
+        }
+        
+        results.success.push(source.name);
+        results.totalArticles += articles.length;
+        
+        // Update scraper health
+        await this.updateScraperHealth(source.name, true, articles.length);
+        
+      } catch (error) {
+        console.error(`Failed to scrape ${source.name}:`, error);
+        results.failed.push({name: source.name, error: error.message});
+        
+        await this.updateScraperHealth(source.name, false, 0, error.message);
+      }
+      
+      // Rate limiting (be nice to servers)
+      await this.sleep(2000); // 2 second delay between sources
+    }
+    
+    console.log(`✅ Scraping complete: ${results.totalArticles} articles from ${results.success.length} sources`);
+    
+    // Cleanup old articles
+    await this.cleanupOldArticles();
+    
+    return results;
+  }
+  
+  // RSS scraping (easiest, most reliable)
+  async scrapeRSS(source) {
+    const feed = await rssParser.parseURL(source.rssUrl);
+    
+    return feed.items.map(item => ({
+      title: item.title,
+      url: item.link,
+      full_content: item.content || item.contentSnippet,
+      published_date: new Date(item.pubDate || item.isoDate),
+      source_type: 'rss'
+    }));
+  }
+  
+  // HTML scraping (more complex, fragile)
+  async scrapeHTML(source) {
+    const response = await axios.get(source.url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; BJJ-OS-Bot/1.0)'
+      }
+    });
+    
+    const $ = cheerio.load(response.data);
+    const articles = [];
+    
+    $(source.selectors.articles).each((i, element) => {
+      const $el = $(element);
+      
+      articles.push({
+        title: $el.find(source.selectors.title).text().trim(),
+        url: $el.find(source.selectors.link).attr('href'),
+        summary: $el.find(source.selectors.summary).text().trim(),
+        published_date: this.parseDate($el.find(source.selectors.date).text()),
+        source_type: 'html'
+      });
+    });
+    
+    return articles;
+  }
+  
+  // API scraping (Reddit, YouTube, etc.)
+  async scrapeAPI(source) {
+    switch(source.source) {
+      case 'reddit':
+        return await this.scrapeReddit(source);
+      case 'youtube':
+        return await this.scrapeYouTube(source);
+      default:
+        throw new Error(`Unknown API source: ${source.source}`);
+    }
+  }
+  
+  async scrapeReddit(source) {
+    // Use Reddit API (requires API key)
+    const response = await axios.get(
+      `https://www.reddit.com/r/${source.subreddit}/top.json?t=day&limit=25`,
+      {
+        headers: {
+          'User-Agent': 'BJJ-OS-Bot/1.0'
+        }
+      }
+    );
+    
+    return response.data.data.children
+      .filter(post => post.data.ups >= 50) // Filter by upvotes
+      .map(post => ({
+        title: post.data.title,
+        url: post.data.url,
+        full_content: post.data.selftext,
+        published_date: new Date(post.data.created_utc * 1000),
+        engagement_score: post.data.ups,
+        source_type: 'api'
+      }));
+  }
+  
+  async scrapeYouTube(source) {
+    // Use YouTube Data API
+    const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+      params: {
+        key: process.env.YOUTUBE_API_KEY,
+        channelId: source.channelId,
+        part: 'snippet',
+        order: 'date',
+        maxResults: 10,
+        publishedAfter: new Date(Date.now() - 24*60*60*1000).toISOString()
+      }
+    });
+    
+    return response.data.items.map(item => ({
+      title: item.snippet.title,
+      url: `https://youtube.com/watch?v=${item.id.videoId}`,
+      summary: item.snippet.description,
+      published_date: new Date(item.snippet.publishedAt),
+      source_type: 'api'
+    }));
+  }
+  
+  // Process individual article
+  async processArticle(article, source) {
+    
+    // 1. Check if already exists (by URL)
+    const existing = await db.query(
+      'SELECT id FROM combat_sports_news WHERE url = $1',
+      [article.url]
+    );
+    
+    if (existing.rows.length > 0) {
+      console.log(`Skipping duplicate: ${article.title}`);
+      return;
+    }
+    
+    // 2. Filter for relevance
+    const isRelevant = await this.checkRelevance(article);
+    if (!isRelevant) {
+      console.log(`Not relevant: ${article.title}`);
+      return;
+    }
+    
+    // 3. Extract entities (athletes, techniques, competitions)
+    const entities = await this.extractEntities(article);
+    
+    // 4. Generate summary if content is long
+    const summary = article.full_content?.length > 500
+      ? await this.generateSummary(article.full_content)
+      : article.summary;
+    
+    // 5. Generate embedding for semantic search
+    const embedding = await this.generateEmbedding(
+      `${article.title} ${summary || ''}`
+    );
+    
+    // 6. Calculate importance score
+    const importanceScore = this.calculateImportance(article, entities, source);
+    
+    // 7. Store in database
+    await db.query(`
+      INSERT INTO combat_sports_news (
+        title, summary, full_content, url, embedding,
+        sport, content_type,
+        athletes, competitions, techniques,
+        source_name, source_type, published_date,
+        importance_score, engagement_score
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    `, [
+      article.title,
+      summary,
+      article.full_content,
+      article.url,
+      JSON.stringify(embedding),
+      source.sport || 'bjj',
+      entities.content_type,
+      entities.athletes,
+      entities.competitions,
+      entities.techniques,
+      source.name,
+      article.source_type,
+      article.published_date,
+      importanceScore,
+      article.engagement_score || 0
+    ]);
+    
+    console.log(`✅ Saved: ${article.title}`);
+  }
+  
+  // Check if article is relevant to BJJ/MMA
+  async checkRelevance(article) {
+    const content = `${article.title} ${article.summary || article.full_content || ''}`.toLowerCase();
+    
+    // Quick keyword filter first (cheap)
+    const bjjKeywords = ['bjj', 'jiu-jitsu', 'jiujitsu', 'grappling', 'submission', 'ibjjf', 'adcc'];
+    const mmaKeywords = ['ufc', 'mma', 'mixed martial arts', 'fighter', 'fight night'];
+    
+    const hasKeywords = [...bjjKeywords, ...mmaKeywords].some(keyword => 
+      content.includes(keyword)
+    );
+    
+    if (!hasKeywords) return false;
+    
+    // For borderline cases, use AI classification (more expensive, use sparingly)
+    if (content.length < 100) {
+      // Too short, probably not relevant
+      return false;
+    }
+    
+    return true;
+  }
+  
+  // Extract entities using GPT
+  async extractEntities(article) {
+    const prompt = `Extract structured data from this combat sports article:
+
+Title: ${article.title}
+Content: ${article.summary || article.full_content?.substring(0, 1000)}
+
+Return JSON with:
+{
+  "content_type": "competition_result" | "news" | "technique_breakdown" | "athlete_interview" | "meta_discussion",
+  "athletes": ["Name1", "Name2"],
+  "competitions": ["Event Name"],
+  "techniques": ["technique_name"],
+  "event_date": "YYYY-MM-DD or null"
+}`;
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', // Cheaper model for extraction
+      messages: [{role: 'user', content: prompt}],
+      response_format: {type: 'json_object'},
+      temperature: 0
+    });
+    
+    return JSON.parse(response.choices[0].message.content);
+  }
+  
+  // Generate summary with GPT
+  async generateSummary(content) {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{
+        role: 'user',
+        content: `Summarize this combat sports article in 2-3 sentences:\n\n${content.substring(0, 2000)}`
+      }],
+      max_tokens: 150
+    });
+    
+    return response.choices[0].message.content;
+  }
+  
+  // Generate embedding for semantic search
+  async generateEmbedding(text) {
+    const response = await openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: text.substring(0, 8000) // Limit input length
+    });
+    
+    return response.data[0].embedding;
+  }
+  
+  // Calculate importance score (1-10)
+  calculateImportance(article, entities, source) {
+    let score = 5; // Base score
+    
+    // Source priority
+    if (source.priority === 'high') score += 2;
+    if (source.priority === 'medium') score += 1;
+    
+    // Content type
+    if (entities.content_type === 'competition_result') score += 2;
+    if (entities.content_type === 'technique_breakdown') score += 1;
+    
+    // Notable athletes (Gordon Ryan, Mikey, etc.)
+    const notableAthletes = ['gordon ryan', 'mikey musumeci', 'nicholas meregali', 'tye ruotolo'];
+    if (entities.athletes?.some(a => notableAthletes.includes(a.toLowerCase()))) {
+      score += 2;
+    }
+    
+    // Major competitions
+    const majorComps = ['adcc', 'worlds', 'pans', 'ufc'];
+    if (entities.competitions?.some(c => majorComps.some(mc => c.toLowerCase().includes(mc)))) {
+      score += 2;
+    }
+    
+    // Engagement (for social sources)
+    if (article.engagement_score > 200) score += 1;
+    if (article.engagement_score > 500) score += 1;
+    
+    return Math.min(10, Math.max(1, score));
+  }
+  
+  // Cleanup articles older than 90 days
+  async cleanupOldArticles() {
+    const result = await db.query(`
+      DELETE FROM combat_sports_news
+      WHERE expires_at < NOW()
+      RETURNING id
+    `);
+    
+    console.log(`🗑️ Cleaned up ${result.rowCount} old articles`);
+  }
+  
+  // Update scraper health monitoring
+  async updateScraperHealth(sourceName, success, articlesScraped, error = null) {
+    await db.query(`
+      INSERT INTO scraper_health (source_name, last_successful_scrape, articles_scraped_today, is_healthy)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (source_name) DO UPDATE SET
+        last_successful_scrape = CASE WHEN $4 THEN $2 ELSE scraper_health.last_successful_scrape END,
+        last_failed_scrape = CASE WHEN NOT $4 THEN NOW() ELSE scraper_health.last_failed_scrape END,
+        failure_count = CASE WHEN NOT $4 THEN scraper_health.failure_count + 1 ELSE 0 END,
+        last_error = CASE WHEN NOT $4 THEN $5 ELSE NULL END,
+        articles_scraped_today = $3,
+        is_healthy = $4
+    `, [sourceName, success ? new Date() : null, articlesScraped, success, error]);
+  }
+  
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  
+  parseDate(dateString) {
+    // Handle various date formats
+    return new Date(dateString);
+  }
+}
+```
+
+-----
+
+# Part 4: Semantic Search Integration
+
+```javascript
+// services/newsSearch.js
+
+export class NewsSearchService {
+  
+  // Search for relevant recent news
+  async searchRelevantNews(query, options = {}) {
+    const {
+      sport = null,          // Filter by sport
+      contentType = null,    // Filter by type
+      limit = 3,             // Max results
+      recencyDays = 7,       // How recent
+      minSimilarity = 0.75   // Relevance threshold
+    } = options;
+    
+    // 1. Generate query embedding
+    const queryEmbedding = await openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: query
+    });
+    
+    // 2. Semantic search with filters
+    const results = await db.query(`
+      SELECT 
+        title,
+        summary,
+        url,
+        published_date,
+        athletes,
+        techniques,
+        competitions,
+        importance_score,
+        1 - (embedding <=> $1::vector) as similarity
+      FROM combat_sports_news
+      WHERE 
+        published_date > NOW() - INTERVAL '${recencyDays} days'
+        ${sport ? `AND sport = '${sport}'` : ''}
+        ${contentType ? `AND content_type = '${contentType}'` : ''}
+        AND expires_at > NOW()
+      ORDER BY 
+        (1 - (embedding <=> $1::vector)) * importance_score DESC
+      LIMIT $2
+    `, [JSON.stringify(queryEmbedding.data[0].embedding), limit]);
+    
+    // 3. Filter by similarity threshold
+    return results.rows.filter(r => r.similarity >= minSimilarity);
+  }
+  
+  // Get recent highlights (most important news of last 7 days)
+  async getRecentHighlights(sport = 'bjj', limit = 5) {
+    const results = await db.query(`
+      SELECT *
+      FROM combat_sports_news
+      WHERE 
+        sport = $1
+        AND published_date > NOW() - INTERVAL '7 days'
+        AND importance_score >= 7
+      ORDER BY importance_score DESC, published_date DESC
+      LIMIT $2
+    `, [sport, limit]);
+    
+    return results.rows;
+  }
+  
+  // Search by specific athlete
+  async searchByAthlete(athleteName, limit = 5) {
+    const results = await db.query(`
+      SELECT *
+      FROM combat_sports_news
+      WHERE 
+        $1 = ANY(athletes)
+        AND published_date > NOW() - INTERVAL '30 days'
+      ORDER BY published_date DESC
+      LIMIT $2
+    `, [athleteName, limit]);
+    
+    return results.rows;
+  }
+  
+  // Search by technique
+  async searchByTechnique(techniqueName, limit = 5) {
+    const results = await db.query(`
+      SELECT *
+      FROM combat_sports_news
+      WHERE 
+        $1 = ANY(techniques)
+        AND published_date > NOW() - INTERVAL '30 days'
+      ORDER BY importance_score DESC
+      LIMIT $2
+    `, [techniqueName, limit]);
+    
+    return results.rows;
+  }
+}
+```
+
+-----
+
+# Part 5: Prof. OS Integration (Subtle & Natural)
+
+```javascript
+// Prof. OS integration
+
+async function handleUserMessage(userMessage, userId) {
+  
+  const context = await buildEnhancedContext(userId);
+  
+  // Detect if recent news might be relevant
+  const newsContext = await getRelevantNewsContext(userMessage, context);
+  
+  // Build system prompt with news context
+  const systemPrompt = `
+    ${BASE_PROF_OS_PROMPT}
+    
+    ${newsContext ? `
+    RECENT COMBAT SPORTS CONTEXT (Last 7 days):
+    ${newsContext}
+    
+    USAGE GUIDELINES FOR RECENT NEWS:
+    - Reference naturally ONLY when relevant to conversation
+    - Don't force it into every response
+    - Cite casually: "I saw that..." or "Recent event showed..."
+    - Connect to user's training when possible
+    - Never info-dump - keep it brief (1-2 sentences max)
+    
+    GOOD: "Triangles are hot right now - Mikey just hit a crazy one at ONE FC. Your closed guard triangle is already strong (82%), want to explore some angle variations?"
+    
+    BAD: "Speaking of triangles, did you know that on October 20th, 2025, Mikey Musumeci competed at ONE Championship and successfully executed a triangle choke from an unconventional angle against his opponent in the bantamweight division..."
+    
+    BE COOL. Reference it if it fits. Otherwise, ignore it.
+    ` : ''}
+  `;
+  
+  const response = await callClaude(systemPrompt, userMessage, context);
+  return response;
+}
+
+async function getRelevantNewsContext(userMessage, userContext) {
+  
+  // Only search if message relates to techniques, competitions, or athletes
+  const triggers = [
+    /technique/i,
+    /competition/i,
+    /fight/i,
+    /triangle|armbar|choke|sweep|pass/i, // Technique names
+    /adcc|ibjjf|ufc|worlds/i, // Competition names
+    /gordon|mikey|nicholas|tye/i // Athlete names
+  ];
+  
+  const shouldSearch = triggers.some(pattern => pattern.test(userMessage));
+  
+  if (!shouldSearch) return null;
+  
+  // Search for relevant recent news
+  const newsService = new NewsSearchService();
+  const relevantNews = await newsService.searchRelevantNews(userMessage, {
+    recencyDays: 7,
+    limit: 2,
+    minSimilarity: 0.8 // High threshold - only very relevant
+  });
+  
+  if (relevantNews.length === 0) return null;
+  
+  // Format for context (brief)
+  return relevantNews.map(news => `
+    [${formatDate(news.published_date)}] ${news.title}
+    ${news.summary}
+    Source: ${news.url}
+  `).join('\n\n');
+}
+
+function formatDate(date) {
+  const daysAgo = Math.floor((Date.now() - new Date(date)) / (1000 * 60 * 60 * 24));
+  
+  if (daysAgo === 0) return 'Today';
+  if (daysAgo === 1) return 'Yesterday';
+  if (daysAgo < 7) return `${daysAgo} days ago`;
+  return new Date(date).toLocaleDateString();
+}
+```
+
+-----
+
+# Part 6: Cron Job Setup
+
+```javascript
+// jobs/dailyScraper.js
+
+import cron from 'node-cron';
+import { CombatSportsScraper } from '../services/combatSportsScraper';
+
+// Run daily at 3am
+cron.schedule('0 3 * * *', async () => {
+  console.log('🚀 Starting daily combat sports scraper...');
+  
+  const scraper = new CombatSportsScraper();
+  
+  try {
+    const results = await scraper.scrapeAll();
+    
+    // Log results
+    console.log('✅ Scraping completed:', results);
+    
+    // Send notification if major failures
+    if (results.failed.length > 5) {
+      await notifyAdmin({
+        subject: 'Scraper Health Alert',
+        message: `${results.failed.length} sources failed. Check scraper_health table.`
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Scraper crashed:', error);
+    await notifyAdmin({
+      subject: 'CRITICAL: Scraper Crashed',
+      message: error.message
+    });
+  }
+});
+
+console.log('📅 Daily scraper scheduled for 3am');
+```
+
+-----
+
+# Part 7: Admin Dashboard
+
+```jsx
+// Admin dashboard to monitor scraper health
+
+function ScraperHealthDashboard() {
+  const [health, setHealth] = useState([]);
+  const [recentNews, setRecentNews] = useState([]);
+  
+  useEffect(() => {
+    fetchScraperHealth();
+    fetchRecentNews();
+  }, []);
+  
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-6">Scraper Health Dashboard</h1>
+      
+      {/* Health Status */}
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <Card>
+          <CardHeader>Total Sources</CardHeader>
+          <CardContent className="text-3xl">{health.length}</CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>Healthy</CardHeader>
+          <CardContent className="text-3xl text-green-600">
+            {health.filter(h => h.is_healthy).length}
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>Failed</CardHeader>
+          <CardContent className="text-3xl text-red-600">
+            {health.filter(h => !h.is_healthy).length}
+          </CardContent>
+        </Card>
+      </div>
+      
+      {/* Source Status Table */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Source Status</h2>
+        <table className="w-full">
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Last Success</th>
+              <th>Articles Today</th>
+              <th>Last Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {health.map(source => (
+              <tr key={source.source_name}>
+                <td>{source.source_name}</td>
+                <td>
+                  {source.is_healthy ? (
+                    <span className="text-green-600">✓ Healthy</span>
+                  ) : (
+                    <span className="text-red-600">✗ Failed</span>
+                  )}
+                </td>
+                <td>{formatTimeAgo(source.last_successful_scrape)}</td>
+                <td>{source.articles_scraped_today}</td>
+                <td className="text-sm text-red-600">{source.last_error}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      
+      {/* Recent Articles */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Recent Articles (Last 24h)</h2>
+        <div className="space-y-4">
+          {recentNews.map(article => (
+            <Card key={article.id}>
+              <CardHeader>
+                <a href={article.url} target="_blank" className="text-blue-600 hover:underline">
+                  {article.title}
+                </a>
+                <div className="text-sm text-gray-500">
+                  {article.source_name} • {formatTimeAgo(article.published_date)} • Score: {article.importance_score}/10
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm">{article.summary}</p>
+                {article.athletes.length > 0 && (
+                  <div className="mt-2">
+                    <span className="font-semibold">Athletes:</span> {article.athletes.join(', ')}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+      
+      {/* Manual Trigger */}
+      <div className="mt-8">
+        <button 
+          onClick={() => triggerManualScrape()}
+          className="bg-blue-600 text-white px-6 py-2 rounded"
+        >
+          Run Scraper Now
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+-----
+
+# Cost Analysis
+
+## Daily Operation Costs
+
+**Scraping:**
+
+- 20 sources × ~25 articles each = 500 articles/day
+- Free (just server compute)
+
+**Entity Extraction (GPT-4o-mini):**
+
+- 500 articles × 200 tokens input = 100K tokens
+- Cost: ~$0.015/day ($0.45/month)
+
+**Summary Generation (when needed, ~20% of articles):**
+
+- 100 articles × 300 tokens = 30K tokens
+- Cost: ~$0.005/day ($0.15/month)
+
+**Embeddings (GPT text-embedding-3-small):**
+
+- 500 articles × 100 tokens = 50K tokens
+- Cost: ~$0.001/day ($0.03/month)
+
+**Query Embeddings (per user search):**
+
+- 1,000 users × 2 searches/day = 2,000 embeddings
+- Cost: ~$0.0004/day ($0.01/month)
+
+**Total: ~$0.64/month for 1,000 active users**
+
+**At 10,000 users: ~$6.40/month**
+
+**This is incredibly cheap for the value it provides.**
+
+-----
+
+# Complete Replit Agent Prompt
+
+```
+I need to build an automated combat sports news scraping system for Prof. OS.
+
+PART 1: DATABASE SETUP
+
+1. Enable pgvector extension:
+CREATE EXTENSION IF NOT EXISTS vector;
+
+2. Create tables:
+- combat_sports_news (main news storage with vector embeddings)
+- news_entity_extraction_log (track extraction quality)
+- scraper_health (monitor scraper status)
+
+Use the schema I provided earlier. Include all indexes.
+
+PART 2: INSTALL DEPENDENCIES
+
+npm install cheerio rss-parser node-cron axios
+
+Add to .env:
+YOUTUBE_API_KEY=your_key_here
+
+PART 3: BUILD SCRAPER SERVICE
+
+Create services/combatSportsScraper.js:
+- CombatSportsScraper class
+- Methods: scrapeAll(), scrapeRSS(), scrapeHTML(), scrapeAPI()
+- Reddit scraping (r/bjj, r/mma)
+- Entity extraction with GPT-4o-mini
+- Embedding generation with text-embedding-3-small
+- Importance scoring algorithm
+
+Sources to scrape (use RSS when available):
+BJJ:
+- BJJ Heroes RSS: https://www.bjjheroes.com/feed
+- BJJEE RSS: https://www.bjjee.com/feed/
+- Grappling Insider RSS: https://www.grappling-insider.com/feed/
+- FloGrappling (HTML scrape)
+- Reddit r/bjj (API)
+
+MMA/UFC:
+- UFC RSS: https://www.ufc.com/rss/news
+- MMA Fighting RSS: https://www.mmafighting.com/rss/current
+- MMA Junkie RSS: https://mmajunkie.usatoday.com/feed
+- Reddit r/mma (API)
+
+PART 4: NEWS SEARCH SERVICE
+
+Create services/newsSearch.js:
+- searchRelevantNews() - semantic search with filters
+- getRecentHighlights() - top news of last 7 days
+- searchByAthlete() - find athlete-specific news
+- searchByTechnique() - find technique-specific news
+
+PART 5: PROF. OS INTEGRATION
+
+Update Prof. OS message handler:
+- Before generating response, check if recent news is relevant
+- Use newsSearch.searchRelevantNews() with high similarity threshold (0.8)
+- Add news context to system prompt with "subtle reference" instructions
+- Prof. OS references naturally, never forces it
+
+PART 6: CRON JOB
+
+Create jobs/dailyScraper.js:
+- Schedule: '0 3 * * *' (3am daily)
+- Run scraper.scrapeAll()
+- Log results
+- Alert admin if >5 sources fail
+
+Start cron in server.js:
+import './jobs/dailyScraper.js';
+
+PART 7: ADMIN DASHBOARD
+
+Create /admin/scraper-health page:
+- Show scraper health status
+- List recent articles (last 24h)
+- Manual trigger button
+- Source failure alerts
+
+PART 8: ERROR HANDLING
+
+- Wrap each source scrape in try/catch
+- Update scraper_health table on success/failure
+- Rate limit between sources (2 second delay)
+- Handle network timeouts gracefully
+- Skip duplicates (check by URL)
+
+PART 9: TESTING
+
+Test each component:
+1. Run scraper manually first
+2. Verify articles saved to database
+3. Test semantic search works
+4. Test Prof. OS can reference news naturally
+5. Verify cron job runs at 3am
+
+Make sure:
+- Embeddings stored as VECTOR type (requires pgvector)
+- Duplicate detection works (by URL)
+- Old articles cleaned up after 90 days
+- Prof. OS references news subtly, not forcefully
+- Admin dashboard shows real-time health
+
+CRITICAL: Recent news should feel like ambient intelligence, not forced information dumps. Prof. OS should sound like they casually watch fights and follow the scene, not like they're reading from a news feed.
+```
+
+-----
+
+Want me to write any specific component in complete detail, or shall we move forward with implementation?​​​​​​​​​​​​​​​​

@@ -1,0 +1,1132 @@
+# 🎯 FINAL MASTER PROMPT - ALL BUGS + SAVED VIDEO ORGANIZATION
+
+```
+EMERGENCY FIX: MULTIPLE CRITICAL BUGS FOUND IN BETA TESTING
+
+Real user testing revealed 7 critical bugs that must be fixed NOW for beta launch.
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG 1: EMAIL NOT USING CORRECT PERSONAL MESSAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Email sent to user did not have the personalized lifetime message.
+
+FIX: Update sendLifetimeInvitation function to use the personal message from admin form.
+
+FIND: sendLifetimeInvitation function
+CHANGE: Use personalMessage parameter if provided, otherwise use default
+
+```javascript
+async function sendLifetimeInvitation(email, inviteToken, personalMessage) {
+  const magicLink = `https://bjjos.app/lifetime-signup?token=${inviteToken}`;
+  
+  // Use provided message or default
+  const message = personalMessage || `You have lifetime access to BJJ OS. Forever. No charge.
+
+I'm genuinely grateful you're here early.
+
+Prof. OS is your training companion that never forgets. After each session, tell it what you worked on - it remembers everything, spots patterns in your game, and tells you what to work on next.
+
+The more you use it, the smarter it gets about YOUR game.
+
+It also scans YouTube daily for new instructionals from elite grapplers, curates a video library, and recommends techniques specific to what you're struggling with.
+
+Here's my only ask: Talk to it like a coach or friend and journal your training after every session for a week. Let's see what happens.
+
+Reach out by text anytime with criticisms. The bad and what can be better only helps. Your feedback shapes what this becomes.
+
+Thanks for using this and helping me build. It means the world.
+
+Oss!
+
+-Todd
+Todd@bjjos.app
+914.837.3750
+Text me anytime with ANY input`;
+
+  // Convert line breaks to paragraphs for HTML
+  const messageHTML = message.split('\n\n').map(para => 
+    `<p style="margin-bottom: 16px; color: #333; line-height: 1.6;">${para.replace(/\n/g, '<br>')}</p>`
+  ).join('');
+  
+  const emailHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f9f9f9;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9f9f9; padding: 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 8px; border: 1px solid #e0e0e0;">
+          <tr>
+            <td style="padding: 40px;">
+              
+              <h1 style="color: #000; margin: 0 0 30px 0; font-size: 24px; font-weight: 600;">BJJ OS</h1>
+              
+              ${messageHTML}
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+                <tr>
+                  <td align="center" style="background: #000; border-radius: 6px; padding: 16px;">
+                    <a href="${magicLink}" style="display: block; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px;">Create your account</a>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin-top: 20px; color: #666; font-size: 14px; text-align: center;">
+                Or copy this link: <a href="${magicLink}" style="color: #000; word-break: break-all;">${magicLink}</a>
+              </p>
+              
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const { Resend } = require('resend');
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  
+  await resend.emails.send({
+    from: 'BJJ OS <noreply@bjjos.app>',
+    to: email,
+    subject: 'Your BJJ OS lifetime access',
+    html: emailHTML
+  });
+}
+```
+
+ENSURE admin form passes personalMessage:
+
+```javascript
+app.post('/api/admin/send-lifetime-invite', async (req, res) => {
+  const { email, personalMessage } = req.body;
+  // ... create invitation token ...
+  await sendLifetimeInvitation(email, inviteToken, personalMessage);
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG 2: EMAIL LINK NOT VISIBLE IN DARK MODE
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Button/link not visible when email client is in dark mode.
+
+FIX: Already fixed in BUG 1 - added text link below button as backup.
+Also ensure button has explicit background color that works in dark mode.
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG 3: LOGIN STILL ASKS FOR PASSWORD (SHOULD BE PASSWORDLESS)
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Login form asks for password when it should be magic link/passwordless.
+
+FIX: Remove password field from login form, implement magic link login.
+
+FIND: Login form HTML
+REPLACE with passwordless login:
+
+```html
+<div class="login-container">
+  <h2>Welcome back to BJJ OS</h2>
+  <p>Enter your email to receive a login link</p>
+  
+  <form id="login-form">
+    <div class="form-group">
+      <label for="email">Email</label>
+      <input 
+        type="email" 
+        id="email" 
+        required
+        placeholder="your@email.com"
+      >
+    </div>
+    
+    <button type="submit" id="login-btn">Send Login Link</button>
+  </form>
+  
+  <div id="success-message" style="display: none;">
+    <p>✅ Check your email! We sent you a login link.</p>
+  </div>
+</div>
+
+<script>
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const email = document.getElementById('email').value;
+  const btn = document.getElementById('login-btn');
+  
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  
+  const response = await fetch('/api/auth/send-login-link', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
+  });
+  
+  if (response.ok) {
+    document.getElementById('login-form').style.display = 'none';
+    document.getElementById('success-message').style.display = 'block';
+  } else {
+    alert('Error sending login link');
+    btn.disabled = false;
+    btn.textContent = 'Send Login Link';
+  }
+});
+</script>
+```
+
+ADD backend endpoint:
+
+```javascript
+app.post('/api/auth/send-login-link', async (req, res) => {
+  const { email } = req.body;
+  
+  // Check if user exists
+  const user = await db.query('SELECT id, email FROM users WHERE email = $1', [email]);
+  
+  if (user.rows.length === 0) {
+    return res.status(404).json({ error: 'No account found with that email' });
+  }
+  
+  // Generate login token
+  const jwt = require('jsonwebtoken');
+  const loginToken = jwt.sign(
+    { userId: user.rows[0].id, purpose: 'login' },
+    process.env.JWT_SECRET,
+    { expiresIn: '15m' }
+  );
+  
+  // Send email with login link
+  const loginLink = `${process.env.APP_URL}/auth/verify?token=${loginToken}`;
+  
+  const { Resend } = require('resend');
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  
+  await resend.emails.send({
+    from: 'BJJ OS <noreply@bjjos.app>',
+    to: email,
+    subject: 'Log in to BJJ OS',
+    html: `
+      <div style="font-family: sans-serif; padding: 20px;">
+        <h2>Log in to BJJ OS</h2>
+        <p>Click the button below to log in:</p>
+        <p><a href="${loginLink}" style="display: inline-block; background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px;">Log In</a></p>
+        <p>Or copy this link: <a href="${loginLink}">${loginLink}</a></p>
+        <p style="color: #666; font-size: 14px;">This link expires in 15 minutes.</p>
+      </div>
+    `
+  });
+  
+  res.json({ success: true });
+});
+
+app.get('/auth/verify', async (req, res) => {
+  const { token } = req.query;
+  
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.purpose !== 'login') {
+      return res.redirect('/login?error=invalid');
+    }
+    
+    // Create session
+    const sessionToken = jwt.sign(
+      { userId: decoded.userId },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+    
+    res.cookie('bjjos_auth', sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      sameSite: 'strict'
+    });
+    
+    res.redirect('/dashboard');
+    
+  } catch (error) {
+    res.redirect('/login?error=expired');
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG 4: SIGNUP NOT ASKING CORRECT ONBOARDING QUESTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Signup didn’t ask all 8 questions with correct button format.
+
+FIX: This should be fixed by the previous comprehensive prompt. Verify it implemented:
+
+- Belt Level (5 buttons)
+- Years Training (6 buttons)
+- Training Frequency (3 buttons)
+- Struggle Area (7 buttons - NOT text input)
+- Training Focus (3 buttons)
+
+If not implemented, rollback and re-apply the onboarding fix from previous prompt.
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG 5: CHAT MESSAGES NOT VISIBLE - ONLY TIMESTAMPS
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: In Prof OS chat, messages show as timestamp bubbles with no text.
+
+FIX: Frontend not rendering message content properly.
+
+FIND: Chat message rendering code (likely in dashboard or chat component)
+
+ENSURE messages display like this:
+
+```html
+<div class="message user-message">
+  <div class="message-content">
+    <p>{{userMessage}}</p>
+  </div>
+  <div class="message-timestamp">{{timestamp}}</div>
+</div>
+
+<div class="message ai-message">
+  <div class="message-content">
+    <p>{{aiResponse}}</p>
+  </div>
+  <div class="message-timestamp">{{timestamp}}</div>
+</div>
+```
+
+CHECK: Message rendering JavaScript
+
+```javascript
+function displayMessage(text, isUser, timestamp) {
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+  
+  messageDiv.innerHTML = `
+    <div class="message-content">${text}</div>
+    <div class="message-timestamp">${new Date(timestamp).toLocaleTimeString()}</div>
+  `;
+  
+  document.getElementById('chat-messages').appendChild(messageDiv);
+  
+  // Scroll to bottom
+  const container = document.getElementById('chat-messages');
+  container.scrollTop = container.scrollHeight;
+}
+```
+
+ADD CSS:
+
+```css
+.message {
+  margin-bottom: 16px;
+  max-width: 80%;
+}
+
+.user-message {
+  margin-left: auto;
+  text-align: right;
+}
+
+.ai-message {
+  margin-right: auto;
+  text-align: left;
+}
+
+.message-content {
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin-bottom: 4px;
+  color: #000;
+  line-height: 1.5;
+  display: inline-block;
+  text-align: left;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.user-message .message-content {
+  background: #000;
+  color: #fff;
+}
+
+.ai-message .message-content {
+  background: #f0f0f0;
+  color: #000;
+}
+
+.message-timestamp {
+  font-size: 11px;
+  color: #999;
+  padding: 0 8px;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG 6: VIDEO LIBRARY - NO THUMBNAILS, CAN’T CLICK/WATCH, HEART DOESN’T WORK
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Video thumbnails blank, videos not clickable, heart button doesn’t save.
+
+FIX A: Get YouTube thumbnails
+
+```javascript
+// When displaying videos
+videos.forEach(video => {
+  const thumbnail = `https://img.youtube.com/vi/${video.youtube_id}/mqdefault.jpg`;
+  
+  const videoCard = `
+    <div class="video-card" data-video-id="${video.id}">
+      <div class="video-thumbnail" style="background-image: url('${thumbnail}');" onclick="playVideo('${video.youtube_id}')">
+        <div class="play-button">▶</div>
+      </div>
+      <div class="video-info">
+        <h4>${video.title}</h4>
+        <p>${video.instructor_name}</p>
+        <button class="heart-btn ${video.is_saved ? 'saved' : ''}" onclick="toggleSave(${video.id})">
+          ${video.is_saved ? '❤️' : '🤍'}
+        </button>
+      </div>
+    </div>
+  `;
+});
+```
+
+FIX B: Make videos clickable and playable
+
+```javascript
+function playVideo(youtubeId) {
+  const modal = document.getElementById('video-modal');
+  const iframe = document.getElementById('video-player');
+  
+  iframe.src = `https://www.youtube.com/embed/${youtubeId}?autoplay=1`;
+  modal.style.display = 'flex';
+}
+
+function closeVideoModal() {
+  const modal = document.getElementById('video-modal');
+  const iframe = document.getElementById('video-player');
+  
+  iframe.src = '';
+  modal.style.display = 'none';
+}
+```
+
+ADD video modal HTML:
+
+```html
+<div id="video-modal" class="modal" style="display: none;" onclick="closeVideoModal()">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <span class="close" onclick="closeVideoModal()">&times;</span>
+    <iframe 
+      id="video-player"
+      width="100%" 
+      height="450" 
+      frameborder="0" 
+      allow="autoplay; encrypted-media" 
+      allowfullscreen
+    ></iframe>
+  </div>
+</div>
+
+<style>
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.9);
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  position: relative;
+  width: 90%;
+  max-width: 800px;
+}
+
+.close {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  color: #fff;
+  font-size: 40px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.video-thumbnail {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  background-size: cover;
+  background-position: center;
+  border-radius: 8px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.play-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  color: #fff;
+  background: rgba(0,0,0,0.7);
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 8px;
+}
+
+.video-thumbnail:hover .play-button {
+  background: rgba(0,0,0,0.9);
+}
+</style>
+```
+
+FIX C: Heart button saves video
+
+```javascript
+async function toggleSave(videoId) {
+  const response = await fetch('/api/videos/toggle-save', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ videoId })
+  });
+  
+  const data = await response.json();
+  
+  if (data.success) {
+    // Update all heart buttons for this video
+    document.querySelectorAll(`[data-video-id="${videoId}"] .heart-btn`).forEach(btn => {
+      btn.textContent = data.saved ? '❤️' : '🤍';
+      btn.classList.toggle('saved', data.saved);
+    });
+    
+    // If currently viewing saved videos and video was un-saved, refresh
+    if (!data.saved && document.getElementById('saved-videos').style.display !== 'none') {
+      loadSavedVideos();
+    }
+  }
+}
+```
+
+ADD backend endpoint:
+
+```javascript
+app.post('/api/videos/toggle-save', authenticateUser, async (req, res) => {
+  const { videoId } = req.body;
+  const userId = req.user.id;
+  
+  // Check if already saved
+  const existing = await db.query(
+    'SELECT id FROM saved_videos WHERE user_id = $1 AND video_id = $2',
+    [userId, videoId]
+  );
+  
+  if (existing.rows.length > 0) {
+    // Remove save
+    await db.query(
+      'DELETE FROM saved_videos WHERE user_id = $1 AND video_id = $2',
+      [userId, videoId]
+    );
+    res.json({ success: true, saved: false });
+  } else {
+    // Add save
+    await db.query(
+      'INSERT INTO saved_videos (user_id, video_id, created_at) VALUES ($1, $2, NOW())',
+      [userId, videoId]
+    );
+    res.json({ success: true, saved: true });
+  }
+});
+```
+
+ENSURE saved_videos table exists:
+
+```sql
+CREATE TABLE IF NOT EXISTS saved_videos (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  video_id INTEGER REFERENCES videos(id),
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(user_id, video_id)
+);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG 6B: SAVED VIDEOS SECTION WITH TECHNIQUE & INSTRUCTOR FILTERS
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Saved videos need their own organized section with filters by technique and instructor.
+
+FIX: Create comprehensive saved videos section with dropdown filters.
+
+ADD navigation tabs and filter controls to video library:
+
+```html
+<div class="video-library">
+  <div class="video-tabs">
+    <button class="tab-btn active" onclick="showTab('all')">All Videos</button>
+    <button class="tab-btn" onclick="showTab('saved')">Saved Videos</button>
+  </div>
+  
+  <!-- Filters for Saved Videos (hidden by default) -->
+  <div id="saved-filters" class="video-filters" style="display: none;">
+    <div class="filter-group">
+      <label for="technique-filter">Technique:</label>
+      <select id="technique-filter" onchange="filterSavedVideos()">
+        <option value="">All Techniques</option>
+        <option value="guard_passing">Guard Passing</option>
+        <option value="guard_retention">Guard Retention</option>
+        <option value="takedowns">Takedowns</option>
+        <option value="submissions">Submissions</option>
+        <option value="escapes">Escapes</option>
+        <option value="transitions">Transitions</option>
+        <option value="sweeps">Sweeps</option>
+        <option value="back_attacks">Back Attacks</option>
+      </select>
+    </div>
+    
+    <div class="filter-group">
+      <label for="instructor-filter">Instructor:</label>
+      <select id="instructor-filter" onchange="filterSavedVideos()">
+        <option value="">All Instructors</option>
+        <!-- Will be populated dynamically -->
+      </select>
+    </div>
+    
+    <button class="clear-filters-btn" onclick="clearSavedFilters()">Clear Filters</button>
+  </div>
+  
+  <div id="all-videos" class="video-grid">
+    <!-- All videos display here -->
+  </div>
+  
+  <div id="saved-videos" class="video-grid" style="display: none;">
+    <!-- Only saved/hearted videos display here with filters applied -->
+  </div>
+</div>
+
+<script>
+let savedVideosData = [];
+
+function showTab(tab) {
+  // Update active tab button
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  if (tab === 'all') {
+    document.getElementById('all-videos').style.display = 'grid';
+    document.getElementById('saved-videos').style.display = 'none';
+    document.getElementById('saved-filters').style.display = 'none';
+  } else {
+    document.getElementById('all-videos').style.display = 'none';
+    document.getElementById('saved-videos').style.display = 'grid';
+    document.getElementById('saved-filters').style.display = 'flex';
+    loadSavedVideos();
+  }
+}
+
+async function loadSavedVideos() {
+  const response = await fetch('/api/videos/saved', {
+    credentials: 'include'
+  });
+  
+  const data = await response.json();
+  savedVideosData = data.videos;
+  
+  // Populate instructor dropdown with unique instructors
+  const instructors = [...new Set(savedVideosData.map(v => v.instructor_name))].sort();
+  const instructorSelect = document.getElementById('instructor-filter');
+  instructorSelect.innerHTML = '<option value="">All Instructors</option>' + 
+    instructors.map(instructor => `<option value="${instructor}">${instructor}</option>`).join('');
+  
+  // Display videos
+  displaySavedVideos(savedVideosData);
+}
+
+function filterSavedVideos() {
+  const techniqueFilter = document.getElementById('technique-filter').value;
+  const instructorFilter = document.getElementById('instructor-filter').value;
+  
+  let filtered = savedVideosData;
+  
+  if (techniqueFilter) {
+    filtered = filtered.filter(v => v.technique_category === techniqueFilter);
+  }
+  
+  if (instructorFilter) {
+    filtered = filtered.filter(v => v.instructor_name === instructorFilter);
+  }
+  
+  displaySavedVideos(filtered);
+}
+
+function clearSavedFilters() {
+  document.getElementById('technique-filter').value = '';
+  document.getElementById('instructor-filter').value = '';
+  displaySavedVideos(savedVideosData);
+}
+
+function displaySavedVideos(videos) {
+  const container = document.getElementById('saved-videos');
+  
+  if (videos.length === 0) {
+    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #666; padding: 40px;">No saved videos match your filters. Heart videos to save them here!</p>';
+    return;
+  }
+  
+  container.innerHTML = videos.map(video => `
+    <div class="video-card" data-video-id="${video.id}">
+      <div class="video-thumbnail" style="background-image: url('https://img.youtube.com/vi/${video.youtube_id}/mqdefault.jpg');" onclick="playVideo('${video.youtube_id}')">
+        <div class="play-button">▶</div>
+      </div>
+      <div class="video-info">
+        <h4>${video.title}</h4>
+        <p class="instructor">${video.instructor_name}</p>
+        <p class="technique-tag">${video.technique_category ? video.technique_category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'General'}</p>
+        <button class="heart-btn saved" onclick="toggleSave(${video.id})">
+          ❤️
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+</script>
+```
+
+ADD CSS for filters:
+
+```css
+.video-filters {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+}
+
+.filter-group select {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+  min-width: 200px;
+  cursor: pointer;
+}
+
+.clear-filters-btn {
+  padding: 10px 20px;
+  background: #000;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.clear-filters-btn:hover {
+  background: #333;
+}
+
+.technique-tag {
+  display: inline-block;
+  padding: 4px 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+```
+
+UPDATE backend to include technique category in saved videos:
+
+```javascript
+app.get('/api/videos/saved', authenticateUser, async (req, res) => {
+  const userId = req.user.id;
+  
+  const savedVideos = await db.query(
+    `SELECT v.*, sv.created_at as saved_at
+     FROM videos v
+     INNER JOIN saved_videos sv ON v.id = sv.video_id
+     WHERE sv.user_id = $1
+     ORDER BY sv.created_at DESC`,
+    [userId]
+  );
+  
+  res.json({
+    success: true,
+    videos: savedVideos.rows
+  });
+});
+```
+
+ENSURE videos table has technique_category column:
+
+```sql
+ALTER TABLE videos 
+ADD COLUMN IF NOT EXISTS technique_category VARCHAR(50),
+ADD COLUMN IF NOT EXISTS instructor_name VARCHAR(100);
+```
+
+CRITICAL BEHAVIOR:
+
+- Saved Videos tab shows dropdown filters for Technique and Instructor
+- Filters are populated from user’s saved videos only
+- Filters work together (both can be active at once)
+- Clear Filters button resets both dropdowns
+- Empty state shows when no videos match filters
+- Videos show technique tag badge
+- Most recently saved videos appear first
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG 7: SETTINGS PROFILE - USERNAME BLANK, MISSING HEIGHT/WEIGHT FIELDS
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Username not displaying in settings, missing optional height/weight fields.
+
+FIX: Update profile settings page.
+
+FIND: Settings/Profile page
+UPDATE with complete profile form:
+
+```html
+<div class="profile-settings">
+  <h2>Profile Settings</h2>
+  
+  <form id="profile-form">
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="username" readonly style="background: #f5f5f5; cursor: not-allowed;">
+      <small>Username cannot be changed</small>
+    </div>
+    
+    <div class="form-group">
+      <label>First Name</label>
+      <input type="text" id="first-name" required>
+    </div>
+    
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="email" readonly style="background: #f5f5f5; cursor: not-allowed;">
+    </div>
+    
+    <div class="form-group">
+      <label>Belt Level</label>
+      <select id="belt-level">
+        <option value="white">White Belt</option>
+        <option value="blue">Blue Belt</option>
+        <option value="purple">Purple Belt</option>
+        <option value="brown">Brown Belt</option>
+        <option value="black">Black Belt</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>Years Training</label>
+      <select id="years-training">
+        <option value="0-0.5">Less than 6 months</option>
+        <option value="0.5-1">6 months - 1 year</option>
+        <option value="1-2">1-2 years</option>
+        <option value="2-5">2-5 years</option>
+        <option value="5-10">5-10 years</option>
+        <option value="10+">10+ years</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>Training Frequency</label>
+      <select id="training-frequency">
+        <option value="1-2">1-2 times per week</option>
+        <option value="3-4">3-4 times per week</option>
+        <option value="5+">5+ times per week</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>Height (optional)</label>
+      <input type="text" id="height" placeholder="e.g., 5'10&quot; or 178cm">
+      <small>This helps Prof. OS give you better technique recommendations</small>
+    </div>
+    
+    <div class="form-group">
+      <label>Weight (optional)</label>
+      <input type="text" id="weight" placeholder="e.g., 170 lbs or 77 kg">
+      <small>This helps Prof. OS give you better technique recommendations</small>
+    </div>
+    
+    <button type="submit" class="save-btn">Save Changes</button>
+  </form>
+</div>
+
+<script>
+// Load current profile data
+async function loadProfile() {
+  const response = await fetch('/api/user/profile', {
+    credentials: 'include'
+  });
+  const data = await response.json();
+  
+  if (data.success) {
+    document.getElementById('username').value = data.user.username || '';
+    document.getElementById('first-name').value = data.user.first_name || '';
+    document.getElementById('email').value = data.user.email || '';
+    document.getElementById('belt-level').value = data.user.belt_level || 'white';
+    document.getElementById('years-training').value = data.user.years_training || '0-0.5';
+    document.getElementById('training-frequency').value = data.user.training_frequency || '1-2';
+    document.getElementById('height').value = data.user.height || '';
+    document.getElementById('weight').value = data.user.weight || '';
+  }
+}
+
+// Save profile changes
+document.getElementById('profile-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const btn = e.target.querySelector('.save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  
+  const profileData = {
+    firstName: document.getElementById('first-name').value,
+    beltLevel: document.getElementById('belt-level').value,
+    yearsTraining: document.getElementById('years-training').value,
+    trainingFrequency: document.getElementById('training-frequency').value,
+    height: document.getElementById('height').value,
+    weight: document.getElementById('weight').value
+  };
+  
+  const response = await fetch('/api/user/profile', {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(profileData)
+  });
+  
+  if (response.ok) {
+    alert('✅ Profile updated successfully');
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+  } else {
+    alert('❌ Error updating profile');
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+  }
+});
+
+// Load profile on page load
+loadProfile();
+</script>
+```
+
+UPDATE backend to handle height/weight:
+
+```sql
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS height VARCHAR(20),
+ADD COLUMN IF NOT EXISTS weight VARCHAR(20);
+```
+
+```javascript
+app.get('/api/user/profile', authenticateUser, async (req, res) => {
+  const userId = req.user.id;
+  
+  const result = await db.query(
+    `SELECT id, email, first_name, username, belt_level, years_training, 
+     training_frequency, struggle_area, training_focus, height, weight
+     FROM users WHERE id = $1`,
+    [userId]
+  );
+  
+  res.json({ 
+    success: true, 
+    user: result.rows[0] 
+  });
+});
+
+app.put('/api/user/profile', authenticateUser, async (req, res) => {
+  const { firstName, beltLevel, yearsTraining, trainingFrequency, height, weight } = req.body;
+  const userId = req.user.id;
+  
+  await db.query(
+    `UPDATE users 
+     SET first_name = $1, belt_level = $2, years_training = $3, 
+         training_frequency = $4, height = $5, weight = $6
+     WHERE id = $7`,
+    [firstName, beltLevel, yearsTraining, trainingFrequency, height, weight, userId]
+  );
+  
+  res.json({ success: true });
+});
+```
+
+ENSURE Prof OS uses height/weight in context:
+
+```javascript
+// In /api/ai/chat endpoint
+const userProfile = await db.query(
+  `SELECT first_name, belt_level, years_training, training_frequency, 
+   struggle_area, training_focus, height, weight FROM users WHERE id = $1`,
+  [userId]
+);
+
+const user = userProfile.rows[0];
+
+const systemPrompt = `You are Prof. OS, expert BJJ coach.
+
+USER PROFILE:
+- Name: ${user.first_name}
+- Belt: ${user.belt_level}
+- Training: ${user.years_training}
+- Frequency: ${user.training_frequency}
+- Main Struggle: ${user.struggle_area}
+- Focus: ${user.training_focus}
+${user.height ? `- Height: ${user.height}` : ''}
+${user.weight ? `- Weight: ${user.weight}` : ''}
+
+Use physical attributes when relevant for technique recommendations (e.g., guard style for taller/shorter players, pressure passing for heavier athletes).`;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL VERIFICATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+Test ALL of these before saying done:
+
+EMAIL:
+[ ] Send test invitation with custom personal message
+[ ] Verify personal message appears in email exactly as entered
+[ ] Test in dark mode - link must be visible (has text link backup)
+[ ] Click button - goes to signup page
+
+LOGIN:
+[ ] Login form does NOT ask for password
+[ ] Enter email → receive magic link email
+[ ] Click magic link → logged in to dashboard
+[ ] No password anywhere in login flow
+
+ONBOARDING:
+[ ] All 8 questions present with correct format
+[ ] Struggle area uses 7 buttons (NOT text input)
+[ ] Belt level uses 5 buttons (no emojis, text only)
+[ ] Years training uses 6 buttons
+[ ] Training frequency uses 3 buttons
+[ ] All data saves to database correctly
+
+CHAT:
+[ ] Send message to Prof OS
+[ ] User message text is VISIBLE (not just timestamp)
+[ ] Prof OS response text is VISIBLE (not just timestamp)
+[ ] Messages display in correct order with proper styling
+[ ] Prof OS responds within 5 seconds
+
+VIDEO LIBRARY - ALL VIDEOS TAB:
+[ ] Video thumbnails display correctly
+[ ] Click video → opens modal player
+[ ] Video plays in modal
+[ ] Close modal works (click X or outside modal)
+[ ] Heart button works (saves video)
+[ ] Saved videos show filled heart ❤️
+[ ] Unsaved videos show empty heart 🤍
+
+VIDEO LIBRARY - SAVED VIDEOS TAB:
+[ ] “Saved Videos” tab visible next to “All Videos”
+[ ] Click Saved Videos tab → shows only hearted videos
+[ ] Technique dropdown filter populated
+[ ] Instructor dropdown filter populated with unique instructors
+[ ] Technique filter works (filters videos by category)
+[ ] Instructor filter works (filters videos by instructor)
+[ ] Both filters work together
+[ ] Clear Filters button resets both dropdowns
+[ ] Un-heart video from Saved Videos → disappears from tab immediately
+[ ] Empty state shows helpful message when no saved videos
+[ ] Most recently saved videos appear first
+[ ] Videos show technique category tag
+
+PROFILE SETTINGS:
+[ ] Username displays correctly (pre-filled, read-only)
+[ ] Email displays correctly (pre-filled, read-only)
+[ ] Belt level dropdown shows current belt and can be changed
+[ ] Years training dropdown present
+[ ] Training frequency dropdown present
+[ ] Height field present, optional, with helpful hint text
+[ ] Weight field present, optional, with helpful hint text
+[ ] Save changes button works
+[ ] Success message shows after save
+[ ] Prof OS receives updated height/weight in system prompt
+[ ] Prof OS uses physical attributes in recommendations
+
+CRITICAL: Test the complete user journey:
+
+1. Send lifetime invitation email
+1. Recipient clicks button in email
+1. Completes onboarding (all 8 questions with buttons)
+1. Lands on dashboard
+1. Sends message to Prof OS - sees full conversation
+1. Browses video library - thumbnails visible
+1. Hearts 3 videos from different instructors
+1. Goes to Saved Videos tab
+1. Uses filters to find specific technique
+1. Plays video in modal
+1. Updates profile with height/weight
+1. Logs out
+1. Logs back in with magic link (no password)
+1. Goes straight to dashboard (no re-onboarding)
+
+LIST EVERY FILE MODIFIED AND WHAT CHANGED.
+
+DO NOT SAY DONE UNTIL ALL BUGS ARE FIXED AND TESTED WITH THE COMPLETE USER JOURNEY.
+
+```
+---
+
+# ✅ COMPLETE MASTER PROMPT READY
+
+This comprehensive prompt fixes all 7 bugs including:
+1. ✅ Email personalization with dark mode support
+2. ✅ Passwordless magic link login
+3. ✅ Correct onboarding questions (8 questions, buttons not text)
+4. ✅ Chat message visibility
+5. ✅ Video thumbnails + playback + heart saves
+6. ✅ **Saved Videos section with Technique & Instructor dropdown filters**
+7. ✅ Profile settings with height/weight that Prof OS uses
+
+**Copy and send this now!** 🚀💪​​​​​​​​​​​​​​​​
+```

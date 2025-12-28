@@ -1,0 +1,1159 @@
+# PROMPT 3: ADMIN DASHBOARD ENHANCEMENTS
+
+**📋 PASTE THIS INTO REPLIT AGENT:**
+
+-----
+
+```
+ADMIN DASHBOARD ENHANCEMENTS - CHAT WITH PROF. OS + USER MANAGEMENT
+
+Add critical admin features: ability to chat with Prof. OS for testing, and improved user management with time filters.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: ADD "CHAT WITH PROF. OS" TO ADMIN SIDEBAR
+═══════════════════════════════════════════════════════════════════════════════
+
+Add a new navigation item in the admin sidebar (between Overview and Users):
+
+**Update Admin Sidebar Navigation:**
+```jsx
+<nav className="admin-nav">
+  <a href="#overview" className="admin-nav-item active" onClick={() => showSection('overview')}>
+    <span>📊</span> Overview
+  </a>
+  
+  {/* NEW: Admin Chat */}
+  <a href="#admin-chat" className="admin-nav-item" onClick={() => showSection('admin-chat')}>
+    <span>💬</span> Chat with Prof. OS
+  </a>
+  
+  <a href="#users" className="admin-nav-item" onClick={() => showSection('users')}>
+    <span>👥</span> Users
+  </a>
+  
+  <a href="#referrals" className="admin-nav-item" onClick={() => showSection('referrals')}>
+    <span>🎁</span> Referral Codes
+  </a>
+  
+  <a href="#lifetime" className="admin-nav-item" onClick={() => showSection('lifetime')}>
+    <span>⭐</span> Lifetime Access
+  </a>
+  
+  <a href="#subscriptions" className="admin-nav-item" onClick={() => showSection('subscriptions')}>
+    <span>💳</span> Subscriptions
+  </a>
+  
+  <a href="#analytics" className="admin-nav-item" onClick={() => showSection('analytics')}>
+    <span>📈</span> Analytics
+  </a>
+  
+  <a href="#logs" className="admin-nav-item" onClick={() => showSection('logs')}>
+    <span>📝</span> AI Logs
+  </a>
+</nav>
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: CREATE ADMIN CHAT SECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Add a new section to the admin dashboard (after Overview section):
+
+```jsx
+{/* Admin Chat Section */}
+<section className="admin-section" id="admin-chat">
+  <div className="admin-header">
+    <div>
+      <h1>Chat with Prof. OS</h1>
+      <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+        Test the AI coach experience as an admin. Your conversation is saved separately from users.
+      </p>
+    </div>
+    <button className="btn-admin-action" onClick={clearAdminChat}>
+      🗑️ Clear Chat
+    </button>
+  </div>
+  
+  <div className="admin-chat-container">
+    
+    {/* Quick Test Prompts */}
+    <div className="admin-quick-prompts">
+      <h3>Quick Test Prompts</h3>
+      <div className="quick-prompts-grid">
+        <button className="admin-quick-prompt" onClick={() => sendQuickMessage('Show me some triangle choke videos for a blue belt')}>
+          🎬 Triangle videos
+        </button>
+        <button className="admin-quick-prompt" onClick={() => sendQuickMessage('I need help passing half guard')}>
+          🤔 Half guard passing
+        </button>
+        <button className="admin-quick-prompt" onClick={() => sendQuickMessage('What should I focus on as a white belt?')}>
+          🎯 White belt advice
+        </button>
+        <button className="admin-quick-prompt" onClick={() => sendQuickMessage('How do I escape mount against bigger opponents?')}>
+          🏔️ Mount escapes
+        </button>
+        <button className="admin-quick-prompt" onClick={() => sendQuickMessage('I have a bad knee. What techniques should I avoid?')}>
+          🏥 Injury concerns
+        </button>
+        <button className="admin-quick-prompt" onClick={() => sendQuickMessage('I have a tournament next week. What should I drill?')}>
+          🏆 Competition prep
+        </button>
+        <button className="admin-quick-prompt" onClick={() => sendQuickMessage('I keep getting passed from half guard. What am I doing wrong?')}>
+          ❌ Troubleshooting
+        </button>
+        <button className="admin-quick-prompt" onClick={() => sendQuickMessage('Explain the details of an armbar from guard')}>
+          🔧 Armbar details
+        </button>
+      </div>
+    </div>
+    
+    {/* Chat Messages */}
+    <div className="admin-messages-container" id="admin-messages">
+      <div className="admin-welcome">
+        <div className="welcome-icon">🥋</div>
+        <h2>Hey! I'm Prof. OS</h2>
+        <p>You're chatting as an admin. Test any conversation or technique question.</p>
+      </div>
+    </div>
+    
+    {/* Typing Indicator */}
+    <div className="typing-indicator hidden" id="admin-typing">
+      <div className="typing-dots">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <span className="typing-text">Prof. OS is thinking...</span>
+    </div>
+    
+    {/* Input Area */}
+    <div className="admin-chat-input">
+      <textarea 
+        id="admin-message-input" 
+        className="admin-message-input" 
+        placeholder="Ask Prof. OS anything..."
+        rows="1"
+        onKeyDown={handleAdminKeyPress}
+      ></textarea>
+      <button className="btn-admin-send" id="admin-send-btn" onClick={sendAdminMessage}>
+        <span>➤</span>
+      </button>
+    </div>
+    
+  </div>
+</section>
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: ADMIN CHAT STYLES
+═══════════════════════════════════════════════════════════════════════════════
+
+Add to admin CSS file:
+
+```css
+/* Admin Chat Container */
+.admin-chat-container {
+  background: var(--dark);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  height: 600px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Quick Test Prompts */
+.admin-quick-prompts {
+  background: var(--gray);
+  border-bottom: 1px solid var(--border);
+  padding: 1rem;
+}
+
+.admin-quick-prompts h3 {
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.quick-prompts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.5rem;
+}
+
+.admin-quick-prompt {
+  padding: 0.5rem 0.75rem;
+  background: var(--dark);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: white;
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.admin-quick-prompt:hover {
+  background: var(--border);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+/* Messages Container */
+.admin-messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  scroll-behavior: smooth;
+}
+
+.admin-welcome {
+  text-align: center;
+  max-width: 500px;
+  margin: 4rem auto;
+}
+
+.admin-welcome .welcome-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.admin-welcome h2 {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.admin-welcome p {
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+/* Admin Messages */
+.admin-message {
+  display: flex;
+  margin-bottom: 1.5rem;
+  animation: slideIn 0.3s ease-out;
+}
+
+.admin-message.user {
+  justify-content: flex-end;
+}
+
+.admin-message-bubble {
+  max-width: 70%;
+  padding: 0.875rem 1.125rem;
+  border-radius: 16px;
+  word-wrap: break-word;
+}
+
+.admin-message.ai .admin-message-bubble {
+  background: var(--gray);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+.admin-message.user .admin-message-bubble {
+  background: var(--gradient);
+  border-bottom-right-radius: 4px;
+}
+
+.admin-message-content {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.admin-message-timestamp {
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  margin-top: 0.5rem;
+}
+
+/* Video Cards in Chat */
+.admin-video-cards {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-video-card {
+  background: var(--black);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.admin-video-card:hover {
+  background: var(--gray);
+  border-color: var(--primary);
+}
+
+.admin-video-thumb {
+  font-size: 2rem;
+  width: 60px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dark);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.admin-video-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-video-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-video-meta {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+/* Typing Indicator */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+}
+
+.typing-indicator.hidden {
+  display: none;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.typing-dots span {
+  width: 8px;
+  height: 8px;
+  background: var(--primary);
+  border-radius: 50%;
+  animation: typing 1.4s infinite;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+.typing-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Chat Input */
+.admin-chat-input {
+  padding: 1rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  background: var(--dark);
+}
+
+.admin-message-input {
+  flex: 1;
+  min-height: 44px;
+  max-height: 120px;
+  padding: 0.75rem;
+  background: var(--gray);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: white;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  resize: none;
+  overflow-y: auto;
+}
+
+.admin-message-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.admin-message-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.btn-admin-send {
+  width: 44px;
+  height: 44px;
+  background: var(--gradient);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  cursor: pointer;
+  font-size: 1.125rem;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-admin-send:hover {
+  transform: scale(1.05);
+}
+
+.btn-admin-send:active {
+  transform: scale(0.95);
+}
+
+.btn-admin-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: ADMIN CHAT JAVASCRIPT FUNCTIONALITY
+═══════════════════════════════════════════════════════════════════════════════
+
+Add to admin dashboard JavaScript:
+
+```javascript
+// Admin chat state
+let adminChatUserId = null;
+
+// Initialize admin chat when section loads
+async function initAdminChat() {
+  if (adminChatUserId) return; // Already initialized
+  
+  try {
+    const adminId = localStorage.getItem('adminId');
+    const adminEmail = localStorage.getItem('adminEmail');
+    
+    const response = await fetch('/api/admin/chat/init', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Id': adminId
+      },
+      body: JSON.stringify({ adminEmail })
+    });
+    
+    const data = await response.json();
+    adminChatUserId = data.userId;
+    
+    // Load chat history
+    await loadAdminChatHistory();
+    
+  } catch (error) {
+    console.error('Failed to initialize admin chat:', error);
+  }
+}
+
+// Load admin chat history
+async function loadAdminChatHistory() {
+  try {
+    const response = await fetch(`/api/ai/chat/history/${adminChatUserId}?limit=50`);
+    const data = await response.json();
+    
+    const container = document.getElementById('admin-messages');
+    
+    if (data.messages && data.messages.length > 0) {
+      // Hide welcome
+      container.querySelector('.admin-welcome')?.remove();
+      
+      // Display messages
+      data.messages.forEach(msg => {
+        displayAdminMessage(msg.message, msg.sender, msg.timestamp, msg.videos);
+      });
+      
+      // Scroll to bottom
+      scrollAdminChatToBottom();
+    }
+    
+  } catch (error) {
+    console.error('Failed to load admin chat history:', error);
+  }
+}
+
+// Send admin message
+async function sendAdminMessage() {
+  const input = document.getElementById('admin-message-input');
+  const message = input.value.trim();
+  
+  if (!message) return;
+  
+  // Initialize chat if needed
+  if (!adminChatUserId) {
+    await initAdminChat();
+  }
+  
+  // Clear input
+  input.value = '';
+  input.style.height = 'auto';
+  
+  // Hide welcome if present
+  document.querySelector('.admin-welcome')?.remove();
+  
+  // Display user message
+  displayAdminMessage(message, 'user', new Date());
+  
+  // Show typing indicator
+  document.getElementById('admin-typing').classList.remove('hidden');
+  scrollAdminChatToBottom();
+  
+  try {
+    // Send to API
+    const response = await fetch('/api/ai/chat/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        userId: adminChatUserId, 
+        message,
+        isAdmin: true 
+      })
+    });
+    
+    const data = await response.json();
+    
+    // Hide typing
+    document.getElementById('admin-typing').classList.add('hidden');
+    
+    // Display AI response
+    displayAdminMessage(data.message, 'ai', new Date(data.timestamp), data.videos);
+    
+    // Scroll to bottom
+    scrollAdminChatToBottom();
+    
+  } catch (error) {
+    console.error('Failed to send admin message:', error);
+    document.getElementById('admin-typing').classList.add('hidden');
+    displayAdminMessage(
+      "Sorry, I'm having trouble right now. Please try again!",
+      'ai',
+      new Date()
+    );
+  }
+}
+
+// Send quick message
+function sendQuickMessage(message) {
+  const input = document.getElementById('admin-message-input');
+  input.value = message;
+  sendAdminMessage();
+}
+
+// Display admin message
+function displayAdminMessage(text, sender, timestamp, videos = []) {
+  const container = document.getElementById('admin-messages');
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `admin-message ${sender}`;
+  
+  const bubble = document.createElement('div');
+  bubble.className = 'admin-message-bubble';
+  
+  const content = document.createElement('div');
+  content.className = 'admin-message-content';
+  content.textContent = text;
+  
+  bubble.appendChild(content);
+  
+  // Add videos if present
+  if (videos && videos.length > 0) {
+    const videoCards = document.createElement('div');
+    videoCards.className = 'admin-video-cards';
+    
+    videos.forEach(video => {
+      const card = document.createElement('div');
+      card.className = 'admin-video-card';
+      card.innerHTML = `
+        <div class="admin-video-thumb">▶️</div>
+        <div class="admin-video-info">
+          <div class="admin-video-title">${video.title}</div>
+          <div class="admin-video-meta">${video.instructor} • ${video.duration}</div>
+        </div>
+      `;
+      videoCards.appendChild(card);
+    });
+    
+    bubble.appendChild(videoCards);
+  }
+  
+  const time = document.createElement('div');
+  time.className = 'admin-message-timestamp';
+  time.textContent = formatTime(timestamp);
+  
+  bubble.appendChild(time);
+  messageDiv.appendChild(bubble);
+  container.appendChild(messageDiv);
+}
+
+// Handle keyboard in admin chat
+function handleAdminKeyPress(event) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    sendAdminMessage();
+  }
+  
+  // Auto-resize textarea
+  const textarea = event.target;
+  textarea.style.height = 'auto';
+  textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+}
+
+// Scroll admin chat to bottom
+function scrollAdminChatToBottom() {
+  const container = document.getElementById('admin-messages');
+  container.scrollTop = container.scrollHeight;
+}
+
+// Clear admin chat
+async function clearAdminChat() {
+  if (!confirm('Clear all admin chat history?')) return;
+  
+  try {
+    const adminId = localStorage.getItem('adminId');
+    
+    await fetch(`/api/ai/chat/clear/${adminChatUserId}`, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Id': adminId }
+    });
+    
+    // Clear UI
+    const container = document.getElementById('admin-messages');
+    container.innerHTML = `
+      <div class="admin-welcome">
+        <div class="welcome-icon">🥋</div>
+        <h2>Hey! I'm Prof. OS</h2>
+        <p>You're chatting as an admin. Test any conversation or technique question.</p>
+      </div>
+    `;
+    
+  } catch (error) {
+    console.error('Failed to clear admin chat:', error);
+    alert('Failed to clear chat');
+  }
+}
+
+// Format time
+function formatTime(date) {
+  return new Date(date).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+}
+
+// Update showSection to initialize admin chat
+const originalShowSection = typeof showSection !== 'undefined' ? showSection : () => {};
+
+function showSection(sectionId) {
+  // Hide all sections
+  document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+  
+  // Show target section
+  document.querySelector(`#${sectionId}`).classList.add('active');
+  
+  // Update nav
+  document.querySelectorAll('.admin-nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelector(`a[href="#${sectionId}"]`)?.classList.add('active');
+  
+  // Initialize admin chat if needed
+  if (sectionId === 'admin-chat' && !adminChatUserId) {
+    initAdminChat();
+  }
+  
+  // Call original function if it exists
+  if (typeof originalShowSection === 'function') {
+    originalShowSection(sectionId);
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: BACKEND - ADMIN CHAT API ENDPOINTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Add to /server/routes/admin_routes.js:
+
+```javascript
+// Initialize admin chat (creates a virtual user for admin)
+router.post('/chat/init', authenticateAdmin, async (req, res) => {
+  try {
+    const { adminEmail } = req.body;
+    
+    // Check if admin user already exists in users table
+    let userResult = await pool.query(
+      'SELECT id FROM users WHERE email = $1',
+      [adminEmail]
+    );
+    
+    if (userResult.rows.length === 0) {
+      // Create virtual user for admin chat
+      userResult = await pool.query(`
+        INSERT INTO users (
+          name, email, phone, belt_level, password_hash
+        ) VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+      `, ['Admin User', adminEmail, 'N/A', 'black', 'admin_no_login']);
+      
+      // Create AI context for admin
+      await pool.query(`
+        INSERT INTO ai_user_context (
+          user_id, belt_level, primary_goal, injuries, training_frequency
+        ) VALUES ($1, $2, $3, $4, $5)
+      `, [userResult.rows[0].id, 'black', 'Testing AI coach', '[]', 'daily']);
+    }
+    
+    res.json({ userId: userResult.rows[0].id });
+    
+  } catch (error) {
+    console.error('Admin chat init error:', error);
+    res.status(500).json({ error: 'Failed to initialize admin chat' });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: IMPROVE USER MANAGEMENT - ADD TIME FILTERS
+═══════════════════════════════════════════════════════════════════════════════
+
+Update the Users section with time filter tabs:
+
+```jsx
+<section className="admin-section" id="users">
+  <div className="admin-header">
+    <h1>User Management</h1>
+    <div class="admin-actions">
+      <input type="text" placeholder="Search users..." className="search-input" id="user-search" onInput={searchUsers} />
+      <button className="btn-admin-action" onClick={refreshUsers}>
+        🔄 Refresh
+      </button>
+    </div>
+  </div>
+  
+  {/* Time Filter Tabs */}
+  <div className="time-filter-tabs">
+    <button className="filter-tab active" data-filter="all" onClick={() => filterUsersByTime('all')}>
+      All Time <span className="tab-count" id="count-all">0</span>
+    </button>
+    <button className="filter-tab" data-filter="24h" onClick={() => filterUsersByTime('24h')}>
+      Last 24h <span className="tab-count" id="count-24h">0</span>
+    </button>
+    <button className="filter-tab" data-filter="7d" onClick={() => filterUsersByTime('7d')}>
+      Last 7 Days <span className="tab-count" id="count-7d">0</span>
+    </button>
+    <button className="filter-tab" data-filter="30d" onClick={() => filterUsersByTime('30d')}>
+      Last 30 Days <span className="tab-count" id="count-30d">0</span>
+    </button>
+    <button className="filter-tab" data-filter="90d" onClick={() => filterUsersByTime('90d')}>
+      Last 90 Days <span className="tab-count" id="count-90d">0</span>
+    </button>
+  </div>
+  
+  {/* Additional Filters */}
+  <div className="user-filters">
+    <select className="filter-select" id="plan-filter" onChange={applyFilters}>
+      <option value="all">All Plans</option>
+      <option value="sms-only">SMS Only</option>
+      <option value="full-ai">Full AI</option>
+      <option value="lifetime">Lifetime</option>
+    </select>
+    
+    <select className="filter-select" id="status-filter" onChange={applyFilters}>
+      <option value="all">All Status</option>
+      <option value="active">Active</option>
+      <option value="trial">Trial</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
+    
+    <select className="filter-select" id="belt-filter" onChange={applyFilters}>
+      <option value="all">All Belts</option>
+      <option value="white">White Belt</option>
+      <option value="blue">Blue Belt</option>
+      <option value="purple">Purple Belt</option>
+      <option value="brown">Brown Belt</option>
+      <option value="black">Black Belt</option>
+    </select>
+  </div>
+  
+  {/* Empty State */}
+  <div className="empty-state" id="users-empty-state" style="display: none;">
+    <div className="empty-icon">📭</div>
+    <h3>No users yet</h3>
+    <p>Your first user will appear here when they sign up.</p>
+    <button className="btn-admin-primary" onClick={createTestUser}>
+      Create Test User
+    </button>
+  </div>
+  
+  {/* Users Table */}
+  <div className="table-container" id="users-table-container">
+    <table className="admin-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Plan</th>
+          <th>Belt</th>
+          <th>Status</th>
+          <th>Joined</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="users-table-body">
+        <!-- Users will be inserted here -->
+      </tbody>
+    </table>
+  </div>
+</section>
+```
+
+**Time Filter Styles:**
+
+```css
+.time-filter-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+}
+
+.filter-tab {
+  padding: 0.75rem 1.25rem;
+  background: var(--dark);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-tab:hover {
+  background: var(--gray);
+  border-color: var(--primary);
+}
+
+.filter-tab.active {
+  background: var(--gradient);
+  border-color: transparent;
+  color: white;
+}
+
+.tab-count {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.125rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.filter-tab.active .tab-count {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.user-filters {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-select {
+  padding: 0.5rem 1rem;
+  background: var(--gray);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: white;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+}
+```
+
+**JavaScript for Time Filters:**
+
+```javascript
+let currentTimeFilter = 'all';
+let currentFilters = {
+  plan: 'all',
+  status: 'all',
+  belt: 'all'
+};
+
+async function loadUsers(timeFilter = 'all') {
+  try {
+    const adminId = localStorage.getItem('adminId');
+    const params = new URLSearchParams({
+      timeFilter,
+      ...currentFilters
+    });
+    
+    const response = await fetch(`/api/admin/users?${params}`, {
+      headers: { 'X-Admin-Id': adminId }
+    });
+    
+    const data = await response.json();
+    
+    // Update counts
+    document.getElementById('count-all').textContent = data.counts?.all || 0;
+    document.getElementById('count-24h').textContent = data.counts?.['24h'] || 0;
+    document.getElementById('count-7d').textContent = data.counts?.['7d'] || 0;
+    document.getElementById('count-30d').textContent = data.counts?.['30d'] || 0;
+    document.getElementById('count-90d').textContent = data.counts?.['90d'] || 0;
+    
+    const tbody = document.getElementById('users-table-body');
+    const emptyState = document.getElementById('users-empty-state');
+    const tableContainer = document.getElementById('users-table-container');
+    
+    if (data.users.length === 0) {
+      // Show empty state
+      emptyState.style.display = 'block';
+      tableContainer.style.display = 'none';
+    } else {
+      // Show table
+      emptyState.style.display = 'none';
+      tableContainer.style.display = 'block';
+      
+      tbody.innerHTML = '';
+      
+      data.users.forEach(user => {
+        const isNew = isWithin24Hours(user.created_at);
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>
+            ${user.name}
+            ${isNew ? '<span class="badge-new">NEW</span>' : ''}
+          </td>
+          <td>${user.email}</td>
+          <td>${user.phone}</td>
+          <td>${user.plan}</td>
+          <td><span class="belt-badge ${user.belt}">${user.belt}</span></td>
+          <td><span class="status-badge ${user.status}">${user.status}</span></td>
+          <td>${formatDate(user.created_at)}</td>
+          <td>
+            <button class="table-action-btn" onClick="viewUserDetails('${user.id}')">View</button>
+            <button class="table-action-btn" onClick="loginAsUser('${user.id}')">Login As</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+    
+  } catch (error) {
+    console.error('Failed to load users:', error);
+  }
+}
+
+function filterUsersByTime(timeFilter) {
+  currentTimeFilter = timeFilter;
+  
+  // Update active tab
+  document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  document.querySelector(`[data-filter="${timeFilter}"]`).classList.add('active');
+  
+  loadUsers(timeFilter);
+}
+
+function applyFilters() {
+  currentFilters = {
+    plan: document.getElementById('plan-filter').value,
+    status: document.getElementById('status-filter').value,
+    belt: document.getElementById('belt-filter').value
+  };
+  
+  loadUsers(currentTimeFilter);
+}
+
+function isWithin24Hours(date) {
+  const now = new Date();
+  const created = new Date(date);
+  const diffHours = (now - created) / (1000 * 60 * 60);
+  return diffHours < 24;
+}
+
+async function createTestUser() {
+  try {
+    const adminId = localStorage.getItem('adminId');
+    
+    const response = await fetch('/api/admin/create-test-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Id': adminId
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      alert('Test user created!');
+      loadUsers(currentTimeFilter);
+    }
+  } catch (error) {
+    console.error('Failed to create test user:', error);
+    alert('Failed to create test user');
+  }
+}
+```
+
+**Update backend to support time filters:**
+
+```javascript
+router.get('/users', authenticateAdmin, async (req, res) => {
+  try {
+    const { timeFilter, plan, status, belt, search } = req.query;
+    
+    let query = 'SELECT * FROM users WHERE 1=1';
+    const params = [];
+    
+    // Time filter
+    if (timeFilter && timeFilter !== 'all') {
+      switch(timeFilter) {
+        case '24h':
+          query += ' AND created_at >= NOW() - INTERVAL \'24 hours\'';
+          break;
+        case '7d':
+          query += ' AND created_at >= NOW() - INTERVAL \'7 days\'';
+          break;
+        case '30d':
+          query += ' AND created_at >= NOW() - INTERVAL \'30 days\'';
+          break;
+        case '90d':
+          query += ' AND created_at >= NOW() - INTERVAL \'90 days\'';
+          break;
+      }
+    }
+    
+    // Get counts for each time period
+    const counts = {
+      all: await pool.query('SELECT COUNT(*) FROM users'),
+      '24h': await pool.query('SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL \'24 hours\''),
+      '7d': await pool.query('SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL \'7 days\''),
+      '30d': await pool.query('SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL \'30 days\''),
+      '90d': await pool.query('SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL \'90 days\'')
+    };
+    
+    query += ' ORDER BY created_at DESC';
+    
+    const users = await pool.query(query, params);
+    
+    res.json({
+      users: users.rows,
+      counts: {
+        all: parseInt(counts.all.rows[0].count),
+        '24h': parseInt(counts['24h'].rows[0].count),
+        '7d': parseInt(counts['7d'].rows[0].count),
+        '30d': parseInt(counts['30d'].rows[0].count),
+        '90d': parseInt(counts['90d'].rows[0].count)
+      }
+    });
+    
+  } catch (error) {
+    console.error('Users fetch error:', error);
+    res.status(500).json({ error: 'Failed to load users' });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, verify:
+
+✅ “Chat with Prof. OS” appears in admin sidebar
+✅ Clicking it shows chat interface
+✅ Quick test prompts work (click any to send)
+✅ Can type and send messages to Prof. OS
+✅ Prof. OS responds with AI-generated answers
+✅ Conversation is saved and persists on refresh
+✅ “Clear Chat” button works
+✅ User management has time filter tabs (24h, 7d, 30d, 90d, All)
+✅ Tab counts update correctly
+✅ Can filter by plan, status, belt
+✅ Empty state shows when no users
+✅ “Create Test User” button works
+✅ NEW badge shows on users < 24 hours old
+
+Test the admin chat with various prompts to ensure Prof. OS is working correctly!
+
+IMPLEMENT ALL CHANGES NOW.
+
+```
+---
+
+**Paste this into Replit Agent!** This adds:
+1. ✅ Full admin chat interface with Prof. OS
+2. ✅ Quick test prompts for easy testing
+3. ✅ Time filters for user management
+4. ✅ Empty state and test user creation
+5. ✅ Better user filtering and search
+
+Once done, you'll be able to chat with Prof. OS directly from the admin dashboard to test AI responses! 🥋🤖​​​​​​​​​​​​​​​​
+```

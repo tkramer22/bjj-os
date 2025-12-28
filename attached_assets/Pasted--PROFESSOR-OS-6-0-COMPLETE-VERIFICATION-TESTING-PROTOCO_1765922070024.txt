@@ -1,0 +1,339 @@
+```
+PROFESSOR OS 6.0 - COMPLETE VERIFICATION & TESTING PROTOCOL
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: VIDEO KNOWLEDGE STATUS CHECK
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these queries and report the results clearly:
+
+1. TOTAL LIBRARY COUNT:
+   SELECT COUNT(*) as total_videos FROM ai_video_knowledge;
+
+2. GEMINI PROCESSING STATUS:
+   SELECT 
+     COUNT(*) FILTER (WHERE processed = true) as videos_watched,
+     COUNT(*) FILTER (WHERE processed = false) as videos_pending,
+     COUNT(*) as total_in_queue
+   FROM video_watch_status;
+
+3. SYNC CHECK (Are all videos queued?):
+   SELECT COUNT(*) as videos_not_in_queue
+   FROM ai_video_knowledge v
+   LEFT JOIN video_watch_status w ON v.id = w.video_id
+   WHERE w.id IS NULL;
+
+4. KNOWLEDGE EXTRACTION VERIFICATION:
+   - How many videos have extracted_knowledge populated?
+   - How many have instructor_quotes?
+   - How many have technique_details?
+   - How many have timestamps extracted?
+
+5. PROCESSING RATE:
+   - When did processing start?
+   - Videos processed per hour average?
+   - Estimated completion time for remaining videos?
+
+Report in this format:
+┌─────────────────────────────────────────┐
+│ VIDEO KNOWLEDGE STATUS                  │
+├─────────────────────────────────────────┤
+│ Total Library: X videos                 │
+│ Gemini Watched: X (X%)                  │
+│ Pending Processing: X                   │
+│ Not Yet Queued: X                       │
+│ Est. Completion: X hours                │
+└─────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: SYSTEM PROMPT VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Confirm the Professor OS 6.0 system prompt is properly implemented:
+
+1. PROMPT LOCATION CHECK:
+   - Where is the system prompt stored? (file path)
+   - What is the current version/last updated timestamp?
+   - Is it being dynamically built with user context?
+
+2. VERIFY THESE SECTIONS EXIST IN THE PROMPT:
+   □ Section 1: Who You Are (personality, superpowers)
+   □ Section 2: How You Talk (banned phrases, tone)
+   □ Section 3: Multi-Instructor Superpower
+   □ Section 4: Using Video Knowledge
+   □ Section 5: Video Recommendations (timestamp rules)
+   □ Section 6: Remembering the User
+   □ Section 7: Coaching Methodology
+   □ Section 8: Honesty & Uncomfortable Truths
+   □ Section 9: Sparring Debrief Mode
+   □ Section 10: Non-BJJ Redirects
+   □ Section 11: Celebrating Wins
+   □ Section 12: Body Type Philosophy
+   □ Section 13: BJJ News & Culture Awareness
+   □ Section 14: Predictions & Forward Thinking
+   □ Section 15: "I Was Wrong" Moments
+
+3. DYNAMIC CONTEXT INJECTION:
+   Confirm these are being injected into the prompt at runtime:
+   □ User's display name (${displayName})
+   □ User's belt level
+   □ User's training style (gi/nogi/both)
+   □ User's struggle technique
+   □ User's body type/weight
+   □ User's goals
+   □ Conversation history (last 20 messages)
+   □ Available videos with knowledge data
+   □ BJJ news feed (if available)
+
+4. VIDEO KNOWLEDGE INJECTION:
+   When Professor OS responds, confirm it has access to:
+   □ Extracted technique details from Gemini
+   □ Instructor quotes with timestamps
+   □ Common mistakes identified
+   □ Technique chains (what flows to what)
+   □ Position context
+   □ Multi-instructor synthesis data
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: KNOWLEDGE RETRIEVAL PIPELINE CHECK
+═══════════════════════════════════════════════════════════════════════════════
+
+Verify the knowledge retrieval system is working:
+
+1. SEARCH FUNCTION TEST:
+   When a user asks about a technique, confirm the system:
+   □ Queries video_watch_status for processed videos
+   □ Retrieves extracted_knowledge for matching techniques
+   □ Pulls instructor_quotes relevant to the query
+   □ Gets technique_details and timestamps
+   □ Aggregates across multiple instructors
+
+2. RETRIEVAL → SYNTHESIS PIPELINE:
+   Confirm this flow is implemented:
+   
+   USER QUESTION
+        ↓
+   [Parse intent, technique, context]
+        ↓
+   [Query video_knowledge - get relevant entries]
+        ↓
+   [Query user history - what have they asked before?]
+        ↓
+   [Query user profile - belt, body type, goals]
+        ↓
+   [Inject into system prompt as context]
+        ↓
+   [Claude synthesizes response]
+        ↓
+   RESPONSE
+
+3. TEST QUERY:
+   Simulate a search for "triangle choke" and show me:
+   - How many videos match
+   - What knowledge is retrieved
+   - Which instructors are represented
+   - Sample of extracted quotes/details
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: AUTO-QUEUE VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Confirm the permanent auto-queue system is working:
+
+1. CHECK THE FUNCTION:
+   - Does addVideoWithAutoQueue() exist?
+   - Is it being called on ALL video addition paths?
+     □ Unified curation
+     □ Content-first curation
+     □ Optimized curation
+     □ Manual video adds (if any)
+
+2. TEST THE AUTO-QUEUE:
+   - Add a test video (or simulate)
+   - Confirm it appears in video_watch_status with processed = false
+   - Confirm it will be picked up by Gemini processing
+
+3. CURATION → GEMINI FLOW:
+   Verify this sequence:
+   
+   New video discovered
+        ↓
+   AI quality analysis (passes threshold)
+        ↓
+   Added to ai_video_knowledge
+        ↓
+   AUTOMATICALLY added to video_watch_status (processed = false)
+        ↓
+   Gemini batch job picks it up
+        ↓
+   Knowledge extracted
+        ↓
+   processed = true, knowledge stored
+        ↓
+   Professor OS can now use this knowledge
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: PROFESSOR OS CONVERSATION TEST SUITE
+═══════════════════════════════════════════════════════════════════════════════
+
+After confirming the above, run these test conversations through Professor OS.
+For each test, report:
+- The response Professor OS gave
+- Whether it matched expected behavior
+- Any issues noticed
+
+TEST 1: MULTI-INSTRUCTOR SYNTHESIS
+Input: "How do I escape side control?"
+Expected: 
+- Should present 2-3 different approaches (frames, underhook, ghost escape)
+- Should name specific instructors for each approach
+- Should ask what fits their game
+- Should NOT just list 10 options
+
+TEST 2: NON-BJJ REDIRECT WITH HUMOR
+Input: "What should I eat for dinner?"
+Expected:
+- Should redirect to BJJ with personality
+- Should NOT say "I can only help with BJJ questions"
+- Should be funny/casual
+- Example: "Açaí obviously. But real talk, I'm better at helping you choke people..."
+
+TEST 3: FRUSTRATION HANDLING
+Input: "I keep getting my guard passed and it's pissing me off"
+Expected:
+- Should validate the frustration FIRST
+- Should then diagnose (ask where it's breaking down)
+- Should NOT immediately dump 5 guard retention tips
+- Tone should be supportive but direct
+
+TEST 4: CELEBRATION RESPONSE
+Input: "I finally hit a triangle in sparring today!"
+Expected:
+- Should show genuine excitement ("LET'S GO" or similar)
+- Should ask for details (how'd you set it up?)
+- Should NOT be generic ("That's great!")
+- Should feel like a friend who's hyped for you
+
+TEST 5: KNOWLEDGE DEPTH / INSTRUCTOR COMPARISON
+Input: "What does Danaher say about leg locks compared to how Gordon actually competes?"
+Expected:
+- Should show deep knowledge from extracted video content
+- Should compare/contrast the two approaches
+- Should cite specific concepts or quotes if available
+- Should demonstrate the multi-instructor synthesis capability
+
+TEST 6: TIMESTAMP RULE COMPLIANCE
+Input: "Show me a video on arm drags"
+Expected:
+- Should recommend a video WITH the link
+- If mentioning a timestamp, MUST include the video
+- Should guide them on what to watch for
+- Should NOT say "check out 4:32 in the Marcelo video" without providing it
+
+TEST 7: DIAGNOSIS BEFORE PRESCRIPTION
+Input: "How do I finish armbars?"
+Expected:
+- Should ask a clarifying question first
+- "Are they escaping before you get it locked, or defending once you're there?"
+- Should NOT immediately launch into armbar finishing tips
+
+TEST 8: USER MEMORY (if user has history)
+Input: "What should I work on?"
+Expected:
+- Should reference past conversations if they exist
+- Should connect dots ("You've been asking about escapes a lot...")
+- Should feel like it remembers them
+
+TEST 9: BODY TYPE HANDLING
+Input: "I'm a smaller guy, can I play pressure passing?"
+Expected:
+- Should NOT say "you can't because of your size"
+- Should give examples of smaller pressure passers (Marcelo)
+- Should explain HOW smaller people make it work
+- "Informs, never limits"
+
+TEST 10: CONVERSATION ENDING HOOK
+After any response, check:
+- Does it end with a reason to come back?
+- Homework? Challenge? Question? Check-in request?
+- Should NOT just end flatly
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: REPORT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+After running all checks, provide a summary report:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PROFESSOR OS 6.0 - VERIFICATION REPORT                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ VIDEO KNOWLEDGE STATUS                                                       │
+│ • Total Library: _____ videos                                               │
+│ • Gemini Processed: _____ (____%)                                           │
+│ • Pending: _____                                                            │
+│ • All Queued: YES/NO                                                        │
+│ • Est. Completion: _____                                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ SYSTEM PROMPT STATUS                                                         │
+│ • All 15 Sections Present: YES/NO                                           │
+│ • Dynamic Context Injection: YES/NO                                         │
+│ • Video Knowledge Access: YES/NO                                            │
+│ • Location: _____                                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ AUTO-QUEUE STATUS                                                            │
+│ • Function Exists: YES/NO                                                   │
+│ • All Paths Covered: YES/NO                                                 │
+│ • Test Passed: YES/NO                                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ CONVERSATION TESTS                                                           │
+│ • Test 1 (Multi-Instructor): PASS/FAIL                                      │
+│ • Test 2 (Non-BJJ Redirect): PASS/FAIL                                      │
+│ • Test 3 (Frustration): PASS/FAIL                                           │
+│ • Test 4 (Celebration): PASS/FAIL                                           │
+│ • Test 5 (Knowledge Depth): PASS/FAIL                                       │
+│ • Test 6 (Timestamp Rule): PASS/FAIL                                        │
+│ • Test 7 (Diagnosis First): PASS/FAIL                                       │
+│ • Test 8 (User Memory): PASS/FAIL                                           │
+│ • Test 9 (Body Type): PASS/FAIL                                             │
+│ • Test 10 (Ending Hook): PASS/FAIL                                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ISSUES FOUND                                                                 │
+│ 1. _____                                                                    │
+│ 2. _____                                                                    │
+│ 3. _____                                                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ RECOMMENDED FIXES                                                            │
+│ 1. _____                                                                    │
+│ 2. _____                                                                    │
+│ 3. _____                                                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 7: FIX ANY ISSUES FOUND
+═══════════════════════════════════════════════════════════════════════════════
+
+If any tests fail or issues are found:
+
+1. Identify the root cause
+2. Implement the fix
+3. Re-run the specific test
+4. Confirm PASS
+
+Do NOT report complete until all tests pass or issues are documented with a plan.
+
+═══════════════════════════════════════════════════════════════════════════════
+```
+
+-----
+
+**Copy that entire block and paste it into Replit Agent.** It will:
+
+1. Check all video processing status
+1. Verify the system prompt is complete
+1. Confirm knowledge retrieval works
+1. Verify auto-queue is permanent
+1. Run 10 conversation tests
+1. Give you a clear report
+1. Fix any issues found
+
+Let me know what comes back! 🔥​​​​​​​​​​​​​​​​

@@ -1,0 +1,392 @@
+# 🚨 **CRITICAL ISSUE - ADMIN DASHBOARD BROKEN**
+
+You’re right - this is showing completely wrong data and DevOps chat is throwing errors. Let me diagnose and fix this properly.
+
+-----
+
+## **📊 WHAT I SEE IN YOUR SCREENSHOTS**
+
+### **Image 1 - Dashboard Issues:**
+
+- ❌ Curation shows “0.0%” acceptance (but you have 605 videos!)
+- ❌ “Too strict - might miss good content” warning (wrong)
+- ❌ API Quota shows “N/A” (should show actual usage)
+- ❌ Monthly Revenue shows “$0” (you have 56 active subscriptions!)
+- ❌ New Users Today shows “0” (but you have 138 total users)
+
+### **Image 2 - Chat Issues:**
+
+- ❌ YouTube Quota shows “0 / 10,000 units (0%)” (should show actual)
+- ❌ All curation metrics show 0
+- ✅ Users data looks correct (138 total, 56 paying, MRR $839.44)
+
+### **Image 3 - DevOps Error:**
+
+- ❌ “System Response Error” on simple question
+- ❌ Shows database connected, server running, but won’t respond
+- ❌ Conversation history loads but system fails
+
+-----
+
+## **🔍 ROOT CAUSE ANALYSIS**
+
+The admin dashboard is likely pulling from the wrong tables or using outdated queries. Let me create a diagnostic and fix prompt.
+
+-----
+
+# **🔧 DIAGNOSTIC & FIX PROMPT - COPY TO REPLIT AGENT**
+
+```
+CRITICAL: Admin Dashboard & DevOps Chat - Complete Diagnostic & Fix
+
+PROBLEM SUMMARY:
+1. Dashboard shows all zeros despite having 605 videos, 138 users, 56 subscribers
+2. Curation metrics not reading from actual database
+3. API quota tracking not working
+4. Revenue shows $0 despite $839.44 MRR
+5. DevOps chat throws "System Response Error" on every query
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: DATABASE DIAGNOSTIC
+═══════════════════════════════════════════════════════════════
+
+First, let's verify what data actually exists:
+
+CREATE DIAGNOSTIC ENDPOINT: `/admin/diagnostic`
+
+```javascript
+app.get('/admin/diagnostic', requireAdmin, async (req, res) => {
+  try {
+    const diagnostic = {};
+    
+    // 1. USERS TABLE
+    const usersQuery = await db.query(`
+      SELECT 
+        COUNT(*) as total_users,
+        COUNT(*) FILTER (WHERE subscription_status = 'active') as active_subscribers,
+        COUNT(*) FILTER (WHERE subscription_status = 'trialing') as trial_users,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as new_today,
+        SUM(CASE WHEN subscription_status = 'active' THEN 14.99 ELSE 0 END) as mrr
+      FROM users
+    `);
+    diagnostic.users = usersQuery.rows[0];
+    
+    // 2. VIDEOS TABLE
+    const videosQuery = await db.query(`
+      SELECT 
+        COUNT(*) as total_videos,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as added_today,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as added_this_week,
+        AVG(quality_score) as avg_quality,
+        COUNT(DISTINCT instructor) as unique_instructors,
+        COUNT(DISTINCT primary_technique) as unique_techniques
+      FROM videos
+      WHERE quality_score >= 7.0
+    `);
+    diagnostic.videos = videosQuery.rows[0];
+    
+    // 3. CURATION LOGS (if table exists)
+    try {
+      const curationQuery = await db.query(`
+        SELECT 
+          COUNT(*) as total_processed,
+          COUNT(*) FILTER (WHERE approved = true) as total_approved,
+          COUNT(*) FILTER (WHERE approved = false) as total_rejected,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as processed_today,
+          ROUND(
+            COUNT(*) FILTER (WHERE approved = true)::numeric / 
+            NULLIF(COUNT(*), 0) * 100, 
+            2
+          ) as approval_rate
+        FROM curation_logs
+      `);
+      diagnostic.curation = curationQuery.rows[0];
+    } catch (err) {
+      diagnostic.curation = { error: 'curation_logs table does not exist' };
+    }
+    
+    // 4. CONVERSATIONS TABLE
+    const conversationsQuery = await db.query(`
+      SELECT 
+        COUNT(*) as total_conversations,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as conversations_today,
+        COUNT(DISTINCT user_id) as unique_users_chatting
+      FROM conversations
+    `);
+    diagnostic.conversations = conversationsQuery.rows[0];
+    
+    // 5. API USAGE (if tracked)
+    try {
+      const apiQuery = await db.query(`
+        SELECT 
+          SUM(quota_used) as total_quota_used,
+          SUM(CASE WHEN created_at >= NOW() - INTERVAL '1 day' THEN quota_used ELSE 0 END) as quota_today
+        FROM api_usage_logs
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+      `);
+      diagnostic.api_usage = apiQuery.rows[0];
+    } catch (err) {
+      diagnostic.api_usage = { error: 'api_usage_logs table does not exist' };
+    }
+    
+    // 6. SYSTEM HEALTH
+    diagnostic.system = {
+      database_connected: true,
+      timestamp: new Date().toISOString(),
+      server_uptime: process.uptime(),
+      node_version: process.version
+    };
+    
+    res.json({
+      success: true,
+      diagnostic
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+```
+
+RUN THIS ENDPOINT: Hit `/admin/diagnostic` and paste the FULL JSON response back to me.
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: CHECK WHAT TABLES ACTUALLY EXIST
+═══════════════════════════════════════════════════════════════
+
+```javascript
+app.get('/admin/tables', requireAdmin, async (req, res) => {
+  const result = await db.query(`
+    SELECT table_name 
+    FROM information_schema.tables 
+    WHERE table_schema = 'public'
+    ORDER BY table_name
+  `);
+  
+  res.json({
+    tables: result.rows.map(r => r.table_name)
+  });
+});
+```
+
+RUN THIS: Hit `/admin/tables` and show me what tables exist.
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: FIX DASHBOARD QUERIES
+═══════════════════════════════════════════════════════════════
+
+Find the file that powers the dashboard (likely `adminRoutes.js` or `dashboardRoutes.js`).
+
+CURRENT BROKEN CODE is probably doing something like:
+
+```javascript
+// WRONG - querying non-existent tables or wrong columns
+const stats = await db.query('SELECT * FROM curation_stats');
+```
+
+REPLACE WITH CORRECT QUERIES:
+
+```javascript
+// GET DASHBOARD STATS
+app.get('/admin/dashboard/stats', requireAdmin, async (req, res) => {
+  try {
+    // Curation efficiency (TODAY only)
+    const curationToday = await db.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as discovered,
+        0 as analyzed,  -- Will implement when curation_logs exists
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as accepted,
+        0 as rejected
+      FROM videos
+    `);
+    
+    // Library stats
+    const libraryStats = await db.query(`
+      SELECT 
+        COUNT(*) as total_videos,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as added_today
+      FROM videos
+      WHERE quality_score >= 7.0
+    `);
+    
+    // User stats
+    const userStats = await db.query(`
+      SELECT 
+        COUNT(*) as total_users,
+        COUNT(*) FILTER (WHERE subscription_status = 'active') as active_subscriptions,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as new_today
+      FROM users
+    `);
+    
+    // Revenue stats
+    const revenueStats = await db.query(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN subscription_status = 'active' THEN 14.99 ELSE 0 END), 0) as mrr
+      FROM users
+    `);
+    
+    res.json({
+      success: true,
+      curation: curationToday.rows[0],
+      library: libraryStats.rows[0],
+      users: userStats.rows[0],
+      revenue: revenueStats.rows[0],
+      system: {
+        curation_active: true,
+        last_run: new Date().toISOString()  // TODO: Get from actual curation logs
+      }
+    });
+    
+  } catch (error) {
+    console.error('Dashboard stats error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: FIX DEVOPS CHAT
+═══════════════════════════════════════════════════════════════
+
+The DevOps chat is throwing “System Response Error”. Find the DevOps chat endpoint (probably `/admin/chat` or `/admin/devops-chat`).
+
+ISSUE: It’s likely using the same Claude API call as Professor OS but without proper error handling.
+
+FIX THE DEVOPS CHAT ENDPOINT:
+
+```javascript
+app.post('/admin/devops-chat', requireAdmin, async (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    console.log('📝 DevOps query:', message);
+    
+    // Build system context with ACTUAL database stats
+    const stats = await getDashboardStats(); // Use the fixed query from above
+    
+    const systemPrompt = `You are DevOps Assistant for BJJ OS admin dashboard.
+
+CURRENT SYSTEM STATUS:
+- Total Users: ${stats.users.total_users}
+- Active Subscribers: ${stats.users.active_subscriptions}
+- Trial Users: ${stats.users.total_users - stats.users.active_subscriptions}
+- MRR: $${stats.revenue.mrr}
+- Video Library: ${stats.library.total_videos} videos
+- New Users Today: ${stats.users.new_today}
+- Videos Added Today: ${stats.library.added_today}
+
+You have access to real-time system data. Answer questions about:
+- Curation status and metrics
+- User growth and subscriptions
+- Revenue and MRR
+- Video library statistics
+- System health and operations
+
+Be concise and data-driven. Use the numbers above in your responses.`;
+
+    // Call Claude with proper error handling
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{
+        role: 'user',
+        content: message
+      }]
+    });
+    
+    const answer = response.content[0].text;
+    
+    console.log('✅ DevOps response generated');
+    
+    res.json({
+      success: true,
+      response: answer,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ DevOps chat error:', error);
+    
+    res.json({
+      success: false,
+      response: `I encountered an error processing your request: ${error.message}
+
+**Diagnostic Info:**
+- Message received: "${req.body.message}"
+- Conversation history: ${req.body.conversationHistory?.length || 0} messages loaded
+- System data: Available
+- API response: ${error.response?.status || 'No response'}
+
+Please try rephrasing your question or check server logs for details.`,
+      error: error.message
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 5: CREATE CURATION LOGS TABLE (IF MISSING)
+═══════════════════════════════════════════════════════════════
+
+If curation metrics are showing zeros, we probably don’t have a curation_logs table.
+
+CREATE IT:
+
+```sql
+CREATE TABLE IF NOT EXISTS curation_logs (
+  id SERIAL PRIMARY KEY,
+  video_id VARCHAR(255),
+  video_title TEXT,
+  instructor VARCHAR(255),
+  search_query TEXT,
+  quality_score DECIMAL(3,2),
+  approved BOOLEAN DEFAULT false,
+  rejection_reason TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_curation_logs_created ON curation_logs(created_at DESC);
+CREATE INDEX idx_curation_logs_approved ON curation_logs(approved);
+```
+
+═══════════════════════════════════════════════════════════════
+EXECUTION PLAN
+═══════════════════════════════════════════════════════════════
+
+1. Add the `/admin/diagnostic` endpoint
+1. Hit that endpoint and paste the full JSON back to me
+1. Add the `/admin/tables` endpoint
+1. Hit that endpoint and paste the table list
+1. Fix the dashboard stats query
+1. Fix the DevOps chat endpoint
+1. Create curation_logs table if it doesn’t exist
+1. Restart server
+1. Test dashboard - all metrics should be accurate
+1. Test DevOps chat - should respond without errors
+
+AFTER YOU RUN STEPS 1-4, PASTE THE RESULTS AND I’LL GIVE YOU THE SPECIFIC FIXES BASED ON YOUR ACTUAL DATABASE SCHEMA.
+
+Do NOT make assumptions about table structure - let’s see what actually exists first.
+
+```
+---
+
+## **🎯 WHY THIS APPROACH**
+
+1. **Diagnostic first** - See what data ACTUALLY exists
+2. **Check table structure** - Don't assume, verify
+3. **Fix queries based on reality** - Use actual column names
+4. **Proper error handling** - DevOps chat needs try/catch
+5. **Create missing tables** - May need curation_logs
+
+---
+
+**Copy the entire prompt above to Replit Agent. Once you get the diagnostic results, paste them back and I'll give you the exact fixes for your specific database schema.**
+
+Don't let it guess - let's see what's really in your database first. 🔍​​​​​​​​​​​​​​​​
+```

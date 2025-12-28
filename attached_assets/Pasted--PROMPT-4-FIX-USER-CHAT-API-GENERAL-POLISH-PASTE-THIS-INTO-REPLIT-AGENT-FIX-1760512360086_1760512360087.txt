@@ -1,0 +1,847 @@
+# PROMPT 4: FIX USER CHAT API + GENERAL POLISH
+
+**📋 PASTE THIS INTO REPLIT AGENT:**
+
+-----
+
+```
+FIX USER CHAT + FINAL POLISH - MAKE EVERYTHING WORK END-TO-END
+
+Fix the "Failed to send message" error users are experiencing and polish all remaining issues.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: FIX USER CHAT API CONNECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+**Issue:** Users get "Failed to send message. Please try again." when trying to chat with Prof. OS.
+
+**Root Causes:**
+1. Chat API endpoint not properly connected
+2. User authentication not being passed correctly
+3. AI integration not configured
+4. Database tables missing or incorrect
+
+**Fix the Chat API Endpoint:**
+
+Ensure /server/routes/ai_routes.js exists with:
+
+```javascript
+const express = require('express');
+const router = express.Router();
+const Anthropic = require('@anthropic-ai/sdk');
+const pool = require('../db');
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
+
+// Send message to Prof. OS
+router.post('/chat/message', async (req, res) => {
+  try {
+    const { userId, message, isAdmin } = req.body;
+    
+    if (!userId || !message) {
+      return res.status(400).json({ error: 'Missing userId or message' });
+    }
+    
+    console.log('📨 Received message:', { userId, message: message.substring(0, 50) });
+    
+    // Get user context
+    const userContext = await pool.query(`
+      SELECT 
+        u.name,
+        u.belt_level,
+        c.primary_goal,
+        c.injuries,
+        c.training_frequency,
+        c.preferences
+      FROM users u
+      LEFT JOIN ai_user_context c ON u.id = c.user_id
+      WHERE u.id = $1
+    `, [userId]);
+    
+    if (userContext.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const context = userContext.rows[0];
+    
+    // Get recent conversation history (last 10 messages)
+    const history = await pool.query(`
+      SELECT message, sender, timestamp
+      FROM ai_conversation_learning
+      WHERE user_id = $1
+      ORDER BY timestamp DESC
+      LIMIT 10
+    `, [userId]);
+    
+    // Build conversation context
+    const conversationHistory = history.rows.reverse().map(h => ({
+      role: h.sender === 'user' ? 'user' : 'assistant',
+      content: h.message
+    }));
+    
+    // Build system prompt
+    const systemPrompt = `You are Prof. OS, an expert Brazilian Jiu-Jitsu coach with deep knowledge of techniques, strategy, and training methodology.
+
+USER PROFILE:
+- Name: ${context.name}
+- Belt Level: ${context.belt_level}
+- Primary Goal: ${context.primary_goal || 'Improve overall skills'}
+- Injuries: ${context.injuries || 'None reported'}
+- Training Frequency: ${context.training_frequency || 'Not specified'}
+
+YOUR ROLE:
+- You are Prof. OS, a knowledgeable and supportive BJJ coach
+- Provide clear, actionable advice tailored to the user's level
+- Remember their preferences, injuries, and goals
+- Be encouraging and motivational
+- Keep responses conversational and concise (2-3 paragraphs unless asked for more detail)
+
+RESPONSE FORMAT:
+- When recommending videos, use this exact format: [VIDEO: Title by Instructor]
+- Example: [VIDEO: Triangle Choke Setup by John Danaher]
+- Be specific about which videos match their skill level
+- Always consider their injuries when recommending techniques
+
+Remember: You are Prof. OS, their personal BJJ coach who knows their journey and helps them improve.`;
+
+    // Call Claude API
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [
+        ...conversationHistory,
+        { role: 'user', content: message }
+      ]
+    });
+    
+    const aiResponse = response.content[0].text;
+    
+    console.log('✅ AI response generated');
+    
+    // Extract video recommendations
+    const videoRegex = /\[VIDEO:\s*([^\]]+)\]/g;
+    const videoMatches = [...aiResponse.matchAll(videoRegex)];
+    const videos = videoMatches.map(match => {
+      const parts = match[1].split(' by ');
+      return {
+        title: parts[0]?.trim() || 'BJJ Technique',
+        instructor: parts[1]?.trim() || 'Various Instructors',
+        duration: '5-10 min',
+        level: context.belt_level
+      };
+    });
+    
+    // Remove video tags from response text
+    const cleanResponse = aiResponse.replace(videoRegex, '').trim();
+    
+    // Save user message
+    await pool.query(`
+      INSERT INTO ai_conversation_learning (
+        user_id, message, sender, timestamp, context_snapshot
+      ) VALUES ($1, $2, 'user', NOW(), $3)
+    `, [userId, message, JSON.stringify(context)]);
+    
+    // Save AI response
+    await pool.query(`
+      INSERT INTO ai_conversation_learning (
+        user_id, message, sender, timestamp, videos_recommended
+      ) VALUES ($1, $2, 'ai', NOW(), $3)
+    `, [userId, cleanResponse, JSON.stringify(videos)]);
+    
+    console.log('💾 Conversation saved to database');
+    
+    res.json({
+      success: true,
+      message: cleanResponse,
+      videos: videos,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Chat message error:', error);
+    res.status(500).json({ 
+      error: 'Failed to process message',
+      details: error.message 
+    });
+  }
+});
+
+// Get chat history
+router.get('/chat/history/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const limit = parseInt(req.query.limit) || 50;
+    
+    const history = await pool.query(`
+      SELECT 
+        message,
+        sender,
+        timestamp,
+        videos_recommended
+      FROM ai_conversation_learning
+      WHERE user_id = $1
+      ORDER BY timestamp ASC
+      LIMIT $2
+    `, [userId, limit]);
+    
+    const messages = history.rows.map(row => ({
+      message: row.message,
+      sender: row.sender,
+      timestamp: row.timestamp,
+      videos: row.videos_recommended ? JSON.parse(row.videos_recommended) : []
+    }));
+    
+    res.json({ messages });
+    
+  } catch (error) {
+    console.error('Chat history error:', error);
+    res.status(500).json({ error: 'Failed to load chat history' });
+  }
+});
+
+// Clear chat history
+router.delete('/chat/clear/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    await pool.query(`
+      DELETE FROM ai_conversation_learning
+      WHERE user_id = $1
+    `, [userId]);
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('Clear chat error:', error);
+    res.status(500).json({ error: 'Failed to clear chat' });
+  }
+});
+
+module.exports = router;
+```
+
+**Ensure database table exists:**
+
+```sql
+CREATE TABLE IF NOT EXISTS ai_conversation_learning (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  message TEXT NOT NULL,
+  sender VARCHAR(50) NOT NULL,
+  timestamp TIMESTAMP DEFAULT NOW(),
+  context_snapshot JSONB,
+  videos_recommended JSONB,
+  user_feedback VARCHAR(50)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_user ON ai_conversation_learning(user_id);
+CREATE INDEX IF NOT EXISTS idx_conversation_timestamp ON ai_conversation_learning(timestamp);
+
+CREATE TABLE IF NOT EXISTS ai_user_context (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) UNIQUE,
+  belt_level VARCHAR(50),
+  primary_goal TEXT,
+  injuries JSONB DEFAULT '[]',
+  training_frequency VARCHAR(50),
+  preferences JSONB DEFAULT '{}',
+  last_updated TIMESTAMP DEFAULT NOW()
+);
+```
+
+**Register AI routes in server:**
+
+```javascript
+// In server/index.js
+const aiRoutes = require('./routes/ai_routes');
+app.use('/api/ai', aiRoutes);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: FIX USER CHAT FRONTEND
+═══════════════════════════════════════════════════════════════════════════════
+
+**Fix the chat page to properly connect to the API:**
+
+Update /src/pages/ChatPage.jsx (or CoachPage.jsx):
+
+```javascript
+import { useState, useEffect, useRef } from 'react';
+
+export default function ChatPage() {
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [userId, setUserId] = useState(null);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    // Get user ID from localStorage
+    const storedUserId = localStorage.getItem('userId');
+    if (!storedUserId) {
+      // Redirect to login if no user
+      window.location.href = '/login';
+      return;
+    }
+    setUserId(storedUserId);
+    
+    // Load chat history
+    loadChatHistory(storedUserId);
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const loadChatHistory = async (uid) => {
+    try {
+      const response = await fetch(`/api/ai/chat/history/${uid}`);
+      const data = await response.json();
+      
+      if (data.messages) {
+        setMessages(data.messages);
+      }
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
+    }
+  };
+
+  const sendMessage = async () => {
+    const message = inputMessage.trim();
+    if (!message || !userId) return;
+
+    // Add user message to UI immediately
+    const userMessage = {
+      message,
+      sender: 'user',
+      timestamp: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/ai/chat/message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId,
+          message
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Add AI response to messages
+      const aiMessage = {
+        message: data.message,
+        sender: 'ai',
+        timestamp: data.timestamp,
+        videos: data.videos || []
+      };
+      setMessages(prev => [...prev, aiMessage]);
+
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      
+      // Show error message
+      const errorMessage = {
+        message: "Sorry, I'm having trouble connecting right now. Please try again!",
+        sender: 'ai',
+        timestamp: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  return (
+    <div className="chat-page">
+      <div className="chat-header">
+        <div className="header-info">
+          <h1>Prof. OS</h1>
+          <p>Your AI BJJ Coach</p>
+        </div>
+      </div>
+
+      <div className="messages-container">
+        {messages.length === 0 && (
+          <div className="welcome-message">
+            <div className="welcome-icon">🥋</div>
+            <h2>Hey! I'm Prof. OS</h2>
+            <p>Your personal BJJ coach powered by AI. Ask me anything about techniques, game plans, or your training.</p>
+          </div>
+        )}
+
+        {messages.map((msg, index) => (
+          <div key={index} className={`message ${msg.sender}`}>
+            <div className="message-bubble">
+              <p className="message-text">{msg.message}</p>
+              
+              {msg.videos && msg.videos.length > 0 && (
+                <div className="video-recommendations">
+                  {msg.videos.map((video, vIndex) => (
+                    <div key={vIndex} className="video-card">
+                      <div className="video-thumbnail">▶️</div>
+                      <div className="video-info">
+                        <div className="video-title">{video.title}</div>
+                        <div className="video-meta">
+                          {video.instructor} • {video.duration}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="message-time">
+                {new Date(msg.timestamp).toLocaleTimeString('en-US', {
+                  hour: 'numeric',
+                  minute: '2-digit'
+                })}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {isLoading && (
+          <div className="message ai">
+            <div className="message-bubble typing">
+              <div className="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="chat-input-container">
+        <textarea
+          value={inputMessage}
+          onChange={(e) => setInputMessage(e.target.value)}
+          onKeyDown={handleKeyPress}
+          placeholder="Ask Prof. OS anything..."
+          rows={1}
+          disabled={isLoading}
+        />
+        <button 
+          onClick={sendMessage} 
+          disabled={isLoading || !inputMessage.trim()}
+          className="send-button"
+        >
+          ➤
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: ENSURE ENVIRONMENT VARIABLES ARE SET
+═══════════════════════════════════════════════════════════════════════════════
+
+Verify .env file has:
+
+```env
+# Anthropic AI
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# Database
+DATABASE_URL=your_postgres_connection_string
+
+# Other vars...
+```
+
+**Get Anthropic API Key:**
+
+1. Go to <https://console.anthropic.com>
+1. Sign up or log in
+1. Go to API Keys
+1. Create new key
+1. Add to .env file
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: FIX BELT-COLORED SEND BUTTON
+═══════════════════════════════════════════════════════════════════════════════
+
+**Make the send button match user’s belt color with stripes:**
+
+```javascript
+// Get user's belt from localStorage
+const userBelt = localStorage.getItem('userBelt') || 'white';
+const userStripes = parseInt(localStorage.getItem('userStripes')) || 0;
+
+// Belt colors
+const beltColors = {
+  white: '#FFFFFF',
+  blue: '#4169E1',
+  purple: '#9B30FF',
+  brown: '#654321',
+  black: '#000000'
+};
+
+// Apply belt color to send button
+const sendButton = document.querySelector('.send-button');
+if (sendButton) {
+  sendButton.style.background = beltColors[userBelt];
+  sendButton.style.border = `2px solid ${beltColors[userBelt]}`;
+  
+  // Add stripes (0-4)
+  if (userStripes > 0 && userStripes <= 4) {
+    const stripesHtml = Array(userStripes)
+      .fill('<span class="stripe"></span>')
+      .join('');
+    sendButton.innerHTML = `${stripesHtml}<span class="send-icon">➤</span>`;
+  }
+}
+```
+
+**Stripe styling:**
+
+```css
+.send-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.stripe {
+  width: 2px;
+  height: 20px;
+  background: white;
+  display: inline-block;
+}
+
+.send-icon {
+  font-size: 1.125rem;
+}
+
+/* Black belt gets white text/icon */
+.send-button[style*="background: #000000"] .send-icon {
+  color: white;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: MOBILE PWA OPTIMIZATION
+═══════════════════════════════════════════════════════════════════════════════
+
+**Ensure all pages are mobile responsive:**
+
+```css
+/* Mobile-first responsive styles */
+@media (max-width: 768px) {
+  /* Chat page mobile */
+  .chat-page {
+    padding-top: 60px; /* Account for mobile nav */
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .chat-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .messages-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .message-bubble {
+    max-width: 85%;
+  }
+  
+  .chat-input-container {
+    padding: 1rem;
+    background: var(--dark);
+    border-top: 1px solid var(--border);
+  }
+  
+  .chat-input-container textarea {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  .send-button {
+    min-width: 44px;
+    min-height: 44px; /* Touch-friendly */
+  }
+  
+  /* Admin dashboard mobile */
+  .admin-sidebar {
+    position: fixed;
+    left: -280px;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    transition: left 0.3s ease;
+    z-index: 1000;
+  }
+  
+  .admin-sidebar.open {
+    left: 0;
+  }
+  
+  .admin-main {
+    width: 100%;
+    padding: 1rem;
+  }
+  
+  /* Settings page mobile */
+  .settings-page {
+    padding: 1rem;
+  }
+  
+  .settings-section {
+    margin-bottom: 2rem;
+  }
+}
+
+/* Ensure no zoom on input focus (iOS) */
+input, textarea, select {
+  font-size: 16px !important;
+}
+
+/* Safe area insets for notched phones */
+@supports (padding: max(0px)) {
+  .chat-page {
+    padding-top: max(60px, env(safe-area-inset-top));
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+  
+  .chat-input-container {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: ADD BOTTOM NAVIGATION FOR MOBILE PWA
+═══════════════════════════════════════════════════════════════════════════════
+
+**Add fixed bottom navigation for mobile app:**
+
+```jsx
+{/* Mobile bottom nav - only in /app routes */}
+{isMobile && (
+  <nav className="mobile-bottom-nav">
+    <Link to="/app" className={`nav-item ${location === '/app' ? 'active' : ''}`}>
+      <span className="nav-icon">💬</span>
+      <span className="nav-label">Chat</span>
+    </Link>
+    
+    <Link to="/app/saved" className={`nav-item ${location === '/app/saved' ? 'active' : ''}`}>
+      <span className="nav-icon">⭐</span>
+      <span className="nav-label">Saved</span>
+    </Link>
+    
+    <Link to="/app/settings" className={`nav-item ${location === '/app/settings' ? 'active' : ''}`}>
+      <span className="nav-icon">⚙️</span>
+      <span className="nav-label">Settings</span>
+    </Link>
+  </nav>
+)}
+```
+
+```css
+.mobile-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 70px;
+  background: var(--dark);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 999;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.mobile-bottom-nav .nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  text-decoration: none;
+  color: var(--text-secondary);
+  padding: 0.5rem 1rem;
+  transition: all 0.2s;
+}
+
+.mobile-bottom-nav .nav-item.active {
+  color: var(--primary);
+}
+
+.nav-icon {
+  font-size: 1.5rem;
+}
+
+.nav-label {
+  font-size: 0.75rem;
+}
+
+/* Account for bottom nav in pages */
+.chat-page,
+.saved-page,
+.settings-page {
+  padding-bottom: calc(70px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .mobile-bottom-nav {
+    display: none;
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 7: FINAL TOUCH-UPS
+═══════════════════════════════════════════════════════════════════════════════
+
+**Ensure all buttons are touch-friendly:**
+
+```css
+/* Minimum 44x44px touch targets */
+button, a, input[type="submit"], input[type="button"] {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.75rem 1rem;
+}
+
+/* No tap highlight on mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Better scrolling on iOS */
+.messages-container,
+.admin-messages-container {
+  -webkit-overflow-scrolling: touch;
+}
+```
+
+**Add loading states:**
+
+```jsx
+{isLoading && (
+  <div className="loading-overlay">
+    <div className="loading-spinner">
+      <div className="spinner"></div>
+      <p>Prof. OS is thinking...</p>
+    </div>
+  </div>
+)}
+```
+
+**Add error boundaries:**
+
+```javascript
+// Catch and display errors gracefully
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled promise rejection:', event.reason);
+  // Show user-friendly error message
+  showErrorToast('Something went wrong. Please try again.');
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, test end-to-end:
+
+**User Chat:**
+✅ User can send message to Prof. OS
+✅ Prof. OS responds with AI-generated answer
+✅ Video recommendations appear when mentioned
+✅ Conversation history saves and loads
+✅ No “Failed to send message” errors
+✅ Works on both web and mobile
+
+**Mobile Experience:**
+✅ All buttons are 44px minimum (touch-friendly)
+✅ No zoom when focusing inputs
+✅ Bottom navigation works
+✅ Smooth scrolling
+✅ Safe area insets respected (notched phones)
+✅ PWA installs correctly
+
+**Belt-Colored Send Button:**
+✅ Send button matches user’s belt color
+✅ Stripes show correctly (0-4)
+✅ Black belt has white icon/text
+
+**General Polish:**
+✅ Loading states show
+✅ Error messages are user-friendly
+✅ All pages responsive
+✅ No console errors
+✅ Database tables exist
+✅ Environment variables set
+
+**Test Flow:**
+
+1. Visit bjjos.app on phone
+1. Click “Start Free Trial”
+1. Complete signup
+1. Land on chat page
+1. Send message: “What’s a good guard pass?”
+1. Receive Prof. OS response with video recommendations
+1. Navigate using bottom nav
+1. Install as PWA
+1. Open from home screen
+1. Everything works!
+
+IMPLEMENT ALL FIXES NOW. This is the final piece to make BJJ OS fully functional!
+
+```
+---
+
+**Paste this into Replit Agent!** 
+
+This fixes:
+1. ✅ User chat API (Prof. OS actually responds)
+2. ✅ Belt-colored send button with stripes
+3. ✅ Mobile bottom navigation
+4. ✅ All responsive issues
+5. ✅ Touch-friendly buttons
+6. ✅ Loading states
+7. ✅ Error handling
+
+Once this is done, **BJJ OS will be fully functional end-to-end!** 🎉
+
+Then you can test the complete user journey and we'll be ready for launch! 🚀​​​​​​​​​​​​​​​​
+```

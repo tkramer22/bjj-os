@@ -1,0 +1,74 @@
+## 🔍 **I CAN SEE THE EXACT ERROR IN THE CONSOLE:**
+
+Multiple **“user rejected the request”** errors - this is a **CORS (Cross-Origin Resource Sharing)** issue.
+
+Your Cursor app (running on `localhost:3000`) is trying to call your Replit API, but Replit is **blocking** the request because it’s coming from a different origin.
+
+-----
+
+## 🔧 **FIX: Enable CORS on Replit Backend**
+
+Give Replit this prompt:
+
+```
+Enable CORS to allow requests from localhost during development
+
+ISSUE: Frontend on localhost:3000 getting "user rejected the request" errors when calling Replit API. This is a CORS (Cross-Origin Resource Sharing) error.
+
+FIX: Add CORS middleware to Express server
+
+Install CORS package (if not already installed):
+npm install cors
+
+In your main server file (index.js or server.js), add CORS:
+
+```javascript
+const express = require('express');
+const cors = require('cors');
+
+const app = express();
+
+// Enable CORS for all routes
+app.use(cors({
+  origin: [
+    'http://localhost:3000',      // Development (Cursor)
+    'http://localhost:5173',      // Vite dev server
+    'https://bjjos.app',          // Production domain
+    'https://www.bjjos.app'       // Production www
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));
+
+// Rest of your routes...
+app.post('/api/auth/check-user', async (req, res) => {
+  // ... your endpoint code
+});
+
+// Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT} with CORS enabled`);
+});
+```
+
+This allows your local Cursor app to make API calls to Replit during development.
+
+After adding CORS, restart the Replit server.
+
+```
+---
+
+## ✅ **AFTER REPLIT ADDS CORS:**
+
+1. **Restart Cursor app** (the fix is on Replit's side, but restart to be safe)
+2. **Try login again**
+3. **Watch console** - should now see successful API calls instead of "user rejected"
+
+---
+
+## 🎤 **PASTE THAT INTO REPLIT NOW!**
+
+Once Replit adds CORS and restarts, try logging in again and tell me what happens! 🥋​​​​​​​​​​​​​​​​
+```

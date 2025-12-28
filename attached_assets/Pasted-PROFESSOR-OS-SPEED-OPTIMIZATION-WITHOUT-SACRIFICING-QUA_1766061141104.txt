@@ -1,0 +1,118 @@
+PROFESSOR OS SPEED OPTIMIZATION - WITHOUT SACRIFICING QUALITY
+
+Current response time: 2-4 seconds
+Target: <2 seconds for most queries
+
+═══════════════════════════════════════════════════════════════════════════════
+1. ENABLE RESPONSE STREAMING
+═══════════════════════════════════════════════════════════════════════════════
+
+This is the #1 improvement. User sees text appearing immediately instead of waiting.
+
+- Enable Claude API streaming (stream: true)
+- Send tokens to frontend as they arrive
+- User perceives instant response even if total time is same
+
+Current: User waits 3 seconds → sees full response
+With streaming: User sees first word in 200ms → rest flows in
+
+This is a PERCEIVED speed improvement that feels 10x faster.
+
+═══════════════════════════════════════════════════════════════════════════════
+2. CACHE USER CONTEXT (Redis)
+═══════════════════════════════════════════════════════════════════════════════
+
+Right now: Every message rebuilds full user context from database
+Optimization: Cache context for 5 minutes
+
+- First message: Build context, cache it (500ms)
+- Next 5 minutes: Use cached context (50ms)
+- Savings: ~450ms per message
+
+Implementation:
+const cacheKey = `context:${userId}`;
+const cached = await redis.get(cacheKey);
+if (cached) return JSON.parse(cached);
+// else build and cache for 5 min
+
+═══════════════════════════════════════════════════════════════════════════════
+3. PARALLEL DATABASE QUERIES
+═══════════════════════════════════════════════════════════════════════════════
+
+Current (sequential):
+- Query user profile (100ms)
+- Query video knowledge (150ms)  
+- Query conversation history (100ms)
+- Query patterns (80ms)
+Total: 430ms
+
+Optimized (parallel):
+const [profile, videos, history, patterns] = await Promise.all([
+  getProfile(userId),
+  getVideoKnowledge(query),
+  getConversationHistory(userId),
+  getPatterns(userId)
+]);
+Total: ~150ms (speed of slowest query)
+
+Savings: ~280ms
+
+═══════════════════════════════════════════════════════════════════════════════
+4. PRE-WARM VIDEO CACHE
+═══════════════════════════════════════════════════════════════════════════════
+
+Cache top videos per technique category:
+- "guard retention" → top 10 videos pre-loaded
+- "submissions" → top 10 videos pre-loaded
+- etc.
+
+When user asks about guard retention, videos are already in memory.
+TTL: 1 hour (videos don't change often)
+
+═══════════════════════════════════════════════════════════════════════════════
+5. REDUCE SYSTEM PROMPT TOKENS (Careful)
+═══════════════════════════════════════════════════════════════════════════════
+
+Current prompt: ~8,000+ tokens
+Every token = processing time
+
+Review Section 4B instructions - can any be condensed?
+Remove redundant examples in prompt
+Target: 20% reduction without losing instruction quality
+
+DO NOT remove:
+- Field usage instructions (we just added these)
+- Core personality
+- Video recommendation rules
+
+CAN potentially trim:
+- Duplicate examples
+- Verbose explanations
+- Rarely-triggered edge cases
+
+═══════════════════════════════════════════════════════════════════════════════
+6. OPTIMIZE VIDEO SEARCH QUERY
+═══════════════════════════════════════════════════════════════════════════════
+
+Ensure these indexes exist:
+CREATE INDEX idx_video_technique ON video_knowledge(technique_name);
+CREATE INDEX idx_video_position ON video_knowledge(position);
+CREATE INDEX idx_video_instructor ON video_knowledge(instructor);
+CREATE INDEX idx_video_search ON video_knowledge USING GIN(to_tsvector('english', title || ' ' || technique_name));
+
+Check EXPLAIN ANALYZE on the video search query - is it using indexes?
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+1. 🔴 Streaming (biggest perceived improvement)
+2. 🔴 Parallel queries (easy win, ~280ms saved)
+3. 🟡 Context caching (saves ~450ms on repeat messages)
+4. 🟡 Video cache (saves ~150ms)
+5. 🟢 Prompt optimization (careful, test quality)
+6. 🟢 Index verification (one-time check)
+
+Implement #1 and #2 first - biggest impact, lowest risk.
+
+Show me current response time breakdown before and after changes.

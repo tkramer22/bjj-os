@@ -1,0 +1,111 @@
+**This is a critical bug.** The user is getting silently blocked - no response, no error message, message just disappears.
+
+## What’s Happening
+
+The user wrote something like “murder” or “killing” in a BJJ context (probably joking about getting destroyed in training - totally normal BJJ talk) and it’s triggering a content filter somewhere.
+
+This could be:
+
+1. **Claude’s safety filter** - Rejecting the message and returning nothing
+1. **A middleware content filter** - Blocking before it even hits Claude
+1. **Frontend validation** - Catching “bad words” and failing silently
+
+**This is terrible UX.** Even if we need to filter, the user should get a response, not silence.
+
+-----
+
+## The Fix
+
+```
+CRITICAL BUG: Professor OS silently fails on certain words
+
+A user reported that messages containing words like "murder" or "killing" (used in normal BJJ context like "I got murdered in training" or "killing it on the mats") result in NO RESPONSE. The message just disappears with no error.
+
+This is a bug because:
+1. These are normal BJJ expressions ("he murdered me from mount", "killing the knee shield")
+2. Silent failure is terrible UX - user thinks app is broken
+3. Even if content needs filtering, user should get a response
+
+## STEP 1: FIND THE FILTER
+
+Search the codebase for any content filtering:
+- Look for word blocklists or regex patterns
+- Check if there's middleware filtering requests
+- Check Claude API error handling - are we catching refusals?
+- Check frontend for any validation before sending
+
+Show me any code that:
+- Filters message content
+- Catches/handles Claude API errors
+- Could cause a message to fail silently
+
+## STEP 2: CHECK CLAUDE ERROR HANDLING
+
+In the Professor OS chat endpoint, show me the error handling:
+
+```javascript
+try {
+  const response = await anthropic.messages.create({...});
+  // handle response
+} catch (error) {
+  // WHAT HAPPENS HERE?
+  // Is this returning nothing to the user?
+}
+```
+
+If Claude refuses a message, it might throw an error or return a refusal. We need to catch this and respond appropriately.
+
+## STEP 3: IMPLEMENT PROPER HANDLING
+
+Option A - If it’s a word filter we added:
+
+- Remove it or make it BJJ-context aware
+- “Murder” in BJJ = normal, “murder” + threat = different
+
+Option B - If it’s Claude refusing:
+
+- Catch the refusal
+- Return a friendly message: “I had trouble with that message. Could you rephrase? Sometimes certain words trigger safety filters even in BJJ context.”
+
+Option C - If it’s silent failure:
+
+- Add proper error handling
+- ALWAYS return something to the user
+- Log the error for debugging
+
+## STEP 4: ADD LOGGING
+
+Add logging to trace exactly where messages fail:
+
+```javascript
+console.log('[PROF OS] Received message:', message.substring(0, 100));
+console.log('[PROF OS] Sending to Claude...');
+try {
+  const response = await anthropic.messages.create({...});
+  console.log('[PROF OS] Claude responded successfully');
+} catch (error) {
+  console.log('[PROF OS] ERROR:', error.message);
+  console.log('[PROF OS] Full error:', JSON.stringify(error));
+  // Return user-friendly error message
+}
+```
+
+## STEP 5: TEST
+
+After fixing, test these messages:
+
+- “I got murdered from mount today”
+- “He was killing it with his pressure passing”
+- “My coach killed my knee shield every time”
+
+All should get normal Professor OS responses.
+
+Find the issue, fix it, and ensure users ALWAYS get a response - even if it’s an error message.
+
+```
+---
+
+**This needs to be fixed immediately.** Silent failures will kill your retention. Users will think the app is broken and leave.
+
+Let me know what Replit finds and we'll fix it properly.​​​​​​​​​​​​​​​​
+```

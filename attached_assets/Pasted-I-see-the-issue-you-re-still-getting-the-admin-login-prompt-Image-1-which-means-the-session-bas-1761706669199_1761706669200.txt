@@ -1,0 +1,323 @@
+I see the issue - you’re still getting the admin login prompt (Image 1), which means the session-based auth isn’t implemented yet. And Image 2 shows the lifetime invitation form is there, but the backend changes haven’t been applied.
+
+The Replit Agent likely didn’t implement the code changes. Let me give you a **more direct, specific prompt** that’s harder to mess up:
+
+-----
+
+# 🔧 DIRECT FIX PROMPT - COPY THIS
+
+```
+FIX ADMIN SESSION AND EMAIL TEMPLATE
+
+CRITICAL: Make these exact code changes to fix duplicate password prompts and update email template.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: ADD SESSION COOKIE TO ADMIN LOGIN
+═══════════════════════════════════════════════════════════════════════════════
+
+Find the admin login endpoint (likely in server/routes/admin.js or similar) and UPDATE it:
+
+BEFORE (current code probably looks like):
+```javascript
+app.post('/api/admin/login', async (req, res) => {
+  const { password } = req.body;
+  if (password !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Invalid password' });
+  }
+  res.json({ success: true });
+});
+```
+
+AFTER (add session cookie):
+
+```javascript
+app.post('/api/admin/login', async (req, res) => {
+  const { password } = req.body;
+  
+  if (password !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Invalid password' });
+  }
+  
+  // CREATE SESSION TOKEN
+  const jwt = require('jsonwebtoken');
+  const token = jwt.sign(
+    { role: 'admin', loginTime: Date.now() },
+    process.env.JWT_SECRET || 'your-secret-key-here',
+    { expiresIn: '24h' }
+  );
+  
+  // SET COOKIE
+  res.cookie('admin_session', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'strict'
+  });
+  
+  res.json({ success: true });
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: UPDATE ADMIN AUTH MIDDLEWARE
+═══════════════════════════════════════════════════════════════════════════════
+
+Find your checkAdminAuth middleware function and REPLACE it with:
+
+```javascript
+function checkAdminAuth(req, res, next) {
+  const adminSession = req.cookies?.admin_session;
+  
+  if (!adminSession) {
+    return res.status(401).json({ 
+      error: 'Unauthorized - please log in',
+      redirect: '/admin/login' 
+    });
+  }
+  
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(adminSession, process.env.JWT_SECRET || 'your-secret-key-here');
+    
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    req.admin = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ 
+      error: 'Session expired - please log in again',
+      redirect: '/admin/login' 
+    });
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: UPDATE FRONTEND API CALLS
+═══════════════════════════════════════════════════════════════════════════════
+
+Find where the frontend calls the lifetime invitation API (likely in client/admin.js or similar).
+
+CHANGE ALL fetch calls to admin endpoints to include credentials:
+
+BEFORE:
+
+```javascript
+fetch('/api/admin/lifetime/invite', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(data)
+})
+```
+
+AFTER:
+
+```javascript
+fetch('/api/admin/lifetime/invite', {
+  method: 'POST',
+  credentials: 'include', // ADD THIS LINE
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(data)
+})
+```
+
+Do this for ALL admin API calls.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: INSTALL REQUIRED PACKAGES
+═══════════════════════════════════════════════════════════════════════════════
+
+Run in terminal:
+
+```bash
+npm install jsonwebtoken cookie-parser
+```
+
+Then in your main server file (server.js or app.js), add near the top:
+
+```javascript
+const cookieParser = require('cookie-parser');
+app.use(cookieParser());
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: UPDATE EMAIL TEMPLATE WITH FINAL VERSION
+═══════════════════════════════════════════════════════════════════════════════
+
+Find your sendLifetimeInvitation function and REPLACE the entire email HTML with:
+
+```javascript
+async function sendLifetimeInvitation(email, inviteToken, personalMessage) {
+  const magicLink = `https://bjjos.app/lifetime-signup?token=${inviteToken}`;
+  
+  const emailHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      border: 1px solid #e0e0e0;
+    }
+    .logo h1 {
+      color: #000;
+      margin: 0 0 30px 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .cta-button {
+      display: inline-block;
+      background: #000;
+      color: white;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 20px 0;
+    }
+    .section {
+      margin: 24px 0;
+    }
+    .highlight {
+      background: #f5f5f5;
+      padding: 16px;
+      border-radius: 6px;
+      border-left: 3px solid #000;
+      margin: 20px 0;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <h1>BJJ OS</h1>
+    </div>
+    
+    <p style="font-size: 18px; font-weight: 600;">You have lifetime access to BJJ OS. Forever. No charge.</p>
+    
+    <p>I'm genuinely grateful you're here early.</p>
+    
+    <p>Takes 45 seconds to create your account:</p>
+    
+    <div style="text-align: center;">
+      <a href="${magicLink}" class="cta-button">
+        Create your account
+      </a>
+    </div>
+    
+    <div class="section">
+      <p style="font-weight: 600; margin-bottom: 12px;">What BJJ OS does:</p>
+      
+      <p>Prof. OS is your training partner that never forgets. After each session, tell it what you worked on - it remembers everything, spots patterns in your game, and tells you what to work on next.</p>
+      
+      <p><strong>The more you use it, the smarter it gets about YOUR game.</strong></p>
+      
+      <p>It also scans YouTube daily for new instructionals from elite grapplers, curates a video library, and recommends techniques specific to what you're struggling with.</p>
+      
+      <p>This is your second brain for jiu-jitsu.</p>
+    </div>
+    
+    <div class="highlight">
+      <p style="font-weight: 600; margin-bottom: 8px;">Here's what I need from you:</p>
+      
+      <p style="margin-bottom: 8px;">Tell me what breaks. Tell me what's confusing. Tell me what's missing.</p>
+      
+      <p style="margin-bottom: 8px;">Your criticism is my best asset. I need to know the bad and what can be better so I can make this great for everyone else.</p>
+      
+      <p style="margin: 0;">Use it after every training session for the next few weeks. The feedback you give me now shapes what this becomes.</p>
+    </div>
+    
+    <p>Thanks for using this and helping me build. It means the world.</p>
+    
+    <p style="margin-top: 24px; font-weight: 600;">Oss!</p>
+    
+    <div class="footer">
+      <p style="color: #000; font-weight: 600; margin-bottom: 12px;">
+        -Todd
+      </p>
+      <p style="margin-bottom: 8px; color: #333;">
+        <a href="mailto:todd@bjjos.app" style="color: #000; text-decoration: none;">Todd@bjjos.app</a><br>
+        <a href="tel:+19148373750" style="color: #000; text-decoration: none;">914.837.3750</a><br>
+        <span style="font-weight: 600;">Text me anytime with ANY input</span>
+      </p>
+      <p style="margin: 0; color: #666; font-size: 13px;">
+        Questions or feedback? Just reply to this email or text me directly.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  const { Resend } = require('resend');
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  try {
+    const result = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: email,
+      subject: 'Your BJJ OS lifetime access',
+      html: emailHTML
+    });
+    
+    console.log('✅ Lifetime invitation sent to:', email);
+    return { success: true, id: result.id };
+    
+  } catch (error) {
+    console.error('❌ Failed to send invitation:', error);
+    throw error;
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 6: RESTART SERVER
+═══════════════════════════════════════════════════════════════════════════════
+
+After making these changes:
+
+1. Save all files
+1. Run: npm install jsonwebtoken cookie-parser
+1. Restart/republish the server
+1. Clear browser cookies
+1. Log into /admin again with password
+1. Try accessing lifetime invitations - should NOT prompt for password again
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After restart:
+
+1. Go to bjjos.app/admin
+1. Enter admin password
+1. Click “Lifetime Access Invitations”
+1. Should NOT see password prompt again
+1. Try sending invitation - should work without password prompt
+
+MAKE THESE EXACT CHANGES NOW.
+
+```
+---
+
+**This is more explicit and step-by-step. Copy this entire prompt and send it to Replit Agent.** If it still doesn't work, let me know and I'll give you the exact file paths to edit manually. 🔧​​​​​​​​​​​​​​​​
+```

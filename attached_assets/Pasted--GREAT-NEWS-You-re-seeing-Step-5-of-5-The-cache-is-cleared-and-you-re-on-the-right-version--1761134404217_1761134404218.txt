@@ -1,0 +1,121 @@
+🎉 **GREAT NEWS - You’re seeing Step 5 of 5!** The cache is cleared and you’re on the right version.
+
+**BUT** - we’re back to the **401 Authentication Error** when you click “Complete Setup”
+
+-----
+
+## **THE AUTHENTICATION ISSUE**
+
+This is the original problem. The user is getting through onboarding but not properly authenticated, so when they try to save data, the server rejects it.
+
+-----
+
+## **THE ROOT CAUSE:**
+
+Looking at the flow:
+
+1. User creates account (Step 1)
+1. Goes through onboarding (Steps 2-5)
+1. Clicks “Complete Setup”
+1. Backend tries to save data → **401 Error: Authentication required**
+
+**The user’s auth token isn’t being sent or isn’t valid.**
+
+-----
+
+## **GIVE REPLIT THIS PROMPT TO FIX IT:**
+
+```
+CRITICAL BUG: User completes onboarding but gets 401 error on "Complete Setup"
+
+The issue: User is not properly authenticated during onboarding flow.
+
+FIX NEEDED:
+
+1. Check the /api/onboarding/complete endpoint
+   - Verify it has authentication middleware
+   - Verify the middleware is working correctly
+
+2. Check the frontend onboarding submission
+   - Ensure auth token is being sent in headers
+   - Token should be: Authorization: Bearer {token}
+   - Token should be stored after signup/login
+
+3. Add better error handling:
+   - If 401, redirect to login
+   - Show specific error message
+   - Don't just say "Authentication required"
+
+4. Fix the auth flow:
+   - After signup, immediately store JWT token
+   - Include token in ALL subsequent API requests
+   - Persist token through onboarding steps
+
+5. Add debug logging:
+   - Log when token is stored
+   - Log when token is sent
+   - Log if token validation fails
+
+The user should go from signup → onboarding → complete WITHOUT any auth errors.
+
+Test this flow:
+1. Create new account
+2. Go through all 5 onboarding steps
+3. Click "Complete Setup"
+4. Should save successfully and redirect to dashboard
+
+Fix this authentication issue immediately.
+```
+
+-----
+
+## **WHILE REPLIT FIXES IT, TRY THIS:**
+
+### **Temporary Workaround:**
+
+1. **Log out completely** (if there’s a logout button)
+1. **Close browser** (⌘ + Q)
+1. **Reopen browser**
+1. Go to bjjos.app
+1. **Create a NEW account** with different email
+1. Go through onboarding
+1. See if it works this time
+
+-----
+
+## **WHAT’S HAPPENING TECHNICALLY:**
+
+The onboarding flow probably works like this:
+
+```
+1. User signs up → Server creates account → Returns JWT token
+2. Frontend should: localStorage.setItem('auth_token', token)
+3. Frontend goes through onboarding steps 1-5
+4. User clicks "Complete Setup"
+5. Frontend should: fetch('/api/onboarding/complete', {
+     headers: { 'Authorization': `Bearer ${token}` }
+   })
+6. Backend validates token → Saves data → Success
+```
+
+**But something is breaking at step 5** - either:
+
+- Token isn’t being stored (step 2)
+- Token isn’t being sent (step 5)
+- Token expired during onboarding
+- Backend auth middleware isn’t working
+
+-----
+
+## **AFTER REPLIT FIXES IT:**
+
+You should be able to:
+
+1. Create account
+1. Complete all 5 onboarding steps
+1. Click “Complete Setup”
+1. → Success! Redirect to dashboard
+
+-----
+
+**Give Replit that prompt now and let them fix the authentication flow. This is the last major bug before your onboarding works perfectly!**

@@ -1,0 +1,1337 @@
+# **🚀 THE ULTIMATE PROFESSOR OS IMPLEMENTATION PROMPT**
+
+Todd, here’s the complete prompt for Replit Agent. This will work through the night and have everything tested.
+
+-----
+
+## **📋 COPY THIS ENTIRE PROMPT TO REPLIT AGENT:**
+
+```
+═══════════════════════════════════════════════════════════════
+🎯 MISSION: BUILD THE ULTIMATE PROFESSOR OS LEARNING SYSTEM
+═══════════════════════════════════════════════════════════════
+
+You are building Professor OS - the most intelligent BJJ coaching AI ever created. This is a complete rebuild with learning capabilities, emotional intelligence, and network effects.
+
+CRITICAL REQUIREMENTS:
+✅ Test EVERYTHING extensively before moving to next phase
+✅ Show me test results with console logs at each checkpoint
+✅ Don't skip testing - this needs to work flawlessly
+✅ Build incrementally - each phase must work before next begins
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: SWITCH TO CLAUDE + STREAMING (2-3 hours)
+═══════════════════════════════════════════════════════════════
+
+TASK 1A: Install Anthropic SDK
+```bash
+npm install @anthropic-ai/sdk
+```
+
+Verify ANTHROPIC_API_KEY exists in environment variables.
+
+─────────────────────────────────────────────────────────────
+
+TASK 1B: Create new streaming endpoint
+
+File: `server/routes/ai-chat-claude.ts`
+
+```typescript
+import Anthropic from '@anthropic-ai/sdk';
+import { db } from '../db';
+import { eq, desc } from 'drizzle-orm';
+import { aiConversationLearning, bjjUsers } from '../db/schema';
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
+
+export async function handleClaudeStream(req: any, res: any) {
+  const { message } = req.body;
+  const userId = req.user.id;
+  
+  try {
+    console.log('═══════════════════════════════════════');
+    console.log('CLAUDE STREAM REQUEST');
+    console.log('User ID:', userId);
+    console.log('Message:', message);
+    
+    // Load user profile
+    const userProfile = await db.select()
+      .from(bjjUsers)
+      .where(eq(bjjUsers.id, userId))
+      .limit(1);
+    
+    if (!userProfile[0]) {
+      throw new Error('User not found');
+    }
+    
+    console.log('✅ User profile loaded');
+    
+    // Load conversation history (last 20 messages)
+    const history = await db.select({
+      messageText: aiConversationLearning.messageText,
+      messageType: aiConversationLearning.messageType,
+      createdAt: aiConversationLearning.createdAt
+    })
+    .from(aiConversationLearning)
+    .where(eq(aiConversationLearning.userId, userId))
+    .orderBy(desc(aiConversationLearning.createdAt))
+    .limit(20);
+    
+    console.log('✅ Loaded', history.length, 'messages from history');
+    
+    // Build system prompt (simplified for Phase 1)
+    const systemPrompt = buildSystemPrompt(userProfile[0]);
+    console.log('✅ System prompt built:', systemPrompt.length, 'characters');
+    
+    // Format conversation history for Claude
+    const conversationHistory = history.reverse().map(msg => ({
+      role: msg.messageType === 'user_sent' ? 'user' : 'assistant',
+      content: msg.messageText
+    }));
+    
+    // Add current message
+    const messages = [
+      ...conversationHistory,
+      { role: 'user', content: message }
+    ];
+    
+    console.log('✅ Messages array prepared:', messages.length, 'total messages');
+    
+    // Set up streaming
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    console.log('📡 Starting Claude stream...');
+    
+    let fullResponse = '';
+    
+    const stream = await anthropic.messages.stream({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: messages
+    });
+    
+    for await (const chunk of stream) {
+      if (chunk.type === 'content_block_delta' && 
+          chunk.delta.type === 'text_delta') {
+        const text = chunk.delta.text;
+        fullResponse += text;
+        
+        // Send to client
+        res.write(`data: ${JSON.stringify({ text })}\n\n`);
+      }
+    }
+    
+    console.log('✅ Stream complete. Response length:', fullResponse.length);
+    
+    // Save to database
+    await saveConversation(userId, message, fullResponse);
+    console.log('✅ Saved to database');
+    
+    res.write('data: [DONE]\n\n');
+    res.end();
+    
+  } catch (error) {
+    console.error('❌ CLAUDE STREAM ERROR:', error);
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+}
+
+function buildSystemPrompt(user: any): string {
+  // Phase 1: Simplified prompt (we'll enhance in Phase 2)
+  const heightDisplay = user.height ? 
+    `${Math.floor(user.height / 12)}'${user.height % 12}"` : 
+    'Not provided';
+  
+  return `You are Professor OS, ${user.displayName || user.username}'s BJJ training partner.
+
+WHO YOU ARE:
+You're a black belt coach who genuinely cares about their progress. You remember every conversation, notice patterns, and guide them intelligently through their BJJ journey.
+
+USER PROFILE:
+Name: ${user.displayName || user.username}
+Belt: ${user.beltLevel || 'Not specified'}
+Style: ${user.style || 'Not specified'}
+Training: ${user.trainingFrequency || 'Not specified'}x per week
+Biggest Struggle: ${user.biggestStruggle || 'Not specified'}
+Height: ${heightDisplay}
+Weight: ${user.weight ? user.weight + ' lbs' : 'Not provided'}
+Body Type: ${user.bodyType || 'Not specified'}
+Goals: ${user.goals || 'Not specified'}
+Injuries: ${user.injuries ? JSON.stringify(user.injuries) : 'None reported'}
+
+CRITICAL: Never recommend techniques that risk their injuries.
+
+HOW YOU COMMUNICATE:
+- Be conversational and direct, like texting a training partner
+- Use contractions naturally (you're, let's, what's)
+- Match depth to context (simple questions = 2-3 sentences, complex = longer)
+- Read emotional state and adapt (frustrated = validate then solve, excited = celebrate)
+
+DIAGNOSTIC APPROACH:
+When they mention a problem, ask ONE diagnostic question before prescribing solutions.
+
+Example:
+User: "Can't finish triangles"
+You: "Are you losing them because you're getting stacked, or can't break posture first?"
+[Wait for answer, THEN give solution]
+
+VIDEO FORMAT:
+When recommending videos, use: [VIDEO: Title by Instructor | START: MM:SS]
+
+Remember: This is ${user.displayName || 'their'} journey. You're their training partner who has perfect memory.`;
+}
+
+async function saveConversation(userId: number, userMessage: string, aiResponse: string) {
+  // Save user message
+  await db.insert(aiConversationLearning).values({
+    userId,
+    messageText: userMessage,
+    messageType: 'user_sent',
+    conversationDate: new Date()
+  });
+  
+  // Save AI response
+  await db.insert(aiConversationLearning).values({
+    userId,
+    messageText: aiResponse,
+    messageType: 'ai_response',
+    conversationDate: new Date()
+  });
+}
+```
+
+─────────────────────────────────────────────────────────────
+
+TASK 1C: Add route to server
+
+In `server/routes.ts`, add:
+
+```typescript
+import { handleClaudeStream } from './routes/ai-chat-claude';
+
+// Add this route
+app.post('/api/ai/chat/claude/stream', requireAuth, async (req, res) => {
+  await handleClaudeStream(req, res);
+});
+```
+
+─────────────────────────────────────────────────────────────
+
+TASK 1D: EXTENSIVE TESTING - PHASE 1
+
+Create test file: `server/tests/test-claude-streaming.ts`
+
+```typescript
+async function testClaudeStreaming() {
+  console.log('\n🧪 TESTING CLAUDE STREAMING - PHASE 1\n');
+  console.log('═══════════════════════════════════════\n');
+  
+  // Test 1: Simple message
+  console.log('TEST 1: Simple greeting');
+  const test1 = await fetch('http://localhost:5000/api/ai/chat/claude/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${TEST_USER_TOKEN}`
+    },
+    body: JSON.stringify({
+      message: 'Hey, what should I work on today?'
+    })
+  });
+  
+  console.log('Status:', test1.status);
+  if (test1.status === 200) {
+    console.log('✅ TEST 1 PASSED');
+  } else {
+    console.error('❌ TEST 1 FAILED');
+    return false;
+  }
+  
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // Test 2: Technical question
+  console.log('\nTEST 2: Technical question with diagnosis');
+  const test2 = await fetch('http://localhost:5000/api/ai/chat/claude/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${TEST_USER_TOKEN}`
+    },
+    body: JSON.stringify({
+      message: 'I keep getting passed from closed guard'
+    })
+  });
+  
+  if (test2.status === 200) {
+    console.log('✅ TEST 2 PASSED');
+  } else {
+    console.error('❌ TEST 2 FAILED');
+    return false;
+  }
+  
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // Test 3: Conversation history
+  console.log('\nTEST 3: Follow-up (tests conversation history loading)');
+  const test3 = await fetch('http://localhost:5000/api/ai/chat/claude/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${TEST_USER_TOKEN}`
+    },
+    body: JSON.stringify({
+      message: 'What did we just talk about?'
+    })
+  });
+  
+  if (test3.status === 200) {
+    console.log('✅ TEST 3 PASSED');
+  } else {
+    console.error('❌ TEST 3 FAILED');
+    return false;
+  }
+  
+  console.log('\n═══════════════════════════════════════');
+  console.log('✅ PHASE 1 TESTS COMPLETE');
+  console.log('═══════════════════════════════════════\n');
+  
+  return true;
+}
+```
+
+Run tests:
+
+```bash
+npm run test:claude
+```
+
+CHECKPOINT: Show me test results. All 3 tests must pass before proceeding.
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: MODULAR PROMPT SYSTEM (2-3 hours)
+═══════════════════════════════════════════════════════════════
+
+TASK 2A: Create modular prompt builder
+
+File: `server/utils/professorOSPrompt.ts`
+
+```typescript
+import { db } from '../db';
+import { eq, desc } from 'drizzle-orm';
+import { professorOsInsights, aiVideoKnowledge } from '../db/schema';
+
+interface PromptComponents {
+  coreIdentity: string;
+  userProfile: string;
+  personalInsights: string;
+  videoLibrary: string;
+  greeting: string;
+}
+
+export async function buildProfessorOSPrompt(
+  userId: number,
+  userProfile: any
+): Promise<string> {
+  
+  console.log('🏗️ Building Professor OS prompt for user', userId);
+  
+  const components: PromptComponents = {
+    coreIdentity: buildCoreIdentity(),
+    userProfile: buildUserProfile(userProfile),
+    personalInsights: await buildPersonalInsights(userId),
+    videoLibrary: await buildVideoLibrary(userId, userProfile),
+    greeting: await buildProactiveGreeting(userId)
+  };
+  
+  const prompt = `${components.coreIdentity}
+
+${components.userProfile}
+
+${components.personalInsights}
+
+${components.videoLibrary}
+
+${components.greeting}`;
+  
+  console.log('✅ Prompt built:', {
+    totalLength: prompt.length,
+    coreLength: components.coreIdentity.length,
+    profileLength: components.userProfile.length,
+    insightsLength: components.personalInsights.length,
+    videosLength: components.videoLibrary.length
+  });
+  
+  return prompt;
+}
+
+function buildCoreIdentity(): string {
+  return `You are Professor OS, their BJJ training partner.
+
+═══════════════════════════════════════════════════════════════
+WHO YOU ARE
+═══════════════════════════════════════════════════════════════
+
+You're a black belt coach who genuinely cares about their progress. You remember every conversation, notice patterns they don't see, and guide them intelligently through their BJJ journey.
+
+You're not a search engine. You're not a technique database. You're their training partner who happens to have perfect memory and access to the best instructional content in BJJ.
+
+═══════════════════════════════════════════════════════════════
+HOW YOU THINK
+═══════════════════════════════════════════════════════════════
+
+DIAGNOSTIC FIRST:
+When they mention a problem, your first instinct is to diagnose root cause, not prescribe solutions. Ask ONE clarifying question before recommending anything.
+
+Example:
+User: "Can't finish triangles"
+You: "Are you losing them because you're getting stacked, or because you can't break their posture first?"
+[WAIT for answer, THEN prescribe]
+
+PATTERN RECOGNITION:
+You notice things across conversations:
+- Recurring topics ("Half guard again - 4th time this month")
+- Improvement arcs ("You couldn't pass last month, now you're passing but losing position after")
+- Emotional states (frustrated? excited? plateauing?)
+
+Use these patterns to coach proactively.
+
+VIDEO PRESCRIPTION:
+Videos are medicine, not search results. When you prescribe a video:
+1. Explain WHY this video for THEIR specific issue
+2. Prescribe ONE video (the right one), not a list
+3. Tell them what timestamp addresses their problem
+4. Follow up: "Try it tonight, tell me if it clicks"
+
+Format: [VIDEO: Title by Instructor | START: MM:SS]
+
+ADAPTIVE COMMUNICATION:
+Match your depth to context:
+- Simple question? 1-2 sentences.
+- Breakthrough moment? 5-6 sentences celebrating and building on it.
+- Complex strategy? Go deeper, but stay conversational.
+- They're frustrated? Validate briefly, then focus on solution.
+- They're excited? Match that energy genuinely.
+
+READ EMOTIONAL STATE:
+- Frustrated language → Validate, simplify, focus on ONE fix
+- Excited language → Celebrate, build momentum
+- Defeated language → Reframe perspective, identify one win
+- Casual language → Match casual energy
+
+═══════════════════════════════════════════════════════════════
+HARD BOUNDARIES
+═══════════════════════════════════════════════════════════════
+
+NEVER recommend techniques that risk their injuries.
+ALWAYS use [VIDEO: Title by Instructor | START: MM:SS] format for videos.
+NEVER say "I don't have a video on that" - find RELATED content in same category.`;
+}
+
+function buildUserProfile(user: any): string {
+  const heightDisplay = user.height ? 
+    `${Math.floor(user.height / 12)}'${user.height % 12}"` : 
+    'Not provided';
+  
+  const daysSince = Math.floor(
+    (Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+  );
+  const weeksSince = Math.floor(daysSince / 7);
+  
+  return `═══════════════════════════════════════════════════════════════
+USER PROFILE
+═══════════════════════════════════════════════════════════════
+
+Name: ${user.displayName || user.username || 'User'}
+Email: ${user.email || 'Not provided'}
+
+TRAINING PROFILE:
+Belt Level: ${user.beltLevel || 'Not specified'}
+Training Style: ${user.style || 'Not specified'}
+Training Frequency: ${user.trainingFrequency || 'Not specified'} sessions per week
+Biggest Struggle: ${user.biggestStruggle || user.struggleAreaCategory || 'Not specified'}
+
+PHYSICAL STATS:
+Height: ${heightDisplay}
+Weight: ${user.weight ? user.weight + ' lbs' : 'Not provided'}
+Age: ${user.ageRange || 'Not provided'}
+Body Type: ${user.bodyType || 'Not specified'}
+
+JOURNEY TOGETHER:
+Days training together: ${daysSince} days
+Weeks together: ${weeksSince} weeks
+
+GOALS:
+${user.goals || 'Not specified yet'}
+
+⚠️ INJURIES (CRITICAL - NEVER RECOMMEND ANYTHING THAT RISKS THESE):
+${user.injuries ? JSON.stringify(user.injuries) : 'None reported'}`;
+}
+
+async function buildPersonalInsights(userId: number): string {
+  // Check if professor_os_insights table exists and has data
+  try {
+    const insights = await db.select()
+      .from(professorOsInsights)
+      .where(eq(professorOsInsights.userId, userId))
+      .orderBy(desc(professorOsInsights.mentionCount))
+      .limit(5);
+    
+    if (insights.length === 0) {
+      return `═══════════════════════════════════════════════════════════════
+PERSONAL LEARNING
+═══════════════════════════════════════════════════════════════
+
+(Building your profile - keep training with me!)`;
+    }
+    
+    const recurringTopics = insights
+      .filter(i => i.insightType === 'recurring_topic')
+      .map(i => `- ${i.topic}: mentioned ${i.mentionCount}x (${i.sentiment})`)
+      .join('\n');
+    
+    const breakthroughs = insights
+      .filter(i => i.insightType === 'breakthrough')
+      .map(i => `- ${i.topic}: ${i.context}`)
+      .join('\n');
+    
+    return `═══════════════════════════════════════════════════════════════
+PERSONAL LEARNING (What I've noticed about your journey)
+═══════════════════════════════════════════════════════════════
+
+RECURRING TOPICS:
+${recurringTopics || 'Building pattern recognition...'}
+
+BREAKTHROUGHS:
+${breakthroughs || 'Tracking your progress...'}
+
+Use these patterns to coach proactively. Reference them naturally.`;
+    
+  } catch (error) {
+    console.log('⚠️ Personal insights not yet available:', error.message);
+    return `═══════════════════════════════════════════════════════════════
+PERSONAL LEARNING
+═══════════════════════════════════════════════════════════════
+
+(Building your profile - keep training with me!)`;
+  }
+}
+
+async function buildVideoLibrary(userId: number, userProfile: any): string {
+  // Load top videos with struggle area boost
+  const videos = await db.select()
+    .from(aiVideoKnowledge)
+    .where(/* quality score not null */)
+    .orderBy(desc(aiVideoKnowledge.qualityScore))
+    .limit(20);
+  
+  const videoList = videos.map((v, i) => 
+    `${i + 1}. ${v.title} by ${v.instructorName} | ${v.techniqueType} | ${v.beltLevel}`
+  ).join('\n');
+  
+  return `═══════════════════════════════════════════════════════════════
+VIDEO LIBRARY (Top 20 High-Quality Videos)
+═══════════════════════════════════════════════════════════════
+
+${videoList}
+
+Only recommend videos from this list. When prescribing, use format:
+[VIDEO: Title by Instructor | START: MM:SS]
+
+If exact technique not listed, find RELATED videos in same category.`;
+}
+
+async function buildProactiveGreeting(userId: number): string {
+  // Check if it's a training day, recent breakthrough, etc.
+  // For Phase 2, keep it simple
+  
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  
+  // Common training days: Mon/Wed/Fri or Tue/Thu
+  const isLikelyTrainingDay = [1, 2, 3, 4, 5].includes(day);
+  
+  if (isLikelyTrainingDay) {
+    return `═══════════════════════════════════════════════════════════════
+GREETING
+═══════════════════════════════════════════════════════════════
+
+Training day! What are you working on?`;
+  }
+  
+  return `═══════════════════════════════════════════════════════════════
+GREETING
+═══════════════════════════════════════════════════════════════
+
+What's up?`;
+}
+```
+
+─────────────────────────────────────────────────────────────
+
+TASK 2B: Update Claude handler to use modular prompt
+
+In `server/routes/ai-chat-claude.ts`, replace `buildSystemPrompt()` with:
+
+```typescript
+import { buildProfessorOSPrompt } from '../utils/professorOSPrompt';
+
+// In handleClaudeStream():
+const systemPrompt = await buildProfessorOSPrompt(userId, userProfile[0]);
+```
+
+─────────────────────────────────────────────────────────────
+
+TASK 2C: TESTING - PHASE 2
+
+Test modular prompt generation:
+
+```typescript
+async function testModularPrompt() {
+  console.log('\n🧪 TESTING MODULAR PROMPT - PHASE 2\n');
+  
+  // Test prompt building
+  const user = await db.select()
+    .from(bjjUsers)
+    .where(eq(bjjUsers.id, TEST_USER_ID))
+    .limit(1);
+  
+  const prompt = await buildProfessorOSPrompt(TEST_USER_ID, user[0]);
+  
+  console.log('Prompt length:', prompt.length);
+  console.log('Contains user name:', prompt.includes(user[0].displayName));
+  console.log('Contains belt level:', prompt.includes(user[0].beltLevel));
+  console.log('Contains video library:', prompt.includes('VIDEO LIBRARY'));
+  
+  if (prompt.length > 5000 && prompt.length < 12000) {
+    console.log('✅ PHASE 2 TEST PASSED - Prompt size appropriate');
+    return true;
+  } else {
+    console.error('❌ PHASE 2 TEST FAILED - Prompt size issue');
+    return false;
+  }
+}
+```
+
+CHECKPOINT: Show me modular prompt test results.
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: PERSONAL LEARNING LOOP (2-3 hours)
+═══════════════════════════════════════════════════════════════
+
+TASK 3A: Create professor_os_insights table (if not exists)
+
+```sql
+CREATE TABLE IF NOT EXISTS professor_os_insights (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES bjj_users(id),
+  insight_type VARCHAR(50) NOT NULL,
+  topic VARCHAR(100),
+  subtopic VARCHAR(100),
+  first_mentioned TIMESTAMP DEFAULT NOW(),
+  last_mentioned TIMESTAMP DEFAULT NOW(),
+  mention_count INTEGER DEFAULT 1,
+  sentiment VARCHAR(50),
+  context TEXT,
+  metadata JSONB,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_insights_user_topic 
+  ON professor_os_insights(user_id, topic);
+CREATE INDEX IF NOT EXISTS idx_insights_type 
+  ON professor_os_insights(insight_type);
+```
+
+─────────────────────────────────────────────────────────────
+
+TASK 3B: Build learning analyzer
+
+File: `server/utils/learningAnalyzer.ts`
+
+```typescript
+interface ConversationAnalysis {
+  topics: Array<{ name: string; category: string }>;
+  sentiment: 'frustrated' | 'improving' | 'confident' | 'plateauing' | 'excited' | 'neutral';
+  breakthrough: boolean;
+  technique?: string;
+  emotionalIndicators: string[];
+}
+
+export async function analyzeConversation(
+  userMessage: string,
+  aiResponse: string
+): Promise<ConversationAnalysis> {
+  
+  console.log('🔍 Analyzing conversation for learning signals...');
+  
+  // Extract topics (simple keyword matching for Phase 3)
+  const topics = extractTopics(userMessage + ' ' + aiResponse);
+  
+  // Detect sentiment
+  const sentiment = detectSentiment(userMessage);
+  
+  // Detect breakthrough
+  const breakthrough = detectBreakthrough(userMessage);
+  
+  // Extract technique if breakthrough
+  const technique = breakthrough ? extractTechnique(userMessage) : undefined;
+  
+  // Emotional indicators
+  const emotionalIndicators = extractEmotionalIndicators(userMessage);
+  
+  return {
+    topics,
+    sentiment,
+    breakthrough,
+    technique,
+    emotionalIndicators
+  };
+}
+
+function extractTopics(text: string): Array<{ name: string; category: string }> {
+  const lowerText = text.toLowerCase();
+  const topics: Array<{ name: string; category: string }> = [];
+  
+  // Guard positions
+  if (lowerText.includes('closed guard')) topics.push({ name: 'closed_guard', category: 'guard' });
+  if (lowerText.includes('open guard')) topics.push({ name: 'open_guard', category: 'guard' });
+  if (lowerText.includes('half guard')) topics.push({ name: 'half_guard', category: 'guard' });
+  if (lowerText.includes('butterfly')) topics.push({ name: 'butterfly_guard', category: 'guard' });
+  
+  // Passing
+  if (lowerText.includes('pass') || lowerText.includes('passing')) {
+    topics.push({ name: 'guard_passing', category: 'passing' });
+  }
+  
+  // Submissions
+  if (lowerText.includes('triangle')) topics.push({ name: 'triangle', category: 'submission' });
+  if (lowerText.includes('armbar')) topics.push({ name: 'armbar', category: 'submission' });
+  if (lowerText.includes('kimura')) topics.push({ name: 'kimura', category: 'submission' });
+  if (lowerText.includes('guillotine')) topics.push({ name: 'guillotine', category: 'submission' });
+  
+  // Escapes
+  if (lowerText.includes('mount') && lowerText.includes('escape')) {
+    topics.push({ name: 'mount_escape', category: 'escape' });
+  }
+  if (lowerText.includes('side control') && lowerText.includes('escape')) {
+    topics.push({ name: 'side_control_escape', category: 'escape' });
+  }
+  
+  // Sweeps
+  if (lowerText.includes('sweep')) topics.push({ name: 'sweeps', category: 'sweep' });
+  
+  return topics;
+}
+
+function detectSentiment(text: string): string {
+  const lowerText = text.toLowerCase();
+  
+  // Frustrated indicators
+  const frustratedWords = ['frustrat', 'annoying', 'stuck', 'can\'t', 'never', 'always fail', 'suck'];
+  if (frustratedWords.some(word => lowerText.includes(word))) {
+    return 'frustrated';
+  }
+  
+  // Excited indicators
+  const excitedWords = ['!', 'finally', 'first time', 'hit my first', 'landed', 'got it', 'worked'];
+  if (excitedWords.some(word => lowerText.includes(word))) {
+    return 'excited';
+  }
+  
+  // Improving indicators
+  const improvingWords = ['better', 'getting', 'progress', 'improving', 'working'];
+  if (improvingWords.some(word => lowerText.includes(word))) {
+    return 'improving';
+  }
+  
+  // Confident indicators
+  const confidentWords = ['confident', 'comfortable', 'easy', 'natural'];
+  if (confidentWords.some(word => lowerText.includes(word))) {
+    return 'confident';
+  }
+  
+  return 'neutral';
+}
+
+function detectBreakthrough(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  const breakthroughPhrases = [
+    'first time',
+    'finally',
+    'hit my first',
+    'landed my first',
+    'got my first',
+    'first successful',
+    'breakthrough'
+  ];
+  
+  return breakthroughPhrases.some(phrase => lowerText.includes(phrase));
+}
+
+function extractTechnique(text: string): string {
+  const topics = extractTopics(text);
+  return topics[0]?.name || 'unknown_technique';
+}
+
+function extractEmotionalIndicators(text: string): string[] {
+  const indicators: string[] = [];
+  const lowerText = text.toLowerCase();
+  
+  if (lowerText.includes('!')) indicators.push('exclamation');
+  if (lowerText.includes('?')) indicators.push('questioning');
+  if (lowerText.match(/\b(ugh|argh|damn)\b/)) indicators.push('frustration_expression');
+  if (lowerText.match(/\b(yay|yes|awesome)\b/)) indicators.push('positive_expression');
+  
+  return indicators;
+}
+```
+
+─────────────────────────────────────────────────────────────
+
+TASK 3C: Implement learning loop
+
+File: `server/utils/learningLoop.ts`
+
+```typescript
+import { analyzeConversation } from './learningAnalyzer';
+import { db } from '../db';
+import { professorOsInsights } from '../db/schema';
+import { eq, and } from 'drizzle-orm';
+
+export async function processLearningSignals(
+  userId: number,
+  userMessage: string,
+  aiResponse: string
+) {
+  console.log('🧠 Processing learning signals for user', userId);
+  
+  try {
+    // Analyze conversation
+    const analysis = await analyzeConversation(userMessage, aiResponse);
+    
+    console.log('Analysis:', {
+      topics: analysis.topics.length,
+      sentiment: analysis.sentiment,
+      breakthrough: analysis.breakthrough
+    });
+    
+    // Update insights for each topic
+    for (const topic of analysis.topics) {
+      await upsertTopicInsight(userId, topic, analysis.sentiment);
+    }
+    
+    // Record breakthrough if detected
+    if (analysis.breakthrough && analysis.technique) {
+      await recordBreakthrough(userId, analysis.technique, userMessage);
+    }
+    
+    console.log('✅ Learning signals processed');
+    
+  } catch (error) {
+    console.error('❌ Error processing learning signals:', error);
+    // Don't throw - learning loop shouldn't break chat
+  }
+}
+
+async function upsertTopicInsight(
+  userId: number,
+  topic: { name: string; category: string },
+  sentiment: string
+) {
+  // Check if insight exists
+  const existing = await db.select()
+    .from(professorOsInsights)
+    .where(
+      and(
+        eq(professorOsInsights.userId, userId),
+        eq(professorOsInsights.topic, topic.name),
+        eq(professorOsInsights.insightType, 'recurring_topic')
+      )
+    )
+    .limit(1);
+  
+  if (existing.length > 0) {
+    // Update existing
+    await db.update(professorOsInsights)
+      .set({
+        mentionCount: existing[0].mentionCount + 1,
+        lastMentioned: new Date(),
+        sentiment: sentiment,
+        updatedAt: new Date()
+      })
+      .where(eq(professorOsInsights.id, existing[0].id));
+    
+    console.log(`📊 Updated ${topic.name}: ${existing[0].mentionCount + 1} mentions`);
+  } else {
+    // Create new
+    await db.insert(professorOsInsights).values({
+      userId,
+      insightType: 'recurring_topic',
+      topic: topic.name,
+      subtopic: topic.category,
+      firstMentioned: new Date(),
+      lastMentioned: new Date(),
+      mentionCount: 1,
+      sentiment: sentiment,
+      context: null
+    });
+    
+    console.log(`🆕 New topic tracked: ${topic.name}`);
+  }
+}
+
+async function recordBreakthrough(
+  userId: number,
+  technique: string,
+  context: string
+) {
+  await db.insert(professorOsInsights).values({
+    userId,
+    insightType: 'breakthrough',
+    topic: technique,
+    firstMentioned: new Date(),
+    lastMentioned: new Date(),
+    mentionCount: 1,
+    sentiment: 'confident',
+    context: context.substring(0, 500) // Truncate long messages
+  });
+  
+  console.log(`🎉 Breakthrough recorded: ${technique}`);
+}
+```
+
+─────────────────────────────────────────────────────────────
+
+TASK 3D: Integrate learning loop into chat
+
+In `server/routes/ai-chat-claude.ts`, after saving conversation:
+
+```typescript
+import { processLearningSignals } from '../utils/learningLoop';
+
+// After saveConversation():
+await processLearningSignals(userId, message, fullResponse);
+```
+
+─────────────────────────────────────────────────────────────
+
+TASK 3E: TESTING - PHASE 3
+
+```typescript
+async function testLearningLoop() {
+  console.log('\n🧪 TESTING LEARNING LOOP - PHASE 3\n');
+  
+  // Test 1: Topic tracking
+  console.log('TEST 1: Topic tracking');
+  await fetch('/api/ai/chat/claude/stream', {
+    method: 'POST',
+    body: JSON.stringify({
+      message: 'I keep getting passed from closed guard'
+    })
+  });
+  
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  
+  // Check database
+  const insights1 = await db.select()
+    .from(professorOsInsights)
+    .where(eq(professorOsInsights.userId, TEST_USER_ID));
+  
+  console.log('Insights created:', insights1.length);
+  console.log('Topics:', insights1.map(i => i.topic));
+  
+  // Test 2: Breakthrough detection
+  console.log('\nTEST 2: Breakthrough detection');
+  await fetch('/api/ai/chat/claude/stream', {
+    method: 'POST',
+    body: JSON.stringify({
+      message: 'I hit my first triangle in live rolling today!'
+    })
+  });
+  
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  
+  const insights2 = await db.select()
+    .from(professorOsInsights)
+    .where(
+      and(
+        eq(professorOsInsights.userId, TEST_USER_ID),
+        eq(professorOsInsights.insightType, 'breakthrough')
+      )
+    );
+  
+  console.log('Breakthroughs detected:', insights2.length);
+  
+  // Test 3: Recurring topic increment
+  console.log('\nTEST 3: Recurring topic counting');
+  await fetch('/api/ai/chat/claude/stream', {
+    method: 'POST',
+    body: JSON.stringify({
+      message: 'Still having trouble with closed guard retention'
+    })
+  });
+  
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  
+  const closedGuardInsight = await db.select()
+    .from(professorOsInsights)
+    .where(
+      and(
+        eq(professorOsInsights.userId, TEST_USER_ID),
+        eq(professorOsInsights.topic, 'closed_guard')
+      )
+    );
+  
+  if (closedGuardInsight[0].mentionCount >= 2) {
+    console.log('✅ Mention count incremented:', closedGuardInsight[0].mentionCount);
+    console.log('✅ PHASE 3 TESTS PASSED');
+    return true;
+  } else {
+    console.error('❌ PHASE 3 TESTS FAILED');
+    return false;
+  }
+}
+```
+
+CHECKPOINT: Show me learning loop test results. Insights must be created and updated correctly.
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: COMBAT SPORTS NEWS INTEGRATION (1-2 hours)
+═══════════════════════════════════════════════════════════════
+
+TASK 4A: Create news integration module
+
+File: `server/utils/combatNewsIntegration.ts`
+
+```typescript
+import { db } from '../db';
+import { combatSportsNews } from '../db/schema';
+import { desc } from 'drizzle-orm';
+
+export async function getRelevantCombatNews(
+  context: string
+): Promise<string | null> {
+  
+  if (!context || context.length < 10) {
+    return null;
+  }
+  
+  console.log('📰 Checking combat sports news relevance...');
+  
+  try {
+    // Get recent news (last 30 days)
+    const recentNews = await db.select()
+      .from(combatSportsNews)
+      .where(/* published in last 30 days */)
+      .orderBy(desc(combatSportsNews.importanceScore))
+      .limit(10);
+    
+    if (recentNews.length === 0) {
+      console.log('⚠️ No recent news available');
+      return null;
+    }
+    
+    // Simple relevance check (Phase 4 - basic version)
+    const lowerContext = context.toLowerCase();
+    const relevantNews = recentNews.filter(news => {
+      const lowerTitle = news.title.toLowerCase();
+      const lowerSummary = news.summary?.toLowerCase() || '';
+      
+      // Check if any techniques mentioned in news match context
+      const techniques = news.techniques || [];
+      const matchesTechnique = techniques.some(t => 
+        lowerContext.includes(t.toLowerCase())
+      );
+      
+      // Check if any athletes mentioned
+      const athletes = news.athletes || [];
+      const matchesAthlete = athletes.some(a => 
+        lowerContext.includes(a.toLowerCase())
+      );
+      
+      return matchesTechnique || matchesAthlete || 
+             lowerTitle.includes(lowerContext) ||
+             lowerContext.includes(lowerTitle.split(' ')[0]);
+    });
+    
+    if (relevantNews.length === 0) {
+      return null;
+    }
+    
+    // Format top 2 relevant news items
+    const newsText = relevantNews.slice(0, 2).map(n => 
+      `- ${n.title} (${n.sourceName}, ${formatDate(n.publishedDate)})`
+    ).join('\n');
+    
+    console.log('✅ Found', relevantNews.length, 'relevant news items');
+    
+    return `
+═══════════════════════════════════════════════════════════════
+📰 RECENT BJJ NEWS (relevant to this conversation)
+═══════════════════════════════════════════════════════════════
+
+${newsText}
+
+You can reference this context if helpful to the user's question.`;
+    
+  } catch (error) {
+    console.error('❌ Error fetching combat news:', error);
+    return null;
+  }
+}
+
+function formatDate(date: Date): string {
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  return `${Math.floor(diffDays / 30)} months ago`;
+}
+```
+
+─────────────────────────────────────────────────────────────
+
+TASK 4B: Integrate into prompt builder
+
+In `server/utils/professorOSPrompt.ts`:
+
+```typescript
+import { getRelevantCombatNews } from './combatNewsIntegration';
+
+// Add to buildProfessorOSPrompt():
+export async function buildProfessorOSPrompt(
+  userId: number,
+  userProfile: any,
+  currentContext?: string
+): Promise<string> {
+  
+  // ... existing code ...
+  
+  // Add combat news if relevant
+  const combatNews = await getRelevantCombatNews(currentContext || '');
+  
+  const prompt = `${components.coreIdentity}
+
+${components.userProfile}
+
+${components.personalInsights}
+
+${components.videoLibrary}
+
+${combatNews || ''}
+
+${components.greeting}`;
+  
+  return prompt;
+}
+```
+
+Update Claude handler to pass context:
+
+```typescript
+// In handleClaudeStream():
+const systemPrompt = await buildProfessorOSPrompt(
+  userId, 
+  userProfile[0],
+  message  // Pass current message as context
+);
+```
+
+─────────────────────────────────────────────────────────────
+
+TASK 4C: TESTING - PHASE 4
+
+```typescript
+async function testCombatNewsIntegration() {
+  console.log('\n🧪 TESTING COMBAT NEWS INTEGRATION - PHASE 4\n');
+  
+  // Check if news exists in database
+  const newsCount = await db.select({ count: sql`COUNT(*)` })
+    .from(combatSportsNews);
+  
+  console.log('Combat sports news in database:', newsCount[0].count);
+  
+  if (parseInt(newsCount[0].count) === 0) {
+    console.log('⚠️ No news in database - integration will be inactive');
+    console.log('✅ PHASE 4 PASSED (graceful handling of empty news)');
+    return true;
+  }
+  
+  // Test news retrieval
+  const testContext = 'leg locks';
+  const news = await getRelevantCombatNews(testContext);
+  
+  if (news) {
+    console.log('✅ News integration working:', news.substring(0, 200));
+  } else {
+    console.log('✅ No relevant news found (expected behavior)');
+  }
+  
+  console.log('✅ PHASE 4 TESTS PASSED');
+  return true;
+}
+```
+
+CHECKPOINT: Show me combat news integration test results.
+
+═══════════════════════════════════════════════════════════════
+PHASE 5: COMPREHENSIVE END-TO-END TESTING (1-2 hours)
+═══════════════════════════════════════════════════════════════
+
+TASK 5: Run complete test suite
+
+```typescript
+async function runCompleteTestSuite() {
+  console.log('\n');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('🧪 COMPLETE PROFESSOR OS TEST SUITE');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('\n');
+  
+  const results = {
+    streaming: false,
+    modularPrompt: false,
+    learningLoop: false,
+    combatNews: false,
+    endToEnd: false
+  };
+  
+  // Test 1: Streaming
+  console.log('TEST SUITE 1: Claude Streaming');
+  results.streaming = await testClaudeStreaming();
+  
+  // Test 2: Modular Prompt
+  console.log('\nTEST SUITE 2: Modular Prompt');
+  results.modularPrompt = await testModularPrompt();
+  
+  // Test 3: Learning Loop
+  console.log('\nTEST SUITE 3: Learning Loop');
+  results.learningLoop = await testLearningLoop();
+  
+  // Test 4: Combat News
+  console.log('\nTEST SUITE 4: Combat News Integration');
+  results.combatNews = await testCombatNewsIntegration();
+  
+  // Test 5: End-to-End User Journey
+  console.log('\nTEST SUITE 5: End-to-End User Journey');
+  results.endToEnd = await testEndToEndJourney();
+  
+  console.log('\n');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('📊 TEST RESULTS SUMMARY');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('Streaming:', results.streaming ? '✅ PASS' : '❌ FAIL');
+  console.log('Modular Prompt:', results.modularPrompt ? '✅ PASS' : '❌ FAIL');
+  console.log('Learning Loop:', results.learningLoop ? '✅ PASS' : '❌ FAIL');
+  console.log('Combat News:', results.combatNews ? '✅ PASS' : '❌ FAIL');
+  console.log('End-to-End:', results.endToEnd ? '✅ PASS' : '❌ FAIL');
+  console.log('═══════════════════════════════════════════════════════════════');
+  
+  const allPassed = Object.values(results).every(r => r === true);
+  
+  if (allPassed) {
+    console.log('\n🎉 ALL TESTS PASSED - PROFESSOR OS READY FOR DEPLOYMENT\n');
+  } else {
+    console.log('\n⚠️ SOME TESTS FAILED - REVIEW LOGS ABOVE\n');
+  }
+  
+  return allPassed;
+}
+
+async function testEndToEndJourney() {
+  console.log('Simulating complete user journey...');
+  
+  // Day 1: First interaction
+  await chat('Hey, I just started training. What should I focus on?');
+  await sleep(2000);
+  
+  // Day 1: Follow-up
+  await chat('I have trouble with closed guard retention');
+  await sleep(2000);
+  
+  // Day 3: Mention same topic
+  await chat('Still struggling with closed guard');
+  await sleep(2000);
+  
+  // Check insights
+  const insights = await db.select()
+    .from(professorOsInsights)
+    .where(eq(professorOsInsights.userId, TEST_USER_ID));
+  
+  const closedGuardInsight = insights.find(i => i.topic === 'closed_guard');
+  
+  if (closedGuardInsight && closedGuardInsight.mentionCount >= 2) {
+    console.log('✅ Pattern recognition working');
+    console.log('✅ Mention count:', closedGuardInsight.mentionCount);
+    
+    // Day 5: Breakthrough
+    await chat('I hit my first successful guard retention today!');
+    await sleep(2000);
+    
+    const breakthroughs = insights.filter(i => i.insightType === 'breakthrough');
+    if (breakthroughs.length > 0) {
+      console.log('✅ Breakthrough detection working');
+      return true;
+    }
+  }
+  
+  console.error('❌ End-to-end test failed');
+  return false;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+FINAL DELIVERABLES
+═══════════════════════════════════════════════════════════════
+
+After all tests pass, provide:
+
+1. ✅ Full test suite results with console logs
+1. ✅ Example conversations showing Professor OS in action
+1. ✅ Database insights showing learning loop working
+1. ✅ Performance metrics (response times, prompt sizes)
+1. ✅ List of any issues encountered and how they were resolved
+
+═══════════════════════════════════════════════════════════════
+CRITICAL REMINDERS
+═══════════════════════════════════════════════════════════════
+
+- Test each phase BEFORE moving to next
+- Show console logs for all tests
+- Don’t skip any checkpoints
+- If any test fails, debug before proceeding
+- Keep me updated on progress every 30 minutes
+
+BUILD THIS RIGHT. THIS IS THE FOUNDATION OF BJJ OS SUCCESS.
+
+```
+---
+
+## **🎯 TODD - NEXT STEPS:**
+
+1. **Copy entire prompt above** to Replit Agent
+2. **Let it work overnight** - it will test everything extensively
+3. **Review test results in morning** - Agent will show detailed logs
+4. **We'll refine based on results** 
+
+This will build:
+- ✅ Claude streaming (faster perceived speed)
+- ✅ Modular prompt system (8k optimized)
+- ✅ Personal learning loop (gets smarter about each user)
+- ✅ Combat news integration (knows what's happening now)
+- ✅ Comprehensive testing (proves it works)
+
+**Ready to send it to Replit?** 🚀💪​​​​​​​​​​​​​​​​
+```

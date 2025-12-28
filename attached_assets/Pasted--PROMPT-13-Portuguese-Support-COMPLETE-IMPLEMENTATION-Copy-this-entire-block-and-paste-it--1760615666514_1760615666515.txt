@@ -1,0 +1,509 @@
+# 🇧🇷 PROMPT 13: Portuguese Support - COMPLETE IMPLEMENTATION
+
+Copy this entire block and paste it into Replit Agent. Then go train! 🥋
+
+-----
+
+```
+PROMPT 13: Portuguese Support - Complete Implementation
+
+Implement full Portuguese (Brazilian) language support for BJJ OS. This adds automatic language detection, bilingual AI responses, Portuguese video curation, and Brazilian personality adaptation.
+
+## CORE REQUIREMENTS:
+
+### 1. DATABASE SCHEMA CHANGES
+
+Add language support to videos table:
+
+```sql
+-- Add languages array field to ai_video_knowledge table
+ALTER TABLE ai_video_knowledge 
+ADD COLUMN IF NOT EXISTS languages TEXT[] DEFAULT '{"en"}';
+
+-- Create index for language queries
+CREATE INDEX IF NOT EXISTS idx_video_languages ON ai_video_knowledge USING GIN(languages);
+
+-- Add language preference to users table
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(5) DEFAULT 'en',
+ADD COLUMN IF NOT EXISTS language_preference_set BOOLEAN DEFAULT false;
+
+-- Update existing videos to have language tag
+UPDATE ai_video_knowledge 
+SET languages = '{"en"}' 
+WHERE languages IS NULL;
+```
+
+### 2. LANGUAGE DETECTION SYSTEM
+
+Create language detection utility in `/utils/languageDetection.js`:
+
+```javascript
+// Detect language from user message
+export function detectLanguage(text) {
+  // Portuguese indicators
+  const portugueseIndicators = [
+    'você', 'está', 'treino', 'treinei', 'hoje', 'posição', 
+    'finalização', 'guarda', 'passagem', 'defesa', 'técnica',
+    'consegui', 'dificuldade', 'mas', 'muito', 'pouco', 'ção'
+  ];
+  
+  // Spanish indicators (to differentiate)
+  const spanishIndicators = [
+    'entrené', 'hoy', 'técnica', 'guardia', 'defensa',
+    'usted', 'está', 'ción', 'pero', 'mucho', 'poco'
+  ];
+  
+  const lowerText = text.toLowerCase();
+  
+  // Count matches
+  const ptMatches = portugueseIndicators.filter(word => 
+    lowerText.includes(word)
+  ).length;
+  
+  const esMatches = spanishIndicators.filter(word => 
+    lowerText.includes(word)
+  ).length;
+  
+  // Spanish detected
+  if (esMatches > ptMatches && esMatches >= 2) {
+    return 'es';
+  }
+  
+  // Portuguese detected
+  if (ptMatches >= 2) {
+    return 'pt';
+  }
+  
+  // Default to English
+  return 'en';
+}
+
+// Check if message has mixed languages
+export function isMixedLanguage(text) {
+  const hasEnglish = /\b(train|trained|guard|pass|submission|technique)\b/i.test(text);
+  const hasPortuguese = /\b(treino|treinei|guarda|passagem|finalização|técnica)\b/i.test(text);
+  
+  return hasEnglish && hasPortuguese;
+}
+```
+
+### 3. PROF. OS SYSTEM PROMPT UPDATE
+
+Update the main Prof. OS system prompt to include Portuguese support:
+
+Add this section to the existing system prompt (after the personality section):
+
+```
+## LANGUAGE SUPPORT
+
+You support English and Brazilian Portuguese. Detect the user's language and respond accordingly.
+
+### Language Detection Rules:
+1. If user writes in Portuguese → Respond in Portuguese
+2. If user writes in English → Respond in English
+3. If user writes in Spanish → Respond in Spanish with polite redirect (see below)
+4. If mixed English/Portuguese → Ask preference ONCE, then remember
+
+### Portuguese Personality (Brazilian):
+When responding in Portuguese, adopt a warm Brazilian coaching style:
+- Use encouraging phrases: "Isso aí!", "Massa!", "Mandou bem!", "Continua assim!"
+- Slightly more casual than English (but still professional)
+- Use "você" for "you", "sua jornada" for "your journey"
+- Keep BJJ technical terms in English: "triangle", "guard", "armbar" (standard in Brazil)
+- Be warm and supportive (Brazilian training culture)
+
+### Mixed Language Response:
+If user mixes languages, respond with:
+
+"Vejo que você está misturando inglês e português. Prefere que eu responda em português ou inglês? 
+
+(I see you're mixing English and Portuguese. Would you prefer I respond in Portuguese or English?)"
+
+Wait for their choice, save preference, then continue.
+
+### Spanish Detection Response:
+If Spanish detected, respond in Spanish:
+
+"¡Hola! Veo que escribes en español. Por ahora, BJJ OS está disponible en inglés y portugués, pero el español está en camino pronto.
+
+¿Prefieres que continúe en inglés?
+
+(Hi! I see you're writing in Spanish. For now, BJJ OS is available in English and Portuguese, but Spanish is coming soon. Would you prefer I continue in English?)"
+
+Then respond in English.
+
+### Video Recommendations by Language:
+- Portuguese speakers: Mix best content (2 PT + 1 EN videos, or best available)
+- Add context for English videos: "(Este vídeo é em inglês, mas é excelente)"
+- Track behavior: If user never watches English videos, prioritize Portuguese only
+- Always prioritize QUALITY over language matching
+```
+
+### 4. TRUSTED INSTRUCTORS - PORTUGUESE ADDITIONS
+
+Update trusted instructors database to include Brazilian instructors with language tags:
+
+```javascript
+const TRUSTED_INSTRUCTORS = [
+  // Existing English instructors
+  { name: "John Danaher", languages: ["en"], threshold: 7.0 },
+  { name: "Gordon Ryan", languages: ["en"], threshold: 7.0 },
+  { name: "Lachlan Giles", languages: ["en"], threshold: 7.0 },
+  { name: "Craig Jones", languages: ["en"], threshold: 7.0 },
+  { name: "Garry Tonon", languages: ["en"], threshold: 7.0 },
+  { name: "Ryan Hall", languages: ["en"], threshold: 7.0 },
+  { name: "Mikey Musumeci", languages: ["en"], threshold: 7.0 },
+  { name: "Jon Thomas", languages: ["en"], threshold: 7.0 },
+  { name: "Chewy", languages: ["en"], threshold: 7.0 },
+  
+  // Bilingual instructors
+  { name: "Bernardo Faria", languages: ["en", "pt"], threshold: 7.0 },
+  { name: "Romulo Barral", languages: ["en", "pt"], threshold: 7.0 },
+  { name: "Caio Terra", languages: ["en", "pt"], threshold: 7.0 },
+  { name: "Saulo Ribeiro", languages: ["en", "pt"], threshold: 7.0 },
+  
+  // Portuguese-only instructors
+  { name: "Leandro Lo", languages: ["pt"], threshold: 7.0 },
+  { name: "Fernando Tererê", languages: ["pt"], threshold: 7.0 },
+  { name: "Rodrigo Cavaca", languages: ["pt"], threshold: 7.0 },
+  { name: "Rafael Mendes", languages: ["pt"], threshold: 7.0 },
+  { name: "Gui Mendes", languages: ["pt"], threshold: 7.0 },
+  { name: "Rickson Gracie", languages: ["pt"], threshold: 7.0 },
+  { name: "Roberto Cyborg", languages: ["pt"], threshold: 7.0 },
+  { name: "Lucas Lepri", languages: ["pt"], threshold: 7.0 },
+  { name: "Cobrinha", languages: ["pt"], threshold: 7.0 },
+  { name: "Buchecha", languages: ["pt"], threshold: 7.0 },
+  { name: "Marcus Almeida", languages: ["pt"], threshold: 7.0 }
+];
+```
+
+### 5. PORTUGUESE VIDEO SEARCH QUERIES
+
+Add these 50 Portuguese search queries to the video curation system:
+
+```javascript
+const PORTUGUESE_SEARCH_QUERIES = [
+  // Fundamentals
+  "jiu jitsu iniciante tutorial",
+  "fundamentos jiu jitsu",
+  "posições básicas jiu jitsu",
+  "jiu jitsu para iniciantes",
+  
+  // Guard
+  "guarda fechada tutorial",
+  "guarda aberta jiu jitsu",
+  "spider guard tutorial português",
+  "de la riva tutorial",
+  "half guard português",
+  "passagem de guarda tutorial",
+  "como passar a guarda",
+  
+  // Submissions
+  "finalização triângulo tutorial",
+  "armlock tutorial português",
+  "guilhotina defesa",
+  "kimura jiu jitsu",
+  "omoplata tutorial",
+  "chave de braço",
+  "estrangulamento pelas costas",
+  "mata leão tutorial",
+  
+  // Positions
+  "montada jiu jitsu",
+  "side control tutorial português",
+  "north south position",
+  "knee on belly português",
+  "back control jiu jitsu",
+  
+  // Escapes
+  "escape da montada",
+  "saída do side control",
+  "defesa guilhotina",
+  "escape back control",
+  
+  // Takedowns
+  "quedas jiu jitsu",
+  "single leg tutorial português",
+  "double leg português",
+  "guard pull tutorial",
+  
+  // Sweeps
+  "raspagem guarda fechada",
+  "sweep de la riva",
+  "raspagem spider guard",
+  "butterfly sweep português",
+  
+  // Advanced
+  "berimbolo tutorial",
+  "leg lock português",
+  "footlock defesa",
+  "heel hook tutorial português",
+  "worm guard português",
+  
+  // Instructor specific
+  "Bernardo Faria guarda",
+  "Leandro Lo passagem",
+  "Rafael Mendes berimbolo",
+  "Buchecha jiu jitsu",
+  "Cobrinha técnicas",
+  "Saulo Ribeiro fundamentos",
+  
+  // Drilling
+  "treino jiu jitsu",
+  "drills jiu jitsu",
+  "aquecimento jiu jitsu"
+];
+```
+
+### 6. LANGUAGE PREFERENCE API ENDPOINTS
+
+Create API endpoint to save/load language preference:
+
+```javascript
+// /api/user/language-preference
+
+export async function POST(req) {
+  const { userId, language } = await req.json();
+  
+  // Save language preference
+  const { error } = await supabase
+    .from('users')
+    .update({ 
+      preferred_language: language,
+      language_preference_set: true 
+    })
+    .eq('id', userId);
+    
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+  
+  return Response.json({ success: true });
+}
+
+export async function GET(req) {
+  const { searchParams } = new URL(req.url);
+  const userId = searchParams.get('userId');
+  
+  // Get language preference
+  const { data, error } = await supabase
+    .from('users')
+    .select('preferred_language, language_preference_set')
+    .eq('id', userId)
+    .single();
+    
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+  
+  return Response.json(data);
+}
+```
+
+### 7. CHAT HANDLER UPDATE
+
+Update the chat API to detect language and include in context:
+
+```javascript
+// In /api/chat endpoint, add language detection
+
+import { detectLanguage, isMixedLanguage } from '@/utils/languageDetection';
+
+// Before sending to Claude
+const detectedLanguage = detectLanguage(userMessage);
+const mixedLanguage = isMixedLanguage(userMessage);
+
+// Check user's saved preference
+const { data: userData } = await supabase
+  .from('users')
+  .select('preferred_language, language_preference_set')
+  .eq('id', userId)
+  .single();
+
+// Determine response language
+let responseLanguage = detectedLanguage;
+
+if (userData?.language_preference_set) {
+  responseLanguage = userData.preferred_language;
+} else if (mixedLanguage && !userData?.language_preference_set) {
+  // Will trigger language preference question in Prof. OS response
+  responseLanguage = 'mixed';
+}
+
+// Add to context sent to Claude
+const contextMessage = `
+User's detected language: ${detectedLanguage}
+User's preferred language: ${responseLanguage}
+Language preference set: ${userData?.language_preference_set || false}
+Mixed language detected: ${mixedLanguage}
+`;
+```
+
+### 8. VIDEO CURATION UPDATE
+
+Update video curation to detect video language and tag appropriately:
+
+```javascript
+// In video analysis function
+
+async function analyzeVideo(video, transcript) {
+  // Detect video language from transcript
+  const videoLanguage = detectLanguage(transcript);
+  
+  // Check if instructor creates bilingual content
+  const instructor = TRUSTED_INSTRUCTORS.find(i => 
+    video.title.includes(i.name) || video.channelTitle.includes(i.name)
+  );
+  
+  let languages = [videoLanguage];
+  
+  // If bilingual instructor, add both languages
+  if (instructor && instructor.languages.length > 1) {
+    languages = instructor.languages;
+  }
+  
+  // Add to video data
+  return {
+    ...videoData,
+    languages: languages
+  };
+}
+
+// When saving to database
+const { error } = await supabase
+  .from('ai_video_knowledge')
+  .insert({
+    ...videoData,
+    languages: languages // Array of language codes
+  });
+```
+
+### 9. VIDEO RECOMMENDATION UPDATE
+
+Update video recommendation logic to consider language:
+
+```javascript
+// When recommending videos
+
+async function getRecommendedVideos(userId, technique, userLanguage) {
+  let query = supabase
+    .from('ai_video_knowledge')
+    .select('*')
+    .contains('technique_tags', [technique])
+    .gte('quality_score', 7.5)
+    .order('quality_score', { ascending: false });
+  
+  // If Portuguese speaker, prioritize but don't limit
+  if (userLanguage === 'pt') {
+    // Get Portuguese videos first
+    const { data: ptVideos } = await query
+      .contains('languages', ['pt'])
+      .limit(2);
+    
+    // Get one high-quality English video
+    const { data: enVideos } = await query
+      .contains('languages', ['en'])
+      .limit(1);
+    
+    // Mix them
+    return [...(ptVideos || []), ...(enVideos || [])];
+  }
+  
+  // English speakers get English videos
+  const { data } = await query
+    .contains('languages', ['en'])
+    .limit(3);
+    
+  return data || [];
+}
+```
+
+### 10. UI UPDATES
+
+Add language toggle in settings page:
+
+```jsx
+// In settings page component
+
+<div className="setting-item">
+  <label>Idioma / Language</label>
+  <select 
+    value={preferredLanguage} 
+    onChange={handleLanguageChange}
+  >
+    <option value="en">English</option>
+    <option value="pt">Português (Brasil)</option>
+  </select>
+  <p className="setting-description">
+    Prof. OS will respond in your preferred language
+  </p>
+</div>
+```
+
+## IMPLEMENTATION CHECKLIST:
+
+1. ✅ Run database migration (add languages columns)
+1. ✅ Create language detection utility
+1. ✅ Update Prof. OS system prompt
+1. ✅ Add Portuguese trusted instructors
+1. ✅ Add Portuguese search queries to curation
+1. ✅ Create language preference API endpoints
+1. ✅ Update chat handler with language detection
+1. ✅ Update video curation to tag languages
+1. ✅ Update video recommendation logic
+1. ✅ Add language toggle to settings UI
+1. ✅ Test with Portuguese messages
+1. ✅ Test with mixed language messages
+1. ✅ Test with Spanish messages (redirect)
+1. ✅ Run Portuguese video curation (50 queries)
+
+## TESTING SCENARIOS:
+
+After implementation, test these:
+
+1. Send message in Portuguese → Prof. OS responds in Portuguese
+1. Send message in English → Prof. OS responds in English
+1. Send mixed message → Prof. OS asks preference
+1. Choose Portuguese → All future responses in Portuguese
+1. Change language in settings → Prof. OS switches
+1. Send Spanish message → Gets polite redirect
+1. Request technique → Receives Portuguese + English videos with context
+1. Check video library → Contains Portuguese-tagged videos
+
+## LAUNCH STRATEGY:
+
+After testing passes:
+
+1. Run aggressive Portuguese curation (all 50 queries, 3x per day for 1 week)
+1. Target 500-800 Portuguese videos in library
+1. Reach out to Bernardo Faria or Brazilian BJJ YouTuber for review
+1. Post in Brazilian BJJ Facebook groups
+1. Monitor Portuguese user engagement
+
+-----
+
+END OF PROMPT 13
+
+Paste this entire prompt into Replit Agent and it will implement everything. Then go train! 🥋🇧🇷
+
+```
+---
+
+# ✅ DONE! 
+
+**Copy everything above (including the triple backticks) and paste into Replit Agent.**
+
+It has:
+- Database changes
+- Language detection system  
+- Prof. OS Portuguese personality
+- 50 Portuguese search queries
+- Trusted Brazilian instructors
+- API endpoints
+- Video recommendation logic
+- UI updates
+- Testing checklist
+
+**Go train, come back, and Portuguese support will be live!** 🚀​​​​​​​​​​​​​​​​
+```

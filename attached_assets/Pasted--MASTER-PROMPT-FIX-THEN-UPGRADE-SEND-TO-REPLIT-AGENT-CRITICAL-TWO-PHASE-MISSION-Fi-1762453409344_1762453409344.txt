@@ -1,0 +1,545 @@
+# **📋 MASTER PROMPT: FIX THEN UPGRADE - SEND TO REPLIT AGENT:**
+
+```
+CRITICAL TWO-PHASE MISSION: Fix Curation Pipeline, Then Implement 7-Dimensional Algorithm
+
+You MUST complete Phase 1 fully and show proof before starting Phase 2.
+Do not skip ahead. Do not implement Phase 2 until Phase 1 is verified working.
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 1: DIAGNOSE & FIX CURATION PIPELINE (COMPLETE THIS FIRST)
+═══════════════════════════════════════════════════════════════════════════════
+
+Current Issue: Curation runs but screens 0 videos, makes 0 YouTube API calls.
+Goal: Get curation screening videos again.
+
+STEP 1.1: CHECK SERVER LOGS
+```bash
+tail -100 /var/log/app.log | grep -i "curation"
+```
+
+Show me the output. What errors appear?
+
+STEP 1.2: TEST YOUTUBE API DIRECTLY
+Create: server/test-youtube-api.js
+
+```javascript
+const axios = require('axios');
+
+async function testYouTubeAPI() {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  
+  console.log('🧪 Testing YouTube API...');
+  console.log('API Key exists:', !!apiKey);
+  console.log('API Key length:', apiKey?.length);
+  
+  try {
+    const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+      params: {
+        part: 'snippet',
+        q: 'bjj guard passing',
+        type: 'video',
+        maxResults: 5,
+        key: apiKey
+      }
+    });
+    
+    console.log('\n✅ SUCCESS! YouTube API works!');
+    console.log(`Found ${response.data.items.length} videos\n`);
+    
+    response.data.items.forEach((video, i) => {
+      console.log(`${i+1}. "${video.snippet.title}"`);
+      console.log(`   By: ${video.snippet.channelTitle}`);
+    });
+    
+    return true;
+    
+  } catch (error) {
+    console.log('\n❌ FAILED:', error.response?.status);
+    console.log('Error:', JSON.stringify(error.response?.data, null, 2));
+    
+    if (error.response?.status === 403) {
+      const reason = error.response?.data?.error?.errors?.[0]?.reason;
+      console.log('\n🚨 403 Error Reason:', reason);
+      
+      if (reason === 'quotaExceeded') {
+        console.log('Quota actually exhausted');
+      } else if (reason === 'accessNotConfigured') {
+        console.log('YouTube Data API v3 NOT ENABLED in Google Cloud');
+      }
+    }
+    
+    return false;
+  }
+}
+
+testYouTubeAPI();
+```
+
+Run: `node server/test-youtube-api.js`
+
+SHOW ME THE OUTPUT. Does it work?
+
+STEP 1.3: FIND WHY CURATION ISN’T SEARCHING
+Find the curation scheduler/trigger file.
+Show me the code that’s supposed to trigger curation.
+
+Is there a quota check blocking it?
+
+```javascript
+// Look for this pattern:
+if (quotaExhausted) {
+  return; // ← THIS BLOCKS EVERYTHING
+}
+```
+
+STEP 1.4: FORCE CURATION TO RUN
+Create: server/services/force-curation.js
+
+```javascript
+const axios = require('axios');
+
+async function forceCuration() {
+  console.log('🚀 FORCING CURATION - BYPASSING ALL CHECKS\n');
+  
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  const queries = ['bjj guard passing', 'bjj submissions', 'bjj escapes'];
+  
+  let totalFound = 0;
+  
+  for (const query of queries) {
+    console.log(`\n🔍 Searching: "${query}"`);
+    
+    try {
+      const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+        params: {
+          part: 'snippet',
+          q: query,
+          type: 'video',
+          maxResults: 10,
+          key: apiKey
+        }
+      });
+      
+      console.log(`✅ Found ${response.data.items.length} videos`);
+      totalFound += response.data.items.length;
+      
+      // Show first 3 titles
+      response.data.items.slice(0, 3).forEach((v, i) => {
+        console.log(`  ${i+1}. "${v.snippet.title}"`);
+      });
+      
+    } catch (error) {
+      console.log(`❌ Failed: ${error.response?.status}`);
+      console.log(`Error: ${error.response?.data?.error?.message}`);
+    }
+  }
+  
+  console.log(`\n📊 Total videos found: ${totalFound}`);
+  
+  if (totalFound > 0) {
+    console.log('✅ YouTube API working - curation CAN find videos');
+  } else {
+    console.log('❌ Problem with YouTube API or quota');
+  }
+}
+
+forceCuration();
+```
+
+Run: `node server/services/force-curation.js`
+
+SHOW ME THE OUTPUT. How many videos found?
+
+STEP 1.5: FIX THE BLOCKER
+Based on diagnosis, fix whatever is preventing curation from running.
+
+Common fixes:
+
+- Remove stale quota check
+- Fix broken scheduler
+- Update search query logic
+- Enable YouTube Data API v3 in Google Cloud
+
+Implement the fix and show me what you changed.
+
+STEP 1.6: VERIFY CURATION WORKS
+Manually trigger one curation run:
+
+```bash
+# However your system triggers curation
+npm run curate
+# or
+node server/services/curation-pipeline.js
+```
+
+Show me output proving:
+✅ Curation started
+✅ YouTube searches executed
+✅ Videos found and screened
+✅ Database updated with results
+
+═══════════════════════════════════════════════════════════════════════════════
+🛑 CHECKPOINT: DO NOT PROCEED TO PHASE 2 UNTIL YOU SHOW ME:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. ✅ YouTube API test successful (5+ videos found)
+1. ✅ Force curation script found videos
+1. ✅ Root cause identified and fixed
+1. ✅ Manual curation run completed successfully
+1. ✅ Database shows videos_screened > 0
+
+STOP HERE AND WAIT FOR MY CONFIRMATION BEFORE PHASE 2.
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 2: IMPLEMENT 7-DIMENSIONAL ALGORITHM (ONLY AFTER PHASE 1 COMPLETE)
+═══════════════════════════════════════════════════════════════════════════════
+
+Once Phase 1 is verified working, implement the advanced quality system:
+
+STEP 2.1: CREATE DATABASE SCHEMA
+
+1. Instructor Database
+   CREATE TABLE instructors (
+   id SERIAL PRIMARY KEY,
+   name VARCHAR(255) UNIQUE NOT NULL,
+   channel_id VARCHAR(100),
+   tier VARCHAR(20), – ‘elite’, ‘high_quality’, ‘emerging’, ‘unknown’
+   credibility_score INT DEFAULT 50,
+
+adcc_achievements JSONB,
+ibjjf_achievements JSONB,
+specialties JSONB,
+teaching_style VARCHAR(100),
+
+gym_affiliation VARCHAR(255),
+lineage TEXT,
+belt_rank VARCHAR(20),
+
+auto_accept BOOLEAN DEFAULT false,
+boost_multiplier DECIMAL(3,2) DEFAULT 1.0,
+
+created_at TIMESTAMP DEFAULT NOW(),
+updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_instructors_name ON instructors(name);
+CREATE INDEX idx_instructors_tier ON instructors(tier);
+
+– Seed 50+ elite instructors
+INSERT INTO instructors (name, tier, credibility_score, adcc_achievements, specialties, auto_accept) VALUES
+(‘Gordon Ryan’, ‘elite’, 100, ‘[“Gold 2019”, “Gold 2022”]’, ‘[“passing”, “back_attacks”, “no_gi”]’, true),
+(‘Lachlan Giles’, ‘elite’, 98, ‘[“Bronze 2019”]’, ‘[“leg_locks”, “back_attacks”]’, true),
+(‘Gui Mendes’, ‘elite’, 99, ‘[]’, ‘[“guard”, “berimbolo”, “gi”]’, true),
+(‘Danaher John’, ‘elite’, 99, ‘[]’, ‘[“systems”, “leg_locks”, “back_attacks”]’, true),
+(‘Marcelo Garcia’, ‘elite’, 100, ‘[“Multiple ADCC Gold”]’, ‘[“x_guard”, “guillotine”, “back_attacks”]’, true),
+(‘Mikey Musumeci’, ‘elite’, 97, ‘[“ADCC Gold 2022”]’, ‘[“guard”, “berimbolo”, “gi”]’, true),
+(‘Craig Jones’, ‘elite’, 95, ‘[“ADCC Bronze”]’, ‘[“leg_locks”, “back_attacks”]’, true),
+(‘Bernardo Faria’, ‘elite’, 96, ‘[“World Champion”]’, ‘[“pressure_passing”, “half_guard”]’, true),
+(‘Caio Terra’, ‘elite’, 94, ‘[“World Champion”]’, ‘[“guard”, “pressure”]’, true),
+(‘Rafael Mendes’, ‘elite’, 98, ‘[“World Champion”]’, ‘[“guard”, “berimbolo”]’, true);
+– Add 40+ more
+
+1. Technique Taxonomy
+   CREATE TABLE technique_taxonomy (
+   id SERIAL PRIMARY KEY,
+   technique_name VARCHAR(255) UNIQUE NOT NULL,
+   category VARCHAR(100),
+   parent_technique VARCHAR(255),
+   target_video_count INT DEFAULT 50,
+   priority INT DEFAULT 5,
+   difficulty_level VARCHAR(20),
+   gi_applicability VARCHAR(20),
+   aliases JSONB,
+   created_at TIMESTAMP DEFAULT NOW()
+   );
+
+– Seed 100+ techniques
+INSERT INTO technique_taxonomy (technique_name, category, target_video_count, priority) VALUES
+(‘armbar’, ‘submission’, 150, 10),
+(‘triangle’, ‘submission’, 120, 9),
+(‘heel_hook’, ‘submission’, 100, 8),
+(‘rear_naked_choke’, ‘submission’, 100, 10),
+(‘kimura’, ‘submission’, 80, 7),
+(‘guillotine’, ‘submission’, 90, 8),
+(‘x_guard_sweep’, ‘sweep’, 70, 7),
+(‘spider_guard_sweep’, ‘sweep’, 60, 6),
+(‘knee_slice_pass’, ‘pass’, 80, 8),
+(‘toreando_pass’, ‘pass’, 70, 7),
+(‘side_control_escape’, ‘escape’, 100, 9),
+(‘mount_escape’, ‘escape’, 100, 9),
+(‘double_leg_takedown’, ‘takedown’, 60, 6),
+(‘single_leg_takedown’, ‘takedown’, 60, 6),
+(‘de_la_riva_sweep’, ‘sweep’, 70, 7),
+(‘berimbolo’, ‘sweep’, 60, 6),
+(‘leg_drag_pass’, ‘pass’, 70, 7),
+(‘butterfly_sweep’, ‘sweep’, 60, 6),
+(‘omoplata’, ‘submission’, 70, 6),
+(‘darce_choke’, ‘submission’, 80, 7);
+– Add 80+ more
+
+1. Enhanced Video Metadata
+   ALTER TABLE videos ADD COLUMN IF NOT EXISTS metadata JSONB;
+
+– Metadata structure will be:
+{
+“primary_technique”: “heel_hook”,
+“variation”: “inside”,
+“position”: “50_50”,
+“skill_level”: “advanced”,
+“gi_or_nogi”: “no_gi”,
+“unique_value”: “Shows 2-on-1 grip to prevent defense”,
+“problem_solved”: “Opponent turning knee out”,
+“specific_details”: [“2_on_1_grip”, “knee_control”],
+“prerequisites”: [“basic_50_50”, “heel_hook_mechanics”],
+“builds_toward”: [“advanced_leg_lock_systems”],
+“scores”: {
+“instructor”: 98,
+“content_quality”: 92,
+“unique_value”: 85,
+“coverage”: 15,
+“final_score”: 89
+},
+“good_because”: [
+“Elite instructor specializing in leg locks”,
+“Addresses specific defense counter”,
+“Shows multiple variations”
+],
+“tags”: [“heel_hook_finishing”, “defense_counter”],
+“good_for_problems”: [“heel_hook_defense”],
+“good_for_styles”: [“leg_lock_game”]
+}
+
+1. Video Performance Tracking
+   CREATE TABLE video_performance (
+   id SERIAL PRIMARY KEY,
+   video_id VARCHAR(20) REFERENCES videos(video_id),
+
+total_views INT DEFAULT 0,
+watch_completion_rate DECIMAL(4,2),
+avg_watch_time_seconds INT,
+rewatch_count INT DEFAULT 0,
+
+saved_to_library_count INT DEFAULT 0,
+shared_count INT DEFAULT 0,
+noted_helpful_count INT DEFAULT 0,
+noted_unhelpful_count INT DEFAULT 0,
+
+recommended_by_os_count INT DEFAULT 0,
+recommendation_accepted_count INT DEFAULT 0,
+recommendation_success_rate DECIMAL(4,2),
+
+recent_growth_rate DECIMAL(4,2),
+
+updated_at TIMESTAMP DEFAULT NOW()
+);
+
+1. Coverage Status
+   CREATE TABLE coverage_status (
+   id SERIAL PRIMARY KEY,
+   technique_name VARCHAR(255) UNIQUE NOT NULL,
+
+current_count INT DEFAULT 0,
+target_count INT DEFAULT 50,
+coverage_ratio DECIMAL(4,2),
+
+beginner_count INT DEFAULT 0,
+intermediate_count INT DEFAULT 0,
+advanced_count INT DEFAULT 0,
+expert_count INT DEFAULT 0,
+
+last_added TIMESTAMP,
+updated_at TIMESTAMP DEFAULT NOW()
+);
+
+1. Emerging Techniques
+   CREATE TABLE emerging_techniques (
+   id SERIAL PRIMARY KEY,
+   technique_name VARCHAR(255) UNIQUE NOT NULL,
+
+first_detected TIMESTAMP DEFAULT NOW(),
+video_count INT DEFAULT 1,
+instructor_count INT DEFAULT 1,
+
+used_in_competitions JSONB,
+status VARCHAR(20) DEFAULT ‘monitoring’,
+confidence_score INT DEFAULT 50,
+
+weekly_video_count JSONB,
+
+updated_at TIMESTAMP DEFAULT NOW()
+);
+
+STEP 2.2: CREATE 7 DIMENSION MODULES
+
+File: server/services/curation/instructor-evaluator.js
+[Full code from original prompt - evaluates instructor credibility]
+
+File: server/services/curation/content-analyzer.js
+[Full code - analyzes content quality with GPT-4]
+
+File: server/services/curation/unique-value-extractor.js
+[Full code - determines if video adds unique value]
+
+File: server/services/curation/coverage-balancer.js
+[Full code - balances library across techniques]
+
+File: server/services/curation/emerging-detector.js
+[Full code - detects new/trending techniques]
+
+File: server/services/curation/progression-mapper.js
+[Full code - maps skill progression]
+
+File: server/services/curation/feedback-analyzer.js
+[Full code - tracks user feedback]
+
+STEP 2.3: CREATE FINAL EVALUATOR
+
+File: server/services/curation/final-evaluator.js
+
+async function evaluateVideo(video) {
+console.log(`\n🔍 Evaluating: "${video.title}"`);
+
+// Run all 7 dimensions
+const [
+instructorEval,
+contentQuality,
+uniqueValue,
+coverageScore,
+emergingTech,
+progression,
+userFeedback
+] = await Promise.all([
+evaluateInstructor(video.channelName, video.channelId),
+analyzeContentQuality(video),
+extractUniqueValue(video),
+calculateCoverageScore(video.technique),
+detectEmergingTechnique(video),
+mapSkillProgression(video, video.technique),
+calculateUserFeedbackScore(video.videoId)
+]);
+
+// Auto-accept elite instructors
+if (instructorEval.auto_accept) {
+return {
+decision: ‘ACCEPT’,
+score: 95,
+reason: ‘Elite instructor - auto-accepted’,
+metadata: await buildMetadata(video, analysis)
+};
+}
+
+// Check unique value
+if (!uniqueValue.should_add) {
+return {
+decision: ‘REJECT’,
+score: 40,
+reason: uniqueValue.reason
+};
+}
+
+// Calculate weighted score
+let finalScore =
+(instructorEval.credibility * 0.25) +
+(contentQuality.score * 0.20) +
+(coverageScore.score * 0.15) +
+(userFeedback.score * 0.15);
+
+// Apply boosts
+finalScore += instructorEval.boost || 0;
+finalScore += uniqueValue.boost || 0;
+finalScore += coverageScore.boost || 0;
+finalScore += emergingTech.boost || 0;
+finalScore += userFeedback.boost || 0;
+
+finalScore = Math.min(finalScore, 100);
+
+const decision = finalScore >= 71 ? ‘ACCEPT’ : ‘REJECT’;
+
+console.log(`🎯 FINAL SCORE: ${finalScore.toFixed(1)}`);
+console.log(`📌 DECISION: ${decision}`);
+
+if (decision === ‘ACCEPT’) {
+return {
+decision: ‘ACCEPT’,
+score: finalScore,
+metadata: await buildMetadata(video, analysis)
+};
+}
+
+return {
+decision: ‘REJECT’,
+score: finalScore,
+reason: `Score too low: ${finalScore.toFixed(1)}/71`
+};
+}
+
+STEP 2.4: INTEGRATE INTO EXISTING PIPELINE
+
+Update your current curation pipeline to use the new evaluator:
+
+// OLD
+const score = await simpleQualityCheck(video);
+
+// NEW  
+const evaluation = await evaluateVideo(video);
+
+if (evaluation.decision === ‘ACCEPT’) {
+await db.videos.create({
+video_id: video.videoId,
+title: video.title,
+quality_score: evaluation.score,
+metadata: evaluation.metadata,
+added_at: new Date()
+});
+
+// Update coverage
+await updateCoverageStatus(
+evaluation.metadata.primary_technique,
+evaluation.metadata.skill_level
+);
+}
+
+STEP 2.5: TEST THE NEW SYSTEM
+
+Run test curation with 20 videos:
+
+- Show acceptance rate
+- Show rejected videos with reasons
+- Show rich metadata for accepted videos
+- Prove emerging technique detection working
+- Show coverage balancing in action
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL DELIVERABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+PHASE 1 PROOF:
+✅ YouTube API test output showing 5+ videos found
+✅ Force curation output showing videos discovered
+✅ Root cause fix implemented
+✅ Manual curation run showing videos_screened > 0
+
+PHASE 2 PROOF:
+✅ Database schema created with 50+ instructors, 100+ techniques
+✅ All 7 dimension modules created
+✅ Final evaluator integrated into pipeline
+✅ Test run showing new algorithm working
+✅ Example of rich metadata generated
+✅ Proof of unique value detection working
+
+REMEMBER: Complete Phase 1 fully and show proof before starting Phase 2.
+
+```
+---
+
+**SEND THIS TO REPLIT AGENT**
+
+This enforces the sequence:
+1. ✅ Fix curation first (with verification steps)
+2. ⏸️ Stop and show proof
+3. ✅ Then implement 7-dimensional system
+4. ✅ Show final proof
+
+The checkpoint prevents Agent from skipping ahead. 🎯​​​​​​​​​​​​​​​​
+```

@@ -1,0 +1,160 @@
+**PERFECT - HERE’S THE SINGLE CLEAN PROMPT** ✅
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+PROFESSOR OS: USE GPT-4o FOR EVERYTHING (SIMPLE & FAST)
+═══════════════════════════════════════════════════════════════════════════════
+
+GOAL: Make Professor OS responses fast (2-3 seconds) and intelligent.
+
+SOLUTION: Use GPT-4o for all queries. Skip routing complexity.
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION: UPDATE CHAT ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+File: server/routes.ts (main chat endpoint)
+
+app.post('/api/chat/professor-os', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { message } = req.body;
+    
+    console.log('═══════════════════════════════════════════');
+    console.log('PROFESSOR OS REQUEST');
+    console.log('User:', userId);
+    console.log('Message:', message.substring(0, 100));
+    
+    // 1. LOAD USER PROFILE
+    const profile = await db.query.user_profiles.findFirst({
+      where: eq(user_profiles.user_id, userId),
+      with: { user: true }
+    });
+    
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    
+    // 2. LOAD CONVERSATION HISTORY (Last 10 messages for context)
+    const history = await db.query.chat_messages.findMany({
+      where: eq(chat_messages.user_id, userId),
+      orderBy: [desc(chat_messages.created_at)],
+      limit: 10
+    });
+    
+    const conversationHistory = history.reverse();
+    
+    console.log('Conversation history:', conversationHistory.length, 'messages');
+    
+    // 3. BUILD SYSTEM PROMPT (use existing buildSystemPrompt function)
+    const systemPrompt = buildSystemPrompt({
+      user: {
+        displayName: profile.first_name,
+        beltLevel: profile.belt_level,
+        style: profile.training_style,
+        struggleTechnique: profile.biggest_struggle,
+        height: profile.height,
+        weight: profile.weight,
+        birthYear: profile.birth_year,
+        trainingFrequency: profile.training_frequency,
+        createdAt: profile.user.created_at
+      }
+    }, availableVideos || []);
+    
+    // 4. FORMAT CONVERSATION HISTORY FOR GPT-4o
+    const messages = conversationHistory.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+    
+    // Add current user message
+    messages.push({
+      role: 'user',
+      content: message
+    });
+    
+    // 5. CALL GPT-4o
+    const startTime = Date.now();
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      max_tokens: 2048,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...messages
+      ],
+      temperature: 0.7
+    });
+    
+    const aiResponse = response.choices[0]?.message?.content || '';
+    const responseTime = Date.now() - startTime;
+    
+    console.log('Response time:', responseTime + 'ms');
+    console.log('Response length:', aiResponse.length, 'characters');
+    console.log('═══════════════════════════════════════════');
+    
+    // 6. SAVE BOTH MESSAGES TO DATABASE
+    await db.insert(chat_messages).values({
+      user_id: userId,
+      role: 'user',
+      content: message,
+      created_at: new Date()
+    });
+    
+    await db.insert(chat_messages).values({
+      user_id: userId,
+      role: 'assistant',
+      content: aiResponse,
+      model_used: 'gpt-4o',
+      response_time_ms: responseTime,
+      created_at: new Date()
+    });
+    
+    // 7. RETURN RESPONSE
+    res.json({ 
+      message: aiResponse,
+      metadata: {
+        model: 'gpt-4o',
+        responseTime: responseTime
+      }
+    });
+    
+  } catch (error) {
+    console.error('Professor OS error:', error);
+    res.status(500).json({ error: 'Failed to get response' });
+  }
+});
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFY OPENAI API KEY
+═══════════════════════════════════════════════════════════════════════════════
+
+Make sure .env has:
+OPENAI_API_KEY=sk-...
+
+That's it. Simple, fast, works.
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After deployment, test:
+
+1. User asks: "how tall am I?" → Should answer with profile data
+2. User says: "hey what's up" → Friendly response, no video spam
+3. User asks: "I'm struggling with guard passing" → Diagnostic conversation
+4. Check response times in console logs (should be 2-3 seconds)
+5. Verify conversation history is working (ask same question twice)
+
+Done. Ship it.
+```
+
+-----
+
+**COPY THIS ⬆️ AND SEND TO REPLIT**
+
+This is it. Simple, clean, fast, works. No routing complexity.
+
+After this deploys, ready for the comprehensive testing framework? 🎯​​​​​​​​​​​​​​​​

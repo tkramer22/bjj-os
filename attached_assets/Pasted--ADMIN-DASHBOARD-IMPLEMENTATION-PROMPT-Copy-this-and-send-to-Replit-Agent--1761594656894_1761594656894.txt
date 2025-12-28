@@ -1,0 +1,1345 @@
+# 🚀 ADMIN DASHBOARD IMPLEMENTATION PROMPT
+
+Copy this and send to Replit Agent:
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════
+ADMIN DASHBOARD - ONE-SCREEN OVERVIEW WITH AUTO-REFRESH
+═══════════════════════════════════════════════════════════════
+
+MISSION: 
+Create a comprehensive admin dashboard that shows everything important on one screen with auto-refresh. The admin can see metrics, recent activity, failed payments, trials ending, referral performance, and quickly access any user's details.
+
+CRITICAL REQUIREMENTS:
+• Single-page dashboard (minimal scrolling)
+• Auto-refresh every 30 seconds
+• Quick search to find any user instantly
+• Show today's metrics, all-time stats, and live activity
+• Alert system for issues (failed payments, trials ending)
+• One-click access to user details
+• No training log details (just high-level counts)
+• Fast, indexed queries (< 200ms per refresh)
+• Clean, scannable design
+• Mobile-responsive
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: DATABASE SETUP - ACTIVITY LOGGING & INDEXES
+═══════════════════════════════════════════════════════════════
+
+Create activity log table for real-time feed:
+
+-- Activity log for dashboard feed
+CREATE TABLE IF NOT EXISTS activity_log (
+  id SERIAL PRIMARY KEY,
+  event_type VARCHAR(100) NOT NULL,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  user_email VARCHAR(255),
+  description TEXT NOT NULL,
+  metadata JSONB,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Indexes for fast queries
+CREATE INDEX IF NOT EXISTS idx_activity_log_created_at ON activity_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_log_event_type ON activity_log(event_type);
+CREATE INDEX IF NOT EXISTS idx_activity_log_user_id ON activity_log(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_users_subscription_status ON users(subscription_status);
+CREATE INDEX IF NOT EXISTS idx_users_subscription_type ON users(subscription_type);
+CREATE INDEX IF NOT EXISTS idx_users_trial_ends_at ON users(trial_ends_at);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_last_active ON users(updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_referral_codes_is_active ON referral_codes(is_active);
+CREATE INDEX IF NOT EXISTS idx_referral_commissions_status ON referral_commissions(status);
+CREATE INDEX IF NOT EXISTS idx_referral_commissions_payment_date ON referral_commissions(payment_date DESC);
+
+-- Admin notes for users
+CREATE TABLE IF NOT EXISTS admin_notes (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  admin_email VARCHAR(255) NOT NULL,
+  note TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_notes_user_id ON admin_notes(user_id);
+
+-- System errors log
+CREATE TABLE IF NOT EXISTS system_errors (
+  id SERIAL PRIMARY KEY,
+  error_type VARCHAR(100) NOT NULL,
+  error_message TEXT,
+  context JSONB,
+  severity VARCHAR(50) DEFAULT 'medium',
+  resolved BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_system_errors_resolved ON system_errors(resolved);
+CREATE INDEX IF NOT EXISTS idx_system_errors_created_at ON system_errors(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_system_errors_severity ON system_errors(severity);
+
+COMMENT ON TABLE activity_log IS 'Real-time activity feed for admin dashboard';
+COMMENT ON TABLE admin_notes IS 'Private notes admins can add about users';
+COMMENT ON TABLE system_errors IS 'Log of system errors for monitoring';
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: ACTIVITY LOGGING - TRACK ALL IMPORTANT EVENTS
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/utils/activity-logger.js
+
+const { db } = require('../db');
+
+// Log activity for dashboard feed
+async function logActivity(eventType, userId, userEmail, description, metadata = null) {
+  try {
+    await db.query(
+      `INSERT INTO activity_log (event_type, user_id, user_email, description, metadata)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [eventType, userId, userEmail, description, metadata ? JSON.stringify(metadata) : null]
+    );
+  } catch (error) {
+    console.error('Failed to log activity:', error);
+  }
+}
+
+// Log system error
+async function logSystemError(errorType, errorMessage, context = null, severity = 'medium') {
+  try {
+    await db.query(
+      `INSERT INTO system_errors (error_type, error_message, context, severity)
+       VALUES ($1, $2, $3, $4)`,
+      [errorType, errorMessage, context ? JSON.stringify(context) : null, severity]
+    );
+  } catch (error) {
+    console.error('Failed to log system error:', error);
+  }
+}
+
+module.exports = {
+  logActivity,
+  logSystemError
+};
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: UPDATE EXISTING CODE TO LOG ACTIVITIES
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/auth.js
+
+Add activity logging to signup:
+
+const { logActivity } = require('./utils/activity-logger');
+
+// In the complete-signup endpoint, after user is created:
+await logActivity(
+  'user_signup',
+  user.id,
+  user.email,
+  `New user signed up${referralCode ? ` via code ${referralCode}` : ''}`,
+  { referralCode: referralCode || null }
+);
+
+UPDATE FILE: /server/stripe-webhooks.js
+
+Add activity logging to payment events:
+
+const { logActivity, logSystemError } = require('./utils/activity-logger');
+
+// After successful payment (invoice.payment_succeeded):
+await logActivity(
+  'payment_succeeded',
+  user.id,
+  user.email,
+  `Payment successful: $${amountPaid.toFixed(2)}`,
+  { amount: amountPaid, invoiceId: invoice.id }
+);
+
+// After trial conversion:
+await logActivity(
+  'trial_converted',
+  user.id,
+  user.email,
+  'Converted from trial to paid subscription',
+  { amount: amountPaid }
+);
+
+// After payment failed:
+await logActivity(
+  'payment_failed',
+  user.id,
+  user.email,
+  `Payment failed: $${(failedInvoice.amount_due / 100).toFixed(2)}`,
+  { invoiceId: failedInvoice.id, reason: failedInvoice.last_payment_error?.message }
+);
+
+// After subscription cancelled:
+await logActivity(
+  'subscription_cancelled',
+  null,
+  null,
+  `Subscription cancelled for customer ${deletedCustomerId}`,
+  { customerId: deletedCustomerId }
+);
+
+UPDATE FILE: /server/referrals.js (wherever referral code is redeemed)
+
+Add activity logging:
+
+await logActivity(
+  'referral_used',
+  newUserId,
+  newUserEmail,
+  `Used referral code: ${referralCode}`,
+  { code: referralCode, codeOwnerId: referralCodeOwnerId }
+);
+
+UPDATE FILE: /server/professor-os.js (or wherever AI conversations happen)
+
+Add activity logging when conversation starts:
+
+await logActivity(
+  'ai_conversation',
+  userId,
+  userEmail,
+  `Started AI conversation: "${conversationTitle}"`,
+  { conversationId, messageCount }
+);
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: ADMIN DASHBOARD BACKEND API
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/admin-dashboard.js
+
+const express = require('express');
+const router = express.Router();
+const { db } = require('./db');
+const { authenticateAdmin } = require('./middleware/auth');
+
+// Middleware to verify admin access
+// You can implement this however you want - hardcoded email, admin flag in DB, etc.
+function requireAdmin(req, res, next) {
+  const adminEmails = (process.env.ADMIN_EMAILS || '').split(',');
+  
+  if (!req.user || !adminEmails.includes(req.user.email)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  next();
+}
+
+// GET: Dashboard metrics and data
+router.get('/dashboard', requireAdmin, async (req, res) => {
+  try {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // TODAY'S METRICS
+    const todayMetrics = await db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE created_at >= $1) as new_signups_today,
+        COUNT(*) FILTER (WHERE subscription_type = 'paid' AND created_at >= $1) as new_paid_today,
+        COUNT(*) FILTER (WHERE subscription_status = 'trialing' AND trial_ends_at::date = $2) as trials_ending_today
+      FROM users
+    `, [today, now.toISOString().split('T')[0]]);
+    
+    // Revenue today (from Stripe webhook logs or payments)
+    const revenueToday = await db.query(`
+      SELECT COALESCE(SUM(commission_amount / (commission_percent / 100.0)), 0) as revenue
+      FROM referral_commissions
+      WHERE payment_date >= $1
+    `, [today]);
+    
+    // AI usage today (from activity log)
+    const aiUsageToday = await db.query(`
+      SELECT COUNT(*) as count
+      FROM activity_log
+      WHERE event_type = 'ai_conversation' AND created_at >= $1
+    `, [today]);
+    
+    // ALL-TIME METRICS
+    const allTimeMetrics = await db.query(`
+      SELECT
+        COUNT(*) as total_users,
+        COUNT(*) FILTER (WHERE subscription_type = 'paid' AND subscription_status = 'active') as active_paid_users,
+        COUNT(*) FILTER (WHERE subscription_type = 'trial') as active_trials
+      FROM users
+    `);
+    
+    // MRR (Monthly Recurring Revenue)
+    const mrr = parseFloat(allTimeMetrics.rows[0].active_paid_users) * 14.99;
+    
+    // Churn rate (cancelled in last 30 days / active 30 days ago)
+    const churnData = await db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE subscription_status = 'canceled' AND updated_at >= NOW() - INTERVAL '30 days') as churned,
+        COUNT(*) FILTER (WHERE created_at <= NOW() - INTERVAL '30 days' AND subscription_type = 'paid') as base
+      FROM users
+    `);
+    const churnRate = churnData.rows[0].base > 0 
+      ? ((churnData.rows[0].churned / churnData.rows[0].base) * 100).toFixed(1)
+      : 0;
+    
+    // Lifetime revenue (approximate from commissions)
+    const lifetimeRevenue = await db.query(`
+      SELECT COALESCE(SUM(commission_amount / (commission_percent / 100.0)), 0) as total
+      FROM referral_commissions
+    `);
+    
+    // CURRENT ACTIVE USERS (last 30 min)
+    const activeNow = await db.query(`
+      SELECT COUNT(DISTINCT user_id) as count
+      FROM activity_log
+      WHERE created_at >= NOW() - INTERVAL '30 minutes'
+    `);
+    
+    // FAILED PAYMENTS
+    const failedPayments = await db.query(`
+      SELECT 
+        u.id,
+        u.email,
+        u.username,
+        al.description,
+        al.metadata,
+        al.created_at
+      FROM activity_log al
+      JOIN users u ON al.user_id = u.id
+      WHERE al.event_type = 'payment_failed'
+        AND al.created_at >= NOW() - INTERVAL '7 days'
+        AND u.subscription_status = 'past_due'
+      ORDER BY al.created_at DESC
+      LIMIT 10
+    `);
+    
+    // TRIALS ENDING TODAY
+    const trialsEndingToday = await db.query(`
+      SELECT
+        id,
+        email,
+        username,
+        trial_ends_at,
+        created_at,
+        (SELECT COUNT(*) FROM activity_log WHERE user_id = users.id AND event_type = 'ai_conversation') as ai_chat_count,
+        updated_at as last_active
+      FROM users
+      WHERE subscription_status = 'trialing'
+        AND trial_ends_at::date = $1
+      ORDER BY trial_ends_at ASC
+    `, [now.toISOString().split('T')[0]]);
+    
+    // RECENT ACTIVITY (last 20 events)
+    const recentActivity = await db.query(`
+      SELECT
+        id,
+        event_type,
+        user_email,
+        description,
+        metadata,
+        created_at,
+        user_id
+      FROM activity_log
+      ORDER BY created_at DESC
+      LIMIT 20
+    `);
+    
+    // TOP REFERRAL CODES
+    const topReferralCodes = await db.query(`
+      SELECT
+        rc.code,
+        rc.commission_percent,
+        COUNT(DISTINCT rr.id) as signup_count,
+        COUNT(DISTINCT CASE WHEN u.subscription_type = 'paid' THEN u.id END) as paid_count,
+        COALESCE(SUM(rcom.commission_amount / (rcom.commission_percent / 100.0)), 0) as revenue
+      FROM referral_codes rc
+      LEFT JOIN referral_redemptions rr ON rc.id = rr.code_id
+      LEFT JOIN users u ON rr.redeemed_by_user_id = u.id
+      LEFT JOIN referral_commissions rcom ON rc.id = rcom.referral_code_id
+      WHERE rc.is_active = true
+      GROUP BY rc.id, rc.code, rc.commission_percent
+      ORDER BY signup_count DESC
+      LIMIT 5
+    `);
+    
+    // RECENT SIGNUPS (last 10)
+    const recentSignups = await db.query(`
+      SELECT
+        id,
+        email,
+        username,
+        subscription_type,
+        subscription_status,
+        referral_code_used,
+        created_at
+      FROM users
+      ORDER BY created_at DESC
+      LIMIT 10
+    `);
+    
+    // SYSTEM ERRORS (unresolved)
+    const systemErrors = await db.query(`
+      SELECT COUNT(*) as count
+      FROM system_errors
+      WHERE resolved = false
+        AND created_at >= NOW() - INTERVAL '24 hours'
+        AND severity IN ('high', 'critical')
+    `);
+    
+    res.json({
+      today: {
+        newSignups: parseInt(todayMetrics.rows[0].new_signups_today),
+        revenue: parseFloat(revenueToday.rows[0].revenue).toFixed(2),
+        trialConverted: parseInt(todayMetrics.rows[0].new_paid_today),
+        aiUsage: parseInt(aiUsageToday.rows[0].count),
+        trialsEndingCount: parseInt(todayMetrics.rows[0].trials_ending_today)
+      },
+      allTime: {
+        totalUsers: parseInt(allTimeMetrics.rows[0].total_users),
+        mrr: mrr.toFixed(2),
+        churnRate: parseFloat(churnRate),
+        lifetimeRevenue: parseFloat(lifetimeRevenue.rows[0].total).toFixed(2),
+        activePaidUsers: parseInt(allTimeMetrics.rows[0].active_paid_users),
+        activeTrials: parseInt(allTimeMetrics.rows[0].active_trials)
+      },
+      live: {
+        activeNow: parseInt(activeNow.rows[0].count)
+      },
+      alerts: {
+        failedPaymentsCount: failedPayments.rows.length,
+        trialsEndingCount: trialsEndingToday.rows.length,
+        systemErrorsCount: parseInt(systemErrors.rows[0].count)
+      },
+      failedPayments: failedPayments.rows,
+      trialsEndingToday: trialsEndingToday.rows,
+      recentActivity: recentActivity.rows,
+      topReferralCodes: topReferralCodes.rows,
+      recentSignups: recentSignups.rows
+    });
+    
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    res.status(500).json({ error: 'Failed to load dashboard' });
+  }
+});
+
+// GET: Search for user
+router.get('/search-user', requireAdmin, async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query || query.length < 2) {
+      return res.status(400).json({ error: 'Query too short' });
+    }
+    
+    const results = await db.query(`
+      SELECT
+        id,
+        email,
+        username,
+        subscription_type,
+        subscription_status,
+        trial_ends_at,
+        created_at,
+        updated_at
+      FROM users
+      WHERE email ILIKE $1 OR username ILIKE $1
+      ORDER BY created_at DESC
+      LIMIT 10
+    `, [`%${query}%`]);
+    
+    res.json({ users: results.rows });
+    
+  } catch (error) {
+    console.error('User search error:', error);
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// GET: User details (for when admin clicks on a user)
+router.get('/user/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // User info
+    const user = await db.query(`
+      SELECT
+        id,
+        email,
+        username,
+        subscription_type,
+        subscription_status,
+        trial_ends_at,
+        stripe_customer_id,
+        stripe_subscription_id,
+        referral_code_used,
+        referred_by_user_id,
+        created_at,
+        updated_at
+      FROM users
+      WHERE id = $1
+    `, [id]);
+    
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const userData = user.rows[0];
+    
+    // Activity summary
+    const activitySummary = await db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE event_type = 'ai_conversation') as ai_conversations,
+        MAX(created_at) FILTER (WHERE event_type = 'ai_conversation') as last_conversation
+      FROM activity_log
+      WHERE user_id = $1
+    `, [id]);
+    
+    // Recent conversations (last 5)
+    const recentConversations = await db.query(`
+      SELECT
+        description,
+        metadata,
+        created_at
+      FROM activity_log
+      WHERE user_id = $1 AND event_type = 'ai_conversation'
+      ORDER BY created_at DESC
+      LIMIT 5
+    `, [id]);
+    
+    // Referral info
+    let referredBy = null;
+    if (userData.referred_by_user_id) {
+      const referrer = await db.query(`
+        SELECT email, username
+        FROM users
+        WHERE id = $1
+      `, [userData.referred_by_user_id]);
+      if (referrer.rows.length > 0) {
+        referredBy = referrer.rows[0];
+      }
+    }
+    
+    // Has own referral code?
+    const ownReferralCode = await db.query(`
+      SELECT code, commission_percent, times_used
+      FROM referral_codes
+      WHERE assigned_to_user_id = $1
+    `, [id]);
+    
+    // Payment history (from activity log or Stripe)
+    const paymentHistory = await db.query(`
+      SELECT description, metadata, created_at
+      FROM activity_log
+      WHERE user_id = $1 AND event_type IN ('payment_succeeded', 'payment_failed')
+      ORDER BY created_at DESC
+      LIMIT 10
+    `, [id]);
+    
+    // Admin notes
+    const adminNotes = await db.query(`
+      SELECT note, admin_email, created_at
+      FROM admin_notes
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `, [id]);
+    
+    res.json({
+      user: userData,
+      activity: {
+        aiConversations: parseInt(activitySummary.rows[0].ai_conversations),
+        lastConversation: activitySummary.rows[0].last_conversation,
+        recentConversations: recentConversations.rows
+      },
+      referral: {
+        referredBy,
+        usedCode: userData.referral_code_used,
+        ownCode: ownReferralCode.rows.length > 0 ? ownReferralCode.rows[0] : null
+      },
+      payments: paymentHistory.rows,
+      adminNotes: adminNotes.rows
+    });
+    
+  } catch (error) {
+    console.error('User details error:', error);
+    res.status(500).json({ error: 'Failed to load user details' });
+  }
+});
+
+// POST: Add admin note to user
+router.post('/user/:id/note', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+    const adminEmail = req.user.email;
+    
+    if (!note || note.trim().length === 0) {
+      return res.status(400).json({ error: 'Note cannot be empty' });
+    }
+    
+    await db.query(
+      `INSERT INTO admin_notes (user_id, admin_email, note) VALUES ($1, $2, $3)`,
+      [id, adminEmail, note.trim()]
+    );
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('Add note error:', error);
+    res.status(500).json({ error: 'Failed to add note' });
+  }
+});
+
+// POST: Retry failed payment
+router.post('/retry-payment', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    const user = await db.query(
+      'SELECT stripe_subscription_id FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Trigger Stripe to retry the payment
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const subscription = await stripe.subscriptions.retrieve(user.rows[0].stripe_subscription_id);
+    
+    if (subscription.latest_invoice) {
+      await stripe.invoices.pay(subscription.latest_invoice);
+    }
+    
+    res.json({ success: true, message: 'Payment retry initiated' });
+    
+  } catch (error) {
+    console.error('Retry payment error:', error);
+    res.status(500).json({ error: 'Failed to retry payment' });
+  }
+});
+
+// POST: Grant free month to user
+router.post('/grant-free-month', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const adminEmail = req.user.email;
+    
+    const user = await db.query(
+      'SELECT email, stripe_subscription_id FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Extend subscription by 30 days in Stripe
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const subscription = await stripe.subscriptions.retrieve(user.rows[0].stripe_subscription_id);
+    
+    const newPeriodEnd = new Date(subscription.current_period_end * 1000);
+    newPeriodEnd.setDate(newPeriodEnd.getDate() + 30);
+    
+    await stripe.subscriptions.update(user.rows[0].stripe_subscription_id, {
+      trial_end: Math.floor(newPeriodEnd.getTime() / 1000)
+    });
+    
+    // Log activity
+    const { logActivity } = require('./utils/activity-logger');
+    await logActivity(
+      'admin_action',
+      userId,
+      user.rows[0].email,
+      `Admin granted 1 free month (by ${adminEmail})`,
+      { admin: adminEmail }
+    );
+    
+    res.json({ success: true, message: 'Free month granted' });
+    
+  } catch (error) {
+    console.error('Grant free month error:', error);
+    res.status(500).json({ error: 'Failed to grant free month' });
+  }
+});
+
+module.exports = router;
+
+═══════════════════════════════════════════════════════════════
+PHASE 5: INTEGRATE ADMIN ROUTES
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/index.js
+
+Add admin dashboard routes:
+
+const adminDashboardRoutes = require('./admin-dashboard');
+app.use('/api/admin', adminDashboardRoutes);
+
+Add ADMIN_EMAILS to environment variables (in Replit Secrets):
+
+ADMIN_EMAILS=todd@bjjos.app,admin@bjjos.app
+
+═══════════════════════════════════════════════════════════════
+PHASE 6: FRONTEND - ADMIN DASHBOARD COMPONENT
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /client/src/pages/AdminDashboard.jsx
+
+import { useState, useEffect } from 'react';
+import { useLocation } from 'wouter';
+
+export default function AdminDashboard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [, setLocation] = useLocation();
+  
+  // Fetch dashboard data
+  const fetchDashboard = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/dashboard', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) {
+        if (response.status === 403) {
+          alert('Admin access required');
+          setLocation('/dashboard');
+          return;
+        }
+        throw new Error('Failed to fetch dashboard');
+      }
+      
+      const result = await response.json();
+      setData(result);
+      setLoading(false);
+    } catch (error) {
+      console.error('Dashboard error:', error);
+      setLoading(false);
+    }
+  };
+  
+  // Initial load
+  useEffect(() => {
+    fetchDashboard();
+  }, []);
+  
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchDashboard();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Search users
+  const handleSearch = async () => {
+    if (searchQuery.length < 2) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `/api/admin/search-user?query=${encodeURIComponent(searchQuery)}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      
+      const result = await response.json();
+      setSearchResults(result.users);
+    } catch (error) {
+      console.error('Search error:', error);
+    }
+  };
+  
+  // View user details
+  const viewUser = async (userId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/user/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      const result = await response.json();
+      setSelectedUser(result);
+      setSearchResults([]);
+      setSearchQuery('');
+    } catch (error) {
+      console.error('User details error:', error);
+    }
+  };
+  
+  const retryPayment = async (userId) => {
+    if (!confirm('Retry payment for this user?')) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      await fetch('/api/admin/retry-payment', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ userId })
+      });
+      
+      alert('Payment retry initiated');
+      fetchDashboard();
+    } catch (error) {
+      console.error('Retry payment error:', error);
+      alert('Failed to retry payment');
+    }
+  };
+  
+  const grantFreeMonth = async (userId) => {
+    if (!confirm('Grant this user 1 free month?')) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      await fetch('/api/admin/grant-free-month', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ userId })
+      });
+      
+      alert('Free month granted');
+      fetchDashboard();
+    } catch (error) {
+      console.error('Grant free month error:', error);
+      alert('Failed to grant free month');
+    }
+  };
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-xl">Loading admin dashboard...</div>
+      </div>
+    );
+  }
+  
+  if (selectedUser) {
+    return (
+      <UserDetailView 
+        user={selectedUser} 
+        onBack={() => setSelectedUser(null)}
+        onRefresh={fetchDashboard}
+      />
+    );
+  }
+  
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h1 className="text-3xl font-bold mb-2">🥋 BJJ OS Admin Dashboard</h1>
+          <p className="text-gray-600 text-sm">
+            Last updated: {new Date().toLocaleTimeString()} • Auto-refreshes every 30s
+          </p>
+        </div>
+        
+        {/* Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Today's Metrics */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-bold mb-4">Today's Metrics</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-3xl font-bold">{data.today.newSignups}</div>
+                <div className="text-sm text-gray-600">New Signups</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold">${data.today.revenue}</div>
+                <div className="text-sm text-gray-600">Revenue</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold">{data.today.trialConverted}</div>
+                <div className="text-sm text-gray-600">Trial→Paid</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold">{data.today.aiUsage}</div>
+                <div className="text-sm text-gray-600">AI Chats</div>
+              </div>
+            </div>
+          </div>
+          
+          {/* All-Time & Live */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-bold mb-4">All-Time</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-3xl font-bold">{data.allTime.totalUsers}</div>
+                <div className="text-sm text-gray-600">Total Users</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold">${data.allTime.mrr}</div>
+                <div className="text-sm text-gray-600">MRR</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold">{data.allTime.churnRate}%</div>
+                <div className="text-sm text-gray-600">Churn Rate</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold">{data.live.activeNow}</div>
+                <div className="text-sm text-gray-600">Active Now</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Alerts */}
+        {(data.alerts.failedPaymentsCount > 0 || 
+          data.alerts.trialsEndingCount > 0 || 
+          data.alerts.systemErrorsCount > 0) && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <h3 className="font-bold text-red-900 mb-2">⚠️ Alerts</h3>
+            <div className="space-y-1 text-sm">
+              {data.alerts.failedPaymentsCount > 0 && (
+                <div className="text-red-800">
+                  🔴 {data.alerts.failedPaymentsCount} failed payment{data.alerts.failedPaymentsCount !== 1 ? 's' : ''} today
+                </div>
+              )}
+              {data.alerts.trialsEndingCount > 0 && (
+                <div className="text-yellow-800">
+                  🟡 {data.alerts.trialsEndingCount} trial{data.alerts.trialsEndingCount !== 1 ? 's' : ''} ending today
+                </div>
+              )}
+              {data.alerts.systemErrorsCount > 0 && (
+                <div className="text-orange-800">
+                  🟠 {data.alerts.systemErrorsCount} system error{data.alerts.systemErrorsCount !== 1 ? 's' : ''}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Quick Search */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-bold mb-4">Quick Search</h2>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Search by email or username..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              className="flex-1 p-3 border border-gray-300 rounded-lg"
+            />
+            <button
+              onClick={handleSearch}
+              className="px-6 py-3 bg-black text-white rounded-lg font-semibold hover:bg-gray-800"
+            >
+              Search
+            </button>
+          </div>
+          
+          {searchResults.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {searchResults.map(user => (
+                <div
+                  key={user.id}
+                  onClick={() => viewUser(user.id)}
+                  className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
+                >
+                  <div className="font-semibold">{user.email}</div>
+                  <div className="text-sm text-gray-600">
+                    @{user.username} • {user.subscription_status}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        {/* Failed Payments */}
+        {data.failedPayments.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-bold mb-4">Failed Payments ({data.failedPayments.length})</h2>
+            <div className="space-y-3">
+              {data.failedPayments.map(payment => (
+                <div key={payment.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="font-semibold">{payment.email}</div>
+                      <div className="text-sm text-gray-600">{payment.description}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => retryPayment(payment.id)}
+                        className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                      >
+                        Retry
+                      </button>
+                      <button
+                        onClick={() => viewUser(payment.id)}
+                        className="px-3 py-1 bg-gray-200 text-sm rounded hover:bg-gray-300"
+                      >
+                        View User
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Trials Ending Today */}
+        {data.trialsEndingToday.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-bold mb-4">Trials Ending Today ({data.trialsEndingToday.length})</h2>
+            <div className="space-y-3">
+              {data.trialsEndingToday.map(user => (
+                <div key={user.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="font-semibold">{user.email}</div>
+                      <div className="text-sm text-gray-600">
+                        {user.ai_chat_count} AI chats • 
+                        Last active: {new Date(user.last_active).toLocaleString()}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => viewUser(user.id)}
+                      className="px-3 py-1 bg-gray-200 text-sm rounded hover:bg-gray-300"
+                    >
+                      View User
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Recent Activity */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-bold mb-4">Recent Activity</h2>
+          <div className="space-y-2">
+            {data.recentActivity.map(activity => (
+              <div key={activity.id} className="flex items-start justify-between p-3 border-b border-gray-100">
+                <div className="flex-1">
+                  <div className="text-sm">
+                    {getActivityIcon(activity.event_type)} {activity.description}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {getTimeAgo(activity.created_at)}
+                  </div>
+                </div>
+                {activity.user_id && (
+                  <button
+                    onClick={() => viewUser(activity.user_id)}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    View User
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Top Referral Codes */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-bold mb-4">Top Referral Codes</h2>
+          <div className="space-y-2">
+            {data.topReferralCodes.map((code, index) => (
+              <div key={code.code} className="flex items-center justify-between p-3 border border-gray-200 rounded">
+                <div>
+                  <span className="font-bold">{index + 1}. {code.code}</span>
+                  <span className="text-sm text-gray-600 ml-3">
+                    {code.signup_count} signups • {code.paid_count} paid • ${parseFloat(code.revenue).toFixed(2)} revenue
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Recent Signups */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-bold mb-4">Recent Signups</h2>
+          <div className="space-y-2">
+            {data.recentSignups.map(user => (
+              <div
+                key={user.id}
+                onClick={() => viewUser(user.id)}
+                className="flex items-center justify-between p-3 border border-gray-200 rounded hover:bg-gray-50 cursor-pointer"
+              >
+                <div>
+                  <div className="font-semibold">{user.email}</div>
+                  <div className="text-sm text-gray-600">
+                    {user.subscription_type} • {user.referral_code_used || 'No referral'} • {getTimeAgo(user.created_at)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UserDetailView({ user, onBack, onRefresh }) {
+  const [note, setNote] = useState('');
+  
+  const addNote = async () => {
+    if (!note.trim()) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`/api/admin/user/${user.user.id}/note`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ note: note.trim() })
+      });
+      
+      alert('Note added');
+      setNote('');
+      onRefresh();
+      onBack();
+    } catch (error) {
+      console.error('Add note error:', error);
+      alert('Failed to add note');
+    }
+  };
+  
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <button
+          onClick={onBack}
+          className="text-blue-600 hover:underline"
+        >
+          ← Back to Dashboard
+        </button>
+        
+        <div className="bg-white rounded-lg shadow p-6">
+          <h1 className="text-2xl font-bold mb-4">
+            {user.user.email} (@{user.user.username})
+          </h1>
+          
+          <div className="grid grid-cols-3 gap-6">
+            {/* Overview */}
+            <div>
+              <h3 className="font-bold mb-2">Overview</h3>
+              <div className="text-sm space-y-1">
+                <div>Status: {user.user.subscription_status}</div>
+                <div>Type: {user.user.subscription_type}</div>
+                <div>Joined: {new Date(user.user.created_at).toLocaleDateString()}</div>
+                {user.user.trial_ends_at && (
+                  <div>Trial ends: {new Date(user.user.trial_ends_at).toLocaleDateString()}</div>
+                )}
+              </div>
+            </div>
+            
+            {/* Activity */}
+            <div>
+              <h3 className="font-bold mb-2">Activity</h3>
+              <div className="text-sm space-y-1">
+                <div>AI Chats: {user.activity.aiConversations}</div>
+                {user.activity.lastConversation && (
+                  <div>Last chat: {getTimeAgo(user.activity.lastConversation)}</div>
+                )}
+              </div>
+            </div>
+            
+            {/* Referral */}
+            <div>
+              <h3 className="font-bold mb-2">Referral</h3>
+              <div className="text-sm space-y-1">
+                {user.referral.referredBy && (
+                  <div>Referred by: {user.referral.referredBy.email}</div>
+                )}
+                {user.referral.usedCode && (
+                  <div>Used code: {user.referral.usedCode}</div>
+                )}
+                {user.referral.ownCode && (
+                  <div>Own code: {user.referral.ownCode.code}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Recent Conversations */}
+        {user.activity.recentConversations.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="font-bold mb-4">Recent AI Conversations</h3>
+            <div className="space-y-3">
+              {user.activity.recentConversations.map((conv, i) => (
+                <div key={i} className="border-b border-gray-100 pb-3">
+                  <div className="font-semibold">{conv.description}</div>
+                  <div className="text-sm text-gray-600">{getTimeAgo(conv.created_at)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Admin Notes */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="font-bold mb-4">Admin Notes</h3>
+          
+          <div className="space-y-2 mb-4">
+            {user.adminNotes.length === 0 && (
+              <div className="text-gray-500 text-sm">No notes yet</div>
+            )}
+            {user.adminNotes.map((note, i) => (
+              <div key={i} className="border border-gray-200 rounded p-3">
+                <div className="text-sm">{note.note}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  By {note.admin_email} • {new Date(note.created_at).toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Add a note..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="flex-1 p-2 border border-gray-300 rounded"
+            />
+            <button
+              onClick={addNote}
+              className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800"
+            >
+              Add Note
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getActivityIcon(eventType) {
+  const icons = {
+    user_signup: '🆕',
+    payment_succeeded: '💰',
+    payment_failed: '⚠️',
+    trial_converted: '💰',
+    ai_conversation: '💬',
+    referral_used: '🎁',
+    subscription_cancelled: '❌'
+  };
+  return icons[eventType] || '📝';
+}
+
+function getTimeAgo(timestamp) {
+  const now = new Date();
+  const then = new Date(timestamp);
+  const seconds = Math.floor((now - then) / 1000);
+  
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+═══════════════════════════════════════════════════════════════
+PHASE 7: ADD ADMIN ROUTE TO ROUTER
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /client/src/App.jsx (or wherever routes are defined)
+
+Add admin route:
+
+import AdminDashboard from './pages/AdminDashboard';
+
+// In your router:
+<Route path="/admin" component={AdminDashboard} />
+
+═══════════════════════════════════════════════════════════════
+PHASE 8: TESTING
+═══════════════════════════════════════════════════════════════
+
+After implementation:
+
+✅ Admin dashboard loads at /admin
+✅ Shows today's metrics correctly
+✅ Shows all-time stats
+✅ Activity feed updates (manually refresh to test)
+✅ Search finds users by email/username
+✅ Clicking user shows detailed view
+✅ Failed payments section shows up when payments fail
+✅ Trials ending section shows users whose trial ends today
+✅ Top referral codes ranked correctly
+✅ Recent signups list shows last 10
+✅ Auto-refresh works (wait 30 seconds, watch data update)
+✅ Admin notes can be added to users
+✅ Only admin emails (from ADMIN_EMAILS env var) can access
+
+═══════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════
+
+✅ One-screen dashboard shows all important info
+✅ Auto-refreshes every 30 seconds
+✅ Quick search finds users instantly
+✅ Failed payments clearly highlighted
+✅ Trials ending today clearly visible
+✅ Activity feed shows real-time events
+✅ User detail view comprehensive but not overwhelming
+✅ No training log details (just counts)
+✅ Fast queries (< 200ms per refresh)
+✅ Mobile-responsive design
+✅ Admin-only access enforced
+
+═══════════════════════════════════════════════════════════════
+CRITICAL NOTES
+═══════════════════════════════════════════════════════════════
+
+• DO NOT show training log details - just show count (e.g., "3 sessions")
+• Keep queries fast with proper indexes
+• Auto-refresh should not disrupt user if they're reading
+• Admin access controlled by ADMIN_EMAILS environment variable
+• Activity logging should be non-blocking (don't slow down main app)
+• Use proper error handling for all database queries
+• Failed payments and trials ending are most critical sections
+
+START IMPLEMENTATION NOW.
+```
+
+-----
+
+## ✅ **PROMPT READY!**
+
+**This prompt includes:**
+
+1. ✅ One-screen dashboard layout
+1. ✅ Auto-refresh every 30 seconds
+1. ✅ Today’s metrics + all-time stats
+1. ✅ Live activity feed
+1. ✅ Failed payments section
+1. ✅ Trials ending today
+1. ✅ Quick user search
+1. ✅ Detailed user view
+1. ✅ Top referral codes
+1. ✅ Recent signups
+1. ✅ Admin notes for users
+1. ✅ Activity logging system
+1. ✅ Fast, indexed queries
+1. ✅ No training log details (just counts)
+
+**Copy the entire prompt above and send it to Replit Agent!** 🚀
+
+**Next up would be items #4 and #5 from your original list - want to continue?**

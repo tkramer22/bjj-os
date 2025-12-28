@@ -1,0 +1,201 @@
+# **CORRECTED - EASTERN TIME (EST/EDT)** 🕐
+
+-----
+
+## **EXECUTION TIMELINE (EASTERN TIME):**
+
+### **RIGHT NOW (12:19 AM EST - Within 60 seconds of sending prompt):**
+
+```
+12:19 AM EST → Agent receives prompt
+12:19 AM EST → Creates override flag
+12:19 AM EST → Sets override to TRUE
+12:20 AM EST → Starts emergencyCurationRun() IMMEDIATELY
+12:20 AM EST → Processing batch 1 (50 videos)
+12:25 AM EST → Processing batch 2 (50 videos)
+12:30 AM EST → Processing batch 3 (50 videos)
+...continues until API quota exhausted...
+~3:00 AM EST → API quota hits 9,000/10,000 units
+~3:00 AM EST → Stops for today
+```
+
+**Today’s expected outcome:**
+
+- Starts: 12:20 AM EST (right now)
+- Runs: ~3 hours
+- Videos screened: ~600-800
+- Videos added: ~90-160
+- Database: 317 → 407-477 videos
+
+-----
+
+### **LATER TODAY & EVERY DAY AFTER (6:00 AM EST):**
+
+```
+6:00 AM EST → emergencyCurationRun() starts automatically
+6:00 AM EST → Processing batch 1
+6:05 AM EST → Processing batch 2
+...continues until API quota exhausted...
+~9:00 AM EST → API quota hits 9,000/10,000 units
+~9:00 AM EST → Stops for today
+
+Next day 6:00 AM EST → Repeat
+```
+
+-----
+
+## **UPDATED PROMPT WITH EASTERN TIME:**
+
+```
+🚨🚨🚨 EMERGENCY: START VIDEO CURATION IMMEDIATELY 🚨🚨🚨
+
+DO NOT WAIT. START RIGHT NOW.
+
+CRITICAL: ALL TIMES ARE EASTERN TIME (EST/EDT)
+
+═══════════════════════════════════════════════════════════════════════════════
+IMMEDIATE ACTIONS - EXECUTE IN ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 1: CREATE OVERRIDE SYSTEM (30 seconds)
+
+Add to database schema:
+```sql
+ALTER TABLE system_settings 
+ADD COLUMN IF NOT EXISTS emergency_curation_override BOOLEAN DEFAULT FALSE;
+
+UPDATE system_settings 
+SET emergency_curation_override = TRUE;
+```
+
+STEP 2: MODIFY CURATION LOGIC (60 seconds)
+
+In the video curation function, add this at the very top:
+
+```typescript
+async function shouldRunCuration(): Promise<boolean> {
+  // Check emergency override FIRST
+  const override = await db.query.systemSettings.findFirst();
+  if (override?.emergencyCurationOverride === true) {
+    return true; // ALWAYS RUN, ignore admin toggle
+  }
+  
+  // Normal admin toggle check
+  return await checkAdminToggle();
+}
+```
+
+STEP 3: START PROCESSING RIGHT NOW (0 seconds)
+
+Execute this function IMMEDIATELY:
+
+```typescript
+async function emergencyCurationRun() {
+  const MAX_API_QUOTA = 9000;
+  let apiQuotaUsed = 0;
+  let totalProcessed = 0;
+  let totalAdded = 0;
+  
+  console.log('🚨 EMERGENCY CURATION STARTED - ' + new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  
+  while (apiQuotaUsed < MAX_API_QUOTA) {
+    // Check if we hit 2,000 videos
+    const currentTotal = await db.query.videos.findMany();
+    if (currentTotal.length >= 2000) {
+      await db.update(systemSettings)
+        .set({ emergencyCurationOverride: false });
+      console.log('✅ TARGET REACHED: 2,000 videos. Override disabled.');
+      break;
+    }
+    
+    try {
+      // Process batch of 50 videos
+      const result = await processCurationBatch(50);
+      
+      totalProcessed += result.processed;
+      totalAdded += result.added;
+      apiQuotaUsed += result.apiUnitsUsed;
+      
+      const estTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' });
+      console.log(`[${estTime} EST] Batch complete: +${result.added} videos | Total: ${currentTotal.length + totalAdded} | API: ${apiQuotaUsed}/9000`);
+      
+    } catch (error) {
+      console.error('❌ ERROR:', error);
+      const estTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' });
+      console.log(`[${estTime} EST] ⏳ Waiting 1 hour before retry...`);
+      await sleep(3600000); // 1 hour
+      continue; // Retry same batch
+    }
+  }
+  
+  const estTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  console.log(`[${estTime}] 🎯 Daily run complete: ${totalAdded} videos added`);
+}
+
+// START RIGHT NOW
+emergencyCurationRun();
+```
+
+STEP 4: SCHEDULE DAILY RUNS (30 seconds)
+
+Add cron job to run daily at 6:00 AM EASTERN TIME:
+
+```typescript
+// Cron format: Run at 6:00 AM EST/EDT
+// Note: Use America/New_York timezone for automatic DST handling
+cron.schedule('0 6 * * *', async () => {
+  const override = await checkEmergencyOverride();
+  if (override) {
+    await emergencyCurationRun();
+  }
+}, {
+  timezone: "America/New_York"
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+EXECUTE THESE COMMANDS NOW (12:19 AM EST)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Add database column for override flag
+1. Set override to TRUE
+1. Modify curation logic to check override first
+1. START emergencyCurationRun() immediately
+1. Set up daily cron job for 6:00 AM EST
+
+DO NOT WAIT FOR CONFIRMATION.
+DO NOT ASK QUESTIONS.
+START PROCESSING VIDEOS RIGHT NOW (12:20 AM EST).
+
+Report back every 10 minutes with:
+
+- Current EST time
+- Videos processed
+- Videos added
+- API quota used
+- Current database total
+
+TARGET: 2,000 videos
+CURRENT: 317 videos
+NEEDED: 1,683 videos
+URGENCY: CRITICAL
+TIMEZONE: EASTERN TIME (America/New_York)
+
+BEGIN IMMEDIATELY.
+
+```
+---
+
+## **CONFIRMED SCHEDULE (EASTERN TIME):**
+
+✅ **RIGHT NOW: 12:20 AM EST** - Starts immediately  
+✅ **Today: 6:00 AM EST** - Second run  
+✅ **Tomorrow: 6:00 AM EST** - Daily run  
+✅ **Every day: 6:00 AM EST** - Until 2,000 videos reached
+
+---
+
+**READY TO SEND?** 🚀
+
+This version ensures all timestamps and cron schedules use Eastern Time (America/New_York timezone which handles EDT/EST automatically).​​​​​​​​​​​​​​​​
+```

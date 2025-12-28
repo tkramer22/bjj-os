@@ -1,0 +1,220 @@
+**Let’s do it.** Here’s the full prompt and realistic timeline.
+
+-----
+
+## ⏱️ TIMELINE TO DOWNLOADABLE APP:
+
+|Step                            |Time     |Who         |
+|--------------------------------|---------|------------|
+|Replit prepares Capacitor setup |30-60 min|Replit Agent|
+|You clone repo to Mac           |10 min   |You         |
+|Install dependencies + build    |15 min   |You         |
+|Open in Xcode + run on simulator|15 min   |You         |
+|Test on your real iPhone        |15 min   |You         |
+
+**Total: ~2 hours to have the app running on your phone.**
+
+Not on App Store yet - but on YOUR phone, working, tappable icon.
+
+-----
+
+## 📋 FULL PROMPT - SEND TO REPLIT AGENT:
+
+```
+IOS APP BUILD - CAPACITOR SETUP (FULL)
+
+Building a native iOS app for BJJ OS. Must be identical to web app, wrapped with Capacitor.
+
+═══════════════════════════════════════════════════════════════════════════════
+1. INSTALL CAPACITOR + PLUGINS
+═══════════════════════════════════════════════════════════════════════════════
+
+npm install @capacitor/core @capacitor/cli @capacitor/ios
+npm install @capacitor/preferences @capacitor/splash-screen @capacitor/status-bar @capacitor/keyboard @capacitor/haptics
+
+Initialize Capacitor:
+npx cap init "BJJ OS" "app.bjjos.ios" --web-dir=dist
+
+═══════════════════════════════════════════════════════════════════════════════
+2. CAPACITOR CONFIG
+═══════════════════════════════════════════════════════════════════════════════
+
+Create capacitor.config.ts:
+
+import { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'app.bjjos.ios',
+  appName: 'BJJ OS',
+  webDir: 'dist',
+  ios: {
+    contentInset: 'automatic',
+    preferredContentMode: 'mobile',
+    scheme: 'BJJ OS'
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 2000,
+      backgroundColor: '#0a0a0a',
+      showSpinner: false
+    },
+    StatusBar: {
+      style: 'dark',
+      backgroundColor: '#0a0a0a'
+    },
+    Keyboard: {
+      resize: 'body',
+      resizeOnFullScreen: true
+    }
+  }
+};
+
+export default config;
+
+═══════════════════════════════════════════════════════════════════════════════
+3. PERSISTENT LOGIN - STAY SIGNED IN FOREVER
+═══════════════════════════════════════════════════════════════════════════════
+
+Users log in ONCE, then app opens directly to dashboard every time.
+
+Implementation:
+- On successful login: Store auth token using @capacitor/preferences
+- On app launch: Check for stored token → if valid, skip login screen
+- Token should NEVER expire (or 1 year minimum)
+- Only show login if: first time, manually logged out, or token revoked
+
+Update the auth flow:
+
+import { Preferences } from '@capacitor/preferences';
+
+// After successful login:
+await Preferences.set({ key: 'authToken', value: token });
+await Preferences.set({ key: 'userId', value: oderId });
+
+// On app launch (check in App.tsx or main entry):
+const { value: token } = await Preferences.get({ key: 'authToken' });
+if (token && isValidToken(token)) {
+  // Skip login, go to dashboard
+} else {
+  // Show login screen
+}
+
+// On logout:
+await Preferences.remove({ key: 'authToken' });
+await Preferences.remove({ key: 'userId' });
+
+═══════════════════════════════════════════════════════════════════════════════
+4. PAYMENT HANDLING - HIDE IN IOS APP
+═══════════════════════════════════════════════════════════════════════════════
+
+To avoid Apple's 30% cut:
+
+- DO NOT show subscription/payment options in iOS app
+- DO NOT show pricing
+- DO NOT link to website for payment
+
+For non-subscribers, show only:
+"Get full access at bjjos.app"
+
+Add platform detection:
+import { Capacitor } from '@capacitor/core';
+
+const isNativeApp = Capacitor.isNativePlatform();
+
+// Hide payment UI if native app
+{!isNativeApp && <SubscriptionButton />}
+
+// Show this instead for non-subscribers in app:
+{isNativeApp && !isSubscribed && (
+  <div>Get full access at bjjos.app</div>
+)}
+
+═══════════════════════════════════════════════════════════════════════════════
+5. BUILD WEB ASSETS
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+
+Confirm dist/ folder is created.
+
+═══════════════════════════════════════════════════════════════════════════════
+6. ADD IOS PLATFORM
+═══════════════════════════════════════════════════════════════════════════════
+
+npx cap add ios
+
+This creates /ios folder with Xcode project.
+
+═══════════════════════════════════════════════════════════════════════════════
+7. APP ICON - USE BJJ OS LOGO
+═══════════════════════════════════════════════════════════════════════════════
+
+Find the BJJ OS logo in the project (check /public, /assets, or /src).
+
+Generate iOS app icons in ALL required sizes:
+- 20x20 @1x, @2x, @3x (60x60)
+- 29x29 @1x, @2x, @3x (87x87)
+- 40x40 @1x, @2x, @3x (120x120)
+- 60x60 @2x, @3x (180x180)
+- 1024x1024 (App Store)
+
+Place all icons in: ios/App/App/Assets.xcassets/AppIcon.appiconset/
+
+Update Contents.json to reference all icon sizes.
+
+═══════════════════════════════════════════════════════════════════════════════
+8. SPLASH SCREEN
+═══════════════════════════════════════════════════════════════════════════════
+
+Create splash screen:
+- BJJ OS logo centered
+- Background color: #0a0a0a (dark/black)
+- Size: 2732x2732 PNG
+
+Place in iOS assets for launch screen.
+
+═══════════════════════════════════════════════════════════════════════════════
+9. SYNC IOS
+═══════════════════════════════════════════════════════════════════════════════
+
+npx cap sync ios
+
+This copies web assets + plugins to iOS project.
+
+═══════════════════════════════════════════════════════════════════════════════
+10. PROVIDE INSTRUCTIONS FOR MAC BUILD
+═══════════════════════════════════════════════════════════════════════════════
+
+After everything is set up, provide Todd with exact steps:
+
+1. How to clone the repo to Mac
+2. Commands to run
+3. How to open in Xcode
+4. How to run on simulator
+5. How to run on real iPhone (needs provisioning profile setup)
+
+═══════════════════════════════════════════════════════════════════════════════
+SUMMARY - CONFIRM WHEN COMPLETE
+═══════════════════════════════════════════════════════════════════════════════
+
+Confirm:
+- [ ] Capacitor installed and configured
+- [ ] Persistent login implemented
+- [ ] Payment UI hidden for native app
+- [ ] Web assets built
+- [ ] iOS platform added
+- [ ] App icons generated from BJJ OS logo
+- [ ] Splash screen created
+- [ ] iOS synced and ready
+- [ ] Instructions provided for Mac build
+
+The app should be identical to bjjos.app but wrapped as native iOS.
+```
+
+-----
+
+## 📱 AFTER REPLIT FINISHES:
+
+I’ll give you the exact Mac commands to run. Should take ~30 minutes to have it on your phone.
+
+**Send it and let’s get this app built.** 🚀​​​​​​​​​​​​​​​​

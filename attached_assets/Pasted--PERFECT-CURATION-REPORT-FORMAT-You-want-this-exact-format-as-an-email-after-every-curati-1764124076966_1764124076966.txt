@@ -1,0 +1,554 @@
+# 🎯 **PERFECT - CURATION REPORT FORMAT**
+
+You want this exact format as an email after every curation AND displayed in the Command Center. Clean, clear, shows exactly what happened.
+
+-----
+
+## **📋 CURATION REPORT TEMPLATE - COPY TO AGENT**
+
+```
+FEATURE REQUEST: Curation Report After Every Run
+
+Todd loves the format Agent just showed. Implement this EXACT format:
+1. Email after every curation run
+2. Display in Command Center after execution
+
+═══════════════════════════════════════════════════════════════
+EMAIL TEMPLATE
+═══════════════════════════════════════════════════════════════
+
+Subject: BJJ OS Curation Complete - +{videosAdded} Videos Added
+
+Body:
+```
+
+🎉 CURATION COMPLETE!
+Results in {duration} minutes:
+
+┌─────────────────┬──────────┬──────────┐
+│ Metric          │ Before   │ After    │
+├─────────────────┼──────────┼──────────┤
+│ Total Videos    │ {before} │ {after}  │
+│ Videos Added    │ 0        │ {added}  │
+└─────────────────┴──────────┴──────────┘
+
+📹 New Elite Videos Added:
+
+┌─────────────────────────────────┬─────────────────┬───────┐
+│ Video                           │ Instructor      │ Score │
+├─────────────────────────────────┼─────────────────┼───────┤
+│ {video1.title}                  │ {instructor1}   │ {score1} │
+│ {video2.title}                  │ {instructor2}   │ {score2} │
+│ {video3.title}                  │ {instructor3}   │ {score3} │
+│ {video4.title}                  │ {instructor4}   │ {score4} │
+└─────────────────────────────────┴─────────────────┴───────┘
+
+📊 Run Statistics:
+• Videos Fetched: {fetched}
+• Videos Analyzed: {analyzed}
+• Videos Approved: {approved}
+• Approval Rate: {rate}%
+• Run Duration: {duration}
+
+✅ Library now has {total} elite videos!
+
+View Library: <https://bjjos.app/admin/videos>
+Run Another: <https://bjjos.app/admin/command-center>
+
+```
+═══════════════════════════════════════════════════════════════
+BACKEND IMPLEMENTATION
+═══════════════════════════════════════════════════════════════
+
+Create curation report function:
+
+```javascript
+// server/services/curationReport.js
+
+async function generateCurationReport(runResult) {
+  const {
+    runId,
+    startTime,
+    endTime,
+    videosBefore,
+    videosAfter,
+    videosAnalyzed,
+    videosAdded,
+    newVideos,
+    approvalRate
+  } = runResult;
+
+  const duration = Math.round((endTime - startTime) / 1000 / 60 * 10) / 10;
+
+  const report = {
+    summary: {
+      before: videosBefore,
+      after: videosAfter,
+      added: videosAdded,
+      duration: `${duration} minutes`
+    },
+    newVideos: newVideos.map(v => ({
+      title: v.title.substring(0, 40),
+      instructor: v.instructor,
+      score: v.qualityScore.toFixed(2)
+    })),
+    statistics: {
+      fetched: runResult.videosFetched || 'N/A',
+      analyzed: videosAnalyzed,
+      approved: videosAdded,
+      rate: approvalRate ? `${approvalRate.toFixed(1)}%` : 'N/A',
+      duration: `${duration} minutes`
+    },
+    libraryTotal: videosAfter
+  };
+
+  return report;
+}
+
+async function sendCurationEmail(report) {
+  const emailBody = formatEmailBody(report);
+  
+  await sendEmail({
+    to: process.env.ADMIN_EMAIL || 'todd@bjjos.app',
+    subject: `BJJ OS Curation Complete - +${report.summary.added} Videos Added`,
+    body: emailBody,
+    html: formatEmailHTML(report)
+  });
+}
+
+function formatEmailBody(report) {
+  const videosTable = report.newVideos.length > 0
+    ? report.newVideos.map(v => 
+        `• ${v.title} - ${v.instructor} (${v.score})`
+      ).join('\n')
+    : '• No new videos added (all duplicates or below threshold)';
+
+  return `
+🎉 CURATION COMPLETE!
+Results in ${report.summary.duration}:
+
+SUMMARY:
+─────────────────────────────────
+Total Videos: ${report.summary.before} → ${report.summary.after}
+Videos Added: ${report.summary.added}
+─────────────────────────────────
+
+📹 NEW ELITE VIDEOS ADDED:
+${videosTable}
+
+📊 RUN STATISTICS:
+• Videos Analyzed: ${report.statistics.analyzed}
+• Videos Approved: ${report.statistics.approved}
+• Approval Rate: ${report.statistics.rate}
+• Run Duration: ${report.statistics.duration}
+
+✅ Library now has ${report.libraryTotal} elite videos!
+
+View Library: https://bjjos.app/admin/videos
+Run Another: https://bjjos.app/admin/command-center
+  `.trim();
+}
+
+function formatEmailHTML(report) {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #fff; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    h1 { color: #6c5ce7; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
+    th { background: #2d2d44; color: #a29bfe; }
+    .score { color: #55efc4; font-weight: bold; }
+    .stats { background: #2d2d44; padding: 15px; border-radius: 8px; margin: 20px 0; }
+    .stats p { margin: 8px 0; }
+    .button { display: inline-block; background: #6c5ce7; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; margin: 10px 5px 10px 0; }
+    .total { font-size: 24px; color: #55efc4; text-align: center; margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎉 Curation Complete!</h1>
+    <p>Results in ${report.summary.duration}:</p>
+    
+    <table>
+      <tr>
+        <th>Metric</th>
+        <th>Before</th>
+        <th>After</th>
+      </tr>
+      <tr>
+        <td>Total Videos</td>
+        <td>${report.summary.before}</td>
+        <td>${report.summary.after}</td>
+      </tr>
+      <tr>
+        <td>Videos Added</td>
+        <td>0</td>
+        <td><strong>${report.summary.added}</strong></td>
+      </tr>
+    </table>
+
+    <h2>📹 New Elite Videos Added:</h2>
+    <table>
+      <tr>
+        <th>Video</th>
+        <th>Instructor</th>
+        <th>Score</th>
+      </tr>
+      ${report.newVideos.map(v => `
+        <tr>
+          <td>${v.title}</td>
+          <td>${v.instructor}</td>
+          <td class="score">${v.score}</td>
+        </tr>
+      `).join('')}
+    </table>
+
+    <div class="stats">
+      <h3>📊 Run Statistics:</h3>
+      <p>• Videos Analyzed: ${report.statistics.analyzed}</p>
+      <p>• Videos Approved: ${report.statistics.approved}</p>
+      <p>• Approval Rate: ${report.statistics.rate}</p>
+      <p>• Run Duration: ${report.statistics.duration}</p>
+    </div>
+
+    <div class="total">
+      ✅ Library now has ${report.libraryTotal} elite videos!
+    </div>
+
+    <a href="https://bjjos.app/admin/videos" class="button">View Library</a>
+    <a href="https://bjjos.app/admin/command-center" class="button">Run Another</a>
+  </div>
+</body>
+</html>
+  `;
+}
+
+module.exports = { generateCurationReport, sendCurationEmail };
+```
+
+═══════════════════════════════════════════════════════════════
+INTEGRATE INTO CURATION PIPELINE
+═══════════════════════════════════════════════════════════════
+
+Update curation completion handler:
+
+```javascript
+// In curation service - after curation completes
+
+const { generateCurationReport, sendCurationEmail } = require('./curationReport');
+
+async function completeCurationRun(runId, results) {
+  // Get before/after counts
+  const videosBefore = results.libraryCountBefore;
+  const videosAfter = await getVideoCount();
+  
+  // Build run result object
+  const runResult = {
+    runId,
+    startTime: results.startTime,
+    endTime: new Date(),
+    videosBefore,
+    videosAfter,
+    videosAnalyzed: results.analyzed,
+    videosAdded: results.approved,
+    newVideos: results.addedVideos, // Array of newly added video objects
+    approvalRate: results.analyzed > 0 
+      ? (results.approved / results.analyzed * 100) 
+      : 0
+  };
+  
+  // Generate and send report
+  const report = await generateCurationReport(runResult);
+  await sendCurationEmail(report);
+  
+  // Store report for Command Center display
+  await storeCurationReport(runId, report);
+  
+  // Update curation run status
+  await updateCurationRunStatus(runId, 'completed', report);
+  
+  return report;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+COMMAND CENTER DISPLAY
+═══════════════════════════════════════════════════════════════
+
+Show report in Command Center after execution:
+
+```jsx
+// In CommandCenter.tsx
+
+function CurationResultDisplay({ report }) {
+  if (!report) return null;
+
+  return (
+    <div className="curation-report">
+      <h3>🎉 Curation Complete!</h3>
+      <p className="duration">Results in {report.summary.duration}</p>
+      
+      {/* Summary Table */}
+      <table className="summary-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Before</th>
+            <th>After</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Total Videos</td>
+            <td>{report.summary.before}</td>
+            <td>{report.summary.after}</td>
+          </tr>
+          <tr>
+            <td>Videos Added</td>
+            <td>0</td>
+            <td className="highlight">{report.summary.added}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* New Videos Table */}
+      {report.newVideos.length > 0 && (
+        <>
+          <h4>📹 New Elite Videos Added:</h4>
+          <table className="videos-table">
+            <thead>
+              <tr>
+                <th>Video</th>
+                <th>Instructor</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.newVideos.map((video, i) => (
+                <tr key={i}>
+                  <td>{video.title}</td>
+                  <td>{video.instructor}</td>
+                  <td className="score">{video.score}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {/* Statistics */}
+      <div className="stats-box">
+        <h4>📊 Run Statistics:</h4>
+        <ul>
+          <li>Videos Analyzed: {report.statistics.analyzed}</li>
+          <li>Videos Approved: {report.statistics.approved}</li>
+          <li>Approval Rate: {report.statistics.rate}</li>
+          <li>Run Duration: {report.statistics.duration}</li>
+        </ul>
+      </div>
+
+      <div className="library-total">
+        ✅ Library now has {report.libraryTotal} elite videos!
+      </div>
+    </div>
+  );
+}
+```
+
+CSS:
+
+```css
+.curation-report {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 24px;
+  margin-top: 20px;
+}
+
+.curation-report h3 {
+  color: #6c5ce7;
+  margin-bottom: 8px;
+}
+
+.curation-report .duration {
+  color: #a29bfe;
+  margin-bottom: 20px;
+}
+
+.curation-report table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+
+.curation-report th,
+.curation-report td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #333;
+}
+
+.curation-report th {
+  background: #2d2d44;
+  color: #a29bfe;
+  font-weight: 600;
+}
+
+.curation-report .highlight {
+  color: #55efc4;
+  font-weight: bold;
+}
+
+.curation-report .score {
+  color: #55efc4;
+  font-weight: bold;
+}
+
+.curation-report .stats-box {
+  background: #2d2d44;
+  padding: 16px;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.curation-report .stats-box ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.curation-report .stats-box li {
+  padding: 6px 0;
+  color: #ddd;
+}
+
+.curation-report .library-total {
+  text-align: center;
+  font-size: 20px;
+  color: #55efc4;
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(85, 239, 196, 0.1);
+  border-radius: 8px;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+STORE RECENT REPORTS FOR HISTORY
+═══════════════════════════════════════════════════════════════
+
+Store reports so Todd can see history:
+
+```javascript
+// Store in database
+async function storeCurationReport(runId, report) {
+  await db.query(`
+    INSERT INTO curation_reports (run_id, report_data, created_at)
+    VALUES ($1, $2, NOW())
+  `, [runId, JSON.stringify(report)]);
+}
+
+// API endpoint to get recent reports
+router.get('/api/admin/curation/reports', async (req, res) => {
+  const { limit = 10 } = req.query;
+  
+  const reports = await db.query(`
+    SELECT run_id, report_data, created_at
+    FROM curation_reports
+    ORDER BY created_at DESC
+    LIMIT $1
+  `, [limit]);
+  
+  res.json(reports.rows.map(r => ({
+    runId: r.run_id,
+    report: JSON.parse(r.report_data),
+    timestamp: r.created_at
+  })));
+});
+```
+
+═══════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════
+
+After implementation:
+
+1. ✅ Email sent after EVERY curation run with full report
+1. ✅ Report displayed in Command Center after execution
+1. ✅ Shows before/after video counts
+1. ✅ Lists all new videos with instructor and score
+1. ✅ Shows run statistics (analyzed, approved, rate, duration)
+1. ✅ Shows total library count
+1. ✅ HTML email with nice formatting
+1. ✅ Report history stored in database
+
+IMPLEMENT NOW.
+
+Test by running one curation and verifying:
+
+- Email arrives with full report
+- Command Center shows same report
+- Format matches the screenshots Todd shared
+
+```
+---
+
+## **📧 EXAMPLE EMAIL YOU'LL RECEIVE**
+
+**Subject:** BJJ OS Curation Complete - +4 Videos Added
+```
+
+🎉 CURATION COMPLETE!
+Results in 5.2 minutes:
+
+┌─────────────────┬──────────┬──────────┐
+│ Metric          │ Before   │ After    │
+├─────────────────┼──────────┼──────────┤
+│ Total Videos    │ 650      │ 654      │
+│ Videos Added    │ 0        │ 4        │
+└─────────────────┴──────────┴──────────┘
+
+📹 NEW ELITE VIDEOS ADDED:
+
+• Baseball Bat Choke From Knee on Belly - Bernardo Faria (8.50)
+• No-Gi X-Guard Sweep - Marcelo Garcia (9.50)
+• X-Guard to the Back - Marcelo Garcia (9.50)
+• Half Butterfly Guard Breakdown - Lachlan Giles (8.50)
+
+📊 RUN STATISTICS:
+• Videos Analyzed: 12
+• Videos Approved: 4
+• Approval Rate: 33.3%
+• Run Duration: 5.2 minutes
+
+✅ Library now has 654 elite videos!
+
+[View Library] [Run Another]
+
+```
+---
+
+## **🎯 WHAT YOU GET**
+
+### **After Every Curation:**
+
+1. **📧 Email** - Full report sent to your inbox
+2. **💻 Command Center** - Same report displayed in UI
+3. **📊 History** - All reports stored for review
+
+### **You'll Always Know:**
+- ✅ How many videos were added
+- ✅ Which specific videos were added
+- ✅ Who the instructors are
+- ✅ Quality scores
+- ✅ Current library total
+- ✅ Curation is working
+
+---
+
+**Copy to Agent. This gives you full visibility into every curation run - exactly what you wanted!** 🎯​​​​​​​​​​​​​​​​
+```

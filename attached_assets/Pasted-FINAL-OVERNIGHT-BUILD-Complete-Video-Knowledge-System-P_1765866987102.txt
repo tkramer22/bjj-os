@@ -1,0 +1,105 @@
+FINAL OVERNIGHT BUILD - Complete Video Knowledge System
+
+PART 1: CROSS-VIDEO SYNTHESIS
+
+Add this capability to Professor OS:
+
+When answering technique questions, Professor OS should:
+
+1. Query ALL videos tagged with that technique
+2. Pull details from MULTIPLE instructors
+3. Find COMPLEMENTARY insights (different instructors teaching different aspects)
+4. Synthesize into ONE comprehensive answer
+5. Cite instructor names but NOT timestamps unless asked
+
+Example synthesis for "How do I maintain mount?":
+
+"Mount retention comes down to a few key principles I've picked up from the masters:
+
+**Hip Pressure** - Roger Gracie emphasizes not attacking right away. Settle in, make them carry your weight.
+
+**Inside Space Control** - Danaher teaches that your elbows must stay inside theirs at all times.
+
+**Feet Position** - Gordon Ryan is strict about this: soles glued to their body, never flat.
+
+**Weight Distribution** - Lachlan Giles has a great adjustment for smaller grapplers: chest on chest, not hips on hips.
+
+These principles work together. Want me to send you the specific video for any of these?"
+
+PART 2: CLEAN RESPONSE FORMAT
+
+RULES:
+1. DEFAULT: Share knowledge conversationally WITHOUT timestamps or video links
+2. ON REQUEST: Only provide video + timestamp when user asks ("show me", "send the video", "link")
+3. OFFER AT END: Always ask "Want me to send any of these videos?"
+4. SOUND LIKE A COACH: Knowledgeable training partner, not a search engine
+
+PART 3: TECHNIQUE KNOWLEDGE GRAPH
+
+Create table: technique_synthesis
+- technique_name
+- related_techniques (array)
+- all_video_ids (array)
+- all_instructors (array)
+- key_principles (array of synthesized principles)
+- principle_sources (which video/timestamp each comes from - stored but not shown unless asked)
+- updated_at
+
+After processing completes, run a job that:
+1. Groups all video_knowledge by primary_technique
+2. Identifies key principles across all instructors
+3. Stores synthesized knowledge for fast retrieval
+
+PART 4: OVERNIGHT PROCESSING WITH PROGRESS LOGGING
+
+Set up continuous processing that:
+1. Processes videos in batches of 10
+2. Every 50 videos, save a progress checkpoint:
+   - Log to a file: /home/runner/workspace/overnight_progress.log
+   - Include: timestamp, videos processed, videos remaining, techniques extracted, any errors
+3. Continue automatically until all ~1,600 videos complete
+4. If any errors, log them but continue processing other videos
+5. Estimate: ~13 hours to complete at current rate
+
+PART 5: MORNING DASHBOARD
+
+Create an endpoint or admin page I can check in the morning:
+
+GET /api/admin/overnight-status
+
+Returns:
+{
+  "started_at": "timestamp",
+  "current_time": "timestamp", 
+  "videos_processed": 1234,
+  "videos_remaining": 395,
+  "videos_failed": 3,
+  "failed_video_ids": [...],
+  "techniques_extracted": 4500,
+  "unique_techniques": 89,
+  "top_instructors": ["Danaher: 45 videos", "Gordon Ryan: 38 videos", ...],
+  "estimated_completion": "7:30 AM",
+  "last_batch_completed": "timestamp",
+  "sample_recent_extractions": [
+    {"video": "...", "techniques": 5, "details": 23},
+    {"video": "...", "techniques": 3, "details": 15}
+  ]
+}
+
+Also create: GET /api/admin/overnight-log
+- Returns the full overnight_progress.log file contents
+
+PART 6: VERIFICATION BEFORE SLEEP
+
+Before I go to sleep, show me:
+1. Confirmation processing is running continuously
+2. Current progress count
+3. The overnight-status endpoint is working
+4. One sample extraction with the NEW comprehensive structure
+5. Confirmation the progress log is being written
+
+PART 7: REPROCESS FIRST 33 VIDEOS
+
+After all new videos complete, automatically reprocess the first 33 videos that used the old extraction logic. Add them to the end of the queue.
+
+START NOW. Confirm everything is running and show me verification before I sleep.

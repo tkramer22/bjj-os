@@ -1,0 +1,654 @@
+# PROMPT 6: AUTONOMOUS VIDEO CURATION SYSTEM
+
+**📋 PASTE THIS INTO REPLIT AGENT:**
+
+```
+BUILD AUTONOMOUS VIDEO CURATION SYSTEM
+
+Create a self-learning video library that discovers, analyzes, and curates BJJ videos automatically using YouTube API and AI analysis.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: DATABASE SCHEMA FOR VIDEO LIBRARY
+═══════════════════════════════════════════════════════════════════════════════
+
+Create these tables:
+
+```sql
+-- Main video knowledge base
+CREATE TABLE IF NOT EXISTS ai_video_knowledge (
+  id SERIAL PRIMARY KEY,
+  youtube_id VARCHAR(50) UNIQUE NOT NULL,
+  youtube_url TEXT NOT NULL,
+  title TEXT NOT NULL,
+  instructor VARCHAR(200),
+  channel_id VARCHAR(100),
+  channel_name VARCHAR(200),
+  
+  -- Metadata
+  duration INTEGER, -- seconds
+  upload_date TIMESTAMP,
+  view_count INTEGER,
+  like_count INTEGER,
+  thumbnail_url TEXT,
+  
+  -- AI-extracted categorization
+  technique_type VARCHAR(100), -- guard, pass, submission, escape, etc.
+  specific_technique VARCHAR(200), -- "triangle from closed guard"
+  belt_level TEXT[], -- ['white', 'blue', 'purple']
+  gi_preference VARCHAR(20), -- gi_only, nogi_only, both
+  
+  -- AI analysis
+  key_details JSONB, -- Main concepts, teaching moments
+  quality_score DECIMAL(3,2), -- 1.0-10.0
+  instructor_credibility VARCHAR(20), -- high, medium, low
+  
+  -- Performance metrics (from user feedback)
+  recommendation_count INTEGER DEFAULT 0,
+  helpful_count INTEGER DEFAULT 0,
+  not_helpful_count INTEGER DEFAULT 0,
+  helpful_ratio DECIMAL(3,2), -- calculated: helpful / total
+  
+  -- Status
+  status VARCHAR(20) DEFAULT 'active', -- active, archived, removed
+  added_at TIMESTAMP DEFAULT NOW(),
+  last_recommended TIMESTAMP,
+  
+  -- Search optimization
+  search_vector tsvector,
+  tags TEXT[]
+);
+
+-- User feedback on videos
+CREATE TABLE IF NOT EXISTS video_feedback (
+  id SERIAL PRIMARY KEY,
+  video_id INTEGER REFERENCES ai_video_knowledge(id),
+  user_id INTEGER REFERENCES users(id),
+  helpful BOOLEAN NOT NULL,
+  user_context JSONB, -- belt, gi_pref, etc. at time of feedback
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Video recommendations log
+CREATE TABLE IF NOT EXISTS video_recommendations (
+  id SERIAL PRIMARY KEY,
+  video_id INTEGER REFERENCES ai_video_knowledge(id),
+  user_id INTEGER REFERENCES users(id),
+  conversation_id INTEGER,
+  recommended_at TIMESTAMP DEFAULT NOW(),
+  context TEXT -- What question led to this recommendation
+);
+
+-- Trusted instructors database
+CREATE TABLE IF NOT EXISTS instructor_credibility (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(200) UNIQUE NOT NULL,
+  channel_id VARCHAR(100),
+  credibility_level VARCHAR(20), -- high, medium, low
+  credentials TEXT,
+  auto_approve BOOLEAN DEFAULT FALSE,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Curation activity log
+CREATE TABLE IF NOT EXISTS video_curation_log (
+  id SERIAL PRIMARY KEY,
+  search_query TEXT,
+  videos_found INTEGER,
+  videos_analyzed INTEGER,
+  videos_added INTEGER,
+  videos_rejected INTEGER,
+  run_at TIMESTAMP DEFAULT NOW(),
+  duration_seconds INTEGER
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_video_status ON ai_video_knowledge(status);
+CREATE INDEX IF NOT EXISTS idx_video_technique ON ai_video_knowledge(technique_type);
+CREATE INDEX IF NOT EXISTS idx_video_belt ON ai_video_knowledge USING GIN(belt_level);
+CREATE INDEX IF NOT EXISTS idx_video_quality ON ai_video_knowledge(quality_score DESC);
+CREATE INDEX IF NOT EXISTS idx_video_helpful ON ai_video_knowledge(helpful_ratio DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_video ON video_feedback(video_id);
+CREATE INDEX IF NOT EXISTS idx_recommendations_video ON video_recommendations(video_id);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: SEED TRUSTED INSTRUCTORS
+═══════════════════════════════════════════════════════════════════════════════
+
+Insert high-credibility instructors (auto-approve their videos):
+
+```sql
+INSERT INTO instructor_credibility (name, credibility_level, auto_approve, credentials) VALUES
+-- HIGH CREDIBILITY - Auto-approve
+('John Danaher', 'high', true, 'Legendary coach, Systematic approach'),
+('Lachlan Giles', 'high', true, 'Black belt, ADCC medalist, Clear instruction'),
+('Bernardo Faria', 'high', true, '5x World Champion, Pressure passing expert'),
+('Gordon Ryan', 'high', true, 'Greatest no-gi grappler, Modern techniques'),
+('Marcelo Garcia', 'high', true, 'GOAT contender, Butterfly guard master'),
+('Roger Gracie', 'high', true, '10x World Champion, Perfect fundamentals'),
+('Keenan Cornelius', 'high', true, 'World Champion, Lapel guard innovator'),
+('Garry Tonon', 'high', true, 'ADCC Champion, Leg lock specialist'),
+('Craig Jones', 'high', true, 'No-gi specialist, Leg locks'),
+('Priit Mihkelson', 'high', true, 'Defensive systems expert'),
+('Ryan Hall', 'high', true, 'Triangle specialist, Systematic training'),
+('Demian Maia', 'high', true, 'UFC fighter, Back control master'),
+('Renzo Gracie', 'high', true, 'Legendary Gracie, Complete game'),
+('Lucas Leite', 'high', true, 'Half guard specialist, World Champion'),
+('Jon Thomas', 'medium', false, 'Clear instruction, growing channel'),
+('Chewjitsu', 'medium', false, 'Beginner-friendly content'),
+('Knight Jiu-Jitsu', 'medium', false, 'Conceptual teaching')
+ON CONFLICT (name) DO NOTHING;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: YOUTUBE API INTEGRATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Install YouTube API package:
+
+```bash
+npm install @googleapis/youtube
+```
+
+Add to .env:
+
+```
+YOUTUBE_API_KEY=your_youtube_api_key_here
+```
+
+Create /server/services/youtube_service.js:
+
+```javascript
+const { google } = require('@googleapis/youtube');
+
+const youtube = google.youtube({
+  version: 'v3',
+  auth: process.env.YOUTUBE_API_KEY
+});
+
+// Search for BJJ videos
+async function searchBJJVideos(query, maxResults = 20) {
+  try {
+    const response = await youtube.search.list({
+      part: 'snippet',
+      q: query,
+      type: 'video',
+      maxResults: maxResults,
+      videoDuration: 'medium', // 4-20 minutes
+      relevanceLanguage: 'en',
+      safeSearch: 'strict'
+    });
+    
+    return response.data.items.map(item => ({
+      youtube_id: item.id.videoId,
+      youtube_url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+      title: item.snippet.title,
+      channel_name: item.snippet.channelTitle,
+      channel_id: item.snippet.channelId,
+      thumbnail_url: item.snippet.thumbnails.medium.url,
+      upload_date: item.snippet.publishedAt
+    }));
+  } catch (error) {
+    console.error('YouTube search error:', error);
+    return [];
+  }
+}
+
+// Get detailed video info
+async function getVideoDetails(videoId) {
+  try {
+    const response = await youtube.videos.list({
+      part: 'contentDetails,statistics',
+      id: videoId
+    });
+    
+    if (response.data.items.length === 0) return null;
+    
+    const video = response.data.items[0];
+    const duration = parseDuration(video.contentDetails.duration);
+    
+    return {
+      duration: duration,
+      view_count: parseInt(video.statistics.viewCount || 0),
+      like_count: parseInt(video.statistics.likeCount || 0)
+    };
+  } catch (error) {
+    console.error('Video details error:', error);
+    return null;
+  }
+}
+
+// Parse ISO 8601 duration to seconds
+function parseDuration(duration) {
+  const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+  const hours = (match[1] || '').replace('H', '') || 0;
+  const minutes = (match[2] || '').replace('M', '') || 0;
+  const seconds = (match[3] || '').replace('S', '') || 0;
+  return parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseInt(seconds);
+}
+
+module.exports = {
+  searchBJJVideos,
+  getVideoDetails
+};
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: AI VIDEO ANALYSIS SERVICE
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /server/services/video_analysis_service.js:
+
+```javascript
+const Anthropic = require('@anthropic-ai/sdk');
+const pool = require('../db');
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
+
+async function analyzeVideo(videoData) {
+  const prompt = `Analyze this BJJ instructional video and extract metadata:
+
+Title: ${videoData.title}
+Channel: ${videoData.channel_name}
+Views: ${videoData.view_count || 'unknown'}
+Duration: ${videoData.duration ? Math.floor(videoData.duration / 60) + ' minutes' : 'unknown'}
+
+Task: Determine if this is a quality BJJ instructional video and extract details.
+
+Return ONLY valid JSON (no markdown, no explanations):
+{
+  "is_instructional": true/false,
+  "technique_type": "guard/pass/submission/escape/transition/takedown/defense/concept",
+  "specific_technique": "specific name like 'triangle from closed guard'",
+  "instructor": "instructor name if mentioned",
+  "instructor_credibility": "high/medium/low",
+  "belt_level": ["white", "blue", "purple", "brown", "black"],
+  "gi_preference": "gi_only/nogi_only/both",
+  "key_concepts": ["concept1", "concept2"],
+  "quality_score": 1-10,
+  "should_add": true/false,
+  "rejection_reason": "if should_add is false, why?"
+}
+
+Quality indicators (high score):
+- Clear instruction
+- Proper demonstration
+- Good production quality
+- Reputable instructor
+- Appropriate pacing
+- No dangerous advice
+
+Reject if:
+- Not instructional (sparring footage, vlogs)
+- Poor quality (can't see technique)
+- Dangerous techniques
+- Spam/clickbait
+- Too short (<2 min) or too long (>30 min)`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: prompt
+      }]
+    });
+    
+    const analysisText = response.content[0].text;
+    const analysis = JSON.parse(analysisText);
+    
+    // Check instructor credibility from database
+    if (analysis.instructor) {
+      const credResult = await pool.query(
+        'SELECT credibility_level, auto_approve FROM instructor_credibility WHERE name ILIKE $1',
+        [analysis.instructor]
+      );
+      
+      if (credResult.rows.length > 0) {
+        analysis.instructor_credibility = credResult.rows[0].credibility_level;
+        analysis.auto_approve = credResult.rows[0].auto_approve;
+      }
+    }
+    
+    return analysis;
+  } catch (error) {
+    console.error('Video analysis error:', error);
+    return {
+      is_instructional: false,
+      should_add: false,
+      rejection_reason: 'Analysis failed'
+    };
+  }
+}
+
+module.exports = {
+  analyzeVideo
+};
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: VIDEO CURATION CONTROLLER
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /server/services/video_curation_service.js:
+
+```javascript
+const pool = require('../db');
+const { searchBJJVideos, getVideoDetails } = require('./youtube_service');
+const { analyzeVideo } = require('./video_analysis_service');
+
+// Foundation search queries for Week 1
+const FOUNDATION_SEARCHES = [
+  // Escapes (critical)
+  'bjj mount escape tutorial',
+  'side control escape fundamentals',
+  'back escape bjj',
+  'guard retention basics',
+  
+  // Guard fundamentals
+  'closed guard basics bjj',
+  'open guard fundamentals',
+  'half guard tutorial',
+  'butterfly guard basics',
+  
+  // Passing
+  'guard passing fundamentals',
+  'pressure passing tutorial',
+  'toreando pass bjj',
+  'knee slice pass',
+  
+  // Submissions
+  'triangle choke tutorial',
+  'armbar from guard',
+  'rear naked choke details',
+  'kimura tutorial bjj',
+  
+  // Defense
+  'submission defense bjj',
+  'mount defense fundamentals',
+  'back defense escape',
+  
+  // Position
+  'side control techniques',
+  'mount attacks bjj',
+  'back control system'
+];
+
+async function runAutonomousCuration(searchLimit = 10) {
+  const startTime = Date.now();
+  let totalFound = 0;
+  let totalAnalyzed = 0;
+  let totalAdded = 0;
+  let totalRejected = 0;
+  
+  console.log('🎬 Starting autonomous video curation...');
+  
+  // Run searches
+  const searches = FOUNDATION_SEARCHES.slice(0, searchLimit);
+  
+  for (const query of searches) {
+    console.log(`\n🔍 Searching: "${query}"`);
+    
+    try {
+      // Search YouTube
+      const videos = await searchBJJVideos(query, 20);
+      totalFound += videos.length;
+      console.log(`   Found ${videos.length} videos`);
+      
+      // Process each video
+      for (const video of videos) {
+        // Check if already exists
+        const existsResult = await pool.query(
+          'SELECT id FROM ai_video_knowledge WHERE youtube_id = $1',
+          [video.youtube_id]
+        );
+        
+        if (existsResult.rows.length > 0) {
+          console.log(`   ⏭️  Skipping (already have): ${video.title}`);
+          continue;
+        }
+        
+        // Get detailed info
+        const details = await getVideoDetails(video.youtube_id);
+        if (details) {
+          video.duration = details.duration;
+          video.view_count = details.view_count;
+          video.like_count = details.like_count;
+        }
+        
+        // AI analysis
+        console.log(`   🤖 Analyzing: ${video.title.substring(0, 50)}...`);
+        const analysis = await analyzeVideo(video);
+        totalAnalyzed++;
+        
+        // Decide: Add or Reject
+        const shouldAdd = decideShouldAdd(analysis);
+        
+        if (shouldAdd) {
+          await addVideoToLibrary(video, analysis);
+          totalAdded++;
+          console.log(`   ✅ ADDED (Score: ${analysis.quality_score})`);
+        } else {
+          totalRejected++;
+          console.log(`   ❌ REJECTED: ${analysis.rejection_reason}`);
+        }
+        
+        // Rate limit: small delay between analyses
+        await sleep(500);
+      }
+      
+    } catch (error) {
+      console.error(`   Error processing query "${query}":`, error);
+    }
+    
+    // Delay between searches
+    await sleep(1000);
+  }
+  
+  const duration = Math.floor((Date.now() - startTime) / 1000);
+  
+  // Log results
+  await pool.query(`
+    INSERT INTO video_curation_log (
+      search_query, videos_found, videos_analyzed, 
+      videos_added, videos_rejected, duration_seconds
+    ) VALUES ($1, $2, $3, $4, $5, $6)
+  `, [
+    `Foundation searches (${searchLimit} queries)`,
+    totalFound, totalAnalyzed, totalAdded, totalRejected, duration
+  ]);
+  
+  console.log('\n📊 CURATION COMPLETE:');
+  console.log(`   Videos Found: ${totalFound}`);
+  console.log(`   Videos Analyzed: ${totalAnalyzed}`);
+  console.log(`   ✅ Added: ${totalAdded}`);
+  console.log(`   ❌ Rejected: ${totalRejected}`);
+  console.log(`   ⏱️  Duration: ${duration}s`);
+  
+  return {
+    totalFound,
+    totalAnalyzed,
+    totalAdded,
+    totalRejected,
+    duration
+  };
+}
+
+function decideShouldAdd(analysis) {
+  // Must be instructional
+  if (!analysis.is_instructional) return false;
+  
+  // AI says don't add
+  if (!analysis.should_add) return false;
+  
+  // Quality threshold
+  if (analysis.instructor_credibility === 'high' && analysis.quality_score >= 7.0) {
+    return true; // Lower bar for trusted instructors
+  }
+  
+  if (analysis.instructor_credibility === 'medium' && analysis.quality_score >= 8.0) {
+    return true;
+  }
+  
+  if (analysis.instructor_credibility === 'low' && analysis.quality_score >= 9.0) {
+    return true; // Very high bar for unknown instructors
+  }
+  
+  return false;
+}
+
+async function addVideoToLibrary(video, analysis) {
+  await pool.query(`
+    INSERT INTO ai_video_knowledge (
+      youtube_id, youtube_url, title, instructor,
+      channel_id, channel_name, duration, upload_date,
+      view_count, like_count, thumbnail_url,
+      technique_type, specific_technique, belt_level,
+      gi_preference, key_details, quality_score,
+      instructor_credibility, status
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+  `, [
+    video.youtube_id, video.youtube_url, video.title, analysis.instructor,
+    video.channel_id, video.channel_name, video.duration, video.upload_date,
+    video.view_count, video.like_count, video.thumbnail_url,
+    analysis.technique_type, analysis.specific_technique, analysis.belt_level,
+    analysis.gi_preference, JSON.stringify(analysis.key_concepts), analysis.quality_score,
+    analysis.instructor_credibility, 'active'
+  ]);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+module.exports = {
+  runAutonomousCuration
+};
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: API ENDPOINTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /server/routes/video_curation_routes.js:
+
+```javascript
+const express = require('express');
+const router = express.Router();
+const { runAutonomousCuration } = require('../services/video_curation_service');
+const pool = require('../db');
+
+// Trigger manual curation (admin only)
+router.post('/curate', async (req, res) => {
+  try {
+    const { searchLimit = 10 } = req.body;
+    
+    const results = await runAutonomousCuration(searchLimit);
+    
+    res.json({
+      success: true,
+      results
+    });
+  } catch (error) {
+    console.error('Curation error:', error);
+    res.status(500).json({ error: 'Curation failed' });
+  }
+});
+
+// Get library stats
+router.get('/stats', async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT 
+        COUNT(*) as total_videos,
+        COUNT(*) FILTER (WHERE status = 'active') as active_videos,
+        AVG(quality_score) as avg_quality,
+        AVG(helpful_ratio) as avg_helpful_ratio
+      FROM ai_video_knowledge
+    `);
+    
+    res.json(stats.rows[0]);
+  } catch (error) {
+    console.error('Stats error:', error);
+    res.status(500).json({ error: 'Failed to get stats' });
+  }
+});
+
+module.exports = router;
+```
+
+Register in server/index.js:
+
+```javascript
+const videoCurationRoutes = require('./routes/video_curation_routes');
+app.use('/api/video-curation', videoCurationRoutes);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 7: INITIAL SETUP SCRIPT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create script to run first curation:
+
+Add to package.json scripts:
+
+```json
+"scripts": {
+  "curate-videos": "node scripts/initial_curation.js"
+}
+```
+
+Create scripts/initial_curation.js:
+
+```javascript
+const { runAutonomousCuration } = require('../server/services/video_curation_service');
+
+async function main() {
+  console.log('Starting initial video curation...');
+  console.log('This will search and analyze ~200-400 videos');
+  console.log('Should take 10-15 minutes\n');
+  
+  // Run all foundation searches
+  await runAutonomousCuration(20);
+  
+  console.log('\n✅ Initial curation complete!');
+  process.exit(0);
+}
+
+main().catch(error => {
+  console.error('Fatal error:', error);
+  process.exit(1);
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation:
+
+✅ Database tables created
+✅ Trusted instructors seeded
+✅ YouTube API configured
+✅ AI analysis working
+✅ Can run: npm run curate-videos
+✅ Videos added to ai_video_knowledge table
+✅ Can query videos in database
+✅ Prof. OS can access videos for recommendations
+
+IMPLEMENT ALL COMPONENTS NOW.
+
+After implementation, run the initial curation to build the library:
+npm run curate-videos
+
+This will add 100-200 videos to start. We can run it multiple times to grow the library.
+
+```
+---
+
+**Paste that in and let me know when it's running!** This will build your video brain. 🎬🧠​​​​​​​​​​​​​​​​
+```

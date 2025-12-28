@@ -1,0 +1,931 @@
+# **📋 PART 1: IMPLEMENT 3-PATH CURATION SYSTEM - SEND TO REPLIT AGENT:**
+
+```
+IMPLEMENT: 3-Path Curation System with YouTube Metrics & Multi-Instructor Detection
+
+Build the complete statistically-sound curation algorithm using 3 clear acceptance paths 
+instead of complex weighted formulas.
+
+This replaces any existing scoring logic with a simpler, more maintainable system.
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 3A: QUICK WINS - IMPLEMENT NOW
+═══════════════════════════════════════════════════════════════════════════════
+
+1. ✅ Multi-instructor detection (from title/description, not just channel)
+2. ✅ YouTube engagement metrics (like rate, comment rate, view velocity)
+3. ✅ Confidence-adjusted scoring (small samples get discounted)
+4. ✅ 3-path acceptance system (Elite, Metrics-Validated, Known-Quality)
+5. ✅ Coverage as secondary filter (not part of quality score)
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: ENHANCE INSTRUCTOR EVALUATOR (MULTI-SOURCE DETECTION)
+═══════════════════════════════════════════════════════════════════════════════
+
+File: server/services/curation/instructor-evaluator.js
+
+async function evaluateInstructor(video) {
+  
+  console.log(`\n🎓 Evaluating Instructor for: "${video.title}"`);
+  
+  // ═══════════════════════════════════════════════════════════
+  // STEP 1: Check channel name (existing behavior)
+  // ═══════════════════════════════════════════════════════════
+  
+  let channelInstructor = await db.instructors.findOne({
+    where: { 
+      name: { [Op.iLike]: video.channelName }  // Case-insensitive
+    }
+  });
+  
+  if (channelInstructor) {
+    console.log(`   Found in DB (channel): ${channelInstructor.name} (${channelInstructor.tier})`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // STEP 2: Extract instructor names from VIDEO TITLE
+  // ═══════════════════════════════════════════════════════════
+  
+  let titleInstructors = await extractInstructorsFromText(video.title);
+  
+  if (titleInstructors.length > 0) {
+    console.log(`   Found in title: ${titleInstructors.map(i => i.name).join(', ')}`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // STEP 3: Extract from DESCRIPTION
+  // ═══════════════════════════════════════════════════════════
+  
+  let descInstructors = await extractInstructorsFromText(video.description);
+  
+  if (descInstructors.length > 0) {
+    console.log(`   Found in description: ${descInstructors.map(i => i.name).join(', ')}`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // STEP 4: Combine all matches, pick HIGHEST credibility
+  // ═══════════════════════════════════════════════════════════
+  
+  const allInstructors = [
+    channelInstructor,
+    ...titleInstructors,
+    ...descInstructors
+  ].filter(Boolean);
+  
+  if (allInstructors.length > 0) {
+    // Sort by credibility (highest first)
+    const bestInstructor = allInstructors.sort((a, b) => 
+      b.credibility_score - a.credibility_score
+    )[0];
+    
+    console.log(`   ✅ Best match: ${bestInstructor.name} (${bestInstructor.credibility_score}/100)`);
+    
+    return {
+      name: bestInstructor.name,
+      tier: bestInstructor.tier,
+      credibility: bestInstructor.credibility_score,
+      specialties: bestInstructor.specialties,
+      auto_accept: bestInstructor.auto_accept,
+      foundIn: bestInstructor.source || 'database',
+      reason: `${bestInstructor.name} is ${bestInstructor.tier} tier`
+    };
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // STEP 5: Unknown instructor
+  // ═══════════════════════════════════════════════════════════
+  
+  console.log(`   ❓ Unknown instructor: ${video.channelName}`);
+  
+  return {
+    name: video.channelName,
+    tier: 'unknown',
+    credibility: 50,
+    reason: 'Unknown instructor - needs strong metrics to validate'
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPER: Extract instructor names from text
+// ═══════════════════════════════════════════════════════════
+
+async function extractInstructorsFromText(text) {
+  if (!text) return [];
+  
+  // Get all instructors from database
+  const allInstructors = await db.instructors.findAll({
+    attributes: ['name', 'tier', 'credibility_score']
+  });
+  
+  const foundInstructors = [];
+  
+  for (const instructor of allInstructors) {
+    const name = instructor.name.toLowerCase();
+    const textLower = text.toLowerCase();
+    
+    // Exact match
+    if (textLower.includes(name)) {
+      foundInstructors.push({
+        ...instructor.dataValues,
+        source: 'text_match'
+      });
+      continue;
+    }
+    
+    // Fuzzy match - handle variations
+    // "Lachlan Giles" = "L. Giles" = "Lachlan"
+    const nameParts = name.split(' ');
+    if (nameParts.length >= 2) {
+      const firstName = nameParts[0];
+      const lastName = nameParts[nameParts.length - 1];
+      
+      // Match "Firstname Lastname" or "F. Lastname"
+      const patterns = [
+        firstName + ' ' + lastName,
+        firstName.charAt(0) + '. ' + lastName,
+        firstName,
+        lastName
+      ];
+      
+      for (const pattern of patterns) {
+        if (textLower.includes(pattern.toLowerCase())) {
+          foundInstructors.push({
+            ...instructor.dataValues,
+            source: 'text_match_fuzzy'
+          });
+          break;
+        }
+      }
+    }
+  }
+  
+  return foundInstructors;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: ADD YOUTUBE METRICS ANALYZER
+═══════════════════════════════════════════════════════════════════════════════
+
+File: server/services/curation/youtube-metrics-analyzer.js
+
+async function calculateYouTubeMetrics(video, channelData) {
+  
+  console.log(`\n📊 Analyzing YouTube Metrics...`);
+  
+  const views = parseInt(video.viewCount) || 0;
+  const likes = parseInt(video.likeCount) || 0;
+  const comments = parseInt(video.commentCount) || 0;
+  const channelSubs = parseInt(channelData?.subscriberCount) || 1;
+  
+  const publishedAt = new Date(video.publishedAt);
+  const daysSincePublish = (Date.now() - publishedAt) / 86400000;
+  
+  // ═══════════════════════════════════════════════════════════
+  // CONFIDENCE LEVEL (based on sample size)
+  // ═══════════════════════════════════════════════════════════
+  
+  let confidence, confidenceMultiplier;
+  
+  if (views < 1000) {
+    confidence = 'LOW';
+    confidenceMultiplier = 0.3;
+  } else if (views < 5000) {
+    confidence = 'MEDIUM';
+    confidenceMultiplier = 0.7;
+  } else {
+    confidence = 'HIGH';
+    confidenceMultiplier = 1.0;
+  }
+  
+  console.log(`   Sample size: ${views} views → Confidence: ${confidence}`);
+  
+  // ═══════════════════════════════════════════════════════════
+  // ENGAGEMENT METRICS
+  // ═══════════════════════════════════════════════════════════
+  
+  const likeRate = views > 0 ? likes / views : 0;
+  const commentRate = views > 0 ? comments / views : 0;
+  const viewToSubRatio = channelSubs > 0 ? views / channelSubs : 0;
+  const viewsPerDay = daysSincePublish > 0 ? views / daysSincePublish : 0;
+  
+  console.log(`   Like rate: ${(likeRate * 100).toFixed(2)}%`);
+  console.log(`   Comment rate: ${(commentRate * 100).toFixed(2)}%`);
+  console.log(`   View/Sub ratio: ${viewToSubRatio.toFixed(2)}`);
+  console.log(`   Views/day: ${viewsPerDay.toFixed(0)}`);
+  
+  // ═══════════════════════════════════════════════════════════
+  // ENGAGEMENT SCORE (0-100)
+  // ═══════════════════════════════════════════════════════════
+  
+  // Like rate scoring (YouTube educational average is 3-5%)
+  let likeScore = 0;
+  if (likeRate >= 0.08) likeScore = 100;       // 8%+ = exceptional
+  else if (likeRate >= 0.05) likeScore = 80;   // 5%+ = excellent
+  else if (likeRate >= 0.03) likeScore = 60;   // 3%+ = good
+  else if (likeRate >= 0.02) likeScore = 40;   // 2%+ = average
+  else likeScore = 20;                         // <2% = poor
+  
+  // Comment rate scoring
+  let commentScore = 0;
+  if (commentRate >= 0.01) commentScore = 100;     // 1%+ = highly engaging
+  else if (commentRate >= 0.005) commentScore = 80; // 0.5%+ = good
+  else if (commentRate >= 0.002) commentScore = 60; // 0.2%+ = average
+  else commentScore = 30;
+  
+  // Combined engagement score
+  const engagementScore = (likeScore * 0.6) + (commentScore * 0.4);
+  
+  // Apply confidence multiplier
+  const adjustedScore = engagementScore * confidenceMultiplier;
+  
+  console.log(`   Engagement score: ${engagementScore.toFixed(1)} → Adjusted: ${adjustedScore.toFixed(1)}`);
+  
+  // ═══════════════════════════════════════════════════════════
+  // SPECIAL SIGNALS
+  // ═══════════════════════════════════════════════════════════
+  
+  // Hidden gem: Small channel going viral
+  const isHiddenGem = channelSubs < 10000 && viewToSubRatio > 2.0;
+  
+  // Viral: Significant reach beyond subscribers
+  const isViral = viewToSubRatio > 0.5;
+  
+  // Trending: New video with high velocity
+  const isTrending = daysSincePublish < 7 && viewsPerDay > 1000;
+  
+  // Evergreen: Old video still getting views
+  const isEvergreen = daysSincePublish > 365 && viewsPerDay > 100;
+  
+  if (isHiddenGem) console.log(`   🔥 HIDDEN GEM detected!`);
+  if (isViral) console.log(`   🚀 VIRAL detected!`);
+  if (isTrending) console.log(`   📈 TRENDING detected!`);
+  if (isEvergreen) console.log(`   ♾️  EVERGREEN detected!`);
+  
+  // ═══════════════════════════════════════════════════════════
+  // RETURN METRICS
+  // ═══════════════════════════════════════════════════════════
+  
+  return {
+    score: adjustedScore,
+    confidence: confidence,
+    views: views,
+    likes: likes,
+    comments: comments,
+    likeRate: likeRate,
+    commentRate: commentRate,
+    viewToSubRatio: viewToSubRatio,
+    viewsPerDay: viewsPerDay,
+    daysSincePublish: daysSincePublish,
+    
+    signals: {
+      isHiddenGem: isHiddenGem,
+      isViral: isViral,
+      isTrending: isTrending,
+      isEvergreen: isEvergreen
+    },
+    
+    breakdown: {
+      likeScore: likeScore,
+      commentScore: commentScore,
+      engagementScore: engagementScore
+    }
+  };
+}
+
+module.exports = { calculateYouTubeMetrics };
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: IMPLEMENT 3-PATH EVALUATION SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+File: server/services/curation/three-path-evaluator.js
+
+const { evaluateInstructor } = require('./instructor-evaluator');
+const { calculateYouTubeMetrics } = require('./youtube-metrics-analyzer');
+const { analyzeContentQuality } = require('./content-analyzer');
+const { extractUniqueValue } = require('./unique-value-extractor');
+
+async function evaluateVideoThreePath(video, channelData) {
+  
+  console.log(`\n${'═'.repeat(80)}`);
+  console.log(`📹 EVALUATING: "${video.title}"`);
+  console.log(`   Channel: ${video.channelName}`);
+  console.log(`   Video ID: ${video.videoId}`);
+  console.log(`${'═'.repeat(80)}`);
+  
+  // Run all analyses
+  const instructor = await evaluateInstructor(video);
+  const youtube = await calculateYouTubeMetrics(video, channelData);
+  const content = await analyzeContentQuality(video);
+  
+  // ═══════════════════════════════════════════════════════════
+  // PATH 1: ELITE INSTRUCTOR (TRUST PATH)
+  // ═══════════════════════════════════════════════════════════
+  
+  console.log(`\n🛤️  PATH 1: Elite Instructor Check...`);
+  
+  if (instructor.tier === 'elite') {
+    console.log(`   ✅ Is elite instructor: ${instructor.name}`);
+    
+    // Basic sanity check on content
+    if (content.score >= 60) {
+      console.log(`   ✅ Content passes sanity check: ${content.score}/100`);
+      console.log(`\n🎯 DECISION: ACCEPT (Elite Instructor Path)`);
+      
+      return {
+        decision: 'ACCEPT',
+        score: 90,
+        path: 'Elite Instructor',
+        reason: `${instructor.name} is elite tier - proven track record`,
+        instructor: instructor,
+        youtube: youtube,
+        content: content
+      };
+    } else {
+      console.log(`   ⚠️  Content quality suspiciously low: ${content.score}/100`);
+      console.log(`\n🎯 DECISION: MANUAL_REVIEW (Elite but low content quality)`);
+      
+      return {
+        decision: 'MANUAL_REVIEW',
+        score: 65,
+        path: 'Elite Instructor',
+        reason: 'Elite instructor but content quality below threshold - needs review',
+        instructor: instructor,
+        youtube: youtube,
+        content: content
+      };
+    }
+  } else {
+    console.log(`   ❌ Not elite instructor (${instructor.tier})`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // PATH 2: METRICS-VALIDATED (DATA PATH)
+  // ═══════════════════════════════════════════════════════════
+  
+  console.log(`\n🛤️  PATH 2: Metrics Validation Check...`);
+  
+  if (youtube.views >= 10000) {
+    console.log(`   ✅ Sufficient data: ${youtube.views} views`);
+    console.log(`   Engagement score: ${youtube.score.toFixed(1)}/100`);
+    console.log(`   Content score: ${content.score}/100`);
+    
+    if (youtube.score >= 75 && content.score >= 70) {
+      console.log(`   ✅ Exceptional metrics + good content`);
+      console.log(`\n🎯 DECISION: ACCEPT (Metrics-Validated Path)`);
+      
+      return {
+        decision: 'ACCEPT',
+        score: 85,
+        path: 'Metrics-Validated',
+        reason: 'Exceptional user engagement validates quality despite unknown instructor',
+        instructor: instructor,
+        youtube: youtube,
+        content: content
+      };
+    } else {
+      console.log(`   ❌ Metrics (${youtube.score.toFixed(1)}) or content (${content.score}) below threshold`);
+    }
+  } else {
+    console.log(`   ❌ Insufficient data: ${youtube.views} views (need 10K+)`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // PATH 3: KNOWN QUALITY INSTRUCTOR (BALANCED PATH)
+  // ═══════════════════════════════════════════════════════════
+  
+  console.log(`\n🛤️  PATH 3: Known Quality Instructor Check...`);
+  
+  if (instructor.tier === 'high_quality') {
+    console.log(`   ✅ Known quality instructor: ${instructor.name}`);
+    
+    const hasMetrics = youtube.views >= 5000;
+    let score;
+    
+    if (hasMetrics) {
+      // With metrics: balanced scoring
+      score = 
+        (instructor.credibility * 0.35) +
+        (youtube.score * 0.40) +
+        (content.score * 0.25);
+      
+      console.log(`   Scoring (with metrics):`);
+      console.log(`     Instructor (35%): ${instructor.credibility} × 0.35 = ${(instructor.credibility * 0.35).toFixed(1)}`);
+      console.log(`     YouTube (40%): ${youtube.score.toFixed(1)} × 0.40 = ${(youtube.score * 0.40).toFixed(1)}`);
+      console.log(`     Content (25%): ${content.score} × 0.25 = ${(content.score * 0.25).toFixed(1)}`);
+      console.log(`     Total: ${score.toFixed(1)}/100`);
+      
+      if (score >= 72) {
+        console.log(`   ✅ Meets threshold (72)`);
+        console.log(`\n🎯 DECISION: ACCEPT (Known Quality + Metrics Path)`);
+        
+        return {
+          decision: 'ACCEPT',
+          score: score,
+          path: 'Known Quality + Metrics',
+          reason: 'Known quality instructor with validated metrics',
+          instructor: instructor,
+          youtube: youtube,
+          content: content
+        };
+      } else {
+        console.log(`   ❌ Below threshold: ${score.toFixed(1)} < 72`);
+      }
+    } else {
+      // Without metrics: trust instructor more
+      score = 
+        (instructor.credibility * 0.60) +
+        (content.score * 0.40);
+      
+      console.log(`   Scoring (without metrics - early video):`);
+      console.log(`     Instructor (60%): ${instructor.credibility} × 0.60 = ${(instructor.credibility * 0.60).toFixed(1)}`);
+      console.log(`     Content (40%): ${content.score} × 0.40 = ${(content.score * 0.40).toFixed(1)}`);
+      console.log(`     Total: ${score.toFixed(1)}/100`);
+      
+      if (score >= 75) {
+        console.log(`   ✅ Meets threshold (75 for early videos)`);
+        console.log(`\n🎯 DECISION: ACCEPT (Known Quality - Early Content Path)`);
+        
+        return {
+          decision: 'ACCEPT',
+          score: score,
+          path: 'Known Quality - Early',
+          reason: 'Known quality instructor - early video without metrics yet',
+          instructor: instructor,
+          youtube: youtube,
+          content: content
+        };
+      } else {
+        console.log(`   ❌ Below threshold: ${score.toFixed(1)} < 75`);
+      }
+    }
+  } else {
+    console.log(`   ❌ Not known quality instructor (${instructor.tier})`);
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // ALL PATHS FAILED
+  // ═══════════════════════════════════════════════════════════
+  
+  console.log(`\n🎯 DECISION: REJECT (Failed all 3 paths)`);
+  console.log(`   Reason: Did not meet Elite, Metrics-Validated, or Known Quality criteria`);
+  
+  return {
+    decision: 'REJECT',
+    score: 45,
+    path: 'None',
+    reason: 'Did not meet acceptance criteria on any path',
+    instructor: instructor,
+    youtube: youtube,
+    content: content
+  };
+}
+
+module.exports = { evaluateVideoThreePath };
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: INTEGRATE INTO CURATION PIPELINE
+═══════════════════════════════════════════════════════════════════════════════
+
+Update your existing curation pipeline to use the new 3-path evaluator:
+
+File: server/services/curation-pipeline.js (or wherever your main curation logic is)
+
+const { evaluateVideoThreePath } = require('./curation/three-path-evaluator');
+const { extractUniqueValue } = require('./curation/unique-value-extractor');
+const { calculateCoverageScore } = require('./curation/coverage-balancer');
+
+async function processCurationBatch(videos) {
+  
+  console.log(`\n${'═'.repeat(80)}`);
+  console.log(`🚀 STARTING CURATION BATCH: ${videos.length} videos`);
+  console.log(`${'═'.repeat(80)}\n`);
+  
+  const results = {
+    accepted: [],
+    rejected: [],
+    manualReview: [],
+    errors: []
+  };
+  
+  for (let i = 0; i < videos.length; i++) {
+    const video = videos[i];
+    
+    try {
+      console.log(`\n[${ i+1}/${videos.length}] Processing: "${video.title}"`);
+      
+      // Get channel data for metrics
+      const channelData = await getChannelData(video.channelId);
+      
+      // STEP 1: Quality evaluation (3-path system)
+      const evaluation = await evaluateVideoThreePath(video, channelData);
+      
+      // STEP 2: If accepted, check unique value
+      if (evaluation.decision === 'ACCEPT') {
+        
+        const uniqueValue = await extractUniqueValue(video);
+        
+        if (!uniqueValue.should_add) {
+          console.log(`\n❌ OVERRIDING TO REJECT: ${uniqueValue.reason}`);
+          
+          results.rejected.push({
+            video_id: video.videoId,
+            title: video.title,
+            reason: `Quality passed but redundant: ${uniqueValue.reason}`
+          });
+          continue;
+        }
+        
+        // STEP 3: Check coverage (optional boost for critical gaps)
+        const coverage = await calculateCoverageScore(evaluation.instructor.primaryTechnique);
+        
+        // Save to database
+        await db.videos.create({
+          video_id: video.videoId,
+          title: video.title,
+          description: video.description,
+          channel_name: video.channelName,
+          channel_id: video.channelId,
+          instructor: evaluation.instructor.name,
+          quality_score: evaluation.score,
+          acceptance_path: evaluation.path,
+          metadata: {
+            instructor: evaluation.instructor,
+            youtube_metrics: evaluation.youtube,
+            content_analysis: evaluation.content,
+            unique_value: uniqueValue,
+            coverage: coverage
+          },
+          added_at: new Date()
+        });
+        
+        // Update coverage tracking
+        if (evaluation.instructor.primaryTechnique) {
+          await updateCoverageStatus(evaluation.instructor.primaryTechnique);
+        }
+        
+        results.accepted.push({
+          video_id: video.videoId,
+          title: video.title,
+          score: evaluation.score,
+          path: evaluation.path,
+          reason: evaluation.reason
+        });
+        
+        console.log(`\n✅ ACCEPTED via ${evaluation.path}`);
+        
+      } else if (evaluation.decision === 'MANUAL_REVIEW') {
+        
+        results.manualReview.push({
+          video_id: video.videoId,
+          title: video.title,
+          reason: evaluation.reason
+        });
+        
+        console.log(`\n⚠️  MANUAL REVIEW NEEDED`);
+        
+      } else {
+        
+        results.rejected.push({
+          video_id: video.videoId,
+          title: video.title,
+          score: evaluation.score,
+          reason: evaluation.reason
+        });
+        
+        console.log(`\n❌ REJECTED`);
+      }
+      
+    } catch (error) {
+      console.error(`\n⚠️  ERROR processing "${video.title}":`, error);
+      results.errors.push({
+        video_id: video.videoId,
+        error: error.message
+      });
+    }
+  }
+  
+  // Summary
+  console.log(`\n${'═'.repeat(80)}`);
+  console.log(`📊 BATCH SUMMARY:`);
+  console.log(`   ✅ Accepted: ${results.accepted.length}`);
+  console.log(`   ❌ Rejected: ${results.rejected.length}`);
+  console.log(`   ⚠️  Manual Review: ${results.manualReview.length}`);
+  console.log(`   💥 Errors: ${results.errors.length}`);
+  console.log(`${'═'.repeat(80)}\n`);
+  
+  return results;
+}
+
+async function getChannelData(channelId) {
+  // Fetch channel statistics from YouTube API
+  try {
+    const response = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
+      params: {
+        part: 'statistics',
+        id: channelId,
+        key: process.env.YOUTUBE_API_KEY
+      }
+    });
+    
+    return response.data.items[0]?.statistics;
+  } catch (error) {
+    console.error('Error fetching channel data:', error);
+    return { subscriberCount: 0 };
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me proof that:
+1. ✅ Multi-instructor detection working (finds instructors in title/description)
+2. ✅ YouTube metrics calculating correctly
+3. ✅ 3-path system routing videos properly
+4. ✅ Elite instructors auto-accepting
+5. ✅ Hidden gems getting discovered
+
+Ready for testing after implementation.
+```
+
+-----
+
+# **📋 PART 2: LIVE TESTING (20 → 100 → 500) - SEND AFTER PART 1 COMPLETE:**
+
+```
+LIVE TEST: Validate 3-Path System with Real Videos
+
+Now that the 3-path system is implemented, run progressive tests:
+- Test 1: 20 videos (validation)
+- Test 2: 100 videos (if Test 1 passes)
+- Test 3: 500 videos (if Test 2 passes)
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST 1: 20 VIDEOS (VALIDATION TEST)
+═══════════════════════════════════════════════════════════════════════════════
+
+Search queries designed to test each path:
+
+1. "lachlan giles heel hooks" (5 videos)
+   → Test: Elite instructor detection, should auto-accept
+
+2. "gordon ryan passing" (5 videos)
+   → Test: Elite instructor detection from title (not channel)
+
+3. "bjj armbar tutorial" (5 videos)
+   → Test: Unknown instructors with varying metrics
+
+4. "chewjitsu guard retention" (5 videos)
+   → Test: Known quality instructor path
+
+Total: 20 videos
+
+Run this test script:
+
+File: server/test-three-path-system.js
+
+const { evaluateVideoThreePath } = require('./services/curation/three-path-evaluator');
+const axios = require('axios');
+
+async function testThreePathSystem() {
+  console.log('🧪 TESTING 3-PATH CURATION SYSTEM\n');
+  
+  const queries = [
+    { query: 'lachlan giles heel hooks', count: 5, expectedPath: 'Elite or Metrics' },
+    { query: 'gordon ryan passing', count: 5, expectedPath: 'Elite (from title)' },
+    { query: 'bjj armbar tutorial', count: 5, expectedPath: 'Mixed' },
+    { query: 'chewjitsu guard retention', count: 5, expectedPath: 'Known Quality' }
+  ];
+  
+  const allResults = [];
+  let totalVideos = 0;
+  
+  for (const { query, count, expectedPath } of queries) {
+    console.log(`\n${'═'.repeat(80)}`);
+    console.log(`🔍 SEARCHING: "${query}" (expecting ${count} videos)`);
+    console.log(`   Expected path: ${expectedPath}`);
+    console.log(`${'═'.repeat(80)}\n`);
+    
+    // Fetch from YouTube
+    const searchResponse = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+      params: {
+        part: 'snippet',
+        q: query,
+        type: 'video',
+        maxResults: count,
+        key: process.env.YOUTUBE_API_KEY
+      }
+    });
+    
+    const videos = searchResponse.data.items.map(item => ({
+      videoId: item.id.videoId,
+      title: item.snippet.title,
+      description: item.snippet.description,
+      channelName: item.snippet.channelTitle,
+      channelId: item.snippet.channelId,
+      publishedAt: item.snippet.publishedAt
+    }));
+    
+    console.log(`✅ Found ${videos.length} videos\n`);
+    
+    // Get video statistics
+    const videoIds = videos.map(v => v.videoId).join(',');
+    const statsResponse = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+      params: {
+        part: 'statistics',
+        id: videoIds,
+        key: process.env.YOUTUBE_API_KEY
+      }
+    });
+    
+    // Merge statistics into videos
+    for (let i = 0; i < videos.length; i++) {
+      const stats = statsResponse.data.items[i]?.statistics;
+      videos[i].viewCount = stats?.viewCount;
+      videos[i].likeCount = stats?.likeCount;
+      videos[i].commentCount = stats?.commentCount;
+    }
+    
+    // Get channel data
+    const channelIds = [...new Set(videos.map(v => v.channelId))].join(',');
+    const channelResponse = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
+      params: {
+        part: 'statistics',
+        id: channelIds,
+        key: process.env.YOUTUBE_API_KEY
+      }
+    });
+    
+    const channelDataMap = {};
+    channelResponse.data.items.forEach(item => {
+      channelDataMap[item.id] = item.statistics;
+    });
+    
+    // Evaluate each video
+    for (const video of videos) {
+      totalVideos++;
+      const channelData = channelDataMap[video.channelId];
+      
+      const evaluation = await evaluateVideoThreePath(video, channelData);
+      
+      allResults.push({
+        query: query,
+        video: video,
+        evaluation: evaluation
+      });
+    }
+  }
+  
+  // ═════════════════════════════════════════════════════════════
+  // SUMMARY STATISTICS
+  // ═════════════════════════════════════════════════════════════
+  
+  console.log(`\n\n${'═'.repeat(80)}`);
+  console.log(`📊 TEST SUMMARY: ${totalVideos} VIDEOS PROCESSED`);
+  console.log(`${'═'.repeat(80)}\n`);
+  
+  const accepted = allResults.filter(r => r.evaluation.decision === 'ACCEPT');
+  const rejected = allResults.filter(r => r.evaluation.decision === 'REJECT');
+  const manualReview = allResults.filter(r => r.evaluation.decision === 'MANUAL_REVIEW');
+  
+  console.log(`OVERALL RESULTS:`);
+  console.log(`  ✅ Accepted: ${accepted.length} (${(accepted.length/totalVideos*100).toFixed(0)}%)`);
+  console.log(`  ❌ Rejected: ${rejected.length} (${(rejected.length/totalVideos*100).toFixed(0)}%)`);
+  console.log(`  ⚠️  Manual Review: ${manualReview.length}`);
+  
+  // Path breakdown
+  const pathCounts = {};
+  accepted.forEach(r => {
+    pathCounts[r.evaluation.path] = (pathCounts[r.evaluation.path] || 0) + 1;
+  });
+  
+  console.log(`\nACCEPTANCE PATHS:`);
+  Object.entries(pathCounts).forEach(([path, count]) => {
+    console.log(`  ${path}: ${count} videos`);
+  });
+  
+  // Instructor tier breakdown
+  const tierCounts = {};
+  allResults.forEach(r => {
+    const tier = r.evaluation.instructor.tier;
+    tierCounts[tier] = (tierCounts[tier] || 0) + 1;
+  });
+  
+  console.log(`\nINSTRUCTOR TIERS:`);
+  Object.entries(tierCounts).forEach(([tier, count]) => {
+    console.log(`  ${tier}: ${count} videos`);
+  });
+  
+  // Top accepted videos
+  console.log(`\nTOP 5 ACCEPTED VIDEOS:`);
+  accepted
+    .sort((a, b) => b.evaluation.score - a.evaluation.score)
+    .slice(0, 5)
+    .forEach((r, i) => {
+      console.log(`  ${i+1}. "${r.video.title}"`);
+      console.log(`     Score: ${r.evaluation.score.toFixed(1)} | Path: ${r.evaluation.path}`);
+      console.log(`     Instructor: ${r.evaluation.instructor.name} (${r.evaluation.instructor.tier})`);
+    });
+  
+  // Examples of rejections
+  if (rejected.length > 0) {
+    console.log(`\nEXAMPLE REJECTIONS:`);
+    rejected.slice(0, 3).forEach((r, i) => {
+      console.log(`  ${i+1}. "${r.video.title}"`);
+      console.log(`     Reason: ${r.evaluation.reason}`);
+    });
+  }
+  
+  // Hidden gems found
+  const hiddenGems = accepted.filter(r => r.evaluation.youtube.signals.isHiddenGem);
+  if (hiddenGems.length > 0) {
+    console.log(`\n🔥 HIDDEN GEMS DISCOVERED: ${hiddenGems.length}`);
+    hiddenGems.forEach((r, i) => {
+      console.log(`  ${i+1}. "${r.video.title}"`);
+      console.log(`     Channel: ${r.video.channelName} (${r.evaluation.youtube.channelSubs} subs)`);
+      console.log(`     Views: ${r.evaluation.youtube.views} | Like rate: ${(r.evaluation.youtube.likeRate * 100).toFixed(1)}%`);
+    });
+  }
+  
+  console.log(`\n${'═'.repeat(80)}\n`);
+  
+  // ═════════════════════════════════════════════════════════════
+  // VALIDATION CHECKS
+  // ═════════════════════════════════════════════════════════════
+  
+  console.log(`VALIDATION CHECKS:\n`);
+  
+  // Check 1: Elite instructors should auto-accept
+  const eliteVideos = allResults.filter(r => r.evaluation.instructor.tier === 'elite');
+  const eliteAccepted = eliteVideos.filter(r => r.evaluation.decision === 'ACCEPT');
+  console.log(`✓ Elite instructor acceptance rate: ${eliteAccepted.length}/${eliteVideos.length} (${(eliteAccepted.length/eliteVideos.length*100).toFixed(0)}%)`);
+  
+  // Check 2: Unknown instructors should be rare acceptances
+  const unknownVideos = allResults.filter(r => r.evaluation.instructor.tier === 'unknown');
+  const unknownAccepted = unknownVideos.filter(r => r.evaluation.decision === 'ACCEPT');
+  console.log(`✓ Unknown instructor acceptance rate: ${unknownAccepted.length}/${unknownVideos.length} (${unknownVideos.length > 0 ? (unknownAccepted.length/unknownVideos.length*100).toFixed(0) : 0}%) - should be low`);
+  
+  // Check 3: Overall acceptance rate should be 30-50%
+  const acceptanceRate = (accepted.length / totalVideos * 100).toFixed(0);
+  console.log(`✓ Overall acceptance rate: ${acceptanceRate}% (target: 30-50%)`);
+  
+  if (acceptanceRate >= 30 && acceptanceRate <= 50) {
+    console.log(`  ✅ Within target range`);
+  } else if (acceptanceRate < 30) {
+    console.log(`  ⚠️  Too selective - may be missing good content`);
+  } else {
+    console.log(`  ⚠️  Too permissive - may be letting in low quality`);
+  }
+  
+  console.log(`\n${'═'.repeat(80)}\n`);
+  
+  return {
+    totalVideos,
+    accepted: accepted.length,
+    rejected: rejected.length,
+    acceptanceRate: parseFloat(acceptanceRate),
+    success: acceptanceRate >= 30 && acceptanceRate <= 50
+  };
+}
+
+// Run test
+testThreePathSystem()
+  .then(results => {
+    if (results.success) {
+      console.log('✅ TEST 1 PASSED - Ready for Test 2 (100 videos)');
+    } else {
+      console.log('⚠️  TEST 1 NEEDS TUNING - Review thresholds');
+    }
+  })
+  .catch(console.error);
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Run this now:
+```bash
+node server/test-three-path-system.js
+```
+
+Show me complete output.
+
+If Test 1 passes (acceptance rate 30-50%), we proceed to Test 2 (100 videos).
+If Test 1 fails, we tune thresholds and retest.
+
+```
+---
+
+**SEND THESE TWO PROMPTS IN SEQUENCE:**
+
+1. **First:** Send Part 1 (Implementation)
+2. **Wait** for Agent to finish
+3. **Then:** Send Part 2 (Testing)
+
+This gets you:
+- ✅ Complete 3-path system
+- ✅ Multi-instructor detection  
+- ✅ YouTube metrics
+- ✅ Progressive testing (20 → 100 → 500)
+
+Ready to send? 🚀​​​​​​​​​​​​​​​​
+```

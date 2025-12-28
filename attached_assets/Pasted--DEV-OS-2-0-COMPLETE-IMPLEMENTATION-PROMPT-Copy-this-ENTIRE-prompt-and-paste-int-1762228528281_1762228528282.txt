@@ -1,0 +1,1434 @@
+# **🚀 DEV OS 2.0 - COMPLETE IMPLEMENTATION PROMPT**
+
+-----
+
+**Copy this ENTIRE prompt and paste into Replit Agent:**
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+DEV OS 2.0 - COMPLETE UPGRADE: ACTION-FIRST, PROACTIVE, ACCURATE
+═══════════════════════════════════════════════════════════════════════════════
+
+MISSION: Transform Dev OS from a chatbot into an intelligent operations center
+that provides accurate data, takes real actions, sends proactive alerts, and
+tracks curation efficiency metrics.
+
+CRITICAL REQUIREMENTS:
+1. ACTION-FIRST: Buttons that actually execute operations
+2. FAST + RELEVANT: Quick answers with pertinent details only
+3. ACCURATE DATA: Fresh queries, no stale/cached info, show timestamps
+4. SCHEDULED REMINDERS: "Check in 5 minutes" must actually work
+5. PROACTIVE ALERTS: Notify immediately when issues detected
+6. HOURLY DIGESTS: Auto-send system updates every hour
+7. CURATION EFFICIENCY: Track screened/accepted/rejected video metrics
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: REAL-TIME STATUS DASHBOARD COMPONENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create a new dashboard that shows system health at the top of Dev OS:
+
+```typescript
+// client/src/components/DevOS/SystemDashboard.tsx
+
+import { useQuery } from '@tanstack/react-query';
+import { formatDistanceToNow } from 'date-fns';
+import { useState } from 'react';
+
+export function SystemDashboard() {
+  const [executing, setExecuting] = useState<string | null>(null);
+  
+  // Fetch system health every 30 seconds
+  const { data: health, refetch } = useQuery({
+    queryKey: ['system-health'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/system-health');
+      return response.json();
+    },
+    refetchInterval: 30000 // 30 seconds
+  });
+  
+  async function handleAction(action: string, params?: any) {
+    setExecuting(action);
+    
+    try {
+      const response = await fetch(`/api/admin/actions/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Refetch health after action
+        setTimeout(() => refetch(), 2000);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Action failed:', error);
+    } finally {
+      setExecuting(null);
+    }
+  }
+  
+  if (!health) return <div className="loading">Loading system status...</div>;
+  
+  return (
+    <div className="system-dashboard">
+      {/* Curation Pipeline Status */}
+      <StatusCard
+        title="⚙️ Curation Pipeline"
+        status={health.curation.isRunning ? 'healthy' : 'critical'}
+        icon="⚙️"
+      >
+        <div className="status-section">
+          <div className="status-label">Status</div>
+          <div className={`status-value ${health.curation.isRunning ? 'green' : 'red'}`}>
+            {health.curation.isRunning ? '✅ RUNNING' : '🔴 OFFLINE'}
+            {!health.curation.isRunning && (
+              <span className="offline-duration">
+                ({health.curation.minutesSinceLastRun} min)
+              </span>
+            )}
+          </div>
+        </div>
+        
+        <div className="metrics-grid">
+          <Metric 
+            label="Last Hour" 
+            sublabel="Screened"
+            value={health.curation.lastHour.screened}
+          />
+          <Metric 
+            label="Accepted" 
+            sublabel={`${health.curation.lastHour.acceptanceRate}%`}
+            value={health.curation.lastHour.accepted}
+            status={
+              health.curation.lastHour.acceptanceRate >= 2 &&
+              health.curation.lastHour.acceptanceRate <= 5
+                ? 'good' : 'warning'
+            }
+          />
+          <Metric 
+            label="Rejected" 
+            value={health.curation.lastHour.rejected}
+          />
+        </div>
+        
+        <div className="metrics-grid">
+          <Metric 
+            label="Today" 
+            sublabel="Screened"
+            value={health.curation.today.screened}
+          />
+          <Metric 
+            label="Accepted" 
+            sublabel={`${health.curation.today.acceptanceRate}%`}
+            value={health.curation.today.accepted}
+          />
+          <Metric 
+            label="API Quota" 
+            sublabel={`${health.curation.apiQuota.percentUsed}%`}
+            value={`${health.curation.apiQuota.used.toLocaleString()}/${health.curation.apiQuota.limit.toLocaleString()}`}
+            status={
+              health.curation.apiQuota.percentUsed > 90 ? 'critical' :
+              health.curation.apiQuota.percentUsed > 70 ? 'warning' : 'good'
+            }
+          />
+        </div>
+        
+        <div className="action-buttons">
+          <button 
+            onClick={() => handleAction('restart-curation')}
+            disabled={executing === 'restart-curation'}
+            className="action-btn primary"
+          >
+            {executing === 'restart-curation' ? '🔄 Restarting...' : '🔄 Restart'}
+          </button>
+          <button 
+            onClick={() => handleAction('view-logs', { service: 'curation' })}
+            className="action-btn secondary"
+          >
+            📋 Logs
+          </button>
+          <button 
+            onClick={() => handleAction('diagnose-curation')}
+            disabled={executing === 'diagnose-curation'}
+            className="action-btn secondary"
+          >
+            {executing === 'diagnose-curation' ? '🔍 Checking...' : '🔍 Diagnose'}
+          </button>
+        </div>
+      </StatusCard>
+      
+      {/* Video Library Status */}
+      <StatusCard
+        title="📹 Video Library"
+        status="healthy"
+        icon="📹"
+      >
+        <div className="metrics-grid">
+          <Metric 
+            label="Total Videos" 
+            value={health.videos.total}
+          />
+          <Metric 
+            label="Elite Tier" 
+            sublabel={`${health.videos.elitePercent}%`}
+            value={health.videos.elite}
+          />
+          <Metric 
+            label="Added Today" 
+            value={health.videos.addedToday}
+          />
+        </div>
+      </StatusCard>
+      
+      {/* Stripe Status */}
+      <StatusCard
+        title="💳 Stripe"
+        status={health.stripe.healthy ? 'healthy' : 'warning'}
+        icon="💳"
+      >
+        <div className="metrics-grid">
+          <Metric 
+            label="MRR" 
+            value={`$${health.stripe.mrr}`}
+          />
+          <Metric 
+            label="Active Subs" 
+            value={health.stripe.activeSubscriptions}
+          />
+          <Metric 
+            label="Trial Users" 
+            value={health.stripe.trialUsers}
+          />
+        </div>
+      </StatusCard>
+      
+      {/* Users Status */}
+      <StatusCard
+        title="👥 Users"
+        status="healthy"
+        icon="👥"
+      >
+        <div className="metrics-grid">
+          <Metric 
+            label="Total" 
+            value={health.users.total}
+          />
+          <Metric 
+            label="Today" 
+            value={health.users.signedUpToday}
+          />
+          <Metric 
+            label="Lifetime" 
+            value={health.users.lifetimeAccess}
+          />
+        </div>
+      </StatusCard>
+    </div>
+  );
+}
+
+function StatusCard({ title, status, icon, children }) {
+  const statusColors = {
+    healthy: '#4ade80',
+    warning: '#fbbf24',
+    critical: '#ef4444'
+  };
+  
+  return (
+    <div className="status-card">
+      <div className="card-header">
+        <div className="card-title">
+          <span className="card-icon">{icon}</span>
+          <h3>{title}</h3>
+        </div>
+        <div 
+          className="status-indicator"
+          style={{ backgroundColor: statusColors[status] }}
+        />
+      </div>
+      <div className="card-content">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, sublabel, value, status }) {
+  const statusColors = {
+    good: '#4ade80',
+    warning: '#fbbf24',
+    critical: '#ef4444'
+  };
+  
+  return (
+    <div className="metric">
+      <div className="metric-label">{label}</div>
+      {sublabel && <div className="metric-sublabel">{sublabel}</div>}
+      <div 
+        className="metric-value"
+        style={status ? { color: statusColors[status] } : {}}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+```
+
+Add styles:
+
+```css
+/* client/src/components/DevOS/SystemDashboard.css */
+
+.system-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: #0f0f1e;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.status-card {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #2a2a3e;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-icon {
+  font-size: 20px;
+}
+
+.card-title h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #0f0f1e;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.status-label {
+  font-size: 13px;
+  color: #808090;
+  font-weight: 600;
+}
+
+.status-value {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.status-value.green {
+  color: #4ade80;
+}
+
+.status-value.red {
+  color: #ef4444;
+}
+
+.offline-duration {
+  font-size: 12px;
+  color: #a0a0b0;
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.metric {
+  background: #0f0f1e;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.metric-label {
+  font-size: 11px;
+  color: #808090;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.metric-sublabel {
+  font-size: 10px;
+  color: #667eea;
+  margin-bottom: 4px;
+}
+
+.metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.action-btn.primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.action-btn.secondary {
+  background: #2a2a3e;
+  color: #a0a0b0;
+  border: 1px solid #3a3a4e;
+}
+
+.action-btn.secondary:hover {
+  background: #3a3a4e;
+  color: white;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: BACKEND - SYSTEM HEALTH ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+// server/routes/admin.ts
+
+app.get('/api/admin/system-health', async (req, res) => {
+  try {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    
+    // CURATION METRICS
+    const lastCurationRun = await db.query.curationRuns.findFirst({
+      orderBy: [desc(curationRuns.createdAt)],
+      limit: 1
+    });
+    
+    const minutesSinceLastRun = lastCurationRun
+      ? Math.floor((now.getTime() - new Date(lastCurationRun.createdAt).getTime()) / 60000)
+      : 999;
+    
+    // Last hour stats
+    const lastHourStats = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(videos_screened), 0) as screened,
+        COALESCE(SUM(videos_added), 0) as accepted,
+        COALESCE(SUM(videos_screened) - SUM(videos_added), 0) as rejected
+      FROM curation_runs
+      WHERE created_at >= ${oneHourAgo.toISOString()}
+    `);
+    
+    const lastHour = lastHourStats.rows[0];
+    const lastHourAcceptanceRate = lastHour.screened > 0
+      ? ((lastHour.accepted / lastHour.screened) * 100).toFixed(1)
+      : 0;
+    
+    // Today's stats
+    const todayStats = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(videos_screened), 0) as screened,
+        COALESCE(SUM(videos_added), 0) as accepted,
+        COALESCE(SUM(youtube_api_calls), 0) as api_calls
+      FROM curation_runs
+      WHERE run_date = ${today}
+    `);
+    
+    const todayCuration = todayStats.rows[0];
+    const todayAcceptanceRate = todayCuration.screened > 0
+      ? ((todayCuration.accepted / todayCuration.screened) * 100).toFixed(1)
+      : 0;
+    
+    // VIDEO METRICS
+    const totalVideos = await db.execute(sql`
+      SELECT COUNT(*) as count FROM videos
+    `);
+    
+    const eliteVideos = await db.execute(sql`
+      SELECT COUNT(*) as count 
+      FROM videos 
+      WHERE credibility_score >= 9.0
+    `);
+    
+    const videosAddedToday = await db.execute(sql`
+      SELECT COUNT(*) as count 
+      FROM videos 
+      WHERE DATE(created_at) = ${today}
+    `);
+    
+    const total = Number(totalVideos.rows[0].count);
+    const elite = Number(eliteVideos.rows[0].count);
+    
+    // STRIPE METRICS
+    const activeSubscriptions = await db.execute(sql`
+      SELECT COUNT(*) as count 
+      FROM users 
+      WHERE subscription_status = 'active'
+    `);
+    
+    const trialUsers = await db.execute(sql`
+      SELECT COUNT(*) as count 
+      FROM users 
+      WHERE subscription_status = 'trial'
+    `);
+    
+    const mrr = await db.execute(sql`
+      SELECT COALESCE(SUM(
+        CASE 
+          WHEN subscription_tier = 'monthly' THEN 50
+          WHEN subscription_tier = 'yearly' THEN 500/12
+          ELSE 0
+        END
+      ), 0) as mrr
+      FROM users
+      WHERE subscription_status = 'active'
+    `);
+    
+    // USER METRICS
+    const totalUsers = await db.execute(sql`
+      SELECT COUNT(*) as count FROM users
+    `);
+    
+    const usersToday = await db.execute(sql`
+      SELECT COUNT(*) as count 
+      FROM users 
+      WHERE DATE(created_at) = ${today}
+    `);
+    
+    const lifetimeUsers = await db.execute(sql`
+      SELECT COUNT(*) as count 
+      FROM users 
+      WHERE subscription_status = 'lifetime'
+    `);
+    
+    res.json({
+      timestamp: now.toISOString(),
+      curation: {
+        isRunning: minutesSinceLastRun < 30,
+        minutesSinceLastRun,
+        lastRun: lastCurationRun?.createdAt,
+        lastHour: {
+          screened: Number(lastHour.screened),
+          accepted: Number(lastHour.accepted),
+          rejected: Number(lastHour.rejected),
+          acceptanceRate: Number(lastHourAcceptanceRate)
+        },
+        today: {
+          screened: Number(todayCuration.screened),
+          accepted: Number(todayCuration.accepted),
+          rejected: Number(todayCuration.screened) - Number(todayCuration.accepted),
+          acceptanceRate: Number(todayAcceptanceRate)
+        },
+        apiQuota: {
+          used: Number(todayCuration.api_calls),
+          limit: 10000,
+          percentUsed: ((Number(todayCuration.api_calls) / 10000) * 100).toFixed(1)
+        }
+      },
+      videos: {
+        total,
+        elite,
+        elitePercent: ((elite / total) * 100).toFixed(1),
+        addedToday: Number(videosAddedToday.rows[0].count)
+      },
+      stripe: {
+        healthy: true,
+        mrr: Number(mrr.rows[0].mrr).toFixed(0),
+        activeSubscriptions: Number(activeSubscriptions.rows[0].count),
+        trialUsers: Number(trialUsers.rows[0].count)
+      },
+      users: {
+        total: Number(totalUsers.rows[0].count),
+        signedUpToday: Number(usersToday.rows[0].count),
+        lifetimeAccess: Number(lifetimeUsers.rows[0].count)
+      }
+    });
+    
+  } catch (error) {
+    console.error('System health error:', error);
+    res.status(500).json({ error: 'Failed to fetch system health' });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: ACTION ENDPOINTS
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+// server/routes/admin.ts
+
+// Restart curation
+app.post('/api/admin/actions/restart-curation', async (req, res) => {
+  try {
+    console.log('🔄 MANUAL CURATION RESTART TRIGGERED');
+    
+    const { ContinuousCurationService } = require('../services/continuousCuration');
+    
+    // Run in background
+    ContinuousCurationService.runAggressiveCuration()
+      .then(result => {
+        console.log('✅ Curation completed:', result);
+      })
+      .catch(error => {
+        console.error('❌ Curation failed:', error);
+      });
+    
+    res.json({
+      success: true,
+      message: 'Curation restart initiated. Processing in background.'
+    });
+    
+  } catch (error) {
+    console.error('Restart error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// View logs
+app.post('/api/admin/actions/view-logs', async (req, res) => {
+  try {
+    const { service } = req.body;
+    
+    // Read last 50 lines of log file
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execPromise = util.promisify(exec);
+    
+    const logFile = service === 'curation' 
+      ? 'logs/curation.log' 
+      : 'logs/app.log';
+    
+    const { stdout } = await execPromise(`tail -50 ${logFile} 2>/dev/null || echo "No logs found"`);
+    
+    res.json({
+      success: true,
+      logs: stdout
+    });
+    
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Diagnose curation
+app.post('/api/admin/actions/diagnose-curation', async (req, res) => {
+  try {
+    const diagnostics = [];
+    
+    // Check YouTube API key
+    const hasApiKey = !!process.env.YOUTUBE_API_KEY;
+    diagnostics.push({
+      check: 'YouTube API Key',
+      status: hasApiKey ? 'pass' : 'fail',
+      message: hasApiKey ? 'API key configured' : 'API key missing'
+    });
+    
+    // Check database connection
+    try {
+      await db.execute(sql`SELECT 1`);
+      diagnostics.push({
+        check: 'Database Connection',
+        status: 'pass',
+        message: 'Database accessible'
+      });
+    } catch (error) {
+      diagnostics.push({
+        check: 'Database Connection',
+        status: 'fail',
+        message: `Database error: ${error.message}`
+      });
+    }
+    
+    // Check last curation run
+    const lastRun = await db.query.curationRuns.findFirst({
+      orderBy: [desc(curationRuns.createdAt)],
+      limit: 1
+    });
+    
+    if (lastRun) {
+      const minutesAgo = Math.floor((Date.now() - new Date(lastRun.createdAt).getTime()) / 60000);
+      diagnostics.push({
+        check: 'Last Curation Run',
+        status: minutesAgo < 60 ? 'pass' : 'warning',
+        message: `Last run ${minutesAgo} minutes ago`
+      });
+    } else {
+      diagnostics.push({
+        check: 'Last Curation Run',
+        status: 'fail',
+        message: 'No curation runs found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      diagnostics
+    });
+    
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: UPDATE QUICK PROMPTS
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+// client/src/pages/admin/DevOS.tsx
+
+const QUICK_PROMPTS = [
+  // Curation efficiency prompts
+  "How many videos screened last hour?",
+  "What's the acceptance rate today?",
+  "Show me rejected videos",
+  
+  // System health prompts
+  "How many users signed up today?",
+  "What's the current MRR?",
+  "Are there any curation jobs running?",
+  
+  // Action prompts
+  "Restart curation now",
+  "Show me today's key metrics",
+  "Check YouTube API quota"
+];
+
+// Update DevOS component to include dashboard
+export default function DevOS() {
+  return (
+    <div className="dev-os-page">
+      <header className="page-header">
+        <div>
+          <h1>Dev OS</h1>
+          <p>Persistent AI assistant with 48-hour memory • Real-time metrics • Daily reports</p>
+        </div>
+        <div className="header-actions">
+          <button onClick={generateDailyReport} className="report-btn">
+            📊 Daily Report
+          </button>
+          <button onClick={clearHistory} className="clear-btn">
+            🗑️ Clear History
+          </button>
+        </div>
+      </header>
+      
+      {/* NEW: System Dashboard */}
+      <SystemDashboard />
+      
+      {/* Quick Prompts */}
+      <div className="quick-prompts">
+        <h3>Quick Prompts</h3>
+        <div className="prompts-grid">
+          {QUICK_PROMPTS.map((prompt, index) => (
+            <button
+              key={index}
+              onClick={() => setInput(prompt)}
+              className="prompt-btn"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      {/* Chat Interface */}
+      <div className="chat-container">
+        {/* ... existing chat implementation ... */}
+      </div>
+    </div>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: ENHANCED CHAT RESPONSES WITH CURATION METRICS
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+// server/routes/admin.ts - Dev OS chat endpoint
+
+app.post('/api/admin/dev-os/chat', async (req, res) => {
+  try {
+    const { message } = req.body;
+    const userId = req.user.id;
+    const lowerMessage = message.toLowerCase();
+    
+    // Save user message
+    await db.insert(devOsMessages).values({
+      userId,
+      role: 'user',
+      content: message
+    });
+    
+    // CURATION EFFICIENCY QUERIES
+    if (
+      lowerMessage.includes('videos screened') ||
+      lowerMessage.includes('how many screened') ||
+      lowerMessage.includes('videos pulled')
+    ) {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      
+      const stats = await db.execute(sql`
+        SELECT 
+          COALESCE(SUM(videos_screened), 0) as screened,
+          COALESCE(SUM(videos_added), 0) as accepted,
+          COALESCE(SUM(videos_screened) - SUM(videos_added), 0) as rejected
+        FROM curation_runs
+        WHERE created_at >= ${oneHourAgo.toISOString()}
+      `);
+      
+      const row = stats.rows[0];
+      const acceptanceRate = row.screened > 0
+        ? ((row.accepted / row.screened) * 100).toFixed(1)
+        : 0;
+      
+      const response = `🔍 **CURATION STATS (Last Hour):**
+
+Screened: ${row.screened} videos
+├─ Accepted: ${row.accepted} videos (${acceptanceRate}%)
+└─ Rejected: ${row.rejected} videos
+
+Acceptance Rate: ${acceptanceRate}% ${
+  acceptanceRate >= 2 && acceptanceRate <= 5 ? '✅ (optimal)' :
+  acceptanceRate < 2 ? '⚠️ (too picky or bad searches)' :
+  '⚠️ (too loose, check quality)'
+}
+
+Status: ${row.screened > 0 ? '✅ Curation active' : '🔴 No activity'}`;
+      
+      await db.insert(devOsMessages).values({
+        userId,
+        role: 'assistant',
+        content: response
+      });
+      
+      return res.json({ success: true, message: response });
+    }
+    
+    // ACCEPTANCE RATE QUERY
+    if (
+      lowerMessage.includes('acceptance rate') ||
+      lowerMessage.includes('how many accepted')
+    ) {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const stats = await db.execute(sql`
+        SELECT 
+          COALESCE(SUM(videos_screened), 0) as screened,
+          COALESCE(SUM(videos_added), 0) as accepted
+        FROM curation_runs
+        WHERE run_date = ${today}
+      `);
+      
+      const row = stats.rows[0];
+      const rate = row.screened > 0
+        ? ((row.accepted / row.screened) * 100).toFixed(1)
+        : 0;
+      
+      const response = `📊 **ACCEPTANCE RATE (Today):**
+
+Total screened: ${row.screened}
+Total accepted: ${row.accepted}
+
+**Acceptance Rate: ${rate}%**
+
+${
+  rate >= 2 && rate <= 5 ? '✅ Optimal range (2-5%)' :
+  rate < 2 ? '⚠️ Too low - may be too picky or bad search queries' :
+  rate > 10 ? '🔴 Too high - quality threshold may be too loose' :
+  '⚠️ Outside optimal range'
+}
+
+Target: 2-5% for best balance of quality and efficiency`;
+      
+      await db.insert(devOsMessages).values({
+        userId,
+        role: 'assistant',
+        content: response
+      });
+      
+      return res.json({ success: true, message: response });
+    }
+    
+    // RESTART CURATION
+    if (
+      lowerMessage.includes('restart curation') ||
+      lowerMessage.includes('start curation') ||
+      lowerMessage.includes('run curation')
+    ) {
+      try {
+        const response = await fetch('http://localhost:5000/api/admin/actions/restart-curation', {
+          method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        const message = result.success
+          ? `✅ **CURATION RESTARTED**\n\nAggressive curation initiated in background.\n\nTargeting ~2,900 videos to screen.\nExpected completion: 15-20 minutes.\n\nCheck status by asking: "How many videos screened last hour?"`
+          : `❌ Failed to restart: ${result.error}`;
+        
+        await db.insert(devOsMessages).values({
+          userId,
+          role: 'assistant',
+          content: message
+        });
+        
+        return res.json({ success: true, message });
+        
+      } catch (error) {
+        const errorMessage = `❌ Error restarting curation: ${error.message}`;
+        
+        await db.insert(devOsMessages).values({
+          userId,
+          role: 'assistant',
+          content: errorMessage
+        });
+        
+        return res.json({ success: true, message: errorMessage });
+      }
+    }
+    
+    // For all other queries, call Claude
+    const recentMessages = await db.query.devOsMessages.findMany({
+      where: eq(devOsMessages.userId, userId),
+      orderBy: [desc(devOsMessages.createdAt)],
+      limit: 10
+    });
+    
+    const claudeResponse = await callClaude({
+      system: DEV_OS_SYSTEM_PROMPT,
+      messages: recentMessages.reverse().map(m => ({
+        role: m.role === 'system' ? 'user' : m.role,
+        content: m.content
+      }))
+    });
+    
+    await db.insert(devOsMessages).values({
+      userId,
+      role: 'assistant',
+      content: claudeResponse.content
+    });
+    
+    res.json({ success: true, message: claudeResponse.content });
+    
+  } catch (error) {
+    console.error('Dev OS error:', error);
+    res.status(500).json({ error: 'Failed to process message' });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: PROACTIVE ALERT SYSTEM (Background Monitor)
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+// server/services/alertMonitor.ts
+
+import { db } from '../db';
+import { sql } from 'drizzle-orm';
+
+class AlertMonitor {
+  private checkInterval: NodeJS.Timeout | null = null;
+  private activeAlerts: Set<string> = new Set();
+  
+  start() {
+    console.log('🚨 Starting alert monitor');
+    
+    // Check every 2 minutes
+    this.checkInterval = setInterval(() => {
+      this.checkSystemHealth();
+    }, 2 * 60 * 1000);
+    
+    // Run immediately
+    this.checkSystemHealth();
+  }
+  
+  stop() {
+    if (this.checkInterval) {
+      clearInterval(this.checkInterval);
+    }
+  }
+  
+  async checkSystemHealth() {
+    try {
+      const now = new Date();
+      
+      // Check curation status
+      const lastRun = await db.query.curationRuns.findFirst({
+        orderBy: [desc(curationRuns.createdAt)],
+        limit: 1
+      });
+      
+      if (lastRun) {
+        const minutesAgo = Math.floor((now.getTime() - new Date(lastRun.createdAt).getTime()) / 60000);
+        
+        // Alert if curation offline > 30 minutes
+        if (minutesAgo > 30) {
+          const alertKey = 'curation-offline';
+          
+          if (!this.activeAlerts.has(alertKey)) {
+            await this.sendAlert({
+              severity: 'critical',
+              title: 'Curation Offline',
+              message: `No curation activity for ${minutesAgo} minutes`,
+              timestamp: now
+            });
+            
+            this.activeAlerts.add(alertKey);
+          }
+        } else {
+          // Clear alert if resolved
+          this.activeAlerts.delete('curation-offline');
+        }
+      }
+      
+      // Check API quota
+      const today = now.toISOString().split('T')[0];
+      const quotaUsage = await db.execute(sql`
+        SELECT COALESCE(SUM(youtube_api_calls), 0) as used
+        FROM curation_runs
+        WHERE run_date = ${today}
+      `);
+      
+      const quotaPercent = (quotaUsage.rows[0].used / 10000) * 100;
+      
+      if (quotaPercent > 90) {
+        const alertKey = 'api-quota-critical';
+        
+        if (!this.activeAlerts.has(alertKey)) {
+          await this.sendAlert({
+            severity: 'critical',
+            title: 'API Quota Critical',
+            message: `${quotaPercent.toFixed(1)}% of daily quota used`,
+            timestamp: now
+          });
+          
+          this.activeAlerts.add(alertKey);
+        }
+      } else {
+        this.activeAlerts.delete('api-quota-critical');
+      }
+      
+    } catch (error) {
+      console.error('Alert monitor error:', error);
+    }
+  }
+  
+  async sendAlert(alert) {
+    console.log('🚨 ALERT:', alert);
+    
+    // Store alert in database
+    await db.insert(systemAlerts).values({
+      severity: alert.severity,
+      title: alert.title,
+      message: alert.message,
+      createdAt: alert.timestamp,
+      dismissed: false
+    });
+    
+    // TODO: Send SMS/email for critical alerts
+    // if (alert.severity === 'critical') {
+    //   await sendSMS('+1...', alert.message);
+    // }
+  }
+}
+
+export const alertMonitor = new AlertMonitor();
+```
+
+Start monitor on server startup:
+
+```typescript
+// server/index.ts
+
+import { alertMonitor } from './services/alertMonitor';
+
+// Start alert monitor
+alertMonitor.start();
+
+// ... rest of server setup
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 7: HOURLY DIGEST SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+// server/services/hourlyDigest.ts
+
+import { CronJob } from 'cron';
+import { db } from '../db';
+import { sql } from 'drizzle-orm';
+
+class HourlyDigestService {
+  private job: CronJob | null = null;
+  
+  start() {
+    console.log('📊 Starting hourly digest service');
+    
+    // Run every hour at :00
+    this.job = new CronJob('0 * * * *', async () => {
+      await this.sendDigest();
+    });
+    
+    this.job.start();
+  }
+  
+  async sendDigest() {
+    try {
+      const now = new Date();
+      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+      
+      // Get stats for last hour
+      const stats = await db.execute(sql`
+        SELECT 
+          COALESCE(SUM(videos_screened), 0) as screened,
+          COALESCE(SUM(videos_added), 0) as accepted
+        FROM curation_runs
+        WHERE created_at >= ${oneHourAgo.toISOString()}
+      `);
+      
+      const row = stats.rows[0];
+      const acceptanceRate = row.screened > 0
+        ? ((row.accepted / row.screened) * 100).toFixed(1)
+        : 0;
+      
+      // Check for issues
+      const issues = [];
+      if (row.screened === 0) {
+        issues.push('• Curation inactive');
+      }
+      if (acceptanceRate > 10) {
+        issues.push('• Acceptance rate high (quality check needed)');
+      }
+      
+      const digest = `📊 **HOURLY DIGEST** - ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+
+⚙️ Curation:
+• Screened: ${row.screened} videos
+• Accepted: ${row.accepted} videos (${acceptanceRate}%)
+• Status: ${row.screened > 0 ? '✅ Active' : '🔴 Inactive'}
+
+${issues.length > 0 ? `⚠️ Issues:\n${issues.join('\n')}` : '✅ All systems healthy'}`;
+      
+      // Save digest to Dev OS chat
+      const adminUsers = await db.execute(sql`
+        SELECT id FROM users WHERE role = 'admin'
+      `);
+      
+      for (const admin of adminUsers.rows) {
+        await db.insert(devOsMessages).values({
+          userId: admin.id,
+          role: 'assistant',
+          content: digest
+        });
+      }
+      
+      console.log('📊 Hourly digest sent');
+      
+    } catch (error) {
+      console.error('Digest error:', error);
+    }
+  }
+  
+  stop() {
+    if (this.job) {
+      this.job.stop();
+    }
+  }
+}
+
+export const hourlyDigest = new HourlyDigestService();
+```
+
+Start on server:
+
+```typescript
+// server/index.ts
+
+import { hourlyDigest } from './services/hourlyDigest';
+
+// Start hourly digest
+hourlyDigest.start();
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 8: SCHEDULED REMINDERS SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+// server/services/taskScheduler.ts
+
+interface ScheduledTask {
+  id: string;
+  userId: number;
+  taskType: string;
+  taskData: any;
+  executeAt: Date;
+  timeout: NodeJS.Timeout;
+}
+
+class TaskScheduler {
+  private tasks: Map<string, ScheduledTask> = new Map();
+  
+  async scheduleTask(userId: number, taskType: string, taskData: any, delayMs: number) {
+    const taskId = `${userId}-${Date.now()}`;
+    const executeAt = new Date(Date.now() + delayMs);
+    
+    const timeout = setTimeout(async () => {
+      await this.executeTask(taskId);
+    }, delayMs);
+    
+    this.tasks.set(taskId, {
+      id: taskId,
+      userId,
+      taskType,
+      taskData,
+      executeAt,
+      timeout
+    });
+    
+    console.log(`⏰ Scheduled task ${taskId} for ${executeAt.toISOString()}`);
+    
+    return taskId;
+  }
+  
+  async executeTask(taskId: string) {
+    const task = this.tasks.get(taskId);
+    
+    if (!task) return;
+    
+    console.log(`⏰ Executing task ${taskId}`);
+    
+    try {
+      let result;
+      
+      switch (task.taskType) {
+        case 'check_curation':
+          result = await this.checkCurationStatus();
+          break;
+          
+        case 'system_health':
+          result = await this.getSystemHealth();
+          break;
+          
+        default:
+          result = { error: 'Unknown task type' };
+      }
+      
+      // Send result to user via Dev OS
+      await db.insert(devOsMessages).values({
+        userId: task.userId,
+        role: 'assistant',
+        content: `⏰ **SCHEDULED UPDATE**\n\n${result.message}`
+      });
+      
+    } catch (error) {
+      console.error('Task execution error:', error);
+    } finally {
+      this.tasks.delete(taskId);
+    }
+  }
+  
+  async checkCurationStatus() {
+    const stats = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(videos_added), 0) as added
+      FROM curation_runs
+      WHERE created_at >= NOW() - INTERVAL '5 minutes'
+    `);
+    
+    return {
+      message: `Curation Status:\nVideos added in last 5 min: ${stats.rows[0].added}`
+    };
+  }
+  
+  async getSystemHealth() {
+    // Reuse system-health endpoint logic
+    return {
+      message: 'System health check complete. All systems operational.'
+    };
+  }
+}
+
+export const taskScheduler = new TaskScheduler();
+```
+
+Add to Dev OS chat handler:
+
+```typescript
+// Detect "check in X minutes" requests
+if (
+  lowerMessage.match(/check.*(in|after)\s+(\d+)\s+(minute|min|hour|hr)/) ||
+  lowerMessage.match(/remind me.*(in|after)\s+(\d+)\s+(minute|min|hour|hr)/)
+) {
+  const match = lowerMessage.match(/(\d+)\s+(minute|min|hour|hr)/);
+  const amount = parseInt(match[1]);
+  const unit = match[2];
+  
+  const delayMs = unit.includes('hour') || unit.includes('hr')
+    ? amount * 60 * 60 * 1000
+    : amount * 60 * 1000;
+  
+  const taskType = lowerMessage.includes('curation') 
+    ? 'check_curation'
+    : 'system_health';
+  
+  await taskScheduler.scheduleTask(userId, taskType, {}, delayMs);
+  
+  const executeAt = new Date(Date.now() + delayMs).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+  
+  const response = `✅ **SCHEDULED**\n\nI'll check and send you an update at ${executeAt}.`;
+  
+  await db.insert(devOsMessages).values({
+    userId,
+    role: 'assistant',
+    content: response
+  });
+  
+  return res.json({ success: true, message: response });
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, verify:
+
+DASHBOARD:
+□ ✅ Real-time status cards showing curation, videos, stripe, users
+□ ✅ Updates every 30 seconds automatically
+□ ✅ Action buttons (Restart, Logs, Diagnose) work
+□ ✅ Shows accurate screened/accepted/rejected metrics
+
+QUICK PROMPTS:
+□ ✅ Updated prompts include curation efficiency queries
+□ ✅ “How many videos screened last hour?” works
+□ ✅ “What’s the acceptance rate today?” works
+□ ✅ “Restart curation now” actually restarts
+
+PROACTIVE ALERTS:
+□ ✅ Alert appears when curation offline > 30 min
+□ ✅ Alert appears when API quota > 90%
+□ ✅ Alerts auto-dismiss when resolved
+
+HOURLY DIGESTS:
+□ ✅ Digest sent every hour at :00
+□ ✅ Shows last hour’s curation stats
+□ ✅ Flags any issues detected
+
+SCHEDULED REMINDERS:
+□ ✅ “Check curation in 5 minutes” schedules task
+□ ✅ Task executes at specified time
+□ ✅ Result sent to Dev OS chat
+
+ACCURATE DATA:
+□ ✅ All metrics show timestamps
+□ ✅ Data queried fresh (no caching)
+□ ✅ Screened vs accepted vs rejected tracked
+
+═══════════════════════════════════════════════════════════════════════════════
+
+DEPLOYMENT ORDER:
+
+1. Backend endpoints (system-health, actions)
+1. Alert monitor service
+1. Hourly digest service
+1. Task scheduler
+1. Frontend dashboard component
+1. Update DevOS page to include dashboard
+1. Test all features
+
+BEGIN DEV OS 2.0 IMPLEMENTATION NOW.
+
+Report progress and any errors encountered.
+
+```
+---
+
+**🚀 READY TO TRANSFORM DEV OS!**
+
+This comprehensive prompt will build the complete Dev OS 2.0 with:
+- ✅ Real-time dashboard
+- ✅ Curation efficiency tracking
+- ✅ Proactive alerts
+- ✅ Hourly digests
+- ✅ Scheduled reminders
+- ✅ Action buttons that work
+- ✅ Accurate data
+
+**Paste into Replit Agent now!** 💪​​​​​​​​​​​​​​​​
+```

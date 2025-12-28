@@ -1,0 +1,1229 @@
+# **REVISED FINAL MEGA SYSTEM TEST - CORRECT PAYMENT MODEL** 🧪
+
+-----
+
+**Copy this entire prompt and paste into Replit Agent:**
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+BJJ OS - COMPLETE SYSTEM VALIDATION FOR BETA LAUNCH
+COMPREHENSIVE END-TO-END TESTING FROM ALL PERSPECTIVES
+═══════════════════════════════════════════════════════════════════════════════
+
+MISSION: Act as the final gatekeeper before beta launch. Test EVERY critical path
+from the user's perspective, admin perspective, and system perspective. Validate
+that all yesterday's changes are working correctly. "Excellence is our pillar" - 
+this system must be flawless before sending beta emails tomorrow.
+
+CRITICAL BUSINESS MODEL UNDERSTANDING:
+• NO free tier - all users enter payment info at signup
+• 7-day trial period - card NOT charged for 7 days
+• After 7 days: Automatic charge of $30/month
+• NO message limits during trial (100/day for all users)
+• NO SMS system - web/mobile app only
+
+TESTING PHILOSOPHY:
+• Test as if you're a real user (not a developer)
+• Test edge cases and error states
+• Validate that everything matches the documented behavior
+• Check that the user experience is smooth and professional
+• Verify all new features from yesterday's work
+• Confirm nothing broke during optimization
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 1: NEW USER SIGNUP & PAYMENT FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+SCENARIO: Brand new user discovers BJJ OS from JT Torres Instagram post
+
+TEST 1.1: Landing Page & First Impression
+□ Navigate to bjjos.app in incognito browser
+□ Check: Does page load in <2 seconds?
+□ Check: Is branding clear and professional?
+□ Check: Is value proposition obvious?
+□ Check: Is pricing clearly stated ($30/month, 7-day trial)?
+□ Check: Is "Start 7-Day Trial" or "Sign Up" button prominent?
+□ Check: Are there any broken images or styles?
+□ Check: Does it work on mobile viewport?
+□ Check: Is it clear this is a PAID product (not free)?
+
+Expected Result:
+✅ Professional landing page
+✅ Clear messaging about Professor OS + video library
+✅ Pricing transparent: "$30/month, 7 days free"
+✅ Smooth, fast load time (<2 seconds)
+✅ Works on desktop and mobile
+✅ No confusion about "free forever" plans
+
+TEST 1.2: Sign Up Form Validation
+□ Click "Sign Up" / "Start Trial" button
+□ Try invalid email: "notanemail"
+□ Check: Does validation catch it with helpful error?
+□ Try weak password: "123"
+□ Check: Does validation require strong password?
+□ Try SQL injection: email="test@test.com' OR '1'='1"
+□ Check: Is it safely handled (no SQL error exposed)?
+□ Enter valid email but leave password empty
+□ Check: Does form validate before submission?
+
+Expected Result:
+✅ Real-time validation on email field
+✅ Password requirements shown (length, complexity)
+✅ SQL injection safely blocked (no error messages)
+✅ Form submission blocked until all fields valid
+✅ Error messages are helpful (not technical jargon)
+
+TEST 1.3: Payment Information Flow
+□ Enter valid credentials: test_beta_1@bjjos.test, StrongPass123!
+□ Check: Does signup flow to payment page?
+□ Check: Is Stripe payment form embedded correctly?
+□ Check: Is it clear "You won't be charged for 7 days"?
+□ Check: Is trial end date clearly shown?
+□ Check: Can you see what you're signing up for?
+
+Expected Result:
+✅ Smooth transition to payment page
+✅ Stripe form loads correctly (not broken)
+✅ Clear messaging: "Start 7-day free trial"
+✅ Shows trial end date (e.g., "Trial ends Dec 7, then $30/month")
+✅ Professional checkout experience
+
+TEST 1.4: Stripe Test Card Processing
+□ Use Stripe test card: 4242 4242 4242 4242
+□ Expiry: Any future date (e.g., 12/25)
+□ CVC: Any 3 digits (e.g., 123)
+□ ZIP: Any 5 digits (e.g., 90210)
+□ Submit payment
+□ Check: Does it process without errors?
+□ Check: Does user get redirected to dashboard?
+□ Check: Does trial period start correctly?
+
+Expected Result:
+✅ Payment processes successfully (no errors)
+✅ User redirected to dashboard immediately
+✅ Trial status visible in account
+✅ No charge on card yet (it's day 0 of 7)
+
+TEST 1.5: Duplicate Email & Rate Limiting
+□ Try to sign up again with same email (test_beta_1@bjjos.test)
+□ Check: Does system reject with clear message?
+□ Message should be: "Email already exists" (not technical error)
+□ From same IP, try 3 more unique signups
+□ Check: After 3 signups in 1 hour, does 4th get blocked?
+□ Check: Is rate limit message clear?
+
+Expected Result:
+✅ Duplicate email rejected politely
+✅ Rate limiter blocks 4th signup from same IP
+✅ Clear message: "Too many signups from this location. Try again in 1 hour."
+✅ No technical errors exposed to user
+
+TEST 1.6: Trial User Dashboard - First Login
+□ After successful signup + payment, check dashboard
+□ Check: Is welcome message shown?
+□ Check: Is trial status clearly visible?
+□ Check: Shows "Trial ends [date]"?
+□ Check: Is Professor OS chat accessible immediately?
+□ Check: Is video library accessible?
+□ Check: Are navigation elements clear?
+□ Check: Is user's name/email shown in profile?
+
+Expected Result:
+✅ Clean, professional dashboard
+✅ Trial status prominent: "7 days remaining"
+✅ Clear call-to-action: "Start chatting with Professor OS"
+✅ Video library accessible
+✅ No confusion about what to do next
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 2: PROFESSOR OS - CORE COACHING FUNCTIONALITY
+═══════════════════════════════════════════════════════════════════════════════
+
+SCENARIO: New trial user (day 0) interacts with Professor OS for first time
+
+TEST 2.1: First Conversation - Coaching Tone & Quality
+□ Send: "Hi, I'm new to BJJ. Can you help me?"
+□ Check: Response time <3 seconds?
+□ Check: Is tone warm, encouraging, coaching-like?
+□ Check: Does Professor OS ask about user's experience level?
+□ Check: Does it feel like talking to a real coach (not ChatGPT)?
+□ Check: Is response substantial (not one-liner)?
+
+Expected Response Characteristics:
+✅ Warm greeting acknowledging new student
+✅ Asks clarifying questions: "What belt are you? Where do you train?"
+✅ Provides initial guidance appropriate for beginners
+✅ Tone: Encouraging, knowledgeable, patient (like JT Torres would talk)
+✅ Not robotic or generic
+
+Example Good Response:
+"Welcome to BJJ! I'm here to help you on your journey. Let me ask a few 
+questions to give you the best guidance: What belt level are you currently? 
+And what aspects of BJJ are you most interested in learning right now - 
+fundamental positions, submissions, or something else?"
+
+TEST 2.2: User Context Collection & Personalization
+□ Reply: "I'm a white belt, 160 lbs, training at a local gym 3x per week"
+□ Check: Does Professor OS acknowledge the info?
+□ Check: Does it reference this context in future responses?
+□ Ask: "What should I focus on as a beginner?"
+□ Check: Is advice specific to white belt level?
+□ Check: Is advice appropriate for 3x/week training?
+
+Expected Result:
+✅ Professor OS remembers: white belt, 160 lbs, 3x/week
+✅ Advice tailored: Focuses on fundamentals (not advanced techniques)
+✅ Realistic expectations: "With 3x/week training, focus on..."
+✅ References user's weight class if relevant to technique
+
+TEST 2.3: Video Recommendations - Elite Tier Only (New User)
+□ Ask: "How do I escape side control?"
+□ Check: Does Professor OS give technique explanation?
+□ Check: Are video recommendations included?
+□ Check: Are videos ONLY from elite instructors (7.5+ credibility)?
+□ Check: Do videos have 🏆 Elite Instructor label?
+□ Check: Are instructors Gordon Ryan, Danaher, Lachlan Giles tier?
+
+Expected Response Format:
+"For side control escapes, here's what I recommend:
+
+[Technique explanation - 2-3 paragraphs]
+
+📹 **Side Control Escape Fundamentals** by John Danaher
+🏆 Elite Instructor
+[Watch video](link)
+
+📹 **Gordon Ryan's Go-To Escape** by Gordon Ryan  
+🏆 Elite Instructor
+[Watch video](link)
+
+All of these instructors are world-class competitors and coaches."
+
+Verify:
+✅ 3-5 video recommendations
+✅ ALL instructors have credibility ≥7.5 (elite tier)
+✅ Clear labeling with 🏆 symbol
+✅ Video links are clickable
+✅ Instructors are legitimate (Gordon, Danaher, Lachlan, etc.)
+
+TEST 2.4: Video Repetition Logic - Transparency
+□ Click on one of the recommended videos
+□ Note the video title and instructor
+□ Return to chat
+□ Ask same question again: "Show me side control escapes"
+□ Check: Does Professor OS mention showing this before?
+□ Check: Is message clear: "I've recommended this video before..."?
+□ Check: Does it explain WHY repeating is valuable?
+
+Expected Response:
+"I've shown you John Danaher's side control escape before, and I'm 
+recommending it again because it's genuinely the best approach for your 
+level. Elite competitors watch the same techniques multiple times to refine 
+their understanding. This time, pay special attention to how he creates 
+frames at [timestamp]."
+
+Verify:
+✅ Acknowledges this is a repeat recommendation
+✅ Explains why repetition is valuable
+✅ Provides additional insight (what to focus on)
+✅ Tone: Coaching, not apologetic
+
+TEST 2.5: Conversation Memory & Context
+□ In same session, send: "Earlier you mentioned focusing on fundamentals"
+□ Check: Does Professor OS remember previous conversation?
+□ Check: Does it reference earlier advice?
+□ Ask follow-up: "Which fundamental should I start with?"
+□ Check: Does response build on previous context?
+
+Expected Result:
+✅ Professor OS maintains conversation memory
+✅ References earlier advice naturally
+✅ Builds on previous recommendations
+✅ Feels like continuous conversation (not isolated questions)
+
+TEST 2.6: Message Rate Limiting (100/day for all users)
+□ Send 95 messages rapidly (test with script if possible)
+□ Check: Do all messages process correctly?
+□ Send 5 more messages (total: 100)
+□ Check: 100th message works?
+□ Send 101st message
+□ Check: Does system block with clear message?
+□ Message should reference daily limit reset
+
+Expected Result:
+✅ First 100 messages work flawlessly
+✅ 101st message blocked
+✅ Clear message: "You've reached today's limit of 100 messages. 
+   This resets at midnight. Take a break and let today's techniques sink in!"
+✅ NOT an error - a friendly boundary
+✅ No option to "upgrade" (all users have same limit)
+
+TEST 2.7: Video Library Search & Filtering
+□ Navigate to video library section
+□ Check: Are videos organized by category?
+□ Search for "guard passing"
+□ Check: Do search results load quickly (<1 second)?
+□ Check: Are results relevant?
+□ Filter by instructor: "Gordon Ryan"
+□ Check: Does filter work correctly?
+□ Check: Are only Gordon Ryan videos shown?
+
+Expected Result:
+✅ Video library is organized and searchable
+✅ Search is fast (<1 second response)
+✅ Results are relevant to query
+✅ Filters work correctly
+✅ Video thumbnails and metadata load correctly
+
+TEST 2.8: Edge Cases & Error Handling
+□ Send empty message
+□ Check: Does system validate (require text)?
+□ Send extremely long message (2000+ characters)
+□ Check: Does system handle it gracefully?
+□ Send gibberish: "aslkdjflaksjdf"
+□ Check: Does Professor OS respond helpfully?
+□ Send off-topic: "What's the weather?"
+□ Check: Does Professor OS redirect to BJJ topics?
+
+Expected Results:
+✅ Empty message: Form validation prevents submission
+✅ Long message: Processed correctly or truncated with notice
+✅ Gibberish: "I didn't quite understand. Can you rephrase your question?"
+✅ Off-topic: "I'm here to help with BJJ techniques. What aspect of training can I help you with?"
+
+TEST 2.9: Professor OS Prompt Validation
+□ Review the actual Professor OS system prompt (if accessible)
+□ Check: Does it reference being a BJJ coach?
+□ Check: Does it have instructions for personalization?
+□ Check: Does it have video recommendation guidelines?
+□ Check: Does it emphasize coaching tone?
+□ Compare to: /mnt/project/Professor_OS_5.0 prompt file
+
+Expected Characteristics:
+✅ Identity: BJJ coach/instructor persona
+✅ Tone: Encouraging, patient, knowledgeable
+✅ Capabilities: Technique advice, video recommendations, personalization
+✅ Boundaries: Stays focused on BJJ, doesn't discuss unrelated topics
+✅ Context awareness: References user's belt, weight, training frequency
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 3: VIDEO SYSTEM & RECOMMENDATION ENGINE
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 3.1: Video Database State
+□ Query: SELECT COUNT(*) FROM videos;
+□ Check: Current video count (should be 336+)
+□ Query: SELECT COUNT(*) FROM videos WHERE tier = 'elite';
+□ Check: Number of elite videos
+□ Query: SELECT COUNT(*) FROM videos WHERE tier = 'verified';
+□ Check: Number of verified videos
+□ Query top instructors:
+  SELECT instructor_name, COUNT(*), AVG(instructor_credibility) 
+  FROM videos GROUP BY instructor_name ORDER BY COUNT(*) DESC LIMIT 10;
+□ Check: Gordon Ryan, Danaher, Lachlan Giles in top 10?
+
+Expected Results:
+✅ Total videos: 336-500 range
+✅ Elite videos (≥7.5): 100-200
+✅ Verified videos (6.5-7.4): 100-200
+✅ Top instructors include Gordon Ryan, Danaher, Lachlan Giles
+✅ Average credibility of top instructors >7.5
+
+TEST 3.2: Video Tier Classification
+□ Query random elite video:
+  SELECT * FROM videos WHERE tier = 'elite' LIMIT 1;
+□ Check: instructor_credibility ≥ 7.5?
+□ Check: Is instructor name recognizable (Gordon, Danaher, etc.)?
+□ Query random verified video:
+  SELECT * FROM videos WHERE tier = 'verified' LIMIT 1;
+□ Check: instructor_credibility between 6.5-7.4?
+
+Expected Results:
+✅ Elite tier: Only videos with credibility ≥7.5
+✅ Verified tier: Videos with credibility 6.5-7.4
+✅ No videos with credibility <6.0
+✅ Tier classification accurate
+
+TEST 3.3: User Tier Progression
+□ Create test user with 0 videos watched
+□ Check: recommendation_tier = 'new_user'?
+□ Manually update: videos_watched_count = 15
+□ Run tier update function
+□ Check: recommendation_tier = 'established_user'?
+□ Update: videos_watched_count = 55
+□ Run tier update
+□ Check: recommendation_tier = 'power_user'?
+
+Expected Results:
+✅ 0-9 videos: new_user tier
+✅ 10-49 videos: established_user tier
+✅ 50+ videos: power_user tier
+✅ Tier updates automatically when watch count changes
+
+TEST 3.4: Video View Tracking
+□ Simulate video view for test user
+□ Check: Record inserted into video_views table?
+□ Check: user_video_stats updated correctly?
+□ Check: User's videos_watched_count incremented?
+□ View same video again
+□ Check: view_count incremented in user_video_stats?
+□ Check: last_viewed_at timestamp updated?
+
+Expected Results:
+✅ Every video view tracked in video_views
+✅ Aggregated stats in user_video_stats updated
+✅ User's total watch count incremented
+✅ Duplicate views counted correctly
+
+TEST 3.5: Recommendation Engine - New User
+□ Test user with recommendation_tier = 'new_user'
+□ Call recommendation engine with query: "guard passing"
+□ Check: Are ALL returned videos from elite tier?
+□ Check: Are videos sorted by credibility (highest first)?
+□ Check: Results contain Gordon Ryan, Danaher, or Lachlan Giles?
+
+Expected Results:
+✅ 100% of recommendations are elite tier (≥7.5 credibility)
+✅ Sorted by credibility descending
+✅ Top results are from world-class instructors
+
+TEST 3.6: Recommendation Engine - Established User
+□ Test user with recommendation_tier = 'established_user'
+□ Call recommendation engine
+□ Check: Are most videos elite tier?
+□ Check: Are some videos verified tier?
+□ Check: Elite videos shown before verified videos?
+
+Expected Results:
+✅ ~80% elite tier, ~20% verified tier
+✅ Elite videos always shown first
+✅ Verified videos clearly labeled
+✅ No "acceptable" tier videos shown
+
+TEST 3.7: Recommendation Engine - Power User
+□ Test user with recommendation_tier = 'power_user'
+□ Call recommendation engine
+□ Check: Are videos from all tiers returned?
+□ Check: Are they still sorted by credibility?
+□ Check: Best match shown first regardless of tier?
+
+Expected Results:
+✅ Videos from elite, verified, and acceptable tiers
+✅ Best match for query shown first
+✅ Credibility still prioritized within tiers
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 4: SUBSCRIPTION & PAYMENT MANAGEMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 4.1: Trial Period Status
+□ Query user created in TEST 1.4
+□ Check: subscription_status = 'trialing'?
+□ Check: trial_end_date = created_at + 7 days?
+□ Check: stripe_customer_id exists?
+□ Check: stripe_subscription_id exists?
+
+Expected Results:
+✅ Status: "trialing" for first 7 days
+✅ Trial end date correctly set
+✅ Stripe IDs properly stored
+✅ Payment method on file (not charged yet)
+
+TEST 4.2: Account Page - Trial User View
+□ Navigate to account/settings page as trial user
+□ Check: Is trial status clearly shown?
+□ Check: Shows "X days remaining in trial"?
+□ Check: Shows next billing date?
+□ Check: Can user see payment method?
+□ Check: Can user cancel subscription?
+□ Check: Is cancellation clear (no dark patterns)?
+
+Expected Results:
+✅ Trial countdown visible: "5 days remaining"
+✅ Next charge date shown: "Card charged on [date] for $30"
+✅ Payment method: **** 4242 (last 4 digits)
+✅ Cancel option available and clear
+✅ No confusing legalese
+
+TEST 4.3: Payment Method Update
+□ On account page, click "Update payment method"
+□ Check: Does Stripe update form load?
+□ Enter new test card: 5555 5555 5555 4444 (Mastercard test)
+□ Submit
+□ Check: Does update succeed?
+□ Check: Is new card shown in account (last 4: 4444)?
+
+Expected Results:
+✅ Update form loads correctly
+✅ New card processes successfully
+✅ Account shows updated payment method
+✅ No errors or broken flows
+
+TEST 4.4: Subscription Cancellation Flow
+□ Click "Cancel subscription"
+□ Check: Is there a confirmation dialog?
+□ Check: Does it explain what happens? ("Access until [trial end date]")
+□ Confirm cancellation
+□ Check: Status changes to "canceled"?
+□ Check: trial_end_date still honored (user retains access)?
+□ Check: No refund needed (trial not charged yet)?
+
+Expected Results:
+✅ Confirmation dialog appears
+✅ Clear explanation of cancellation effects
+✅ Status: "canceled" but access until trial end
+✅ User can still use Professor OS until trial ends
+✅ Professional, no guilt-tripping
+
+TEST 4.5: Subscription Reactivation
+□ After canceling, try to reactivate
+□ Check: Is reactivation option available?
+□ Click "Resume subscription"
+□ Check: Does it reactivate successfully?
+□ Check: Status returns to "trialing"?
+□ Check: trial_end_date unchanged?
+
+Expected Results:
+✅ Reactivation option clearly available
+✅ One-click reactivation (no need to re-enter payment)
+✅ Status restored to "trialing"
+✅ Trial period continues from where it was
+
+TEST 4.6: Post-Trial Subscription (Day 8+)
+□ Manually adjust user's created_at to 8 days ago
+□ Run billing check (or wait for Stripe webhook)
+□ Check: Status changes from "trialing" to "active"?
+□ Check: Stripe charge created for $30?
+□ Check: Next billing date set to +30 days?
+
+Expected Results (Simulated):
+✅ After 7 days, status → "active"
+✅ Card charged $30
+✅ User retains full access
+✅ Next billing: 30 days from first charge
+
+TEST 4.7: Failed Payment Handling
+□ Update payment method to test card: 4000 0000 0000 0341 (charge fails)
+□ Simulate trial end / billing attempt
+□ Check: Does system handle gracefully?
+□ Check: Is user notified of failed payment?
+□ Check: Is there grace period before suspension?
+□ Check: Can user update payment method?
+
+Expected Results:
+✅ Failed payment detected
+✅ User notified via email (check email queue)
+✅ Account not immediately suspended (grace period)
+✅ Clear instructions to update payment
+✅ No panic-inducing messages
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 5: ADMIN DASHBOARD & DEV OS
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 5.1: Admin Authentication
+□ Navigate to /admin
+□ Check: Is non-admin user blocked?
+□ Error should be 403 Forbidden (not 404 or 500)
+□ Login as admin user
+□ Check: Does admin dashboard load?
+□ Check: Are admin controls visible?
+
+Expected Results:
+✅ Non-admin blocked with 403
+✅ Admin login successful
+✅ Dashboard loads with admin tools
+✅ No broken links or missing styles
+
+TEST 5.2: Admin Dashboard - User Management
+□ View list of all users
+□ Check: Can see user count, emails, subscription status?
+□ Check: Can filter by subscription status (trialing, active, canceled)?
+□ Check: Can search by email?
+□ Select a test user
+□ Check: Can view user details (watch history, messages sent, etc.)?
+
+Expected Results:
+✅ User list displays correctly
+✅ All relevant user data visible
+✅ Filtering and search work
+✅ User details page loads
+✅ Can see user activity (videos watched, messages)
+
+TEST 5.3: Admin Dashboard - Video Management
+□ Navigate to video management section
+□ Check: Can see total video count?
+□ Check: Can see breakdown by tier (elite/verified/acceptable)?
+□ Check: Can search videos by instructor?
+□ Check: Can filter by technique category?
+□ Select a video
+□ Check: Can edit video metadata?
+□ Check: Can change instructor credibility?
+□ Check: Does tier update automatically if credibility changes?
+
+Expected Results:
+✅ Video list loads quickly
+✅ Tier distribution visible
+✅ Search and filters work
+✅ Can edit video details
+✅ Tier recalculates on credibility change
+
+TEST 5.4: Admin Dashboard - Curation Status
+□ Navigate to curation status page
+□ Check: Shows current video count vs target (2,000)?
+□ Check: Shows today's curation progress?
+□ Check: Shows API usage (YouTube, Claude, GPT)?
+□ Check: Shows curation enabled/disabled status?
+□ Check: Can manually trigger curation?
+
+Expected Results:
+✅ Progress to 2,000 videos clearly shown
+✅ Today's stats: "Added X videos, Y API calls"
+✅ API limits: "YouTube: 234/10,000, Claude: 45/1,000"
+✅ Curation status toggle visible
+✅ Manual trigger button works
+
+TEST 5.5: Dev OS - System Status Query
+□ In admin dashboard, access Dev OS chat
+□ Send: "What's the system status?"
+□ Check: Does Dev OS respond with metrics?
+□ Check: Includes total users, active subscriptions, MRR?
+□ Check: Includes video count, curation status?
+□ Check: Response is conversational (not just JSON dump)?
+
+Expected Response Format:
+"System Status:
+• 76 total users
+• 28 active subscriptions ($840 MRR)
+• 43 trial users
+• 336 videos in library (target: 2,000)
+• Curation running: 15 videos added today
+• All systems operational ✅"
+
+Verify:
+✅ Accurate metrics
+✅ Conversational tone
+✅ Key business metrics highlighted
+✅ Status indicators (✅ or ⚠️)
+
+TEST 5.6: Dev OS - User Insights
+□ Send to Dev OS: "How many users signed up today?"
+□ Check: Does it query database and respond accurately?
+□ Send: "Show me the last 5 signups"
+□ Check: Does it list recent users (anonymized if needed)?
+□ Send: "What's our conversion rate?"
+□ Check: Does it calculate trial → paid conversion?
+
+Expected Results:
+✅ Queries execute correctly
+✅ Data returned accurately
+✅ Calculations correct (conversion rate, MRR, etc.)
+✅ Response format clear and actionable
+
+TEST 5.7: Dev OS - Video Analytics
+□ Send: "How many videos did we add this week?"
+□ Check: Does it query curation_runs table?
+□ Send: "Which instructors do we have the most videos from?"
+□ Check: Does it query and rank instructors?
+□ Send: "What's our most-watched video?"
+□ Check: Does it use video_views data?
+
+Expected Results:
+✅ Accurate video addition count
+✅ Top instructors listed correctly
+✅ Most-watched video identified
+✅ Data-driven insights provided
+
+TEST 5.8: Dev OS - Alerts & Anomalies
+□ Send: "Are there any issues I should know about?"
+□ Check: Does Dev OS proactively identify problems?
+□ Check: Mentions failed payments, API limit warnings, etc.?
+□ Send: "Is curation on track to hit 2,000 videos?"
+□ Check: Does it project timeline based on current rate?
+
+Expected Response:
+"Curation Progress:
+• Current: 336 videos
+• Target: 2,000
+• Rate: ~11 videos/day
+• Projected completion: 150 days (~5 months)
+• To hit target faster, consider increasing daily curation limit from 50 to 75 videos."
+
+Verify:
+✅ Proactive problem identification
+✅ Data-driven projections
+✅ Actionable recommendations
+
+TEST 5.9: Dev OS - Prompt Validation
+□ Review Dev OS system prompt (if accessible)
+□ Check: Does it reference database schema?
+□ Check: Does it have SQL query capabilities?
+□ Check: Does it have business context (MRR, conversion, etc.)?
+□ Check: Tone is analytical but conversational?
+□ Compare to: /mnt/project/Professor_Os_additives file
+
+Expected Characteristics:
+✅ Has access to database queries
+✅ Understands business metrics (MRR, LTV, churn)
+✅ Can generate insights from data
+✅ Proactive about alerting issues
+✅ Conversational but analytical tone
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 6: CONTINUOUS CURATION SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 6.1: Curation Configuration Check
+□ Query curation_config table
+□ Check: target_total_videos = '2000'?
+□ Check: credibility_threshold = '6.0'?
+□ Check: daily_video_target = '50'?
+□ Check: youtube_api_daily_limit configured?
+□ Check: claude_api_daily_limit configured?
+□ Check: curation_enabled = 'true'?
+
+Expected Results:
+✅ All configuration values present
+✅ Target: 2,000 videos
+✅ Threshold: 6.0 (permissive curation)
+✅ Daily target: 50 videos
+✅ API limits reasonable
+✅ Curation enabled
+
+TEST 6.2: Curation Runs Tracking
+□ Query curation_runs table for today
+□ Check: Is today's run record present?
+□ Check: Status = 'in_progress' or 'completed'?
+□ Check: videos_added count makes sense?
+□ Check: API call counts tracked?
+□ Query last 7 days of curation_runs
+□ Check: Are videos being added daily?
+
+Expected Results:
+✅ Today's run exists and tracked
+✅ Status indicates progress
+✅ Video addition count reasonable (0-50 today)
+✅ API usage logged
+✅ Historical data shows consistent curation
+
+TEST 6.3: API Limit Enforcement
+□ Check today's curation run API usage
+□ If youtube_api_calls < youtube_api_daily_limit:
+   □ Trigger manual curation
+   □ Check: Does curation proceed?
+□ If youtube_api_calls >= youtube_api_daily_limit:
+   □ Trigger manual curation
+   □ Check: Does curation stop with rate_limited status?
+   □ Check: Is clear message provided?
+
+Expected Results:
+✅ Curation proceeds when under limits
+✅ Curation stops when limits hit
+✅ Status changes to 'rate_limited'
+✅ Clear messaging: "API limit reached, resuming tomorrow"
+
+TEST 6.4: Daily Reset Verification
+□ Check if it's a new day (date changed since last run)
+□ Trigger curation
+□ Check: Does new curation_runs record get created?
+□ Check: API counters reset to 0?
+□ Check: Yesterday's counters preserved in history?
+
+Expected Results:
+✅ New day = new curation_runs record
+✅ API counters start at 0 for new day
+✅ Historical data intact
+
+TEST 6.5: Target Reached Auto-Stop
+□ Check current video count vs target
+□ If current < 2000:
+   □ Trigger curation
+   □ Check: Does it add videos?
+□ If current >= 2000:
+   □ Trigger curation
+   □ Check: Does it stop automatically?
+   □ Check: Is curation_enabled set to 'false'?
+   □ Check: Is clear message provided?
+
+Expected Results:
+✅ Continues curating if under target
+✅ Stops automatically when target reached
+✅ Updates curation_enabled to 'false'
+✅ Message: "Target of 2,000 videos reached! 🎉"
+
+TEST 6.6: Cron Job Status
+□ Check if cron job is running
+□ Look for process or scheduled task
+□ Check: Is it scheduled to run hourly?
+□ Check: Does it check time and run at midnight?
+□ Review cron logs (if available)
+□ Check: Are there any errors in recent runs?
+
+Expected Results:
+✅ Cron job active and running
+✅ Scheduled every hour
+✅ Checks time and curates at configured hour (midnight default)
+✅ No errors in recent logs
+
+TEST 6.7: Manual Curation Trigger
+□ From admin dashboard, click "Run Curation Now"
+□ Check: Does curation start immediately?
+□ Check: Does it respect daily API limits?
+□ Check: Are new videos added to database?
+□ Check: Do new videos have correct tier classification?
+
+Expected Results:
+✅ Manual trigger works
+✅ Videos added successfully
+✅ Tier classification correct (elite/verified/acceptable)
+✅ API limits respected even in manual mode
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 7: PERFORMANCE & OPTIMIZATION VALIDATION
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 7.1: Database Query Performance
+□ Run: EXPLAIN ANALYZE SELECT * FROM videos WHERE instructor_credibility >= 7.5 LIMIT 20;
+□ Check: Execution time <10ms?
+□ Check: Uses idx_video_credibility index?
+□ Run: EXPLAIN ANALYZE SELECT * FROM videos WHERE technique_category = 'guard' AND tier = 'elite';
+□ Check: Execution time <10ms?
+□ Check: Uses appropriate indexes?
+
+Expected Results:
+✅ All queries <10ms
+✅ Indexes utilized (no Seq Scan)
+✅ Query plans optimal
+
+TEST 7.2: Cache Performance
+□ Make first API call to Professor OS
+□ Note response time
+□ Make identical API call again
+□ Note response time
+□ Check: Is second call faster?
+□ Check: Is cache hit rate >40%?
+
+Expected Results:
+✅ First call: <3 seconds (API + processing)
+✅ Second call: <500ms (cached)
+✅ Cache provides 5-10x speedup
+✅ Cache hit rate >40% under normal use
+
+TEST 7.3: Page Load Times
+□ Clear browser cache
+□ Navigate to bjjos.app
+□ Measure time to first paint
+□ Measure time to interactive
+□ Check: First paint <1 second?
+□ Check: Interactive <2 seconds?
+
+Expected Results:
+✅ First paint: <1 second
+✅ Time to interactive: <2 seconds
+✅ No render-blocking resources
+✅ Images load quickly
+
+TEST 7.4: Professor OS Response Time Under Load
+□ Send 10 simultaneous messages to Professor OS
+□ Check: Do all responses come back?
+□ Check: Average response time <5 seconds?
+□ Check: No timeouts or errors?
+□ Check: No rate limit errors?
+
+Expected Results:
+✅ All 10 messages processed
+✅ Average response time <5 seconds
+✅ No errors or timeouts
+✅ System handles concurrent load
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 8: SECURITY & ERROR HANDLING
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 8.1: SQL Injection Protection
+□ Try SQL injection in signup: email="test@test.com' OR '1'='1"
+□ Check: Is it safely handled (no SQL error)?
+□ Try in Professor OS chat: "'; DROP TABLE users; --"
+□ Check: Is it treated as text (not executed)?
+
+Expected Results:
+✅ All inputs sanitized
+✅ No SQL errors exposed
+✅ Malicious input treated as text
+✅ Drizzle ORM parameterization working
+
+TEST 8.2: XSS Protection
+□ Try XSS in chat: "<script>alert('xss')</script>"
+□ Check: Is script tag escaped/sanitized?
+□ Check: Does it display as text (not execute)?
+
+Expected Results:
+✅ Script tags escaped
+✅ No JavaScript execution
+✅ Output safely rendered
+
+TEST 8.3: Authentication & Authorization
+□ Logout from admin account
+□ Try to access /admin/dashboard directly
+□ Check: Redirected to login?
+□ Try to access API endpoint without auth token
+□ Check: Returns 401 Unauthorized?
+
+Expected Results:
+✅ Protected routes require authentication
+✅ API endpoints require valid token
+✅ Clear redirects to login
+✅ No sensitive data exposed without auth
+
+TEST 8.4: Rate Limiting Validation
+□ From same IP, attempt 4 signups in 1 hour
+□ Check: 4th blocked?
+□ Send 101 messages to Professor OS in one day
+□ Check: 101st blocked?
+□ Check: Error messages helpful (not technical)?
+
+Expected Results:
+✅ Signups: 3/hour per IP limit enforced
+✅ Messages: 100/day per user limit enforced
+✅ Error messages user-friendly
+✅ No bypass possible
+
+TEST 8.5: Error Page Handling
+□ Navigate to non-existent page: /this-does-not-exist
+□ Check: Clean 404 page?
+□ Trigger server error (if possible)
+□ Check: Clean 500 page (no stack trace exposed)?
+□ Check: Does user have path to get back?
+
+Expected Results:
+✅ 404: Clean page with navigation back
+✅ 500: Generic error (no sensitive info)
+✅ Errors logged to Sentry (not shown to user)
+✅ User can recover gracefully
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 9: MOBILE & CROSS-BROWSER TESTING
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 9.1: Mobile Responsiveness
+□ Open bjjos.app on mobile viewport (375px width)
+□ Check: Does layout adapt to mobile?
+□ Check: Are buttons thumb-friendly (min 44px)?
+□ Check: Is text readable without zooming?
+□ Check: Can you navigate easily?
+□ Test Professor OS chat on mobile
+□ Check: Is keyboard interaction smooth?
+□ Check: Does chat scroll properly?
+
+Expected Results:
+✅ Mobile layout clean and usable
+✅ No horizontal scrolling
+✅ Touch targets appropriately sized
+✅ Text legible
+✅ Chat fully functional on mobile
+
+TEST 9.2: Browser Compatibility
+□ Test on Chrome (latest)
+□ Test on Safari (latest)
+□ Test on Firefox (latest)
+□ Test on mobile Safari (iOS)
+□ Check: Does everything work across browsers?
+
+Expected Results:
+✅ Consistent experience across browsers
+✅ No browser-specific bugs
+✅ All features functional
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST SUITE 10: EMAIL SYSTEM (READY FOR BETA LAUNCH)
+═══════════════════════════════════════════════════════════════════════════════
+
+TEST 10.1: Welcome Email (Post-Signup)
+□ Sign up new test user
+□ Check: Is welcome email queued/sent?
+□ Check email content:
+  □ Subject line compelling?
+  □ Body professional and branded?
+  □ Clear next steps for user?
+  □ Link to Professor OS working?
+  □ Unsubscribe link present (legal requirement)?
+
+Expected Email Content:
+Subject: "Welcome to BJJ OS - Your AI BJJ Coach is Ready"
+
+Body should include:
+✅ Welcome message
+✅ Brief explanation of Professor OS
+✅ "Start your first conversation" CTA link
+✅ Trial reminder: "Your 7-day trial starts now"
+✅ Support contact info
+✅ Professional branding/design
+
+TEST 10.2: Trial Ending Soon Email (Day 5)
+□ Find/create user with trial ending in 2 days
+□ Check: Is "trial ending" email scheduled?
+□ Check email content:
+  □ Clear about trial ending date?
+  □ Mentions upcoming charge ($30)?
+  □ Provides cancellation option?
+  □ Highlights value received so far?
+
+Expected Email Content:
+Subject: "Your BJJ OS Trial Ends in 2 Days"
+
+Body should include:
+✅ Trial end date clearly stated
+✅ "Your card will be charged $30 on [date]"
+✅ Option to cancel if not satisfied
+✅ Reminder of value: "You've had X conversations with Professor OS"
+✅ Link to account management
+
+TEST 10.3: Payment Successful Email (Day 8)
+□ Find/simulate user charged after trial
+□ Check: Is payment receipt sent?
+□ Check email content:
+  □ Receipt with transaction details?
+  □ Amount charged ($30)?
+  □ Next billing date?
+  □ Thank you message?
+
+Expected Email Content:
+Subject: "Receipt for Your BJJ OS Subscription"
+
+Body should include:
+✅ "Thank you for subscribing!"
+✅ Amount charged: $30.00
+✅ Billing date
+✅ Next billing: [30 days from now]
+✅ Link to download receipt
+✅ Support contact
+
+TEST 10.4: Payment Failed Email
+□ Simulate failed payment
+□ Check: Is failure notification sent?
+□ Check email content:
+  □ Clear about failure (not accusatory)?
+  □ Instructions to update payment?
+  □ Grace period mentioned?
+  □ Easy link to update payment?
+
+Expected Email Content:
+Subject: "Action Required: Update Your Payment Method"
+
+Body should include:
+✅ Friendly tone (not threatening)
+✅ "We couldn't process your payment"
+✅ "Please update your payment method to keep access"
+✅ Clear CTA button: "Update Payment Method"
+✅ Support contact if issue persists
+
+TEST 10.5: Beta Invitation Email (FOR TOMORROW)
+□ Draft beta invitation email
+□ Check content:
+  □ Subject line creates urgency/exclusivity?
+  □ Body explains what BJJ OS is?
+  □ Clear CTA to sign up?
+  □ Mentions 7-day trial?
+  □ Personal touch (from founder)?
+  □ Designed/formatted professionally?
+
+Expected Beta Email Content:
+Subject: "[Beta] You're Invited: Meet Professor OS - Your AI BJJ Coach"
+
+Body should include:
+✅ Personal introduction (from you/founder)
+✅ "You're among the first to access this"
+✅ Clear explanation of what Professor OS does
+✅ "Start 7-day free trial" CTA button
+✅ Social proof (JT Torres mention if approved)
+✅ Limited spots messaging (creates urgency)
+✅ Professional design with brand colors
+
+CRITICAL: Review this email draft carefully before sending tomorrow!
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL VALIDATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After completing all tests above, verify:
+
+□ ✅ All critical user flows work end-to-end
+□ ✅ Payment/subscription system functioning correctly
+□ ✅ Professor OS responding with correct tone and quality
+□ ✅ Video recommendations accurate (elite tier for new users)
+□ ✅ Admin dashboard functional and data accurate
+□ ✅ Dev OS providing useful insights
+□ ✅ Curation system running and respecting limits
+□ ✅ Database optimized and queries fast
+□ ✅ Security measures in place
+□ ✅ Error handling graceful
+□ ✅ Mobile experience good
+□ ✅ Email system ready for beta launch
+□ ✅ No critical bugs identified
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL REPORT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+After testing, provide comprehensive report:
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+BJJ OS - BETA LAUNCH READINESS REPORT
+═══════════════════════════════════════════════════════════════════════════════
+
+EXECUTIVE SUMMARY:
+System Status: [READY FOR BETA / NEEDS FIXES]
+Critical Issues: [COUNT]
+Warnings: [COUNT]
+Tests Passed: [X/Y]
+Overall Grade: [A/B/C]
+
+RECOMMENDATION: [LAUNCH / FIX CRITICAL ISSUES FIRST / NOT READY]
+
+───────────────────────────────────────────────────────────────────────────────
+TEST RESULTS BY CATEGORY:
+───────────────────────────────────────────────────────────────────────────────
+
+Signup & Onboarding: [PASS/FAIL]
+
+- Landing page: ✅
+- Sign up validation: ✅
+- Payment flow: ✅
+- Issues: [none or list]
+
+Professor OS: [PASS/FAIL]
+
+- Chat functionality: ✅
+- Response quality: ✅
+- Video recommendations: ✅
+- Repetition logic: ✅
+- Issues: [none or list]
+
+Video System: [PASS/FAIL]
+
+- Database state: ✅
+- Tier classification: ✅
+- Recommendation engine: ✅
+- Issues: [none or list]
+
+Subscription Management: [PASS/FAIL]
+
+- Trial period: ✅
+- Payment processing: ✅
+- Cancellation: ✅
+- Issues: [none or list]
+
+Admin Dashboard: [PASS/FAIL]
+
+- User management: ✅
+- Video management: ✅
+- Curation status: ✅
+- Issues: [none or list]
+
+Dev OS: [PASS/FAIL]
+
+- System queries: ✅
+- Insights generation: ✅
+- Alerting: ✅
+- Issues: [none or list]
+
+Curation System: [PASS/FAIL]
+
+- Configuration: ✅
+- API limits: ✅
+- Auto-stop at target: ✅
+- Issues: [none or list]
+
+Performance: [PASS/FAIL]
+
+- Database speed: ✅
+- Cache effectiveness: ✅
+- Page load times: ✅
+- Issues: [none or list]
+
+Security: [PASS/FAIL]
+
+- SQL injection protection: ✅
+- XSS protection: ✅
+- Authentication: ✅
+- Rate limiting: ✅
+- Issues: [none or list]
+
+Email System: [PASS/FAIL]
+
+- Welcome email: ✅
+- Trial emails: ✅
+- Payment emails: ✅
+- Beta email ready: ✅
+- Issues: [none or list]
+
+───────────────────────────────────────────────────────────────────────────────
+CRITICAL ISSUES (MUST FIX BEFORE LAUNCH):
+───────────────────────────────────────────────────────────────────────────────
+
+[List any blocking issues, or “NONE” if ready]
+
+───────────────────────────────────────────────────────────────────────────────
+WARNINGS (SHOULD FIX BUT NOT BLOCKING):
+───────────────────────────────────────────────────────────────────────────────
+
+[List any non-critical issues]
+
+───────────────────────────────────────────────────────────────────────────────
+EXCELLENT FINDINGS (CELEBRATING WHAT WORKS):
+───────────────────────────────────────────────────────────────────────────────
+
+[Highlight what’s working exceptionally well]
+
+───────────────────────────────────────────────────────────────────────────────
+BETA LAUNCH RECOMMENDATION:
+───────────────────────────────────────────────────────────────────────────────
+
+[Detailed recommendation on whether to proceed with beta emails tomorrow]
+
+If READY: “The system is production-ready. All critical paths tested and
+functioning correctly. Professor OS is performing excellently.
+Payment system is solid. Excellence pillar maintained.
+✅ CLEARED FOR BETA LAUNCH.”
+
+If NOT READY: “The following issues must be addressed before launch: [list]”
+
+───────────────────────────────────────────────────────────────────────────────
+FINAL CHECKLIST FOR TOMORROW MORNING:
+───────────────────────────────────────────────────────────────────────────────
+
+Before sending beta emails:
+□ Test signup flow one more time
+□ Test Professor OS with 3 questions
+□ Verify payment processing works
+□ Check admin dashboard loads
+□ Confirm email templates look good
+□ Review beta invitation email
+□ Send test email to yourself first
+
+═══════════════════════════════════════════════════════════════════════════════
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+BEGIN COMPREHENSIVE TESTING NOW
+═══════════════════════════════════════════════════════════════════════════════
+
+Excellence is the pillar. Test thoroughly. Be the gatekeeper.
+Report findings with brutal honesty - we need to know the truth before launch.
+
+If you find critical issues, FLAG THEM IMMEDIATELY.
+If everything works, CONFIRM WITH CONFIDENCE.
+
+The beta emails go out tomorrow morning. This is the final check.
+
+BEGIN TESTING.
+```
+
+-----
+
+**This mega prompt tests EVERYTHING from the user’s actual journey to admin capabilities to system integrity. It’s comprehensive, realistic, and focused on the ACTUAL business model (7-day trial with payment upfront, no free tier).**
+
+**Get some rest - when you wake up, you’ll have a complete validation report waiting.** 🚀💤​​​​​​​​​​​​​​​​

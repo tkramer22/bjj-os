@@ -1,0 +1,46 @@
+IGNORE all previous context.
+
+SINGLE TASK: Add 10 videos to aiVideoKnowledge table.
+
+Create and run this file as seed-videos.js:
+
+const { drizzle } = require('drizzle-orm/node-postgres');
+const { Pool } = require('pg');
+const { aiVideoKnowledge } = require('./shared/schema');
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const db = drizzle(pool);
+
+const videos = [
+  { youtubeUrl: 'https://youtube.com/watch?v=BWitv9AKoNU', title: 'Triangle System', instructorName: 'John Danaher', qualityScore: 9.5, technique: 'Triangle', category: 'Submissions', giNoGi: 'both' },
+  { youtubeUrl: 'https://youtube.com/watch?v=y6T1Dkk8jWU', title: 'Armbar Guide', instructorName: 'John Danaher', qualityScore: 9.5, technique: 'Armbar', category: 'Submissions', giNoGi: 'both' },
+  { youtubeUrl: 'https://youtube.com/watch?v=LA2KC4NfOVU', title: 'Back Attacks', instructorName: 'John Danaher', qualityScore: 9.5, technique: 'Back Takes', category: 'Position', giNoGi: 'both' },
+  { youtubeUrl: 'https://youtube.com/watch?v=2XXETsqS6Wk', title: 'Guard Retention', instructorName: 'Gordon Ryan', qualityScore: 9.0, technique: 'Guard', category: 'Guard', giNoGi: 'nogi' },
+  { youtubeUrl: 'https://youtube.com/watch?v=JCTh3WXpzN8', title: 'Half Guard', instructorName: 'Lachlan Giles', qualityScore: 9.0, technique: 'Half Guard', category: 'Guard', giNoGi: 'both' },
+  { youtubeUrl: 'https://youtube.com/watch?v=VVxGzKNdRgM', title: 'Spider Guard', instructorName: 'Bernardo Faria', qualityScore: 8.5, technique: 'Spider', category: 'Guard', giNoGi: 'gi' },
+  { youtubeUrl: 'https://youtube.com/watch?v=6nP3EWzY0Xc', title: 'X-Guard', instructorName: 'Marcelo Garcia', qualityScore: 9.0, technique: 'X-Guard', category: 'Guard', giNoGi: 'both' },
+  { youtubeUrl: 'https://youtube.com/watch?v=t7w4xO-W7rE', title: 'Mount Attacks', instructorName: 'Roger Gracie', qualityScore: 9.0, technique: 'Mount', category: 'Position', giNoGi: 'gi' },
+  { youtubeUrl: 'https://youtube.com/watch?v=PVq3XNwDlxM', title: 'Fundamentals', instructorName: 'Caio Terra', qualityScore: 8.5, technique: 'Basics', category: 'Fundamentals', giNoGi: 'both' },
+  { youtubeUrl: 'https://youtube.com/watch?v=qRPKqbP7KhU', title: 'Lapel Guard', instructorName: 'Keenan Cornelius', qualityScore: 8.5, technique: 'Lapel', category: 'Guard', giNoGi: 'gi' }
+];
+
+async function seed() {
+  try {
+    await db.insert(aiVideoKnowledge).values(videos);
+    console.log('✅ Successfully added 10 videos');
+    const count = await db.select().from(aiVideoKnowledge);
+    console.log(`Total videos in database: ${count.length}`);
+    process.exit(0);
+  } catch (error) {
+    console.error('Error:', error);
+    process.exit(1);
+  }
+}
+
+seed();
+
+Save this file and run: node seed-videos.js
+
+Show me the console output. Then refresh bjjos.app/admin/videos and tell me the count.
+
+Don't diagnose. Don't explain. Just execute the script and report results.

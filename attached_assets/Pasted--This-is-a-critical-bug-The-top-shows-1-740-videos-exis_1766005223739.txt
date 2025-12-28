@@ -1,0 +1,90 @@
+**This is a critical bug.** The top shows 1,740 videos exist, but the library shows 0.
+
+The Video Knowledge System widget is reading from one table, but the Video Library display is querying something else (or has a broken query).
+
+-----
+
+**Send this to Replit Agent IMMEDIATELY:**
+
+```
+CRITICAL BUG: VIDEO LIBRARY SHOWING 0 VIDEOS
+
+═══════════════════════════════════════════════════════════════════════════════
+PROBLEM:
+═══════════════════════════════════════════════════════════════════════════════
+
+Admin Dashboard at bjjos.app/admin/videos shows:
+
+TOP WIDGET (Video Knowledge System):
+- 1,740 total ✅
+- 389 watched ✅
+- 115 pending ✅
+- 1,580 techniques extracted ✅
+
+BOTTOM SECTION (Video Library):
+- Total Videos: 0 ❌
+- Instructors: 0 ❌
+- Techniques: 0 ❌
+- "No videos found" ❌
+
+The data EXISTS but the Video Library is not displaying it.
+
+═══════════════════════════════════════════════════════════════════════════════
+DIAGNOSE:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. What table does the Video Knowledge System widget query?
+   - Likely: video_watch_status or ai_video_knowledge
+
+2. What table does the Video Library section query?
+   - Is it querying a DIFFERENT table?
+   - Is there a JOIN that's failing?
+   - Is there a WHERE clause filtering everything out?
+
+3. Run these queries and show me results:
+
+   -- What the widget sees:
+   SELECT COUNT(*) FROM video_watch_status;
+   SELECT COUNT(*) FROM ai_video_knowledge;
+
+   -- What the library might be querying:
+   SELECT COUNT(*) FROM videos;
+   SELECT COUNT(*) FROM curated_videos;
+
+4. Show me the API endpoint for /admin/videos library
+5. Show me the exact query it runs
+6. Why is it returning 0 results?
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX:
+═══════════════════════════════════════════════════════════════════════════════
+
+The Video Library section needs to query the SAME data source as the Video Knowledge System widget.
+
+If they're querying different tables, unify them.
+
+If there's a broken JOIN or WHERE clause, fix it.
+
+The 1,740 videos MUST appear in the Video Library grid below.
+
+═══════════════════════════════════════════════════════════════════════════════
+ALSO CHECK:
+═══════════════════════════════════════════════════════════════════════════════
+
+Is Professor OS able to see these videos for recommendations?
+- What table does Prof OS query when recommending videos?
+- Is it the same table showing 1,740 or the broken one showing 0?
+
+This could explain why recommendations seemed wrong earlier.
+
+FIX THIS IMMEDIATELY - This is blocking core functionality.
+```
+
+-----
+
+This explains the earlier issue too. If the Video Library shows 0, Professor OS might also be querying the wrong table and either:
+
+- Can’t find videos to recommend
+- Is hallucinating because it has no real data to pull from
+
+Let me know what they find!​​​​​​​​​​​​​​​​

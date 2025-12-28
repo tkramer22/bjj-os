@@ -1,0 +1,255 @@
+# 🚀 **MAXIMUM CURATION - LIBRARY EXPANSION DAY**
+
+-----
+
+## **📋 COPY TO AGENT**
+
+```
+MAXIMUM CURATION MODE - Expand the video library aggressively today.
+
+═══════════════════════════════════════════════════════════════
+OBJECTIVE
+═══════════════════════════════════════════════════════════════
+
+Run curation until YouTube API quota is exhausted. Maximize new 
+elite video additions. Target: Add 200-400 videos today.
+
+Current library: ~705 videos
+Goal: 900-1100 videos by end of day
+
+═══════════════════════════════════════════════════════════════
+STEP 1: CHECK CURRENT STATUS
+═══════════════════════════════════════════════════════════════
+
+Run these queries and show me the results:
+
+1. Current video count:
+   SELECT COUNT(*) FROM ai_video_knowledge;
+
+2. Videos added today:
+   SELECT COUNT(*) FROM ai_video_knowledge 
+   WHERE created_at >= CURRENT_DATE;
+
+3. YouTube API quota status (if tracked):
+   SELECT * FROM curation_state ORDER BY id DESC LIMIT 1;
+
+4. Top instructors in library:
+   SELECT instructor_name, COUNT(*) as count 
+   FROM ai_video_knowledge 
+   GROUP BY instructor_name 
+   ORDER BY count DESC 
+   LIMIT 15;
+
+5. Technique type distribution:
+   SELECT technique_type, COUNT(*) as count 
+   FROM ai_video_knowledge 
+   GROUP BY technique_type;
+
+═══════════════════════════════════════════════════════════════
+STEP 2: RUN EXHAUST CURATION - AGGRESSIVE MODE
+═══════════════════════════════════════════════════════════════
+
+If exhaust-curation.js exists, run:
+node exhaust-curation.js --max-runs=100 --delay=30 --stop-on-empty=5
+
+If it doesn't exist, create it with these specs:
+
+EXHAUST CURATION SCRIPT:
+- Runs curation continuously until quota exhausted
+- 30 second delay between runs (aggressive)
+- Max 100 runs or until quota hits
+- Stops after 5 consecutive runs with 0 new videos
+- Logs progress after each run
+- Sends email summary when complete
+
+Parameters:
+- --max-runs=100 (maximum curation cycles)
+- --delay=30 (seconds between runs)
+- --stop-on-empty=5 (stop after N runs with no new videos)
+
+═══════════════════════════════════════════════════════════════
+STEP 3: ENSURE PROPER TAGGING
+═══════════════════════════════════════════════════════════════
+
+All new videos MUST be tagged with the 4-field taxonomy:
+
+1. technique_type: attack | defense | concept
+2. position_category: closed_guard | open_guard | half_guard | 
+   mount | side_control | back | standing | turtle | 
+   leg_entanglement | north_south | knee_on_belly | 
+   guard_passing | universal
+3. gi_nogi: gi | nogi | both
+4. tags: [array of searchable keywords]
+
+Verify the curation AI prompt includes taxonomy requirements.
+
+═══════════════════════════════════════════════════════════════
+STEP 4: QUERY DIVERSITY
+═══════════════════════════════════════════════════════════════
+
+Ensure we're searching with diverse queries to avoid duplicates:
+
+INSTRUCTOR-BASED QUERIES:
+- "John Danaher BJJ", "Gordon Ryan technique", "Roger Gracie BJJ"
+- "Marcelo Garcia guard", "Lachlan Giles leg locks"
+- "Craig Jones BJJ", "Bernardo Faria passing"
+- "Mikey Musumeci guard", "Keenan Cornelius lapel"
+- "Ryan Hall 50/50", "Eddie Bravo rubber guard"
+
+TECHNIQUE-BASED QUERIES:
+- "armbar tutorial", "triangle choke details", "kimura finish"
+- "guillotine setup", "rear naked choke", "arm triangle"
+- "heel hook defense", "knee bar entry", "toe hold"
+- "hip bump sweep", "scissor sweep", "butterfly sweep"
+- "knee slice pass", "torreando pass", "pressure passing"
+
+POSITION-BASED QUERIES:
+- "closed guard attacks", "open guard sweeps"
+- "half guard bottom", "mount escapes"
+- "side control escape", "back control BJJ"
+- "turtle attacks", "leg entanglement entries"
+
+DEFENSE QUERIES (ensure we get escapes, not just attacks):
+- "mount escape tutorial", "side control escape"
+- "back escape BJJ", "guillotine defense"
+- "leg lock defense", "guard retention"
+- "submission defense", "escaping bad positions"
+
+CONCEPT QUERIES:
+- "BJJ concepts", "pressure BJJ", "weight distribution"
+- "framing jiu jitsu", "hip movement BJJ"
+- "guard retention concepts", "passing concepts"
+
+═══════════════════════════════════════════════════════════════
+STEP 5: PROGRESS MONITORING
+═══════════════════════════════════════════════════════════════
+
+Every 10 runs, log:
+- Total videos analyzed this session
+- Total videos added this session
+- Approval rate
+- Top 3 instructors added
+- Any errors encountered
+
+═══════════════════════════════════════════════════════════════
+STEP 6: EMAIL REPORT ON COMPLETION
+═══════════════════════════════════════════════════════════════
+
+When curation completes (quota exhausted or max runs), send email:
+
+Subject: "🚀 BJJ OS Maximum Curation Complete - +X Videos Added"
+
+Body:
+- Session duration
+- Total runs completed
+- Stop reason (quota/max runs/empty runs)
+- Videos analyzed
+- Videos added
+- Approval rate
+- Before/After library count
+- Top 10 new videos added (title, instructor, quality score)
+- Top instructors added
+- Technique type breakdown of new additions
+
+═══════════════════════════════════════════════════════════════
+STEP 7: POST-CURATION VERIFICATION
+═══════════════════════════════════════════════════════════════
+
+After curation completes, run:
+
+1. New video count:
+   SELECT COUNT(*) FROM ai_video_knowledge;
+
+2. Videos added today:
+   SELECT COUNT(*) FROM ai_video_knowledge 
+   WHERE created_at >= CURRENT_DATE;
+
+3. Verify taxonomy coverage:
+   SELECT 
+     COUNT(*) as total,
+     SUM(CASE WHEN technique_type IS NOT NULL THEN 1 ELSE 0 END) as has_type,
+     SUM(CASE WHEN position_category IS NOT NULL THEN 1 ELSE 0 END) as has_position,
+     SUM(CASE WHEN gi_nogi IS NOT NULL THEN 1 ELSE 0 END) as has_gi_nogi,
+     SUM(CASE WHEN tags IS NOT NULL AND array_length(tags, 1) > 0 THEN 1 ELSE 0 END) as has_tags
+   FROM ai_video_knowledge 
+   WHERE created_at >= CURRENT_DATE;
+
+4. New instructor discovery:
+   SELECT instructor_name, COUNT(*) as count
+   FROM ai_video_knowledge
+   WHERE created_at >= CURRENT_DATE
+   GROUP BY instructor_name
+   ORDER BY count DESC
+   LIMIT 20;
+
+5. Quality distribution:
+   SELECT 
+     CASE 
+       WHEN quality_score >= 9 THEN '9+ Elite'
+       WHEN quality_score >= 8 THEN '8+ Excellent'
+       WHEN quality_score >= 7 THEN '7+ Good'
+       ELSE 'Below 7'
+     END as quality_tier,
+     COUNT(*) as count
+   FROM ai_video_knowledge
+   WHERE created_at >= CURRENT_DATE
+   GROUP BY quality_tier
+   ORDER BY quality_tier DESC;
+
+═══════════════════════════════════════════════════════════════
+EXECUTION
+═══════════════════════════════════════════════════════════════
+
+1. Show me current status (Step 1)
+2. Start exhaust curation in aggressive mode (Step 2)
+3. Monitor progress and show updates
+4. Send completion email
+5. Show final results (Step 7)
+
+START NOW. Let's grow this library.
+```
+
+-----
+
+## **⚡ QUICK VERSION (If Script Exists)**
+
+```
+Run maximum curation now:
+
+node exhaust-curation.js --max-runs=100 --delay=30 --stop-on-empty=5
+
+Show me:
+1. Current video count before starting
+2. Progress updates every 10 runs
+3. Final count when complete
+4. Email me the full report
+
+Let's max out the YouTube API quota today.
+```
+
+-----
+
+## **📊 EXPECTED RESULTS**
+
+|Metric                 |Estimate        |
+|-----------------------|----------------|
+|YouTube API Quota      |10,000 units/day|
+|Runs before quota      |50-80 runs      |
+|Videos analyzed per run|15-20           |
+|Approval rate          |25-35%          |
+|Videos added per run   |4-7             |
+|**Total videos added** |**200-400**     |
+|Library growth         |705 → 900-1100  |
+
+-----
+
+## **🎯 AFTER CURATION COMPLETES**
+
+Once done, I can help you:
+
+1. Analyze what was added
+1. Check for library gaps
+1. Plan tomorrow’s curation focus
+1. Verify all new videos are properly tagged
+
+**Send the prompt and let’s grow that library!** 🚀​​​​​​​​​​​​​​​​

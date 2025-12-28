@@ -1,0 +1,305 @@
+**💯 PERFECT - STREAMLINED ONBOARDING WITH CRITICAL DATA FLOW**
+
+Let me create the ultimate prompt that ensures EVERYTHING connects properly.
+
+-----
+
+## **🎯 FINAL MASTER PROMPT - COPY THIS:**
+
+```
+═══════════════════════════════════════════════════════════════════
+MISSION: FIX COMPLETE SIGNUP FLOW - DATA INTEGRITY & STRIPE CONNECTION
+═══════════════════════════════════════════════════════════════════
+
+CRITICAL REQUIREMENTS:
+1. Smooth 4-step onboarding (no friction)
+2. All data saves to database correctly
+3. Stripe integration works perfectly
+4. User data flows to Professor OS (3-brain system)
+5. Admin dashboard shows correct email/username
+6. After signup, user lands in Professor OS that remembers them
+
+═══════════════════════════════════════════════════════════════════
+PART 1: ONBOARDING FLOW (4 STEPS ONLY - NO GYM QUESTION)
+═══════════════════════════════════════════════════════════════════
+
+Step 1 of 4 (25%): "What's your first name?"
+- Text input
+- Required
+- Store as: user.name
+
+Step 2 of 4 (50%): "What belt are you?"
+- Dropdown: White Belt, Blue Belt, Purple Belt, Brown Belt, Black Belt
+- Required
+- Store as: user.belt_level
+
+Step 3 of 4 (75%): "What technique do you struggle with most?"
+- Text input (open-ended)
+- Placeholder: "e.g., triangle choke, guard passing, escapes..."
+- Required
+- Store as: user.struggle_technique
+
+Step 4 of 4 (100%): "What do you primarily train?"
+- Radio buttons: Gi, No-Gi, Both
+- Required
+- Store as: user.training_style
+
+After Step 4 → SAVE ALL DATA TO DATABASE → Go to Payment Page
+
+═══════════════════════════════════════════════════════════════════
+PART 2: DATABASE - SAVE USER DATA CORRECTLY
+═══════════════════════════════════════════════════════════════════
+
+After onboarding completion, IMMEDIATELY save to database:
+
+UPDATE users SET
+  name = [first name from Step 1],
+  belt_level = [belt from Step 2],
+  struggle_technique = [technique from Step 3],
+  training_style = [gi/nogi/both from Step 4],
+  onboarding_completed = true,
+  updated_at = NOW()
+WHERE email = [user's email]
+
+VERIFY DATA IS SAVED before proceeding to payment page.
+
+═══════════════════════════════════════════════════════════════════
+PART 3: PAYMENT PAGE WITH STRIPE INTEGRATION
+═══════════════════════════════════════════════════════════════════
+
+After onboarding data is saved, show PAYMENT PAGE:
+
+DISPLAY:
+- "Complete Your Setup"
+- Plan selected: "Monthly ($14.99/month)" or "Annual ($179.88/year)"
+- "🎉 Start your 7-day free trial"
+- "You won't be charged until [DATE 7 days from now]"
+- "Cancel anytime before [DATE] - no charge"
+
+STRIPE INTEGRATION:
+1. Create Stripe Checkout Session with:
+   - customer_email: user.email
+   - subscription_data: {
+       trial_period_days: 7,
+       items: [{ price: price_id_monthly_or_annual }]
+     }
+   - success_url: bjjos.app/dashboard
+   - cancel_url: bjjos.app/payment
+
+2. When Stripe webhook receives 'checkout.session.completed':
+   UPDATE users SET
+     stripe_customer_id = [Stripe customer ID],
+     stripe_subscription_id = [Stripe subscription ID],
+     subscription_tier = 'pro',
+     subscription_status = 'trialing',
+     trial_end_date = [DATE 7 days from now],
+     updated_at = NOW()
+   WHERE email = [user's email]
+
+3. After successful payment setup → Redirect to /dashboard
+
+CRITICAL: Stripe webhook MUST update database before user reaches dashboard.
+
+═══════════════════════════════════════════════════════════════════
+PART 4: ADMIN DASHBOARD DATA DISPLAY
+═══════════════════════════════════════════════════════════════════
+
+Admin dashboard at /admin/users MUST show:
+
+For each user:
+- Email: user.email (CORRECT EMAIL FROM SIGNUP)
+- Username: user.username (CORRECT USERNAME FROM SIGNUP)
+- Name: user.name (from onboarding Step 1)
+- Belt: user.belt_level (from onboarding Step 2)
+- Training Style: user.training_style (gi/nogi/both from Step 4)
+- Plan: "Trial (Xd left)" or "Pro ($14.99/mo)" or "Lifetime"
+- Status: subscription_status (trialing, active, canceled)
+- Stripe Customer: stripe_customer_id (linked correctly)
+- Joined: created_at
+
+VERIFY admin dashboard fetches and displays this data correctly.
+
+═══════════════════════════════════════════════════════════════════
+PART 5: PROFESSOR OS - 3-BRAIN SYSTEM WITH USER CONTEXT
+═══════════════════════════════════════════════════════════════════
+
+After user completes payment and lands on /dashboard, they interact with Professor OS.
+
+PROFESSOR OS MUST:
+
+1. LOAD USER CONTEXT from database:
+   - name: "Hi [Name]!"
+   - belt_level: "As a [Belt] belt..."
+   - struggle_technique: "I know you want to improve your [technique]..."
+   - training_style: "For [gi/nogi/both] training..."
+   - conversation_history: Load all past conversations with this user
+
+2. USE 3-BRAIN SYSTEM:
+   
+   Brain 1 - Short-term Memory (Current Conversation):
+   - Store current conversation in session/memory
+   - Remember what user just said
+   - Context window: Current chat only
+   
+   Brain 2 - Medium-term Memory (Recent Sessions):
+   - Load last 5-10 training sessions
+   - Remember techniques practiced recently
+   - Suggest next steps based on recent training
+   
+   Brain 3 - Long-term Memory (User Profile + History):
+   - Belt level, struggle techniques, training style
+   - All past conversations (from database)
+   - Progress over time
+   - Patterns in training
+
+3. PERSONALIZED RESPONSES:
+   Professor OS should say things like:
+   - "Hey [Name]! How was training today?"
+   - "Last time you mentioned working on [technique]. Did you drill that?"
+   - "As a [belt], you might want to focus on..."
+   - "Since you train [gi/nogi/both], here's what I recommend..."
+
+4. SAVE EVERY CONVERSATION:
+   After each chat, save to database:
+   - conversation_id
+   - user_id
+   - messages (full conversation JSON)
+   - techniques_discussed
+   - recommendations_made
+   - timestamp
+
+═══════════════════════════════════════════════════════════════════
+PART 6: DATA FLOW VERIFICATION
+═══════════════════════════════════════════════════════════════════
+
+CRITICAL CHECKPOINTS - Verify each step saves data:
+
+✅ Checkpoint 1: After email verification
+   - User record created with: email, username, created_at
+
+✅ Checkpoint 2: After onboarding completion  
+   - User record updated with: name, belt_level, struggle_technique, training_style
+
+✅ Checkpoint 3: After Stripe payment
+   - User record updated with: stripe_customer_id, stripe_subscription_id, subscription_tier, trial_end_date
+
+✅ Checkpoint 4: When user reaches dashboard
+   - Professor OS loads: name, belt_level, struggle_technique, training_style, conversation_history
+
+✅ Checkpoint 5: Admin dashboard displays
+   - All user data visible: email, username, name, belt, plan, Stripe ID
+
+LOG EACH CHECKPOINT to console for debugging.
+
+═══════════════════════════════════════════════════════════════════
+PART 7: EXCEPTION HANDLING
+═══════════════════════════════════════════════════════════════════
+
+LIFETIME USERS:
+- Skip payment page entirely
+- Go straight from onboarding → dashboard
+- Professor OS still loads all their context
+
+IF STRIPE WEBHOOK FAILS:
+- Log error
+- Send admin alert email
+- Show user: "Setting up your account... (this may take a moment)"
+- Retry webhook processing
+
+IF DATABASE SAVE FAILS:
+- Don't proceed to next step
+- Show error to user
+- Log full error details
+- Allow user to retry
+
+═══════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════
+
+After implementing, test this flow:
+
+1. New user signs up with test email
+2. Completes all 4 onboarding steps
+3. Data saves to database ✓
+4. Payment page shows with Stripe
+5. Enters test card (4242 4242 4242 4242)
+6. Stripe creates subscription with 7-day trial ✓
+7. Webhook updates database ✓
+8. User redirects to dashboard
+9. Professor OS greets user by name ✓
+10. Professor OS knows belt level, struggle technique, training style ✓
+11. Admin dashboard shows correct email, username, Stripe ID ✓
+12. User has conversation with Professor OS
+13. Conversation saves to database ✓
+14. User logs out and logs back in
+15. Professor OS remembers previous conversation ✓
+
+═══════════════════════════════════════════════════════════════════
+
+IMPLEMENT ALL OF THIS NOW.
+
+Focus on data integrity - every piece of information must flow correctly from signup → onboarding → payment → Professor OS → admin dashboard.
+
+The 3-brain system depends on this data being saved and loaded properly.
+```
+
+-----
+
+## **🎯 AFTER YOU PASTE THIS:**
+
+Replit Agent will fix:
+
+1. ✅ Streamlined 4-step onboarding (no gym)
+1. ✅ All data saves correctly to database
+1. ✅ Stripe integration works perfectly
+1. ✅ Payment page creates subscription with trial
+1. ✅ Admin dashboard shows correct email/username
+1. ✅ Professor OS loads user context (3-brain system)
+1. ✅ Conversations save and persist
+
+-----
+
+## **📋 WHAT TO TEST AFTER FIX:**
+
+**Test with a NEW email (not your lifetime account):**
+
+1. Sign up with test email
+1. Go through 4 onboarding questions
+1. Get to payment page
+1. Enter Stripe test card: `4242 4242 4242 4242`
+1. Redirects to dashboard
+1. Professor OS says: “Hey [YourName]! As a [Belt] belt who wants to improve [technique]…”
+1. Have a conversation about training
+1. Log out
+1. Log back in
+1. Professor OS remembers the previous conversation
+
+-----
+
+## **💾 CRITICAL SUCCESS CRITERIA:**
+
+After this works, you should be able to:
+
+✅ **As admin**, open /admin/users and see:
+
+- Correct email
+- Correct username
+- User’s name from onboarding
+- Belt level
+- Stripe customer ID
+- Subscription status: “Trial (7d left)”
+
+✅ **As user**, chat with Professor OS who:
+
+- Knows your name
+- Knows your belt
+- Knows what technique you struggle with
+- Knows if you train gi/nogi/both
+- Remembers past conversations
+- Gives personalized recommendations
+
+-----
+
+**PASTE THIS PROMPT NOW!**
+
+This is the foundation for your entire beta launch. Once this works perfectly, you can invite beta users with confidence. 🚀💪​​​​​​​​​​​​​​​​

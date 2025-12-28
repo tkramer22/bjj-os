@@ -1,0 +1,318 @@
+**🚨 CRITICAL BUSINESS PROBLEM - CURATION SYSTEM NOT WORKING**
+
+You’re absolutely right to be frustrated. Looking at your screenshots:
+
+**THE CONTRADICTIONS:**
+
+- ❌ Dashboard: “Curation: Offline - Last run 233m ago”
+- ❌ Chat: “Curation Started” at 4:02 AM but it’s now 11:03 PM
+- ❌ Videos added today: **0**
+- ❌ API quota used: **0 / 10,000**
+- ❌ Acceptance rate: **0.0%** (no screening happening)
+
+**THE CORE PROBLEM:**
+Your autonomous curation system - THE main value prop of BJJ OS - has been sitting idle all day while 10,000 YouTube API quota goes to waste.
+
+-----
+
+# **📋 NUCLEAR PROMPT - SEND TO REPLIT AGENT:**
+
+```
+CRITICAL SYSTEM FAILURE: Curation not running, API quota wasted
+
+The autonomous video curation system is broken. It claims to be "started" 
+but hasn't screened a single video in 19 hours. 10,000 YouTube API quota 
+is sitting unused.
+
+This is the CORE VALUE PROPOSITION of BJJ OS and it's completely broken.
+
+═══════════════════════════════════════════════════════════════════════════════
+THE EVIDENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+Dashboard shows:
+• Curation: 🔴 Offline
+• Last run: 233 minutes ago (almost 4 hours)
+• Videos added today: 0
+• API quota: N/A
+• Screened today: 0
+• Accepted today: 0
+• Rejected today: 0
+
+Chat shows:
+• "✅ Curation Started"
+• Job ID: 308ebc9c30509f09f
+• Mode: aggressive
+• Started: 4:02:31 AM (19 hours ago!)
+• "Processing videos in the background"
+• API quota: 0 / 10,000
+• Quota remaining: 10,000
+
+CONTRADICTION: System says it's running but has done ZERO work in 19 hours.
+
+═══════════════════════════════════════════════════════════════════════════════
+THREE CRITICAL FAILURES
+═══════════════════════════════════════════════════════════════════════════════
+
+FAILURE 1: Curation starts but doesn't actually screen videos
+• Job is created in database
+• Status shows "started"
+• But no videos are being analyzed
+• No API calls are being made
+• System is lying about being active
+
+FAILURE 2: API quota tracking is broken
+• Dashboard shows "N/A" instead of real numbers
+• Can't tell if quota is available or exhausted
+• No visibility into YouTube API usage
+• Can't optimize curation strategy
+
+FAILURE 3: Not running aggressively until quota exhausted
+• 10,000 quota available RIGHT NOW
+• Should be screening videos continuously
+• Should only stop when quota hits 0
+• Currently sitting idle while quota expires at midnight
+
+═══════════════════════════════════════════════════════════════════════════════
+IMMEDIATE DIAGNOSIS REQUIRED
+═══════════════════════════════════════════════════════════════════════════════
+
+1. CHECK IF CURATION PROCESS IS ACTUALLY RUNNING
+```bash
+# Show running processes
+ps aux | grep -i curation
+
+# Check if worker is alive
+# Show me the output
+```
+
+1. CHECK SERVER LOGS FOR ERRORS
+
+```bash
+# Last 200 lines of logs
+tail -200 /var/log/app.log | grep -i "curation\|youtube\|video"
+
+# Look for:
+# - "Curation started"
+# - "YouTube API error"
+# - "Quota exceeded"
+# - Any stack traces or crashes
+```
+
+1. CHECK DATABASE FOR CURATION STATUS
+
+```sql
+-- Check curation runs table
+SELECT * FROM curation_runs 
+ORDER BY started_at DESC 
+LIMIT 5;
+
+-- Check if videos are being screened
+SELECT COUNT(*) FROM video_screening_log 
+WHERE screened_at > NOW() - INTERVAL '24 hours';
+
+-- Should be THOUSANDS, not zero
+```
+
+1. CHECK YOUTUBE API QUOTA
+   • Make a test API call to YouTube
+   • Check actual quota usage
+   • Verify API key is valid
+   • Show me the actual response
+
+═══════════════════════════════════════════════════════════════════════════════
+ROOT CAUSE POSSIBILITIES
+═══════════════════════════════════════════════════════════════════════════════
+
+SCENARIO A: Curation starts then immediately crashes
+• Job created, marked as “started”
+• Hits an error on first video
+• Crashes without proper error handling
+• Never marked as “failed”
+• Looks like it’s running but isn’t
+
+SCENARIO B: YouTube API key invalid/expired
+• Curation tries to make API calls
+• Gets 403 Forbidden or 401 Unauthorized
+• Silently fails without logging
+• No videos get screened
+
+SCENARIO C: Infinite loop or stuck state
+• Curation starts
+• Gets stuck waiting for something
+• Never progresses to actually screening videos
+• Process is alive but not doing work
+
+SCENARIO D: Database connection lost
+• Curation runs
+• Can’t write screening logs to database
+• Thinks it’s working but data isn’t persisting
+• Looks like 0 videos from dashboard perspective
+
+═══════════════════════════════════════════════════════════════════════════════
+REQUIRED FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+FIX 1: Implement proper error handling and logging
+
+```javascript
+async function runCuration() {
+  try {
+    console.log('🚀 Curation starting...');
+    
+    // Check YouTube API quota BEFORE starting
+    const quota = await checkYouTubeQuota();
+    console.log(`📊 Available quota: ${quota.remaining}`);
+    
+    if (quota.remaining < 100) {
+      console.log('⚠️ Insufficient quota, stopping');
+      return;
+    }
+    
+    // Start screening videos
+    let videosScreened = 0;
+    while (quota.remaining > 100) {
+      try {
+        const video = await getNextVideoToScreen();
+        console.log(`🎥 Screening: ${video.id}`);
+        
+        const result = await screenVideo(video);
+        videosScreened++;
+        
+        console.log(`✅ Screened ${videosScreened} videos so far`);
+        
+        // Log to database
+        await logScreening(result);
+        
+      } catch (videoError) {
+        console.error(`❌ Failed to screen video:`, videoError);
+        // Continue to next video, don't crash
+      }
+    }
+    
+    console.log(`🎉 Curation complete: ${videosScreened} videos screened`);
+    
+  } catch (error) {
+    console.error('💥 CURATION CRASHED:', error);
+    // Mark job as failed in database
+    await markCurationFailed(error.message);
+  }
+}
+```
+
+FIX 2: Real-time YouTube API quota tracking
+
+```javascript
+async function getYouTubeQuota() {
+  try {
+    // Make a lightweight API call to check quota
+    const response = await youtube.videos.list({
+      part: 'id',
+      id: 'test',
+      maxResults: 1
+    });
+    
+    // Parse quota headers
+    const quotaUsed = response.headers['x-ratelimit-used'];
+    const quotaLimit = response.headers['x-ratelimit-limit'];
+    const quotaRemaining = quotaLimit - quotaUsed;
+    
+    // Store in database for dashboard
+    await db.system_metrics.upsert({
+      metric: 'youtube_api_quota',
+      used: quotaUsed,
+      limit: quotaLimit,
+      remaining: quotaRemaining,
+      updated_at: new Date()
+    });
+    
+    return { used: quotaUsed, limit: quotaLimit, remaining: quotaRemaining };
+    
+  } catch (error) {
+    console.error('Failed to check YouTube quota:', error);
+    return { used: 0, limit: 10000, remaining: 10000 }; // Default if check fails
+  }
+}
+```
+
+FIX 3: Aggressive continuous curation
+• Run curation every 5 minutes (not once per day)
+• Each run: screen as many videos as possible
+• Stop only when quota < 100 remaining
+• Automatically restart at midnight when quota resets
+
+```javascript
+// Cron job: every 5 minutes
+cron.schedule('*/5 * * * *', async () => {
+  const quota = await getYouTubeQuota();
+  
+  if (quota.remaining > 100) {
+    console.log('🚀 Starting curation run (5min schedule)');
+    await runCuration();
+  } else {
+    console.log('⏸️ Quota exhausted, waiting for reset');
+  }
+});
+
+// Also: midnight cron job to force restart after quota resets
+cron.schedule('0 0 * * *', async () => {
+  console.log('🌅 Midnight quota reset - starting fresh curation');
+  await runCuration();
+});
+```
+
+FIX 4: Dashboard shows real-time quota
+• Query system_metrics table for latest quota numbers
+• Display: “2,847 / 10,000 used (28%)”
+• Update every 30 seconds
+• Show time until quota reset (countdown to midnight PT)
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After fixes, verify:
+
+□ Curation actually screens videos (check logs)
+□ Video_screening_log table has new rows every minute
+□ Dashboard shows real quota numbers (not “N/A”)
+□ Screened count increments in real-time
+□ Accepted/Rejected counts update correctly
+□ Curation stops gracefully when quota exhausted
+□ Errors are logged but don’t crash the system
+□ Status changes from “Offline” to “Active” when running
+
+═══════════════════════════════════════════════════════════════════════════════
+SHOW ME PROOF
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Server logs showing curation actually running
+1. Database query showing new video_screening_log entries
+1. YouTube API quota check response (actual numbers)
+1. Screenshot of dashboard with real-time updates
+
+Don’t just say “it’s fixed” - show me evidence that videos are being screened.
+
+═══════════════════════════════════════════════════════════════════════════════
+THIS IS URGENT
+═══════════════════════════════════════════════════════════════════════════════
+
+The autonomous curation system IS the product. Without it working:
+• No new videos added to library
+• No quality filtering happening
+• Users get stale content
+• BJJ OS has no competitive advantage
+
+Fix this NOW. We’re wasting 10,000 API calls per day sitting idle.
+
+Start with diagnosis (show me logs), then implement fixes, then prove it works.
+
+```
+---
+
+**SEND THIS IMMEDIATELY.**
+
+You're 100% right to be frustrated. The curation system should be running 24/7, screening thousands of videos until quota is exhausted, then starting fresh at midnight. Instead it's sitting idle doing nothing. 
+
+This is THE core feature and it's broken. 🚨​​​​​​​​​​​​​​​​
+```

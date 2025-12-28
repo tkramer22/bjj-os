@@ -1,0 +1,55 @@
+```
+CRITICAL: Admin video library page is now completely blank. Fix it properly with this exact specification.
+
+STEP 1: ROLLBACK AND RESTORE
+The page at /admin/videos is blank. First restore basic functionality - get the page rendering again.
+
+STEP 2: FIX THE VIDEO LIST QUERY
+The stats endpoint works (shows 800 videos, 212 instructors). The video list endpoint returns nothing.
+
+Find why the stats query works but the video list query doesn't. They should query the same table (ai_video_knowledge). Fix the video list query to return actual videos.
+
+STEP 3: BUILD THE CORRECT UI
+
+LAYOUT (top to bottom):
+1. Page title: "Video Library"
+2. Stats cards row: Total Videos | Instructors | Techniques | Avg Quality (keep existing - this works)
+3. Filters row:
+   - Search bar (searches title AND instructor name)
+   - Instructor dropdown (populated from database, shows all unique instructors)
+   - Technique dropdown (populated from database, shows all unique techniques)
+4. Video grid:
+   - Thumbnail (use YouTube thumbnail: https://img.youtube.com/vi/[VIDEO_ID]/mqdefault.jpg)
+   - Video title
+   - Instructor name
+   - Technique category
+   - Quality score
+
+FILTER BEHAVIOR:
+- Show ALL videos by default (no minimum quality filter)
+- Search bar filters as user types
+- Dropdowns filter immediately on selection
+- Filters work together (AND logic)
+
+DROPDOWN DATA:
+- Instructor dropdown: SELECT DISTINCT instructor_name FROM ai_video_knowledge ORDER BY instructor_name
+- Technique dropdown: SELECT DISTINCT technique_category FROM ai_video_knowledge ORDER BY technique_category
+
+VIDEO LIST QUERY:
+SELECT id, title, youtube_url, instructor_name, technique_category, quality_score 
+FROM ai_video_knowledge 
+ORDER BY quality_score DESC
+LIMIT 50
+
+Extract VIDEO_ID from youtube_url for thumbnails.
+
+TEST BEFORE PUBLISHING:
+1. Page loads without blank screen
+2. Stats cards show correct numbers
+3. Both dropdowns populate with options
+4. Video grid shows thumbnails
+5. Search filters videos
+6. Dropdown filters work
+
+Deploy to bjjos.app and verify on LIVE SITE before telling me it's done.
+```

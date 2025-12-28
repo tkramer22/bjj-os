@@ -1,0 +1,790 @@
+# 🎉 COMMAND 1 COMPLETE!
+
+Perfect! The foundation is built. Now let’s build the actual chat interface.
+
+-----
+
+## 📋 COMMAND 2 OF 4: COACH CHAT INTERFACE
+
+Copy and paste this entire block into Replit Agent:
+
+-----
+
+```
+BUILD BJJ OS PWA - COMMAND 2 OF 4: COACH CHAT INTERFACE
+
+CRITICAL RULES:
+✅ Build the main chat screen with AI coach
+✅ Voice input capability
+✅ Video card components
+✅ Message bubbles (AI vs User)
+✅ Connect to backend API for chat
+✅ Clean, modern UI matching design system
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: BOTTOM NAVIGATION COMPONENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /components/BottomNav.jsx:
+
+import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import './BottomNav.css';
+
+function BottomNav() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const navItems = [
+    { path: '/app', icon: '💬', label: 'Coach' },
+    { path: '/app/saved', icon: '⭐', label: 'Saved' },
+    { path: '/app/settings', icon: '⚙️', label: 'Settings' }
+  ];
+
+  return (
+    <nav className="bottom-nav safe-area-bottom">
+      {navItems.map(item => (
+        <button
+          key={item.path}
+          className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
+          onClick={() => navigate(item.path)}
+        >
+          <span className="nav-icon">{item.icon}</span>
+          <span className="nav-label">{item.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+export default BottomNav;
+
+---
+
+Create /components/BottomNav.css:
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--dark-gray);
+  border-top: 1px solid var(--border-gray);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 12px 0;
+  z-index: var(--z-fixed);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 8px 20px;
+  transition: var(--transition-base);
+}
+
+.nav-item.active {
+  color: var(--primary-purple);
+}
+
+.nav-icon {
+  font-size: 24px;
+}
+
+.nav-label {
+  font-size: 11px;
+  font-weight: var(--font-medium);
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: MESSAGE BUBBLE COMPONENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /components/MessageBubble.jsx:
+
+import React from 'react';
+import VideoCard from './VideoCard';
+import './MessageBubble.css';
+
+function MessageBubble({ message, sender, timestamp, videos }) {
+  const formatTime = (date) => {
+    return new Date(date).toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit' 
+    });
+  };
+
+  return (
+    <div className={`message-wrapper ${sender}`}>
+      <div className={`message message-${sender} animate-slide-in`}>
+        <div className="message-content">
+          {message}
+          {videos && videos.length > 0 && (
+            <div className="message-videos">
+              {videos.map((video, index) => (
+                <VideoCard key={index} {...video} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="message-timestamp">
+        {formatTime(timestamp)}
+      </div>
+    </div>
+  );
+}
+
+export default MessageBubble;
+
+---
+
+Create /components/MessageBubble.css:
+
+.message-wrapper {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+  padding: 0 16px;
+}
+
+.message-wrapper.user {
+  align-items: flex-end;
+}
+
+.message-wrapper.ai {
+  align-items: flex-start;
+}
+
+.message {
+  max-width: 75%;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  word-wrap: break-word;
+}
+
+.message-ai {
+  background: var(--medium-gray);
+  border: 1px solid var(--border-gray);
+  margin-right: 60px;
+}
+
+.message-user {
+  background: var(--primary-gradient);
+  color: var(--text-primary);
+  margin-left: 60px;
+}
+
+.message-content {
+  font-size: var(--text-base);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.message-videos {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-timestamp {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: VIDEO CARD COMPONENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /components/VideoCard.jsx:
+
+import React, { useState } from 'react';
+import './VideoCard.css';
+
+function VideoCard({ title, instructor, duration, thumbnailUrl, videoUrl, rating, onSave, onWatch }) {
+  const [isSaved, setIsSaved] = useState(false);
+
+  const handleSave = () => {
+    setIsSaved(!isSaved);
+    if (onSave) onSave();
+  };
+
+  const handleWatch = () => {
+    if (videoUrl) {
+      window.open(videoUrl, '_blank');
+    }
+    if (onWatch) onWatch();
+  };
+
+  return (
+    <div className="video-card">
+      <div className="video-thumbnail" onClick={handleWatch}>
+        {thumbnailUrl ? (
+          <img src={thumbnailUrl} alt={title} />
+        ) : (
+          <div className="video-placeholder">▶️</div>
+        )}
+        <div className="play-overlay">▶️</div>
+      </div>
+      
+      <div className="video-info">
+        <h3 className="video-title">{title}</h3>
+        <p className="video-meta">
+          {instructor} • {duration}
+        </p>
+        {rating && (
+          <div className="video-rating">
+            ⭐ {rating}/5
+          </div>
+        )}
+      </div>
+      
+      <div className="video-actions">
+        <button className="btn-watch" onClick={handleWatch}>
+          ▶️ Watch
+        </button>
+        <button 
+          className={`btn-save ${isSaved ? 'saved' : ''}`} 
+          onClick={handleSave}
+        >
+          {isSaved ? '❤️' : '🤍'} {isSaved ? 'Saved' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default VideoCard;
+
+---
+
+Create /components/VideoCard.css:
+
+.video-card {
+  background: var(--dark-gray);
+  border: 1px solid var(--border-gray);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: var(--transition-base);
+}
+
+.video-card:hover {
+  border-color: var(--primary-purple);
+  box-shadow: var(--shadow-glow);
+}
+
+.video-thumbnail {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: var(--black);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.video-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 48px;
+  color: var(--text-tertiary);
+}
+
+.play-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  opacity: 0;
+  transition: var(--transition-base);
+}
+
+.video-thumbnail:hover .play-overlay {
+  opacity: 0.9;
+}
+
+.video-info {
+  padding: 12px;
+}
+
+.video-title {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.video-meta {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.video-rating {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.video-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.btn-watch {
+  flex: 1;
+  background: var(--primary-gradient);
+  color: var(--text-primary);
+  padding: 10px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.btn-save {
+  background: var(--medium-gray);
+  border: 1px solid var(--border-gray);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  transition: var(--transition-base);
+}
+
+.btn-save.saved {
+  background: var(--primary-purple);
+  border-color: var(--primary-purple);
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: VOICE RECORDER COMPONENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /components/VoiceRecorder.jsx:
+
+import React, { useState } from 'react';
+import './VoiceRecorder.css';
+
+function VoiceRecorder({ onTranscript }) {
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState('');
+
+  const startRecording = () => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      
+      recognition.onstart = () => {
+        setIsRecording(true);
+      };
+      
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        
+        setTranscript(finalTranscript || interimTranscript);
+      };
+      
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setIsRecording(false);
+      };
+      
+      recognition.onend = () => {
+        setIsRecording(false);
+        if (transcript && onTranscript) {
+          onTranscript(transcript);
+          setTranscript('');
+        }
+      };
+      
+      recognition.start();
+      window.currentRecognition = recognition;
+    } else {
+      alert('Speech recognition not supported in this browser');
+    }
+  };
+
+  const stopRecording = () => {
+    if (window.currentRecognition) {
+      window.currentRecognition.stop();
+    }
+  };
+
+  return (
+    <button
+      className={`voice-recorder ${isRecording ? 'recording' : ''}`}
+      onMouseDown={startRecording}
+      onMouseUp={stopRecording}
+      onTouchStart={startRecording}
+      onTouchEnd={stopRecording}
+    >
+      {isRecording ? (
+        <>
+          <span className="recording-dot animate-pulse"></span>
+          <span>Recording...</span>
+        </>
+      ) : (
+        <span>🎤</span>
+      )}
+    </button>
+  );
+}
+
+export default VoiceRecorder;
+
+---
+
+Create /components/VoiceRecorder.css:
+
+.voice-recorder {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 24px;
+  transition: var(--transition-base);
+  cursor: pointer;
+}
+
+.voice-recorder:hover {
+  color: var(--primary-purple);
+}
+
+.voice-recorder.recording {
+  color: var(--error-red);
+}
+
+.recording-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--error-red);
+  border-radius: 50%;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: TYPING INDICATOR COMPONENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /components/TypingIndicator.jsx:
+
+import React from 'react';
+import './TypingIndicator.css';
+
+function TypingIndicator() {
+  return (
+    <div className="typing-indicator">
+      <div className="message message-ai">
+        <div className="typing-dots">
+          <span className="dot animate-pulse"></span>
+          <span className="dot animate-pulse" style={{ animationDelay: '0.2s' }}></span>
+          <span className="dot animate-pulse" style={{ animationDelay: '0.4s' }}></span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default TypingIndicator;
+
+---
+
+Create /components/TypingIndicator.css:
+
+.typing-indicator {
+  padding: 0 16px;
+  margin-bottom: 16px;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: COACH PAGE (MAIN CHAT SCREEN)
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /pages/CoachPage.jsx:
+
+import React, { useState, useEffect, useRef } from 'react';
+import MessageBubble from '../components/MessageBubble';
+import VideoCard from '../components/VideoCard';
+import VoiceRecorder from '../components/VoiceRecorder';
+import TypingIndicator from '../components/TypingIndicator';
+import BottomNav from '../components/BottomNav';
+import './CoachPage.css';
+
+function CoachPage() {
+  const [messages, setMessages] = useState([
+    {
+      id: 1,
+      sender: 'ai',
+      message: 'Hey! How was training today? 🥋',
+      timestamp: new Date(),
+      videos: []
+    }
+  ]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isTyping]);
+
+  const handleSendMessage = async (text = inputMessage) => {
+    if (!text.trim()) return;
+
+    // Add user message
+    const userMessage = {
+      id: Date.now(),
+      sender: 'user',
+      message: text,
+      timestamp: new Date(),
+      videos: []
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsTyping(true);
+
+    // Simulate AI response (will connect to real API in Command 4)
+    setTimeout(() => {
+      const aiResponse = generateMockResponse(text);
+      setMessages(prev => [...prev, aiResponse]);
+      setIsTyping(false);
+    }, 1500);
+  };
+
+  const handleVoiceTranscript = (transcript) => {
+    handleSendMessage(transcript);
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  // Mock response generator (will be replaced with real API)
+  const generateMockResponse = (userMessage) => {
+    const lowerMessage = userMessage.toLowerCase();
+    
+    if (lowerMessage.includes('video') || lowerMessage.includes('show me')) {
+      return {
+        id: Date.now(),
+        sender: 'ai',
+        message: 'Here are some great videos for you:',
+        timestamp: new Date(),
+        videos: [
+          {
+            title: 'Triangle Choke Setup',
+            instructor: 'John Danaher',
+            duration: '8:45',
+            videoUrl: 'https://youtube.com',
+            rating: 4.8
+          },
+          {
+            title: 'Armbar from Guard',
+            instructor: 'Lachlan Giles',
+            duration: '10:20',
+            videoUrl: 'https://youtube.com',
+            rating: 4.9
+          }
+        ]
+      };
+    }
+    
+    return {
+      id: Date.now(),
+      sender: 'ai',
+      message: `I understand you said: "${userMessage}". In Command 4, I'll connect to the real AI backend to give you smart responses! 🧠`,
+      timestamp: new Date(),
+      videos: []
+    };
+  };
+
+  return (
+    <div className="coach-page">
+      <header className="chat-header safe-area-top">
+        <h1>💬 Coach</h1>
+      </header>
+
+      <div className="messages-container">
+        {messages.map(msg => (
+          <MessageBubble key={msg.id} {...msg} />
+        ))}
+        
+        {isTyping && <TypingIndicator />}
+        
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="input-area safe-area-bottom">
+        <input
+          ref={inputRef}
+          type="text"
+          className="message-input"
+          placeholder="Type message or ask anything..."
+          value={inputMessage}
+          onChange={(e) => setInputMessage(e.target.value)}
+          onKeyPress={handleKeyPress}
+        />
+        <VoiceRecorder onTranscript={handleVoiceTranscript} />
+      </div>
+
+      <BottomNav />
+    </div>
+  );
+}
+
+export default CoachPage;
+
+---
+
+Create /pages/CoachPage.css:
+
+.coach-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--black);
+}
+
+.chat-header {
+  background: var(--dark-gray);
+  border-bottom: 1px solid var(--border-gray);
+  padding: 16px;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+
+.chat-header h1 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+  padding-bottom: 80px; /* Space for input area */
+  -webkit-overflow-scrolling: touch;
+}
+
+.input-area {
+  position: fixed;
+  bottom: 60px; /* Height of bottom nav */
+  left: 0;
+  right: 0;
+  background: var(--dark-gray);
+  border-top: 1px solid var(--border-gray);
+  padding: 12px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.message-input {
+  flex: 1;
+  background: var(--medium-gray);
+  border: 1px solid var(--border-gray);
+  border-radius: var(--radius-full);
+  padding: 12px 20px;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+}
+
+.message-input:focus {
+  outline: none;
+  border-color: var(--primary-purple);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After completing Command 2:
+
+1. Visit: /app (or /onboarding if not logged in)
+2. You should see: Chat interface with header, messages, input
+3. Test: Type a message and press Enter
+4. Test: Click voice recorder button (hold to record)
+5. Test: Type "show me videos" - should show mock video cards
+6. Bottom navigation should work (Coach, Saved, Settings)
+
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Chat interface displays correctly
+✅ Can send messages (mock responses work)
+✅ Message bubbles styled correctly (AI left, User right)
+✅ Video cards display in messages
+✅ Voice recorder button works (records speech)
+✅ Typing indicator shows when AI is "thinking"
+✅ Bottom navigation present and working
+✅ Scrolls smoothly to new messages
+✅ Mobile-responsive and looks clean
+
+Ready for Command 3 (Saved Videos + Settings pages).
+```
+
+-----
+
+**📋 PASTE COMMAND 2 INTO REPLIT AGENT NOW**
+
+Let me know when it’s done! ✅​​​​​​​​​​​​​​​​

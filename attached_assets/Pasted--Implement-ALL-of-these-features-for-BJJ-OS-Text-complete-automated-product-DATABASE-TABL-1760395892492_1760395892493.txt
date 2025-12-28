@@ -1,0 +1,249 @@
+```
+Implement ALL of these features for BJJ OS Text - complete automated product:
+
+=== DATABASE TABLES ===
+
+1. Create these new tables:
+   - sent_techniques (id, user_id, technique_name, video_url, instructor, sent_date, clicked: boolean, created_at)
+   - user_engagement (id, user_id, last_click_date, total_clicks, streak_days, last_reply_date, progression_level: beginner/intermediate/advanced)
+   - referral_codes (id, user_id, code, uses, free_months_earned, created_at)
+
+2. Update user_preferences table to include:
+   - competition_mode: boolean (default false)
+   - comp_date: date (nullable)
+   - progression_level: string (default 'beginner')
+   - referral_code: string (unique)
+   - weekly_recap_enabled: boolean (default true)
+   - paused: boolean (default false)
+
+=== SMART DUPLICATE PREVENTION ===
+
+Before sending any daily technique:
+- Check sent_techniques table for that user
+- Exclude any technique sent in last 90 days
+- After user has been subscribed 180+ days, enable "refresher mode" where occasionally resend best techniques with prefix "Remember this gem?"
+- Log every technique sent to sent_techniques table
+
+=== ENGAGEMENT TRACKING ===
+
+1. Create URL redirect system:
+   - All YouTube links should be wrapped as: bjjos.app/v/[unique_tracking_id]
+   - When user clicks, log the click in sent_techniques table (clicked: true)
+   - Then redirect to actual YouTube URL with timestamp
+
+2. Engagement monitoring:
+   - If user hasn't clicked any links for 7 consecutive days, send check-in text:
+   "Haven't seen you watch lately - everything okay? Reply FEEDBACK to help us improve or PAUSE to skip a week"
+
+=== SMART TIMING COMMAND ===
+
+When user replies with "TIME 6AM", "TIME 7:30PM", "TIME 9AM", etc:
+- Parse the time from their message
+- Update their send_time in user_preferences
+- Respond: "✅ Changed! You'll get techniques at [TIME] starting tomorrow"
+- Support formats: "6AM", "6:00AM", "18:00", "6:30PM"
+
+=== DIFFICULTY PROGRESSION ===
+
+1. White belts only get fundamentals:
+   - When generating techniques for white belts, add keywords to AI search: "basics", "fundamentals", "beginner", "introduction"
+   - Filter out advanced techniques
+
+2. After 30 days subscribed:
+   - Send: "You've been crushing it for a month! Ready for intermediate techniques? Reply YES or NO"
+   - If YES: update progression_level to 'intermediate'
+   - If NO: keep as 'beginner'
+
+3. After 90 days at intermediate:
+   - Offer advanced: "Ready to level up to advanced techniques? Reply YES or NO"
+   - Update to 'advanced' if YES
+
+4. Adjust AI queries based on progression_level
+
+=== WEEKLY RECAP (SUNDAYS AT 6 PM) ===
+
+Every Sunday at 6 PM, send to users where weekly_recap_enabled = true:
+
+First time a user receives weekly recap, send:
+"📊 Your first week with BJJ OS!
+
+Mon: [Technique name 1]
+Tue: [Technique name 2]
+Wed: [Technique name 3]
+Thu: [Technique name 4]
+Fri: [Technique name 5]
+Sat: [Technique name 6]
+Sun: [Technique name 7]
+
+Which one will you drill this week? 🥋
+
+(Don't want weekly recaps? Reply RECAP OFF)"
+
+For subsequent weeks, send:
+"📊 This week's arsenal:
+Mon: [Technique name 1]
+Tue: [Technique name 2]
+Wed: [Technique name 3]
+Thu: [Technique name 4]
+Fri: [Technique name 5]
+Sat: [Technique name 6]
+Sun: [Technique name 7]
+
+Which one will you drill this week? 🥋"
+
+Pull the last 7 techniques from sent_techniques table for that user.
+Only send if weekly_recap_enabled = true.
+
+=== WEEKLY RECAP OPT-OUT ===
+
+Add to SMS reply handler:
+- "RECAP OFF" or "NO RECAP" → set weekly_recap_enabled: false, respond "✅ Weekly recaps turned off. Reply RECAP ON to re-enable"
+- "RECAP ON" → set weekly_recap_enabled: true, respond "✅ Weekly recaps turned back on. Next one comes Sunday at 6 PM"
+
+=== REFERRAL SYSTEM ===
+
+1. On user creation:
+   - Generate unique referral code: first_name + random 4 digits (e.g., TODD2847)
+   - Store in user_preferences.referral_code
+
+2. After user receives their 3rd daily technique:
+   - Send: "❤️ Loving BJJ OS? Share with training partners: bjjos.app/ref/[CODE] - Give friends 1 week free, you get 1 month free when they subscribe!"
+
+3. Track referrals:
+   - When someone signs up via /ref/[CODE], credit the referrer
+   - Give referrer 1 free month (update subscription)
+   - Give new user 1 week free trial
+
+=== BAD TECHNIQUE BAILOUT ===
+
+If user replies "BAD", "SKIP", "👎", or "TERRIBLE" to any technique:
+1. Immediately generate a NEW different technique
+2. Send it right away with: "Got it - here's a different one! 👇"
+3. Log the rejected video/instructor in a review queue
+4. Don't count the bad one as their daily technique
+
+=== COMPETITION PREP MODE ===
+
+When user replies "COMP MARCH 15", "COMP 3/15/25", "COMP 03-15", etc:
+1. Parse the competition date
+2. Calculate weeks until competition
+3. Update user_preferences: competition_mode = true, comp_date = parsed_date
+4. Respond: "⏱️ Competition mode activated! [X] weeks to go. You'll get high-percentage competition techniques focused on: back attacks, guard retention, submissions, and escapes. Good luck! 🏆"
+5. Modify AI technique selection to prioritize competition-proven moves
+6. Add countdown to each daily text: "⏱️ 6 weeks to comp - Today's high-percentage move:"
+7. 1 week before comp date: "⏱️ Final week! Sharpening your A-game:"
+8. After comp date passes, send: "How'd the comp go? Reply with results! 🥇" and turn off competition_mode
+
+=== RELATED TECHNIQUES FEATURE ===
+
+When user replies with enthusiastic messages like:
+- "LOVE THIS", "🔥", "AMAZING", "AWESOME", "YES", "FIRE", "MORE"
+- Any message with fire emoji, heart emoji, or thumbs up
+
+Trigger this response:
+"🔥 Glad you loved it! Here are 2 related techniques:
+
+1. [Related technique name] - [Instructor]
+Watch: [link with timestamp]
+
+2. [Related technique name] - [Instructor]
+Watch: [link with timestamp]
+
+This won't affect tomorrow's daily technique - see you at 8 AM! 💪"
+
+- Use AI to search for 2 related videos (same category or same instructor)
+- These are bonus rewards, don't replace the daily technique
+- Don't send related techniques more than once per day per user
+
+=== COMPLETE SMS ONBOARDING FLOW ===
+
+Text 1 (immediate after signup):
+"🥋 Welcome to BJJ OS!
+
+Every morning at 8 AM, you'll get ONE carefully curated technique with the key detail that makes it work - timestamped and ready to drill.
+
+Stop wasting time searching YouTube for the perfect technique. We've done the research for you.
+
+Quick setup (takes 30 seconds):
+
+What belt are you?
+Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK"
+
+Text 2 (after belt reply):
+"💪 [BELT] belt - nice!
+
+What do you train?
+Reply: GI, NOGI, or BOTH"
+
+Text 3 (after style reply):
+"🎯 Final question - any areas you want to SKIP for now?
+
+GUARD • PASSING • SWEEPS • SUBMISSIONS • ESCAPES • TAKEDOWNS
+
+Reply with areas to skip, or reply ALL to learn everything
+
+Example: TAKEDOWNS, ESCAPES"
+
+Text 4 (confirmation):
+"✅ Perfect! First technique drops tomorrow at 8 AM.
+
+Pro tips:
+• Reply TIME 7AM to change your schedule
+• Reply PAUSE to skip days
+• Share with training partners: bjjos.app/ref/[YOUR_CODE]
+
+Get ready to level up 🚀"
+
+=== COMPREHENSIVE SMS REPLY HANDLER ===
+
+Create a webhook endpoint that handles ALL incoming SMS replies and routes them appropriately:
+
+1. **Onboarding responses:**
+   - Belt level: WHITE/BLUE/PURPLE/BROWN/BLACK → save to user_preferences
+   - Style: GI/NOGI/BOTH → save to user_preferences
+   - Focus areas: Parse list or "ALL" → save as array or empty array
+
+2. **Command responses:**
+   - "TIME [time]" → update send_time
+   - "PAUSE" → set paused: true, respond "⏸️ Paused. Reply RESUME when ready"
+   - "RESUME" → set paused: false, respond "▶️ Resumed! Next technique coming [tomorrow at TIME]"
+   - "RECAP ON" → set weekly_recap_enabled: true, respond "✅ Weekly recaps turned back on. Next one comes Sunday at 6 PM"
+   - "RECAP OFF" or "NO RECAP" → set weekly_recap_enabled: false, respond "✅ Weekly recaps turned off. Reply RECAP ON to re-enable"
+   - "HELP" → send: "Available commands:
+   • TIME 7AM - change delivery time
+   • PAUSE/RESUME - pause daily techniques
+   • RECAP ON/OFF - toggle weekly recaps
+   • COMP [date] - activate competition mode
+   • FEEDBACK [message] - send us feedback
+   • Reply with enthusiasm for related techniques"
+   - "FEEDBACK [message]" → log feedback to database, respond "Thanks for the feedback! 🙏"
+   - "COMP [date]" → activate competition mode
+   - "BAD/SKIP/👎" → send different technique immediately
+   - Enthusiastic responses → send related techniques
+
+3. **Default/Unknown:**
+   - If message doesn't match any pattern, log it and respond:
+   "Thanks for your message! Reply HELP to see available commands."
+
+=== PAUSE/RESUME FUNCTIONALITY ===
+
+- Add "paused" boolean to user_preferences (default: false)
+- When paused, skip daily sends
+- User can pause/resume anytime via SMS
+- After 30 days paused, send check-in: "Miss us? Reply RESUME to get back on track 🥋"
+
+=== DAILY SCHEDULER INTEGRATION ===
+
+1. Every day at each user's specified send_time:
+   - Check if user is paused → skip if paused
+   - Get user preferences (belt_level, style, focus_areas, progression_level, competition_mode)
+   - Generate technique using AI that matches their preferences
+   - Check against sent_techniques for duplicates (90-day window)
+   - Send via Twilio
+   - Log to sent_techniques table
+   - Track in user_engagement
+
+2. Handle timezone correctly - store user timezone and convert to UTC for scheduling
+
+Implement all of these features to create the complete, fully automated BJJ OS Text product.
+```

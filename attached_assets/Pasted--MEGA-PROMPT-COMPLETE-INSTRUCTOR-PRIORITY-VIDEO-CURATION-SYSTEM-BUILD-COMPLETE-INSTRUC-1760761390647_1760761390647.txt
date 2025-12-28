@@ -1,0 +1,1572 @@
+# **MEGA PROMPT - COMPLETE INSTRUCTOR PRIORITY & VIDEO CURATION SYSTEM**
+
+```
+BUILD COMPLETE INSTRUCTOR PRIORITY SYSTEM WITH AUTO-CALCULATION, MANUAL OVERRIDE PROTECTION, AND AGGRESSIVE HIGH-QUALITY VIDEO CURATION
+
+═══════════════════════════════════════════════════════════════════
+CORE PRINCIPLE: EXCELLENCE OVER SPEED
+═══════════════════════════════════════════════════════════════════
+
+We will NOT compromise on quality to hit numbers. Every video must be genuinely helpful.
+The instructor priority system must be accurate, self-improving, and respect manual overrides.
+
+═══════════════════════════════════════════════════════════════════
+PART 1: DATABASE SCHEMA - INSTRUCTOR PRIORITY SYSTEM
+═══════════════════════════════════════════════════════════════════
+
+CREATE OR UPDATE instructor_credibility TABLE:
+
+```sql
+CREATE TABLE IF NOT EXISTS instructor_credibility (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  tier INTEGER, -- 1=elite, 2=established
+  
+  -- PRIORITY SYSTEM (CRITICAL - HANDLES AUTO + MANUAL)
+  priority_mode TEXT DEFAULT 'auto' NOT NULL, 
+    -- 'auto' or 'manual' - LOCKS the mode
+  
+  auto_calculated_priority INTEGER DEFAULT 0, 
+    -- Always stores AI calculation, NEVER overwrites manual
+  
+  manual_override_priority INTEGER, 
+    -- NULL if auto, SET if manual
+  
+  recommendation_priority INTEGER NOT NULL DEFAULT 0, 
+    -- ACTUAL priority used in recommendations
+    -- = manual_override_priority IF mode='manual'
+    -- = auto_calculated_priority IF mode='auto'
+  
+  quality_threshold DECIMAL DEFAULT 7.5,
+    -- Minimum score to accept videos (6.5, 7.0, or 7.5)
+  
+  -- TRACKING & AUDIT
+  last_auto_calculation TIMESTAMP,
+  manual_override_date TIMESTAMP, 
+    -- When admin manually changed it
+  manual_override_by TEXT, 
+    -- Admin email who changed it
+  manual_override_reason TEXT, 
+    -- Optional note: "Featured for launch week"
+  
+  -- AI CALCULATION INPUTS (SCRAPED DATA)
+  achievements JSONB DEFAULT '[]'::jsonb,
+    -- ['IBJJF World Champion', 'ADCC Champion', ...]
+  
+  youtube_channel_id TEXT,
+  youtube_channel_handle TEXT,
+  youtube_subscribers INTEGER DEFAULT 0,
+  youtube_video_count INTEGER DEFAULT 0,
+  youtube_last_scraped TIMESTAMP,
+  
+  has_instructional_series BOOLEAN DEFAULT false,
+  instructional_platforms JSONB DEFAULT '[]'::jsonb,
+    -- ['BJJ Fanatics', 'Grappler\'s Guide', ...]
+  
+  -- USER FEEDBACK (AUTO-CALCULATED FROM video_feedback)
+  total_videos INTEGER DEFAULT 0,
+  helpful_count INTEGER DEFAULT 0,
+  not_helpful_count INTEGER DEFAULT 0,
+  helpful_ratio DECIMAL DEFAULT 0,
+  
+  -- SPECIALTIES
+  specialties TEXT[] DEFAULT ARRAY[]::TEXT[],
+    -- ['guard', 'sweeps', 'competition', 'no-gi', ...]
+  
+  -- METADATA
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  CONSTRAINT valid_priority_mode CHECK (priority_mode IN ('auto', 'manual')),
+  CONSTRAINT valid_tier CHECK (tier IN (1, 2)),
+  CONSTRAINT valid_priority CHECK (recommendation_priority BETWEEN 0 AND 100)
+);
+
+CREATE INDEX idx_instructor_priority ON instructor_credibility(recommendation_priority DESC);
+CREATE INDEX idx_instructor_mode ON instructor_credibility(priority_mode);
+CREATE INDEX idx_instructor_active ON instructor_credibility(is_active);
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 2: AI AUTO-CALCULATION FORMULA
+═══════════════════════════════════════════════════════════════════
+
+Implement this exact priority calculation function:
+
+```javascript
+function calculateInstructorPriority(instructor) {
+  let priority = 0;
+  
+  // 1. COMPETITION CREDENTIALS (0-40 points)
+  const achievements = instructor.achievements || [];
+  
+  if (achievements.includes('IBJJF World Champion') || 
+      achievements.includes('ADCC Champion')) {
+    priority += 40;
+  } else if (achievements.includes('IBJJF Pan Champion') || 
+             achievements.includes('ADCC Medalist')) {
+    priority += 30;
+  } else if (achievements.includes('IBJJF European Champion') ||
+             achievements.includes('ADCC Trials Winner')) {
+    priority += 25;
+  } else if (achievements.includes('Black Belt World Medalist')) {
+    priority += 20;
+  } else if (achievements.includes('Black Belt Competitor')) {
+    priority += 15;
+  }
+  
+  // 2. TEACHING REPUTATION - YOUTUBE (0-30 points)
+  const subs = instructor.youtube_subscribers || 0;
+  
+  if (subs >= 500000) {
+    priority += 30;
+  } else if (subs >= 200000) {
+    priority += 25;
+  } else if (subs >= 100000) {
+    priority += 20;
+  } else if (subs >= 50000) {
+    priority += 15;
+  } else if (subs >= 10000) {
+    priority += 10;
+  } else if (subs >= 5000) {
+    priority += 5;
+  }
+  
+  // 3. INSTRUCTIONAL QUALITY (0-20 points)
+  if (instructor.has_instructional_series) {
+    const platforms = instructor.instructional_platforms || [];
+    if (platforms.length >= 3) {
+      priority += 20; // Multiple platforms = proven quality
+    } else if (platforms.length >= 1) {
+      priority += 15; // At least one series
+    }
+  } else if (instructor.instructional_platforms?.length > 0) {
+    priority += 10; // Guest instructionals
+  }
+  
+  // 4. USER FEEDBACK FROM YOUR APP (0-10 points)
+  const helpfulRatio = instructor.helpful_ratio || 0;
+  const totalFeedback = (instructor.helpful_count || 0) + (instructor.not_helpful_count || 0);
+  
+  // Only count feedback if we have at least 10 votes
+  if (totalFeedback >= 10) {
+    if (helpfulRatio >= 0.95) {
+      priority += 10;
+    } else if (helpfulRatio >= 0.90) {
+      priority += 9;
+    } else if (helpfulRatio >= 0.85) {
+      priority += 8;
+    } else if (helpfulRatio >= 0.80) {
+      priority += 7;
+    } else if (helpfulRatio >= 0.75) {
+      priority += 5;
+    } else if (helpfulRatio >= 0.70) {
+      priority += 3;
+    }
+  }
+  
+  // Cap at 100
+  return Math.min(priority, 100);
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 3: DATA SCRAPING SYSTEM
+═══════════════════════════════════════════════════════════════════
+
+BUILD AUTOMATED DATA SCRAPING FOR INSTRUCTOR INTELLIGENCE:
+
+**3.1 - YOUTUBE DATA SCRAPER**
+
+Use YouTube Data API v3 to fetch:
+
+- Channel subscriber count
+- Video count
+- Channel description (look for achievements)
+- Upload frequency
+
+```javascript
+async function scrapeYouTubeData(instructor) {
+  if (!instructor.youtube_channel_id && !instructor.youtube_channel_handle) {
+    return null;
+  }
+  
+  try {
+    // Use YouTube Data API v3
+    const channelId = instructor.youtube_channel_id || 
+                     await getChannelIdFromHandle(instructor.youtube_channel_handle);
+    
+    const response = await fetch(
+      `https://www.googleapis.com/youtube/v3/channels?` +
+      `part=snippet,statistics&id=${channelId}&key=${YOUTUBE_API_KEY}`
+    );
+    
+    const data = await response.json();
+    const channel = data.items[0];
+    
+    if (!channel) return null;
+    
+    return {
+      youtube_subscribers: parseInt(channel.statistics.subscriberCount),
+      youtube_video_count: parseInt(channel.statistics.videoCount),
+      youtube_channel_id: channelId,
+      youtube_last_scraped: new Date()
+    };
+  } catch (error) {
+    console.error(`Failed to scrape YouTube data for ${instructor.name}:`, error);
+    return null;
+  }
+}
+```
+
+**3.2 - ACHIEVEMENTS SCRAPER**
+
+Scrape achievements from multiple sources:
+
+```javascript
+async function scrapeAchievements(instructor) {
+  const achievements = [];
+  
+  // SOURCE 1: BJJ Heroes (most comprehensive)
+  try {
+    const bjjHeroesData = await scrapeBJJHeroes(instructor.name);
+    if (bjjHeroesData?.achievements) {
+      achievements.push(...bjjHeroesData.achievements);
+    }
+  } catch (error) {
+    console.log(`BJJ Heroes scrape failed for ${instructor.name}`);
+  }
+  
+  // SOURCE 2: IBJJF Rankings API (if they have official records)
+  try {
+    const ibjjfData = await scrapeIBJJFRecords(instructor.name);
+    if (ibjjfData?.titles) {
+      achievements.push(...ibjjfData.titles);
+    }
+  } catch (error) {
+    console.log(`IBJJF scrape failed for ${instructor.name}`);
+  }
+  
+  // SOURCE 3: FloGrappling records
+  try {
+    const floData = await scrapeFloGrappling(instructor.name);
+    if (floData?.achievements) {
+      achievements.push(...floData.achievements);
+    }
+  } catch (error) {
+    console.log(`FloGrappling scrape failed for ${instructor.name}`);
+  }
+  
+  // Deduplicate and return
+  return [...new Set(achievements)];
+}
+```
+
+**3.3 - INSTRUCTIONAL PLATFORMS SCRAPER**
+
+Check for presence on major instructional platforms:
+
+```javascript
+async function scrapeInstructionalPresence(instructor) {
+  const platforms = [];
+  
+  // Check BJJ Fanatics
+  try {
+    const bjjFanaticsSearch = await fetch(
+      `https://bjjfanatics.com/search?q=${encodeURIComponent(instructor.name)}`
+    );
+    const html = await bjjFanaticsSearch.text();
+    if (html.includes('instructional-by-' + instructor.name.toLowerCase().replace(/\s+/g, '-'))) {
+      platforms.push('BJJ Fanatics');
+    }
+  } catch (error) {
+    console.log(`BJJ Fanatics check failed for ${instructor.name}`);
+  }
+  
+  // Check Grappler's Guide
+  try {
+    const grapplersGuideSearch = await checkGrapplersGuide(instructor.name);
+    if (grapplersGuideSearch) {
+      platforms.push('Grappler\'s Guide');
+    }
+  } catch (error) {
+    console.log(`Grappler's Guide check failed for ${instructor.name}`);
+  }
+  
+  // Check AOJ Online / Atos
+  // Check their personal websites
+  // etc.
+  
+  return {
+    has_instructional_series: platforms.length > 0,
+    instructional_platforms: platforms
+  };
+}
+```
+
+**3.4 - COMPREHENSIVE INSTRUCTOR DATA UPDATE**
+
+Run nightly to scrape all data sources:
+
+```javascript
+async function updateInstructorIntelligence(instructorId) {
+  const instructor = await db.query(
+    'SELECT * FROM instructor_credibility WHERE id = $1',
+    [instructorId]
+  );
+  
+  // Scrape YouTube data
+  const youtubeData = await scrapeYouTubeData(instructor);
+  
+  // Scrape achievements
+  const achievements = await scrapeAchievements(instructor);
+  
+  // Scrape instructional presence
+  const instructionalData = await scrapeInstructionalPresence(instructor);
+  
+  // Update database with scraped data
+  await db.query(`
+    UPDATE instructor_credibility 
+    SET 
+      youtube_subscribers = $1,
+      youtube_video_count = $2,
+      youtube_channel_id = $3,
+      youtube_last_scraped = $4,
+      achievements = $5,
+      has_instructional_series = $6,
+      instructional_platforms = $7,
+      updated_at = NOW()
+    WHERE id = $8
+  `, [
+    youtubeData?.youtube_subscribers || instructor.youtube_subscribers,
+    youtubeData?.youtube_video_count || instructor.youtube_video_count,
+    youtubeData?.youtube_channel_id || instructor.youtube_channel_id,
+    youtubeData?.youtube_last_scraped || instructor.youtube_last_scraped,
+    JSON.stringify(achievements),
+    instructionalData.has_instructional_series,
+    JSON.stringify(instructionalData.instructional_platforms),
+    instructorId
+  ]);
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 4: NIGHTLY CRON JOB - AUTO-CALCULATION (RESPECTS MANUAL OVERRIDES)
+═══════════════════════════════════════════════════════════════════
+
+This runs every night at 2:00 AM:
+
+```javascript
+async function recalculateInstructorPriorities() {
+  console.log('Starting nightly instructor priority recalculation...');
+  
+  // Get ALL instructors
+  const instructors = await db.query(`
+    SELECT * FROM instructor_credibility 
+    WHERE is_active = true
+  `);
+  
+  for (const instructor of instructors) {
+    try {
+      // STEP 1: Update user feedback stats from video_feedback table
+      const feedback = await db.query(`
+        SELECT 
+          COUNT(*) FILTER (WHERE helpful = true) as helpful,
+          COUNT(*) FILTER (WHERE helpful = false) as not_helpful,
+          COUNT(*) as total
+        FROM video_feedback vf
+        JOIN ai_video_knowledge avk ON vf.video_id = avk.id
+        WHERE LOWER(avk.instructor_name) = LOWER($1)
+      `, [instructor.name]);
+      
+      const helpfulCount = parseInt(feedback.rows[0].helpful) || 0;
+      const notHelpfulCount = parseInt(feedback.rows[0].not_helpful) || 0;
+      const totalFeedback = helpfulCount + notHelpfulCount;
+      const helpfulRatio = totalFeedback > 0 ? helpfulCount / totalFeedback : 0;
+      
+      // Update instructor with feedback data
+      instructor.helpful_count = helpfulCount;
+      instructor.not_helpful_count = notHelpfulCount;
+      instructor.helpful_ratio = helpfulRatio;
+      
+      // STEP 2: Scrape fresh data (YouTube, achievements, etc.)
+      // Only scrape if last scraped > 7 days ago
+      const lastScraped = instructor.youtube_last_scraped;
+      const daysSinceLastScrape = lastScraped 
+        ? (Date.now() - new Date(lastScraped)) / (1000 * 60 * 60 * 24)
+        : 999;
+      
+      if (daysSinceLastScrape > 7) {
+        console.log(`Scraping data for ${instructor.name}...`);
+        await updateInstructorIntelligence(instructor.id);
+        
+        // Re-fetch instructor with updated data
+        const updated = await db.query(
+          'SELECT * FROM instructor_credibility WHERE id = $1',
+          [instructor.id]
+        );
+        Object.assign(instructor, updated.rows[0]);
+      }
+      
+      // STEP 3: Calculate new AI priority
+      const newAutoPriority = calculateInstructorPriority(instructor);
+      
+      // STEP 4: Update database
+      // ALWAYS update auto_calculated_priority (doesn't touch manual!)
+      await db.query(`
+        UPDATE instructor_credibility 
+        SET 
+          auto_calculated_priority = $1,
+          last_auto_calculation = NOW(),
+          helpful_count = $2,
+          not_helpful_count = $3,
+          helpful_ratio = $4
+        WHERE id = $5
+      `, [
+        newAutoPriority,
+        helpfulCount,
+        notHelpfulCount,
+        helpfulRatio,
+        instructor.id
+      ]);
+      
+      // STEP 5: ONLY update recommendation_priority if mode is 'auto'
+      // If mode is 'manual', recommendation_priority stays LOCKED
+      if (instructor.priority_mode === 'auto') {
+        await db.query(`
+          UPDATE instructor_credibility 
+          SET recommendation_priority = $1
+          WHERE id = $2
+        `, [newAutoPriority, instructor.id]);
+        
+        console.log(`✅ ${instructor.name}: Auto priority updated to ${newAutoPriority}`);
+      } else {
+        console.log(`🔒 ${instructor.name}: Manual override (${instructor.manual_override_priority}) - skipping auto update`);
+      }
+      
+    } catch (error) {
+      console.error(`Error processing ${instructor.name}:`, error);
+    }
+  }
+  
+  console.log('Nightly recalculation complete!');
+}
+
+// Schedule to run at 2:00 AM every night
+cron.schedule('0 2 * * *', recalculateInstructorPriorities);
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 5: MANUAL OVERRIDE FUNCTIONS (LOCKS PRIORITY)
+═══════════════════════════════════════════════════════════════════
+
+**5.1 - SET MANUAL OVERRIDE**
+
+```javascript
+async function setManualPriority(instructorId, newPriority, adminEmail, reason) {
+  // Validate priority is 0-100
+  if (newPriority < 0 || newPriority > 100) {
+    throw new Error('Priority must be between 0 and 100');
+  }
+  
+  await db.query(`
+    UPDATE instructor_credibility 
+    SET 
+      priority_mode = 'manual',
+      manual_override_priority = $1,
+      recommendation_priority = $1,  -- Set to manual value
+      manual_override_date = NOW(),
+      manual_override_by = $2,
+      manual_override_reason = $3,
+      updated_at = NOW()
+    WHERE id = $4
+  `, [newPriority, adminEmail, reason || 'Manual override', instructorId]);
+  
+  console.log(`🔒 Locked ${instructorId} at priority ${newPriority}`);
+}
+```
+
+**5.2 - UPDATE EXISTING MANUAL OVERRIDE**
+
+```javascript
+async function updateManualPriority(instructorId, newPriority, adminEmail, reason) {
+  // Verify it's already in manual mode
+  const instructor = await db.query(
+    'SELECT priority_mode FROM instructor_credibility WHERE id = $1',
+    [instructorId]
+  );
+  
+  if (instructor.rows[0].priority_mode !== 'manual') {
+    throw new Error('Cannot update - instructor is in auto mode. Use setManualPriority instead.');
+  }
+  
+  await db.query(`
+    UPDATE instructor_credibility 
+    SET 
+      manual_override_priority = $1,
+      recommendation_priority = $1,
+      manual_override_date = NOW(),
+      manual_override_by = $2,
+      manual_override_reason = $3,
+      updated_at = NOW()
+    WHERE id = $4
+  `, [newPriority, adminEmail, reason || 'Manual update', instructorId]);
+}
+```
+
+**5.3 - REVERT TO AUTO MODE**
+
+```javascript
+async function revertToAuto(instructorId) {
+  const instructor = await db.query(
+    'SELECT auto_calculated_priority FROM instructor_credibility WHERE id = $1',
+    [instructorId]
+  );
+  
+  const autoPriority = instructor.rows[0].auto_calculated_priority;
+  
+  await db.query(`
+    UPDATE instructor_credibility 
+    SET 
+      priority_mode = 'auto',
+      manual_override_priority = NULL,
+      recommendation_priority = $1,  -- Use AI calculated value
+      manual_override_date = NULL,
+      manual_override_by = NULL,
+      manual_override_reason = NULL,
+      updated_at = NOW()
+    WHERE id = $2
+  `, [autoP riority, instructorId]);
+  
+  console.log(`🤖 Unlocked ${instructorId} - now using auto priority ${autoP riority}`);
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 6: DATA INTEGRITY AUDIT (RUNS DAILY AT 3 AM)
+═══════════════════════════════════════════════════════════════════
+
+```javascript
+async function auditPriorityIntegrity() {
+  console.log('Running priority integrity audit...');
+  
+  // CHECK 1: Ensure recommendation_priority matches mode
+  const mismatches = await db.query(`
+    SELECT 
+      id, 
+      name, 
+      priority_mode, 
+      recommendation_priority, 
+      auto_calculated_priority, 
+      manual_override_priority
+    FROM instructor_credibility 
+    WHERE 
+      (priority_mode = 'manual' AND recommendation_priority != manual_override_priority)
+      OR
+      (priority_mode = 'auto' AND recommendation_priority != auto_calculated_priority)
+  `);
+  
+  if (mismatches.rows.length > 0) {
+    console.error(`⚠️ Found ${mismatches.rows.length} priority mismatches!`);
+    
+    // FIX IMMEDIATELY
+    for (const instructor of mismatches.rows) {
+      const correctPriority = instructor.priority_mode === 'manual' 
+        ? instructor.manual_override_priority 
+        : instructor.auto_calculated_priority;
+      
+      await db.query(`
+        UPDATE instructor_credibility 
+        SET recommendation_priority = $1 
+        WHERE id = $2
+      `, [correctPriority, instructor.id]);
+      
+      console.log(`Fixed ${instructor.name}: Set priority to ${correctPriority}`);
+    }
+    
+    // Send admin alert
+    await sendAdminAlert(
+      'Priority Integrity Issue Fixed',
+      `Fixed ${mismatches.rows.length} instructor priority mismatches. System is now correct.`
+    );
+  }
+  
+  // CHECK 2: Ensure manual overrides have required fields
+  const invalidManuals = await db.query(`
+    SELECT id, name FROM instructor_credibility 
+    WHERE priority_mode = 'manual' 
+    AND (
+      manual_override_priority IS NULL 
+      OR manual_override_date IS NULL 
+      OR manual_override_by IS NULL
+    )
+  `);
+  
+  if (invalidManuals.rows.length > 0) {
+    console.error(`⚠️ Found ${invalidManuals.rows.length} invalid manual overrides!`);
+    await sendAdminAlert(
+      'Invalid Manual Overrides Detected',
+      `${invalidManuals.rows.length} instructors in manual mode are missing required data. Please review.`
+    );
+  }
+  
+  // CHECK 3: Ensure all priorities are within valid range
+  const invalidPriorities = await db.query(`
+    SELECT id, name, recommendation_priority 
+    FROM instructor_credibility 
+    WHERE recommendation_priority < 0 OR recommendation_priority > 100
+  `);
+  
+  if (invalidPriorities.rows.length > 0) {
+    console.error(`⚠️ Found ${invalidPriorities.rows.length} invalid priorities!`);
+    
+    for (const instructor of invalidPriorities.rows) {
+      const clampedPriority = Math.max(0, Math.min(100, instructor.recommendation_priority));
+      await db.query(`
+        UPDATE instructor_credibility 
+        SET recommendation_priority = $1 
+        WHERE id = $2
+      `, [clampedPriority, instructor.id]);
+    }
+  }
+  
+  console.log('✅ Integrity audit complete!');
+}
+
+// Schedule to run at 3:00 AM every night (after priority recalculation)
+cron.schedule('0 3 * * *', auditPriorityIntegrity);
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 7: SEED ELITE INSTRUCTORS WITH INITIAL DATA
+═══════════════════════════════════════════════════════════════════
+
+Insert these instructors with their YouTube handles and known achievements:
+
+```javascript
+async function seedEliteInstructors() {
+  const eliteInstructors = [
+    // TIER 1 - PRIORITY WILL BE AUTO-CALCULATED
+    {
+      name: 'JT Torres',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@jtorresbjj',
+      achievements: ['IBJJF World Champion', 'IBJJF Pan Champion', 'ADCC Veteran'],
+      specialties: ['competition', 'guard', 'sweeps', 'berimbolo']
+    },
+    {
+      name: 'Gordon Ryan',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@gordonlovesjiujitsu',
+      achievements: ['ADCC Champion', 'IBJJF No-Gi World Champion'],
+      specialties: ['no-gi', 'leg locks', 'passing', 'back attacks']
+    },
+    {
+      name: 'Marcelo Garcia',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@marcelogarciajj',
+      achievements: ['ADCC Champion (multiple)', 'IBJJF World Champion'],
+      specialties: ['butterfly guard', 'guillotine', 'x-guard', 'back takes']
+    },
+    {
+      name: 'Roger Gracie',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@RogerGracieTV',
+      achievements: ['IBJJF World Champion (10x)', 'ADCC Champion'],
+      specialties: ['closed guard', 'mount', 'cross collar choke', 'fundamentals']
+    },
+    {
+      name: 'Mikey Musumeci',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@MikeyMusumeciJiuJitsu',
+      achievements: ['IBJJF World Champion', 'ONE Championship Champion'],
+      specialties: ['berimbolo', 'lapel guards', 'technique', 'details']
+    },
+    {
+      name: 'John Danaher',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@DanaherDeathSquad',
+      achievements: ['Legendary Coach', 'Developed multiple champions'],
+      specialties: ['systems', 'leg locks', 'theory', 'instructional', 'philosophy']
+    },
+    {
+      name: 'Lachlan Giles',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@LachlanGiles',
+      achievements: ['ADCC Medalist', 'Absolute MMA founder'],
+      specialties: ['leg locks', 'half guard', 'technical', 'instructional']
+    },
+    {
+      name: 'Craig Jones',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@CraigJones',
+      achievements: ['ADCC Medalist', 'No-Gi World Champion'],
+      specialties: ['leg locks', 'triangles', 'no-gi', 'back attacks']
+    },
+    {
+      name: 'Bernardo Faria',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@BernardoFaria',
+      achievements: ['IBJJF World Champion (5x)', 'ADCC Champion'],
+      specialties: ['pressure passing', 'deep half', 'over under', 'fundamentals']
+    },
+    {
+      name: 'Keenan Cornelius',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@KeenOnline',
+      achievements: ['IBJJF Pan Champion', 'IBJJF World Medalist'],
+      specialties: ['worm guard', 'lapel guards', 'creativity', 'innovation']
+    },
+    {
+      name: 'Demian Maia',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@DemianMaia',
+      achievements: ['ADCC Champion', 'UFC Welterweight Contender'],
+      specialties: ['back control', 'rear naked choke', 'MMA grappling']
+    },
+    {
+      name: 'Jon Thomas',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@JonThomasBJJ',
+      achievements: ['Black Belt Instructor', 'Popular BJJ YouTuber'],
+      specialties: ['fundamentals', 'teaching', 'concepts', 'clarity']
+    },
+    {
+      name: 'Chewy',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@Chewjitsu',
+      achievements: ['Black Belt Instructor', 'BJJ Lifestyle Coach'],
+      specialties: ['fundamentals', 'teaching', 'practical', 'mindset']
+    },
+    {
+      name: 'Ryan Hall',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@RyanHallBJJ',
+      achievements: ['IBJJF World Medalist', 'UFC Fighter'],
+      specialties: ['triangles', '50/50', 'theory', 'leg locks']
+    },
+    {
+      name: 'Stephan Kesting',
+      tier: 1,
+      quality_threshold: 6.5,
+      youtube_channel_handle: '@GrappleArts',
+      achievements: ['Black Belt Instructor', 'Grapplearts Founder'],
+      specialties: ['fundamentals', 'teaching', 'self-defense', 'concepts']
+    },
+    
+    // TIER 2 - ESTABLISHED
+    {
+      name: 'Knight Jiu Jitsu',
+      tier: 2,
+      quality_threshold: 7.0,
+      youtube_channel_handle: '@KnightJiuJitsu',
+      achievements: ['Black Belt Instructor', 'Popular BJJ Channel'],
+      specialties: ['fundamentals', 'drilling', 'technique']
+    },
+    {
+      name: 'Jordan Teaches Jiujitsu',
+      tier: 2,
+      quality_threshold: 7.0,
+      youtube_channel_handle: '@JordanTeachesJiujitsu',
+      achievements: ['Black Belt Instructor', 'BJJ Educator'],
+      specialties: ['teaching', 'fundamentals', 'concepts']
+    }
+  ];
+  
+  for (const instructor of eliteInstructors) {
+    try {
+      // Check if already exists
+      const existing = await db.query(
+        'SELECT id FROM instructor_credibility WHERE LOWER(name) = LOWER($1)',
+        [instructor.name]
+      );
+      
+      if (existing.rows.length > 0) {
+        console.log(`${instructor.name} already exists - skipping`);
+        continue;
+      }
+      
+      // Insert with auto mode (AI will calculate priority)
+      await db.query(`
+        INSERT INTO instructor_credibility 
+        (name, tier, quality_threshold, youtube_channel_handle, achievements, specialties, priority_mode, recommendation_priority)
+        VALUES ($1, $2, $3, $4, $5, $6, 'auto', 0)
+      `, [
+        instructor.name,
+        instructor.tier,
+        instructor.quality_threshold,
+        instructor.youtube_channel_handle,
+        JSON.stringify(instructor.achievements),
+        instructor.specialties
+      ]);
+      
+      console.log(`✅ Seeded ${instructor.name}`);
+    } catch (error) {
+      console.error(`Failed to seed ${instructor.name}:`, error);
+    }
+  }
+  
+  console.log('Elite instructor seeding complete!');
+  
+  // Now scrape data and calculate priorities for all
+  console.log('Starting initial data scrape and priority calculation...');
+  const allInstructors = await db.query(
+    'SELECT id FROM instructor_credibility WHERE youtube_last_scraped IS NULL'
+  );
+  
+  for (const instructor of allInstructors.rows) {
+    await updateInstructorIntelligence(instructor.id);
+  }
+  
+  // Run first priority calculation
+  await recalculateInstructorPriorities();
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 8: ADMIN DASHBOARD - INSTRUCTOR MANAGEMENT PAGE
+═══════════════════════════════════════════════════════════════════
+
+CREATE PAGE: /admin/instructors
+
+**8.1 - HEADER STATS CARDS**
+
+```jsx
+<div className="stats-grid">
+  <StatCard 
+    title="Total Instructors"
+    value={totalInstructors}
+    icon={<Users />}
+  />
+  <StatCard 
+    title="Tier 1 (Elite)"
+    value={tier1Count}
+    subtitle={`${tier1Count} elite instructors`}
+    icon={<Star />}
+  />
+  <StatCard 
+    title="Tier 2 (Established)"
+    value={tier2Count}
+    subtitle={`${tier2Count} established instructors`}
+    icon={<CheckCircle />}
+  />
+  <StatCard 
+    title="Manual Overrides"
+    value={manualOverrideCount}
+    subtitle={`${manualOverrideCount} manually controlled`}
+    icon={<Lock />}
+  />
+</div>
+```
+
+**8.2 - INSTRUCTOR TABLE WITH VISUAL INDICATORS**
+
+```jsx
+<table className="instructor-table">
+  <thead>
+    <tr>
+      <th>Instructor</th>
+      <th>Priority</th>
+      <th>Mode</th>
+      <th>Threshold</th>
+      <th>Videos</th>
+      <th>Helpful %</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {instructors.map(instructor => (
+      <tr key={instructor.id} className={instructor.name === 'JT Torres' ? 'featured-row' : ''}>
+        <td>
+          <div className="instructor-name">
+            {instructor.name}
+            {instructor.name === 'JT Torres' && <span className="star-badge">⭐</span>}
+            {instructor.priority_mode === 'manual' && <span className="lock-badge">🔒</span>}
+          </div>
+          <div className="instructor-specialties">
+            {instructor.specialties.map(s => <span key={s} className="tag">{s}</span>)}
+          </div>
+        </td>
+        <td>
+          <div className="priority-cell">
+            <strong>{instructor.recommendation_priority}</strong>
+            {instructor.priority_mode === 'manual' && (
+              <span className="auto-would-be">
+                (Auto: {instructor.auto_calculated_priority})
+              </span>
+            )}
+          </div>
+        </td>
+        <td>
+          {instructor.priority_mode === 'manual' ? (
+            <Badge variant="manual">👤 Manual</Badge>
+          ) : (
+            <Badge variant="auto">🤖 Auto</Badge>
+          )}
+        </td>
+        <td>{instructor.quality_threshold}</td>
+        <td>{instructor.total_videos}</td>
+        <td>
+          {instructor.helpful_ratio ? 
+            `${(instructor.helpful_ratio * 100).toFixed(0)}%` : 
+            'N/A'
+          }
+        </td>
+        <td>
+          {instructor.priority_mode === 'auto' ? (
+            <Button onClick={() => openManualOverrideModal(instructor)}>
+              Set Manual
+            </Button>
+          ) : (
+            <>
+              <Button onClick={() => openEditManualModal(instructor)}>
+                Edit
+              </Button>
+              <Button variant="secondary" onClick={() => revertToAuto(instructor.id)}>
+                Revert to Auto
+              </Button>
+            </>
+          )}
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+```
+
+**8.3 - SET MANUAL OVERRIDE MODAL**
+
+```jsx
+<Modal isOpen={showManualModal} onClose={() => setShowManualModal(false)}>
+  <h2>Set Manual Priority: {selectedInstructor.name}</h2>
+  
+  <div className="current-status">
+    <Badge variant="auto">🤖 Currently Auto</Badge>
+    <p>Auto-Calculated Priority: <strong>{selectedInstructor.auto_calculated_priority}</strong></p>
+  </div>
+  
+  <div className="calculation-breakdown">
+    <h3>AI Calculation Breakdown:</h3>
+    <ul>
+      <li>Competition: +{calculateCompetitionPoints(selectedInstructor)} points</li>
+      <li>YouTube: +{calculateYouTubePoints(selectedInstructor)} ({selectedInstructor.youtube_subscribers?.toLocaleString()} subs)</li>
+      <li>Instructionals: +{calculateInstructionalPoints(selectedInstructor)}</li>
+      <li>User Feedback: +{calculateFeedbackPoints(selectedInstructor)} ({(selectedInstructor.helpful_ratio * 100).toFixed(0)}% helpful)</li>
+    </ul>
+    <p className="total">Total: {selectedInstructor.auto_calculated_priority}</p>
+  </div>
+  
+  <div className="manual-priority-input">
+    <label>Set Manual Priority:</label>
+    <input 
+      type="range" 
+      min="0" 
+      max="100" 
+      value={manualPriority}
+      onChange={(e) => setManualPriority(parseInt(e.target.value))}
+    />
+    <div className="priority-display">{manualPriority}</div>
+  </div>
+  
+  <div className="warning-box">
+    <strong>⚠️ IMPORTANT:</strong>
+    <p>Once you set this manually, the AI will NEVER change it automatically. You must update it yourself or revert to Auto mode.</p>
+  </div>
+  
+  <div className="reason-input">
+    <label>Reason for override (optional):</label>
+    <input 
+      type="text"
+      placeholder="e.g., Featured for launch week"
+      value={overrideReason}
+      onChange={(e) => setOverrideReason(e.target.value)}
+    />
+  </div>
+  
+  <p className="attribution">
+    This override will be attributed to: {adminEmail}
+  </p>
+  
+  <div className="modal-actions">
+    <Button variant="secondary" onClick={() => setShowManualModal(false)}>
+      Cancel
+    </Button>
+    <Button 
+      variant="primary" 
+      onClick={() => handleSetManual(selectedInstructor.id, manualPriority, overrideReason)}
+    >
+      Set Manual Priority (Lock at {manualPriority})
+    </Button>
+  </div>
+</Modal>
+```
+
+**8.4 - EDIT MANUAL OVERRIDE MODAL**
+
+```jsx
+<Modal isOpen={showEditManualModal} onClose={() => setShowEditManualModal(false)}>
+  <h2>Edit Manual Override: {selectedInstructor.name}</h2>
+  
+  <div className="current-status">
+    <Badge variant="manual">🔒 Currently Manual</Badge>
+    <p>Current Priority: <strong>{selectedInstructor.recommendation_priority}</strong></p>
+    <p className="override-details">
+      Set by: {selectedInstructor.manual_override_by}<br/>
+      Date: {formatDate(selectedInstructor.manual_override_date)}<br/>
+      Reason: {selectedInstructor.manual_override_reason || 'None provided'}
+    </p>
+  </div>
+  
+  <div className="ai-comparison">
+    <p>AI would calculate: <strong>{selectedInstructor.auto_calculated_priority}</strong></p>
+    <p className="last-calc">Last AI calculation: {formatRelativeTime(selectedInstructor.last_auto_calculation)}</p>
+  </div>
+  
+  <div className="manual-priority-input">
+    <label>Update Manual Priority:</label>
+    <input 
+      type="range" 
+      min="0" 
+      max="100" 
+      value={manualPriority}
+      onChange={(e) => setManualPriority(parseInt(e.target.value))}
+    />
+    <div className="priority-display">{manualPriority}</div>
+  </div>
+  
+  <div className="reason-input">
+    <label>Update reason (optional):</label>
+    <input 
+      type="text"
+      placeholder="e.g., Increased promotion for competition season"
+      value={overrideReason}
+      onChange={(e) => setOverrideReason(e.target.value)}
+    />
+  </div>
+  
+  <div className="modal-actions">
+    <Button variant="secondary" onClick={() => setShowEditManualModal(false)}>
+      Cancel
+    </Button>
+    <Button 
+      variant="warning" 
+      onClick={() => handleRevertToAuto(selectedInstructor.id)}
+    >
+      Revert to Auto ({selectedInstructor.auto_calculated_priority})
+    </Button>
+    <Button 
+      variant="primary" 
+      onClick={() => handleUpdateManual(selectedInstructor.id, manualPriority, overrideReason)}
+    >
+      Update Manual Priority
+    </Button>
+  </div>
+  
+  <div className="warning-box">
+    <strong>⚠️ Reverting to Auto:</strong>
+    <p>This will UNLOCK the instructor and let AI manage their priority going forward. They will use auto-calculated value of {selectedInstructor.auto_calculated_priority}.</p>
+  </div>
+</Modal>
+```
+
+**8.5 - ADD NEW INSTRUCTOR FORM**
+
+```jsx
+<form onSubmit={handleAddInstructor}>
+  <h2>Add New Instructor</h2>
+  
+  <FormField label="Name" required>
+    <input type="text" value={newInstructor.name} onChange={...} />
+  </FormField>
+  
+  <FormField label="Tier">
+    <select value={newInstructor.tier} onChange={...}>
+      <option value="1">Tier 1 - Elite</option>
+      <option value="2">Tier 2 - Established</option>
+    </select>
+  </FormField>
+  
+  <FormField label="Quality Threshold">
+    <select value={newInstructor.quality_threshold} onChange={...}>
+      <option value="6.5">6.5 (Elite only)</option>
+      <option value="7.0">7.0 (Standard)</option>
+      <option value="7.5">7.5 (Strict)</option>
+    </select>
+  </FormField>
+  
+  <FormField label="YouTube Channel Handle" hint="e.g., @jtorresbjj">
+    <input type="text" value={newInstructor.youtube_channel_handle} onChange={...} />
+  </FormField>
+  
+  <FormField label="Achievements (comma-separated)">
+    <input 
+      type="text" 
+      placeholder="IBJJF World Champion, ADCC Medalist"
+      value={newInstructor.achievements}
+      onChange={...}
+    />
+  </FormField>
+  
+  <FormField label="Specialties (comma-separated)">
+    <input 
+      type="text" 
+      placeholder="guard, sweeps, competition"
+      value={newInstructor.specialties}
+      onChange={...}
+    />
+  </FormField>
+  
+  <div className="priority-mode-selection">
+    <p>Initial Priority Mode:</p>
+    <label>
+      <input 
+        type="radio" 
+        value="auto" 
+        checked={newInstructor.priority_mode === 'auto'}
+        onChange={...}
+      />
+      Auto (Let AI calculate based on data)
+    </label>
+    <label>
+      <input 
+        type="radio" 
+        value="manual" 
+        checked={newInstructor.priority_mode === 'manual'}
+        onChange={...}
+      />
+      Manual (Set custom priority now)
+    </label>
+  </div>
+  
+  {newInstructor.priority_mode === 'manual' && (
+    <FormField label="Manual Priority">
+      <input 
+        type="range" 
+        min="0" 
+        max="100" 
+        value={newInstructor.manual_priority}
+        onChange={...}
+      />
+      <div>{newInstructor.manual_priority}</div>
+    </FormField>
+  )}
+  
+  <div className="form-actions">
+    <Button type="button" variant="secondary" onClick={...}>Cancel</Button>
+    <Button type="submit" variant="primary">
+      {newInstructor.priority_mode === 'auto' ? 'Add (Auto Mode)' : 'Add (Manual Mode)'}
+    </Button>
+  </div>
+</form>
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 9: VIDEO CURATION - USE INSTRUCTOR PRIORITIES
+═══════════════════════════════════════════════════════════════════
+
+When analyzing and recommending videos, use the instructor priority system:
+
+**9.1 - VIDEO QUALITY CHECK (Uses Thresholds)**
+
+```javascript
+async function shouldAddVideo(video, qualityScore) {
+  // Get instructor from database
+  const instructor = await db.query(`
+    SELECT quality_threshold, recommendation_priority 
+    FROM instructor_credibility 
+    WHERE LOWER(name) = LOWER($1) AND is_active = true
+  `, [video.instructorName]);
+  
+  if (instructor.rows.length === 0) {
+    // Unknown instructor - use default strict threshold
+    return qualityScore >= 7.5;
+  }
+  
+  const threshold = instructor.rows[0].quality_threshold;
+  return qualityScore >= threshold;
+}
+```
+
+**9.2 - VIDEO RECOMMENDATION RANKING (Uses Priority)**
+
+```javascript
+function rankVideosForUser(videos, userContext) {
+  return videos.map(video => {
+    // Start with base quality score (1-10)
+    let rankScore = video.qualityScore * 10; // Convert to 0-100 scale
+    
+    // Add instructor priority boost (0-100)
+    const instructorPriority = video.instructor?.recommendation_priority || 0;
+    rankScore += instructorPriority;
+    
+    // Apply user context bonuses
+    if (userContext.belt === 'white' && video.tags.includes('beginner-friendly')) {
+      rankScore += 10;
+    }
+    
+    if (userContext.goal === 'compete' && video.tags.includes('competition')) {
+      rankScore += 15;
+    }
+    
+    // Boost based on user feedback from YOUR app
+    if (video.helpful_ratio >= 0.90 && video.total_feedback >= 20) {
+      rankScore += 20; // Proven helpful
+    }
+    
+    return {
+      ...video,
+      finalRankScore: rankScore
+    };
+  }).sort((a, b) => b.finalRankScore - a.finalRankScore);
+}
+```
+
+**Example:**
+
+```
+User asks: "Show me guard passing videos"
+
+Videos found:
+1. JT Torres guard passing (quality: 7.0, priority: 100)
+   → rankScore = 70 + 100 = 170 ← WINS
+
+2. Unknown instructor (quality: 9.0, priority: 0)
+   → rankScore = 90 + 0 = 90
+
+3. Gordon Ryan guard passing (quality: 8.0, priority: 95)
+   → rankScore = 80 + 95 = 175 ← WINS (if exists)
+
+User sees: Gordon (175), JT Torres (170), Unknown (90)
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 10: AGGRESSIVE VIDEO CURATION - EXCELLENCE MAINTAINED
+═══════════════════════════════════════════════════════════════════
+
+**10.1 - QUALITY STANDARDS (NON-NEGOTIABLE)**
+
+Maintain these exact thresholds:
+
+- Elite instructors (Tier 1): 6.5+ quality score
+- Established instructors (Tier 2): 7.0+ quality score
+- Unknown instructors: 7.5+ quality score
+
+NO exceptions. Reject anything below these scores.
+
+**10.2 - SEARCH QUERY STRATEGY**
+
+Run scraper 4x per day with 150 different queries:
+
+FUNDAMENTALS (30 queries):
+
+- “BJJ guard pass tutorial [instructor name]”
+- “mount escape fundamentals”
+- “side control escape step by step”
+- “closed guard basics for beginners”
+- “half guard escape tutorial”
+- “back control defense”
+- “turtle position escapes”
+- “knee on belly escape”
+- … [22 more fundamental variations]
+
+SUBMISSIONS (40 queries):
+
+- “armbar from guard tutorial [instructor]”
+- “triangle choke setup details”
+- “rear naked choke technique”
+- “kimura from side control”
+- “guillotine choke mechanics”
+- “darce choke entry”
+- “anaconda choke tutorial”
+- “arm triangle from mount”
+- “omoplata setup”
+- “heel hook fundamentals”
+- “kneebar technique”
+- “toe hold BJJ”
+- “straight ankle lock”
+- “calf slicer”
+- “bicep slicer”
+- “americana from side control”
+- “ezekiel choke”
+- “bow and arrow choke”
+- “loop choke”
+- “baseball choke”
+- “bow and arrow choke”
+- “north south choke”
+- “paper cutter choke”
+- … [18 more submission variations]
+
+GUARD SYSTEMS (30 queries):
+
+- “spider guard basics”
+- “de la riva guard tutorial”
+- “x guard sweeps”
+- “butterfly guard fundamentals”
+- “deep half guard system”
+- “50/50 guard techniques”
+- “lasso guard concepts”
+- “reverse de la riva”
+- “single leg x guard”
+- “k guard BJJ”
+- “shin to shin guard”
+- “seated guard”
+- “z guard”
+- “lockdown half guard”
+- “Williams guard”
+- “rubber guard”
+- “mission control”
+- “worm guard”
+- “squid guard”
+- … [11 more guard variations]
+
+PASSING SYSTEMS (25 queries):
+
+- “knee slice pass tutorial”
+- “toreando pass fundamentals”
+- “leg drag pass technique”
+- “stack pass details”
+- “headquarters position passing”
+- “over under pass”
+- “x pass BJJ”
+- “smash pass”
+- “long step pass”
+- “floating pass”
+- “cartwheel pass”
+- “bodylock pass”
+- … [13 more passing variations]
+
+NO-GI SPECIFIC (15 queries):
+
+- “no gi guard passing”
+- “wrestling for BJJ”
+- “no gi leg locks”
+- “guillotine no gi”
+- “no gi back takes”
+- “front headlock series”
+- “no gi mount attacks”
+- “no gi guard retention”
+- … [7 more no-gi variations]
+
+COMPETITION TECHNIQUES (10 queries):
+
+- “IBJJF legal techniques”
+- “competition strategy BJJ”
+- “points system techniques”
+- “BJJ competition gameplan”
+- “tournament preparation”
+- … [5 more competition variations]
+
+**10.3 - PARALLEL PROCESSING FOR SPEED**
+
+```javascript
+async function bulkAnalyzeVideos(videoUrls) {
+  // Process 20 videos simultaneously
+  const batchSize = 20;
+  const results = [];
+  
+  for (let i = 0; i < videoUrls.length; i += batchSize) {
+    const batch = videoUrls.slice(i, i + batchSize);
+    
+    const batchResults = await Promise.all(
+      batch.map(url => analyzeVideoWithClaude(url))
+    );
+    
+    results.push(...batchResults);
+    
+    // Log progress
+    console.log(`Analyzed ${i + batch.length}/${videoUrls.length} videos`);
+  }
+  
+  return results;
+}
+```
+
+**10.4 - TARGET METRICS**
+
+WEEK 1: 1,000+ videos
+
+- Day 1: 200 videos (run scraper 4x)
+- Day 2: 200 videos
+- Day 3: 200 videos
+- Day 4: 200 videos
+- Day 5: 200 videos
+
+WEEK 2: 2,000+ total videos
+
+- Continue 150-200 videos per day
+
+WEEK 3-4: 3,000+ total videos
+
+- Ongoing curation at 100-150 per day
+- Focus on gap filling
+
+**10.5 - USER FEEDBACK DELETION (Auto-Quality Control)**
+
+After 20+ user votes, auto-delete videos with <40% helpful ratio:
+
+```javascript
+async function autoDeleteLowQualityVideos() {
+  const lowQualityVideos = await db.query(`
+    SELECT v.id, v.title, v.instructor_name,
+           COUNT(CASE WHEN f.helpful = true THEN 1 END) as helpful,
+           COUNT(CASE WHEN f.helpful = false THEN 1 END) as not_helpful,
+           COUNT(*) as total
+    FROM ai_video_knowledge v
+    JOIN video_feedback f ON v.id = f.video_id
+    GROUP BY v.id
+    HAVING COUNT(*) >= 20 
+      AND (COUNT(CASE WHEN f.helpful = true THEN 1 END)::float / COUNT(*)) < 0.40
+  `);
+  
+  for (const video of lowQualityVideos.rows) {
+    await db.query('DELETE FROM ai_video_knowledge WHERE id = $1', [video.id]);
+    await logAdminAction('video_auto_deleted', {
+      video_id: video.id,
+      title: video.title,
+      instructor: video.instructor_name,
+      helpful_ratio: video.helpful / video.total,
+      total_feedback: video.total
+    });
+    
+    console.log(`🗑️ Auto-deleted: ${video.title} (${Math.round(video.helpful/video.total*100)}% helpful)`);
+  }
+}
+
+// Run daily
+cron.schedule('0 4 * * *', autoDeleteLowQualityVideos);
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 11: API ENDPOINTS
+═══════════════════════════════════════════════════════════════════
+
+CREATE THESE API ROUTES:
+
+**11.1 - GET /api/admin/instructors**
+Returns all instructors with full details
+
+**11.2 - POST /api/admin/instructors**
+Adds new instructor (auto or manual mode)
+
+**11.3 - POST /api/admin/instructors/:id/set-manual**
+Body: { priority: 100, reason: “Featured for launch” }
+Sets manual override, locks priority
+
+**11.4 - POST /api/admin/instructors/:id/update-manual**
+Body: { priority: 95, reason: “Updated priority” }
+Updates existing manual override
+
+**11.5 - POST /api/admin/instructors/:id/revert-auto**
+Unlocks instructor, reverts to AI calculation
+
+**11.6 - GET /api/admin/instructors/:id/history**
+Returns timeline of all priority changes
+
+**11.7 - GET /api/admin/instructors/stats**
+Returns aggregated statistics
+
+**11.8 - POST /api/admin/instructors/:id/scrape-data**
+Manually triggers data scraping for specific instructor
+
+═══════════════════════════════════════════════════════════════════
+PART 12: INITIAL SETUP CHECKLIST
+═══════════════════════════════════════════════════════════════════
+
+Run these steps IN ORDER:
+
+✅ 1. Create instructor_credibility table with all columns
+✅ 2. Seed elite instructors with YouTube handles
+✅ 3. Run initial data scrape for all instructors
+✅ 4. Calculate initial auto priorities
+✅ 5. Set JT Torres to manual priority 100 (if desired)
+✅ 6. Set up nightly cron jobs (2 AM priority calc, 3 AM audit, 4 AM cleanup)
+✅ 7. Create admin dashboard pages
+✅ 8. Test manual override → verify it locks
+✅ 9. Test revert to auto → verify it unlocks
+✅ 10. Start video curation with 4x daily runs
+
+═══════════════════════════════════════════════════════════════════
+PART 13: VERIFICATION TESTS
+═══════════════════════════════════════════════════════════════════
+
+BEFORE LAUNCH, TEST:
+
+✅ Set JT Torres to manual priority 100
+✅ Run nightly recalculation
+✅ Verify JT Torres priority stays at 100 (locked)
+✅ Verify Gordon Ryan priority updates (auto mode)
+✅ Check database: recommendation_priority matches mode
+✅ Revert JT Torres to auto
+✅ Verify priority changes to auto_calculated_priority
+✅ Set back to manual 100
+✅ User feedback system adds videos
+✅ Videos rank correctly (JT’s videos appear first)
+✅ Auto-deletion triggers after 20 votes < 40%
+✅ Admin dashboard shows all data correctly
+✅ Manual override badge appears (🔒)
+✅ Auto mode badge appears (🤖)
+✅ JT Torres row has ⭐ indicator
+
+═══════════════════════════════════════════════════════════════════
+CRITICAL SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════
+
+System is COMPLETE when:
+
+✅ All instructors have accurate auto-calculated priorities
+✅ JT Torres can be set to manual 100 and stays locked
+✅ Manual overrides NEVER get overwritten by nightly jobs
+✅ Database integrity audit runs daily with no errors
+✅ Admin dashboard clearly shows manual vs auto instructors
+✅ Data scraping runs weekly and updates instructor info
+✅ Video curation respects quality thresholds
+✅ Video recommendations use priority boosting
+✅ User feedback system auto-deletes bad videos
+✅ You can add new instructors with auto or manual mode
+✅ Timeline/history shows all priority changes
+
+═══════════════════════════════════════════════════════════════════
+EXCELLENCE MAINTAINED
+═══════════════════════════════════════════════════════════════════
+
+Remember:
+
+- Quality thresholds are STRICT (6.5, 7.0, 7.5 - no exceptions)
+- Manual overrides are SACRED (never auto-overwritten)
+- Data scraping is ACCURATE (multiple sources, verified)
+- Auto-calculation is INTELLIGENT (competition + teaching + feedback)
+- User feedback is DECISIVE (< 40% helpful = auto-delete)
+
+Build this system with EXCELLENCE as the pillar.
+
+```
+---
+
+**This is the complete mega prompt. Paste it into Replit Agent and it will build the entire system with:**
+
+1. ✅ Instructor priority system (auto + manual with lock protection)
+2. ✅ Data scraping (YouTube, achievements, instructionals)
+3. ✅ AI auto-calculation (accurate, self-improving)
+4. ✅ Manual override protection (never gets reset)
+5. ✅ Admin dashboard (full visibility and control)
+6. ✅ Video curation (excellence-focused, 2,000+ videos)
+7. ✅ User feedback system (auto-deletion of low quality)
+8. ✅ Complete audit system (data integrity)
+
+**Ready to paste into Replit Agent?** 🚀​​​​​​​​​​​​​​​​
+```

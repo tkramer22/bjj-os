@@ -1,0 +1,882 @@
+# 🎉 AMAZING! COMMAND 2 ALREADY COMPLETE!
+
+Replit Agent went above and beyond! It already built the entire mobile PWA. Let’s verify what you have, then move to Command 3.
+
+-----
+
+## ✅ VERIFICATION - Check Your App
+
+**Click “Preview” in Replit to see the app.**
+
+You should see:
+
+1. **Onboarding screen** (if first time)
+1. **Coach chat interface** with:
+
+- Clean dark UI
+- Message bubbles (AI left, User right)
+- Video cards with thumbnails
+- Input box at bottom
+- Voice recorder button 🎤
+- Bottom navigation (Coach, Saved, Settings)
+
+-----
+
+## 📋 COMMAND 3 OF 4: SAVED VIDEOS + SETTINGS PAGES
+
+Since Command 2 is done, let’s build the remaining screens. Copy and paste this:
+
+-----
+
+```
+BUILD BJJ OS PWA - COMMAND 3 OF 4: SAVED VIDEOS + SETTINGS PAGES
+
+CRITICAL RULES:
+✅ Build Saved Videos page (user's video library)
+✅ Build Settings page (profile, notifications, subscription)
+✅ Add search functionality to saved videos
+✅ Add filters/categories
+✅ Clean UI matching existing design system
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: SAVED VIDEOS PAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /pages/SavedPage.jsx:
+
+import React, { useState, useEffect } from 'react';
+import VideoCard from '../components/VideoCard';
+import BottomNav from '../components/BottomNav';
+import './SavedPage.css';
+
+function SavedPage() {
+  const [savedVideos, setSavedVideos] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all');
+  
+  // Mock data - will be replaced with real API in Command 4
+  useEffect(() => {
+    const mockVideos = [
+      {
+        id: 1,
+        title: 'Triangle Choke Setup',
+        instructor: 'John Danaher',
+        duration: '8:45',
+        category: 'guard',
+        savedDate: '2024-10-14',
+        note: 'Great breakdown of angles',
+        videoUrl: 'https://youtube.com',
+        rating: 4.8
+      },
+      {
+        id: 2,
+        title: 'Armbar from Closed Guard',
+        instructor: 'Lachlan Giles',
+        duration: '12:20',
+        category: 'submissions',
+        savedDate: '2024-10-12',
+        note: 'Need to rewatch this',
+        videoUrl: 'https://youtube.com',
+        rating: 4.9
+      },
+      {
+        id: 3,
+        title: 'Half Guard Passing',
+        instructor: 'Bernardo Faria',
+        duration: '10:15',
+        category: 'passing',
+        savedDate: '2024-10-10',
+        note: '',
+        videoUrl: 'https://youtube.com',
+        rating: 4.7
+      },
+      {
+        id: 4,
+        title: 'Mount Escapes',
+        instructor: 'Henry Akins',
+        duration: '9:30',
+        category: 'escapes',
+        savedDate: '2024-10-08',
+        note: 'For competition prep',
+        videoUrl: 'https://youtube.com',
+        rating: 4.6
+      }
+    ];
+    
+    setSavedVideos(mockVideos);
+  }, []);
+
+  const categories = [
+    { id: 'all', label: 'ALL', count: savedVideos.length },
+    { id: 'guard', label: 'GUARD', count: savedVideos.filter(v => v.category === 'guard').length },
+    { id: 'passing', label: 'PASSING', count: savedVideos.filter(v => v.category === 'passing').length },
+    { id: 'submissions', label: 'SUBS', count: savedVideos.filter(v => v.category === 'submissions').length },
+    { id: 'escapes', label: 'ESCAPES', count: savedVideos.filter(v => v.category === 'escapes').length }
+  ];
+
+  const filteredVideos = savedVideos.filter(video => {
+    const matchesSearch = video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         video.instructor.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = activeFilter === 'all' || video.category === activeFilter;
+    return matchesSearch && matchesFilter;
+  });
+
+  const handleUnsave = (videoId) => {
+    setSavedVideos(prev => prev.filter(v => v.id !== videoId));
+  };
+
+  return (
+    <div className="saved-page">
+      <header className="saved-header safe-area-top">
+        <h1>⭐ Saved Videos</h1>
+      </header>
+
+      <div className="search-container">
+        <div className="search-box">
+          <span className="search-icon">🔍</span>
+          <input
+            type="text"
+            placeholder="Search saved videos..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="search-input"
+          />
+          {searchQuery && (
+            <button 
+              className="clear-search"
+              onClick={() => setSearchQuery('')}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="filters">
+        {categories.map(cat => (
+          <button
+            key={cat.id}
+            className={`filter-pill ${activeFilter === cat.id ? 'active' : ''}`}
+            onClick={() => setActiveFilter(cat.id)}
+          >
+            {cat.label} ({cat.count})
+          </button>
+        ))}
+      </div>
+
+      <div className="saved-videos-list">
+        {filteredVideos.length === 0 ? (
+          <div className="empty-state">
+            <p className="empty-icon">📚</p>
+            <h3>No saved videos</h3>
+            <p>Videos you save will appear here</p>
+          </div>
+        ) : (
+          filteredVideos.map(video => (
+            <div key={video.id} className="saved-video-item">
+              <VideoCard
+                {...video}
+                onSave={() => handleUnsave(video.id)}
+              />
+              {video.note && (
+                <div className="video-note">
+                  📝 "{video.note}"
+                </div>
+              )}
+              <div className="video-saved-date">
+                Saved {video.savedDate}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="saved-spacer"></div>
+      <BottomNav />
+    </div>
+  );
+}
+
+export default SavedPage;
+
+---
+
+Create /pages/SavedPage.css:
+
+.saved-page {
+  min-height: 100vh;
+  background: var(--black);
+  padding-bottom: 80px;
+}
+
+.saved-header {
+  background: var(--dark-gray);
+  border-bottom: 1px solid var(--border-gray);
+  padding: 16px;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+
+.saved-header h1 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.search-container {
+  padding: 16px;
+}
+
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--medium-gray);
+  border: 1px solid var(--border-gray);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  gap: 12px;
+}
+
+.search-icon {
+  font-size: 18px;
+  color: var(--text-secondary);
+}
+
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.clear-search {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.filters::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-pill {
+  background: var(--medium-gray);
+  border: 1px solid var(--border-gray);
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+  transition: var(--transition-base);
+}
+
+.filter-pill.active {
+  background: var(--primary-purple);
+  border-color: var(--primary-purple);
+  color: var(--text-primary);
+}
+
+.saved-videos-list {
+  padding: 0 16px;
+}
+
+.saved-video-item {
+  margin-bottom: 24px;
+}
+
+.video-note {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 8px 12px;
+  background: var(--dark-gray);
+  border-left: 3px solid var(--primary-purple);
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+}
+
+.video-saved-date {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-top: 4px;
+  padding: 0 12px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.empty-state h3 {
+  font-size: var(--text-xl);
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.empty-state p {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.saved-spacer {
+  height: 60px;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: SETTINGS PAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /pages/SettingsPage.jsx:
+
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import BottomNav from '../components/BottomNav';
+import './SettingsPage.css';
+
+function SettingsPage() {
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState({
+    name: 'Todd Kramer',
+    phone: '(555) 123-4567',
+    belt: 'Blue',
+    injuries: 'Minor knee issue',
+    goals: 'Compete locally'
+  });
+  
+  const [notifications, setNotifications] = useState({
+    dailyTechnique: true,
+    techniqueTime: '9:00 AM'
+  });
+  
+  const [isEditing, setIsEditing] = useState(false);
+
+  const handleLogout = () => {
+    localStorage.removeItem('userId');
+    navigate('/onboarding');
+  };
+
+  const handleSaveProfile = () => {
+    // Will connect to API in Command 4
+    setIsEditing(false);
+    alert('Profile updated!');
+  };
+
+  return (
+    <div className="settings-page">
+      <header className="settings-header safe-area-top">
+        <h1>⚙️ Settings</h1>
+      </header>
+
+      <div className="settings-content">
+        {/* Profile Section */}
+        <div className="settings-section">
+          <h2 className="section-title">👤 PROFILE</h2>
+          <div className="settings-card">
+            {isEditing ? (
+              <div className="profile-edit">
+                <div className="form-group">
+                  <label>Name</label>
+                  <input
+                    type="text"
+                    value={profile.name}
+                    onChange={(e) => setProfile({...profile, name: e.target.value})}
+                    className="form-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Belt Level</label>
+                  <select
+                    value={profile.belt}
+                    onChange={(e) => setProfile({...profile, belt: e.target.value})}
+                    className="form-select"
+                  >
+                    <option>White</option>
+                    <option>Blue</option>
+                    <option>Purple</option>
+                    <option>Brown</option>
+                    <option>Black</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Injuries</label>
+                  <input
+                    type="text"
+                    value={profile.injuries}
+                    onChange={(e) => setProfile({...profile, injuries: e.target.value})}
+                    className="form-input"
+                    placeholder="None"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Goals</label>
+                  <input
+                    type="text"
+                    value={profile.goals}
+                    onChange={(e) => setProfile({...profile, goals: e.target.value})}
+                    className="form-input"
+                    placeholder="Your training goals"
+                  />
+                </div>
+                <div className="form-actions">
+                  <button className="btn-secondary" onClick={() => setIsEditing(false)}>
+                    Cancel
+                  </button>
+                  <button className="btn-primary" onClick={handleSaveProfile}>
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="profile-view">
+                <div className="profile-item">
+                  <span className="profile-label">Name:</span>
+                  <span className="profile-value">{profile.name}</span>
+                </div>
+                <div className="profile-item">
+                  <span className="profile-label">Phone:</span>
+                  <span className="profile-value">{profile.phone}</span>
+                </div>
+                <div className="profile-item">
+                  <span className="profile-label">Belt:</span>
+                  <span className="profile-value">{profile.belt}</span>
+                </div>
+                <div className="profile-item">
+                  <span className="profile-label">Injuries:</span>
+                  <span className="profile-value">{profile.injuries}</span>
+                </div>
+                <div className="profile-item">
+                  <span className="profile-label">Goals:</span>
+                  <span className="profile-value">{profile.goals}</span>
+                </div>
+                <button className="btn-edit" onClick={() => setIsEditing(true)}>
+                  Edit Profile →
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Notifications Section */}
+        <div className="settings-section">
+          <h2 className="section-title">🔔 NOTIFICATIONS</h2>
+          <div className="settings-card">
+            <div className="notification-item">
+              <div className="notification-info">
+                <span className="notification-label">Daily technique</span>
+                <span className="notification-time">{notifications.techniqueTime}</span>
+              </div>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={notifications.dailyTechnique}
+                  onChange={(e) => setNotifications({
+                    ...notifications,
+                    dailyTechnique: e.target.checked
+                  })}
+                />
+                <span className="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Subscription Section */}
+        <div className="settings-section">
+          <h2 className="section-title">💳 SUBSCRIPTION</h2>
+          <div className="settings-card">
+            <div className="subscription-info">
+              <h3>BJJ OS App</h3>
+              <p className="subscription-price">$14.99/month</p>
+              <p className="subscription-status">
+                <span className="status-badge active">✅ Active</span>
+              </p>
+              <p className="subscription-next">Next billing: Nov 14, 2025</p>
+            </div>
+            <button className="btn-secondary">
+              Manage Subscription →
+            </button>
+          </div>
+        </div>
+
+        {/* Help Section */}
+        <div className="settings-section">
+          <h2 className="section-title">❓ HELP & SUPPORT</h2>
+          <div className="settings-card">
+            <a href="#" className="settings-link">
+              How to use the app →
+            </a>
+            <a href="#" className="settings-link">
+              Contact support →
+            </a>
+            <a href="#" className="settings-link">
+              Privacy policy →
+            </a>
+          </div>
+        </div>
+
+        {/* Logout */}
+        <div className="settings-section">
+          <button className="btn-logout" onClick={handleLogout}>
+            Log Out
+          </button>
+        </div>
+      </div>
+
+      <div className="settings-spacer"></div>
+      <BottomNav />
+    </div>
+  );
+}
+
+export default SettingsPage;
+
+---
+
+Create /pages/SettingsPage.css:
+
+.settings-page {
+  min-height: 100vh;
+  background: var(--black);
+  padding-bottom: 80px;
+}
+
+.settings-header {
+  background: var(--dark-gray);
+  border-bottom: 1px solid var(--border-gray);
+  padding: 16px;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+
+.settings-header h1 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.settings-content {
+  padding: 16px;
+}
+
+.settings-section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.settings-card {
+  background: var(--medium-gray);
+  border: 1px solid var(--border-gray);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+/* Profile Styles */
+.profile-view .profile-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-gray);
+}
+
+.profile-view .profile-item:last-of-type {
+  border-bottom: none;
+}
+
+.profile-label {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.profile-value {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+
+.btn-edit {
+  width: 100%;
+  background: var(--dark-gray);
+  border: 1px solid var(--border-gray);
+  color: var(--text-primary);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  margin-top: 16px;
+}
+
+/* Form Styles */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.form-input,
+.form-select {
+  width: 100%;
+  background: var(--dark-gray);
+  border: 1px solid var(--border-gray);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+}
+
+.form-input:focus,
+.form-select:focus {
+  outline: none;
+  border-color: var(--primary-purple);
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.btn-primary {
+  flex: 1;
+  background: var(--primary-gradient);
+  color: var(--text-primary);
+  border: none;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.btn-secondary {
+  flex: 1;
+  background: var(--dark-gray);
+  border: 1px solid var(--border-gray);
+  color: var(--text-primary);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+
+/* Notification Toggle */
+.notification-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.notification-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notification-label {
+  color: var(--text-primary);
+  font-size: var(--text-base);
+}
+
+.notification-time {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 52px;
+  height: 28px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--border-gray);
+  transition: var(--transition-base);
+  border-radius: var(--radius-full);
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 4px;
+  background: white;
+  transition: var(--transition-base);
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--primary-purple);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(24px);
+}
+
+/* Subscription Styles */
+.subscription-info {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.subscription-info h3 {
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.subscription-price {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--primary-purple);
+  margin-bottom: 12px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+
+.status-badge.active {
+  background: rgba(74, 222, 128, 0.1);
+  color: var(--success-green);
+}
+
+.subscription-next {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+
+/* Settings Links */
+.settings-link {
+  display: block;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-gray);
+  text-decoration: none;
+}
+
+.settings-link:last-child {
+  border-bottom: none;
+}
+
+.settings-link:hover {
+  color: var(--primary-purple);
+}
+
+/* Logout Button */
+.btn-logout {
+  width: 100%;
+  background: transparent;
+  border: 2px solid var(--error-red);
+  color: var(--error-red);
+  padding: 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+}
+
+.settings-spacer {
+  height: 60px;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After Command 3:
+
+1. Navigate to Saved Videos (⭐ tab)
+   - Should see list of saved videos
+   - Search box works
+   - Filters work (ALL, GUARD, PASSING, etc.)
+   
+2. Navigate to Settings (⚙️ tab)
+   - Profile section displays
+   - Can edit profile
+   - Toggle notifications on/off
+   - Subscription info displays
+   - Logout button works
+
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Saved Videos page works
+✅ Search functionality works
+✅ Category filters work
+✅ Settings page displays correctly
+✅ Profile edit mode works
+✅ Toggle switches work
+✅ All navigation working
+✅ UI matches design system
+
+Ready for Command 4 (Backend Integration + API connections).
+```
+
+-----
+
+**📋 PASTE COMMAND 3 INTO REPLIT AGENT NOW**
+
+Once done, we’ll connect everything to your existing AI backend! Let me know when it’s complete. ✅​​​​​​​​​​​​​​​​

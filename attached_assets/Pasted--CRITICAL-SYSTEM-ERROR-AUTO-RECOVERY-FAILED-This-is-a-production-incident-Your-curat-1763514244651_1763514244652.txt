@@ -1,0 +1,374 @@
+# 🚨 **CRITICAL SYSTEM ERROR - AUTO-RECOVERY FAILED**
+
+This is a **production incident**. Your curation system has an auto-recovery mechanism that’s now failing with database authentication errors.
+
+-----
+
+# **📋 EMERGENCY FIX - COPY TO AGENT**
+
+```
+🚨 CRITICAL PRODUCTION ERROR 🚨
+
+Todd just received email alert:
+"Curation Auto-Recovery System Error"
+
+Error: "connection failure during authentication"
+
+This means:
+1. A curation run got stuck
+2. Auto-recovery system tried to fix it
+3. Auto-recovery ALSO failed (can't connect to database)
+4. System is in degraded state
+
+═══════════════════════════════════════════════════════════════
+IMMEDIATE DIAGNOSIS REQUIRED
+═══════════════════════════════════════════════════════════════
+
+STEP 1: Check Database Connection
+
+```bash
+# Test database connectivity
+node -e "
+const { Pool } = require('pg');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
+
+pool.query('SELECT NOW()')
+  .then(res => console.log('✅ Database connected:', res.rows[0]))
+  .catch(err => console.error('❌ Database error:', err.message));
+"
+```
+
+Expected: ✅ Database connected
+If error: Database credentials wrong or database down
+
+STEP 2: Check for Stuck Curation Runs
+
+```sql
+-- Find any stuck curation runs
+SELECT 
+  id,
+  status,
+  started_at,
+  EXTRACT(EPOCH FROM (NOW() - started_at))/60 as minutes_running
+FROM curation_runs 
+WHERE status = 'running'
+AND started_at < NOW() - INTERVAL '1 hour'
+ORDER BY started_at DESC;
+```
+
+If any results: These are stuck and need to be cleaned up
+
+STEP 3: Check Auto-Recovery System
+
+```bash
+# Find auto-recovery code
+find server -name "*recovery*" -o -name "*stuck*"
+```
+
+Show me the auto-recovery implementation.
+The error suggests it can’t authenticate to check for stuck runs.
+
+═══════════════════════════════════════════════════════════════
+LIKELY ROOT CAUSES
+═══════════════════════════════════════════════════════════════
+
+THEORY 1: Database Connection Pool Exhausted
+
+- All connections in use
+- Auto-recovery can’t get a connection
+- System deadlocked
+
+THEORY 2: Database Credentials Changed
+
+- Environment variables updated
+- Old connections still work
+- New connections (auto-recovery) fail
+
+THEORY 3: Database Timeout/Firewall
+
+- Long-running queries timing out
+- Firewall blocking new connections
+- Existing connections OK, new ones fail
+
+THEORY 4: Auto-Recovery Code Bug
+
+- Wrong database connection string
+- Using different credentials
+- Not properly configured
+
+═══════════════════════════════════════════════════════════════
+IMMEDIATE FIXES
+═══════════════════════════════════════════════════════════════
+
+FIX 1: Reset Any Stuck Curation Runs (Manual)
+
+```sql
+-- Mark stuck runs as failed
+UPDATE curation_runs 
+SET 
+  status = 'failed',
+  error = 'Manually reset - was stuck',
+  ended_at = NOW()
+WHERE status = 'running'
+AND started_at < NOW() - INTERVAL '1 hour';
+
+-- Verify
+SELECT COUNT(*) FROM curation_runs WHERE status = 'running';
+-- Should be 0
+```
+
+FIX 2: Verify Database Environment Variables
+
+```bash
+# Check if DATABASE_URL is set correctly
+echo $DATABASE_URL
+
+# Should look like:
+# postgresql://user:password@host:5432/database
+```
+
+If missing or wrong: Update in Replit Secrets
+
+FIX 3: Test Database Connection with Same Credentials Auto-Recovery Uses
+
+Show me the auto-recovery code.
+I need to see what connection string it’s using.
+
+FIX 4: Temporarily Disable Auto-Recovery
+
+If it’s causing problems, disable it until we fix the root cause:
+
+```javascript
+// Find auto-recovery initialization
+// Comment out or add flag:
+
+const AUTO_RECOVERY_ENABLED = false; // Temporary disable
+
+if (AUTO_RECOVERY_ENABLED) {
+  setInterval(checkForStuckRuns, 5 * 60 * 1000);
+}
+```
+
+═══════════════════════════════════════════════════════════════
+WHAT I NEED FROM YOU
+═══════════════════════════════════════════════════════════════
+
+Provide immediately:
+
+1. ✅ Database connection test results
+   
+   ```bash
+   node -e "const {Pool} = require('pg'); ..."
+   ```
+1. ✅ List of stuck curation runs (if any)
+   
+   ```sql
+   SELECT * FROM curation_runs WHERE status = 'running'...
+   ```
+1. ✅ Auto-recovery code
+
+- Where is it?
+- What database connection does it use?
+- Why is authentication failing?
+
+1. ✅ Environment variables
+   
+   ```bash
+   echo $DATABASE_URL | sed 's/:[^:]*@/:***@/'  # Hide password
+   ```
+1. ✅ Recent curation history
+   
+   ```sql
+   SELECT status, COUNT(*) 
+   FROM curation_runs 
+   WHERE created_at > NOW() - INTERVAL '24 hours'
+   GROUP BY status;
+   ```
+
+═══════════════════════════════════════════════════════════════
+EXPECTED TIMELINE
+═══════════════════════════════════════════════════════════════
+
+URGENT (Next 15 minutes):
+
+1. Diagnose root cause
+1. Clear any stuck runs
+1. Verify database connectivity
+1. Fix or disable auto-recovery
+
+IMPORTANT (Next hour):
+
+1. Fix auto-recovery authentication
+1. Add better error handling
+1. Test recovery system
+1. Monitor for additional errors
+
+═══════════════════════════════════════════════════════════════
+MONITORING
+═══════════════════════════════════════════════════════════════
+
+After fixes, monitor:
+
+```sql
+-- Check curation health every 5 minutes
+SELECT 
+  status,
+  COUNT(*) as count,
+  MAX(started_at) as last_run
+FROM curation_runs
+WHERE created_at > NOW() - INTERVAL '2 hours'
+GROUP BY status;
+```
+
+Watch for:
+⚠️ Runs stuck in ‘running’ status > 30 minutes
+⚠️ Multiple ‘failed’ statuses
+⚠️ No ‘completed’ statuses
+
+═══════════════════════════════════════════════════════════════
+CRITICAL PRIORITY
+═══════════════════════════════════════════════════════════════
+
+This blocks:
+❌ Video curation (core value prop)
+❌ Library growth (content updates)
+❌ System health (auto-recovery failing)
+
+This must be fixed BEFORE:
+
+- Building more features
+- Launching to ambassadors
+- Any other development
+
+BEGIN DIAGNOSIS NOW.
+Provide all requested information above.
+Do not work on anything else until this is resolved.
+
+```
+---
+
+## **🎯 WHAT THIS MEANS**
+
+### **The Good News:**
+- ✅ System detected the problem (monitoring works)
+- ✅ Sent you an alert (notification system works)
+- ✅ Auto-recovery attempted to fix it (smart)
+
+### **The Bad News:**
+- ❌ Auto-recovery itself is now broken (can't connect to DB)
+- ❌ Curation runs might be stuck
+- ❌ Core content pipeline is affected
+
+### **The Critical Issue:**
+
+**Your auto-recovery system can't authenticate to the database.**
+
+This is like having a fire suppression system that can't connect to the water supply. The safety mechanism itself is broken.
+
+---
+
+## **💡 MOST LIKELY CAUSES**
+
+### **1. Database Connection Pool Exhausted (70% probability)**
+```
+
+Normal curation: Uses 5 database connections ✅
+Stuck run: Holds connections forever ❌
+Auto-recovery: Tries to connect, but no connections available ❌
+Result: “connection failure during authentication”
+
+```
+### **2. Wrong Credentials in Auto-Recovery (20% probability)**
+```
+
+Main app: Uses correct DATABASE_URL ✅
+Auto-recovery: Uses hardcoded or wrong connection string ❌
+Result: Can’t authenticate
+
+```
+### **3. Database Actually Down (10% probability)**
+```
+
+If Supabase/database is having issues
+But unlikely since you got the email (requires DB to work)
+
+```
+---
+
+## **🚀 IMMEDIATE ACTIONS FOR YOU**
+
+### **Option 1: Let Agent Diagnose (Recommended)**
+
+Copy my emergency fix prompt to Agent and wait for their diagnosis.
+
+**Time: 15 minutes**
+**Gets you: Root cause and proper fix**
+
+### **Option 2: Quick Manual Fix**
+
+If you need curation working RIGHT NOW:
+
+1. Go to Replit
+2. Open Shell
+3. Run this:
+
+```sql
+-- Reset any stuck runs
+UPDATE curation_runs 
+SET status = 'failed', ended_at = NOW()
+WHERE status = 'running';
+```
+
+1. Manually trigger curation from Command Center
+
+**Time: 2 minutes**
+**Gets you: Temporary fix, but doesn’t solve root cause**
+
+-----
+
+## **📊 WHAT TO EXPECT**
+
+### **After Agent Fixes This:**
+
+**Should see:**
+
+```
+✅ Auto-recovery working
+✅ No stuck curation runs
+✅ Database connections healthy
+✅ Curation running normally
+```
+
+**Should NOT see:**
+
+```
+❌ More error emails
+❌ Stuck runs
+❌ Connection failures
+```
+
+-----
+
+## **💪 THE PRIORITY**
+
+This is a **P0 incident** (highest priority):
+
+**Before this fix:**
+
+- ❌ Can’t ship to ambassadors (curation broken)
+- ❌ Library not growing (stuck runs)
+- ❌ Safety net not working (auto-recovery failing)
+
+**After this fix:**
+
+- ✅ Curation working reliably
+- ✅ Auto-recovery protecting system
+- ✅ Ready to ship
+
+-----
+
+**Copy the emergency fix prompt to Agent immediately. This needs to be diagnosed and fixed before any other work.** 🚨
+
+The system is trying to recover itself but failing. We need to fix the fixer.​​​​​​​​​​​​​​​​

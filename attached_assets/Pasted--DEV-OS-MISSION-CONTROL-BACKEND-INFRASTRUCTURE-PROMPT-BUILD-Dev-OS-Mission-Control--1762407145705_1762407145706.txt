@@ -1,0 +1,322 @@
+# **📋 DEV OS MISSION CONTROL - BACKEND INFRASTRUCTURE PROMPT:**
+
+```
+BUILD: Dev OS Mission Control Backend Infrastructure
+
+Dev OS Chat needs to become an autonomous monitoring system that tracks BJJ OS 
+health, alerts to problems, and coordinates fixes. Currently it just shows 
+basic metrics but doesn't actively monitor or alert.
+
+═══════════════════════════════════════════════════════════════════════════════
+WHAT TO BUILD
+═══════════════════════════════════════════════════════════════════════════════
+
+Create backend APIs and scheduled jobs so Dev OS can:
+1. Query system metrics in real-time
+2. Run health checks automatically
+3. Alert when problems are detected
+4. Generate daily briefings
+5. Coordinate with Replit Agent for fixes
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: CREATE API ENDPOINTS FOR DEV OS
+═══════════════════════════════════════════════════════════════════════════════
+
+Build these REST API endpoints that Dev OS can call:
+
+1. GET /api/admin/system-health
+   Returns:
+   {
+     database: { status: "healthy", connections: 12, max: 100 },
+     curation: { 
+       status: "running" | "idle" | "error",
+       lastRun: "2025-11-06T00:00:00Z",
+       videosScreenedToday: 47,
+       videosAcceptedToday: 12,
+       apiQuotaUsed: 2340,
+       apiQuotaLimit: 10000
+     },
+     users: {
+       totalUsers: 97,
+       activeToday: 23,
+       newSignupsToday: 5,
+       lifetimeMembers: 24
+     },
+     videos: {
+       totalVideos: 439,
+       addedToday: 12,
+       topViewed: [...]
+     }
+   }
+
+2. GET /api/admin/alerts
+   Returns critical issues:
+   {
+     critical: [
+       { type: "curation_stopped", message: "Curation hasn't run in 4 hours", severity: "high" }
+     ],
+     warnings: [
+       { type: "quota_high", message: "API quota at 85%", severity: "medium" }
+     ]
+   }
+
+3. GET /api/admin/metrics
+   Returns business metrics:
+   {
+     revenue: { mrr: 2847, todayRevenue: 129 },
+     engagement: { avgSessionTime: 342, bounceRate: 0.23 },
+     conversion: { trialToPaid: 0.31 }
+   }
+
+4. POST /api/admin/run-query
+   Allows Dev OS to run safe read-only SQL queries:
+   {
+     query: "SELECT COUNT(*) FROM users WHERE created_at > CURRENT_DATE"
+   }
+   Returns: { result: [...] }
+
+5. POST /api/admin/trigger-action
+   Allows Dev OS to trigger actions:
+   {
+     action: "start_curation" | "restart_server" | "clear_cache"
+   }
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: BUILD HEALTH CHECK SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+Create a health monitoring service that runs every 5 minutes:
+
+File: server/services/health-monitor.js
+
+const healthChecks = {
+  
+  // Check if curation is running
+  async checkCuration() {
+    const lastRun = await db.query(`
+      SELECT started_at FROM curation_runs 
+      ORDER BY started_at DESC LIMIT 1
+    `);
+    
+    const hoursSinceLastRun = (Date.now() - lastRun.started_at) / 1000 / 60 / 60;
+    
+    if (hoursSinceLastRun > 2) {
+      return {
+        status: 'critical',
+        message: `Curation hasn't run in ${hoursSinceLastRun.toFixed(1)} hours`,
+        action: 'start_curation'
+      };
+    }
+    
+    return { status: 'ok' };
+  },
+  
+  // Check API quota usage
+  async checkAPIQuota() {
+    const quota = await db.query(`
+      SELECT quota_used, quota_limit 
+      FROM api_quotas 
+      WHERE service = 'youtube' AND date = CURRENT_DATE
+    `);
+    
+    const percentUsed = (quota.quota_used / quota.quota_limit) * 100;
+    
+    if (percentUsed > 95) {
+      return {
+        status: 'critical',
+        message: 'YouTube API quota at 95% - will hit limit soon'
+      };
+    }
+    
+    if (percentUsed < 50 && new Date().getHours() > 18) {
+      return {
+        status: 'warning',
+        message: 'Low API usage today - curation running slow?'
+      };
+    }
+    
+    return { status: 'ok' };
+  },
+  
+  // Check if videos are being added
+  async checkVideoAddition() {
+    const videosToday = await db.query(`
+      SELECT COUNT(*) FROM videos 
+      WHERE added_at > CURRENT_DATE
+    `);
+    
+    if (videosToday.count === 0 && new Date().getHours() > 12) {
+      return {
+        status: 'critical',
+        message: 'No videos added today - curation system stuck?',
+        action: 'start_curation'
+      };
+    }
+    
+    return { status: 'ok' };
+  },
+  
+  // Check for database issues
+  async checkDatabase() {
+    try {
+      const connections = await db.query('SELECT COUNT(*) FROM pg_stat_activity');
+      const maxConnections = 100;
+      
+      if (connections.count > maxConnections * 0.8) {
+        return {
+          status: 'warning',
+          message: `Database connections at ${connections.count}/${maxConnections}`
+        };
+      }
+      
+      return { status: 'ok' };
+    } catch (error) {
+      return {
+        status: 'critical',
+        message: 'Database connection failed',
+        error: error.message
+      };
+    }
+  },
+  
+  // Check for errors in logs
+  async checkErrorLogs() {
+    const recentErrors = await db.query(`
+      SELECT COUNT(*) FROM error_logs 
+      WHERE created_at > NOW() - INTERVAL '1 hour'
+      AND severity = 'error'
+    `);
+    
+    if (recentErrors.count > 10) {
+      return {
+        status: 'warning',
+        message: `${recentErrors.count} errors in last hour`
+      };
+    }
+    
+    return { status: 'ok' };
+  }
+};
+
+// Run all checks
+async function runHealthChecks() {
+  const results = {
+    critical: [],
+    warnings: [],
+    ok: []
+  };
+  
+  for (const [name, check] of Object.entries(healthChecks)) {
+    const result = await check();
+    
+    if (result.status === 'critical') {
+      results.critical.push({ check: name, ...result });
+    } else if (result.status === 'warning') {
+      results.warnings.push({ check: name, ...result });
+    } else {
+      results.ok.push(name);
+    }
+  }
+  
+  // Store results
+  await db.health_check_results.insert({
+    timestamp: new Date(),
+    results: results
+  });
+  
+  return results;
+}
+
+// Schedule to run every 5 minutes
+setInterval(runHealthChecks, 5 * 60 * 1000);
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: DEV OS CHAT INTEGRATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Update Dev OS Chat to call these APIs and display results:
+
+When user opens chat:
+1. Call GET /api/admin/system-health
+2. Call GET /api/admin/alerts
+3. Display briefing format:
+
+🚨 CRITICAL ALERTS (2)
+• Curation hasn't run in 4 hours [Fix Now]
+• No videos added today [Start Curation]
+
+⚠️ WARNINGS (1)
+• Database connections at 82/100
+
+✅ SYSTEM HEALTH
+• Video Library: 439 videos
+• Users: 97 total, 23 active today
+• API Quota: 2,340 / 10,000 (23% used)
+
+💡 RECOMMENDATIONS
+• START CURATION IMMEDIATELY - wasting API quota
+• California users (42%) - consider CA partnerships
+
+Add action buttons:
+[Start Curation Now] [View Full Metrics] [Run Diagnostics]
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: AUTO-FIX CAPABILITIES
+═══════════════════════════════════════════════════════════════════════════════
+
+When Dev OS detects issues, let it trigger fixes:
+
+If curation stopped:
+→ Button: [Start Curation] 
+→ Calls: POST /api/admin/trigger-action { action: "start_curation" }
+
+If database connections high:
+→ Button: [Clear Idle Connections]
+→ Calls: POST /api/admin/trigger-action { action: "clear_connections" }
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: SCHEDULED REPORTING
+═══════════════════════════════════════════════════════════════════════════════
+
+Create daily summary that Dev OS can pull:
+
+Cron job (daily at 8 AM):
+- Generate previous day summary
+- Store in database
+- Dev OS can display: "Yesterday's Report" with key metrics
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL ALERT RIGHT NOW
+═══════════════════════════════════════════════════════════════════════════════
+
+Dev OS shows:
+**Curation Efficiency (Today)**
+- Screened: 0 videos
+- Accepted: 0 videos  
+- Status: No data
+
+This means curation is NOT running. But Dev OS isn't alerting about it!
+
+After you build this system, Dev OS should show:
+🚨 CRITICAL: Curation system idle - 0 videos screened today
+[Start Curation Now] ← Clickable button
+
+═══════════════════════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. API endpoints implemented and tested
+2. Health check service running every 5 minutes
+3. Dev OS Chat showing real-time alerts
+4. Action buttons that actually trigger fixes
+5. Proof: Screenshot of Dev OS showing a critical alert with action button
+
+Start with the health check system and API endpoints.
+Then integrate into Dev OS Chat UI.
+```
+
+-----
+
+**COPY AND SEND THIS TO REPLIT AGENT** 🚀
+
+This builds the backend infrastructure so Dev OS becomes your autonomous right-hand man that monitors everything, alerts you to problems, and can trigger fixes with one click.​​​​​​​​​​​​​​​​

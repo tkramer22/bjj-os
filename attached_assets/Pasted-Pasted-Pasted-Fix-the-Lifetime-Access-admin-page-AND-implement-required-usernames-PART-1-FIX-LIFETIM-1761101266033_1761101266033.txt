@@ -1,0 +1,67 @@
+Pasted-Pasted-Fix-the-Lifetime-Access-admin-page-AND-implement-required-usernames-PART-1-FIX-LIFETIME-ACCES-1761101107887_1761101107887.txt
+Pasted-Fix-the-Lifetime-Access-admin-page-AND-implement-required-usernames-PART-1-FIX-LIFETIME-ACCESS-P-1761093745687_1761093745688.txt
+Fix the Lifetime Access admin page AND implement required usernames:
+
+PART 1 - FIX LIFETIME ACCESS PAGE:
+
+1. ENABLE ACTION BUTTONS:
+- Eye icon: Opens user detail view (shows full profile, sessions, activity)
+- Edit icon: Opens edit modal to modify user details
+- X icon: Soft delete/hide user (mark as deleted, don't show in list)
+
+2. AUTO-ENABLE LIFETIME BYPASS:
+When an admin grants lifetime access to a user, automatically set their "lifetime_bypass" field to TRUE in the database. This prevents subscription conflicts.
+
+3. ADD BULK ACTIONS:
+- "Hide Test Users" button to filter out users with reason: "Beta Tester", "Bulk Test", "Test", "Automated test"
+- "Delete Selected" checkbox system to bulk remove fake accounts
+
+4. ADD CONFIRMATION DIALOGS:
+- Before deleting: "Are you sure you want to remove this user's lifetime access?"
+- Show username and phone number in confirmation
+
+PART 2 - IMPLEMENT REQUIRED USERNAMES:
+
+1. UPDATE SIGNUP FLOW:
+Add username field as REQUIRED during signup, right after SMS verification.
+
+Step 1: Enter phone number
+Step 2: Verify SMS code
+Step 3: Enter display name (required) - "What should we call you?"
+Step 4: Select belt level
+Step 5: Complete - enter app
+
+2. USERNAME VALIDATION & SUGGESTIONS:
+- Convert user input to username format: "John Smith" → "john_smith"
+- Check if username exists in database
+- If taken, automatically suggest alternatives:
+  * [username]_bjj (e.g., john_smith_bjj)
+  * [username]_[random 2-digit number] (e.g., john_smith_47)
+  * [first initial][last name] (e.g., jsmith)
+  * [first name]_[last initial] (e.g., john_s)
+- Show these 4 suggestions in real-time
+- Allow user to type custom username if they don't like suggestions
+- Re-validate custom input before allowing signup
+
+3. USERNAME RULES:
+- Lowercase only
+- Alphanumeric + underscores only
+- 3-20 characters
+- No spaces
+- Must be unique across all users
+
+4. DATABASE UPDATES:
+- Add "username" column to users table (VARCHAR, UNIQUE, NOT NULL)
+- Add "display_name" column for the original input (e.g., "John Smith")
+- Backfill existing users: set username = "user_[user_id]" for any unnamed accounts
+
+5. ADMIN DASHBOARD DISPLAY:
+- Show display_name in all admin panels (not "Unnamed")
+- Show @username as secondary identifier
+- Update Lifetime Access page to display: "John Smith (@john_smith)"
+
+6. PROF. OS INTEGRATION:
+- Use display_name in all Prof. OS conversations
+- Example: "Hey John, based on your last session..." (not "Hey user_12345...")
+
+Make all these changes cohesive and production-ready.

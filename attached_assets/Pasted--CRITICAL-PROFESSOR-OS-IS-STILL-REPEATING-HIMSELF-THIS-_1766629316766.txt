@@ -1,0 +1,116 @@
+```
+CRITICAL: PROFESSOR OS IS STILL REPEATING HIMSELF - THIS MUST BE FIXED NOW
+
+EVIDENCE: User asked about arm bars. Professor OS gave duplicate content within the SAME response. This is unacceptable.
+
+THE RULES ARE NOT WORKING. HERE'S WHY:
+
+Rules buried at the bottom of a system prompt get IGNORED by LLMs. The model pays most attention to:
+1. The FIRST 500 tokens of the system prompt
+2. The LAST 500 tokens before the user message
+3. Everything in the middle gets diluted
+
+SOLUTION: Move the critical behavior rules to the TOP of the system prompt.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 1: RESTRUCTURE buildSystemPrompt.ts
+═══════════════════════════════════════════════════════════════════════════════
+
+The FIRST thing in the system prompt must be:
+```
+
+You are Professor OS, an elite BJJ coach. Before responding, you MUST follow these rules:
+
+RULE #1 - NO REPETITION (CRITICAL):
+
+- NEVER repeat the same information twice in a response
+- NEVER rephrase something you already said
+- If you catch yourself about to repeat, STOP and move to new information
+- Each paragraph must contain COMPLETELY NEW content
+- Violating this makes you useless to the user
+
+RULE #2 - BE CONCISE:
+
+- Short responses unless user asks for detail
+- 2-3 paragraphs MAX for most questions
+- No filler phrases, no rambling
+- Get to the point immediately
+
+RULE #3 - NO CORPORATE SPEAK:
+
+- Never say “Great question!” or “I’d be happy to help”
+- Never say “Feel free to let me know”
+- Talk like a training partner, not a chatbot
+
+```
+THEN add the rest (identity, video library, credentials, etc.)
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 2: ADD REPETITION CHECK TO THE END
+═══════════════════════════════════════════════════════════════════════════════
+
+The LAST thing before sending to Claude must be:
+```
+
+FINAL CHECK BEFORE RESPONDING:
+
+- Have you repeated any point twice? If yes, delete the duplicate.
+- Is your response under 4 paragraphs? If no, cut it down.
+- Does every sentence add NEW information? If no, remove it.
+
+```
+This creates a "sandwich" - rules at START and END where the model pays attention.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 3: REDUCE SYSTEM PROMPT LENGTH
+═══════════════════════════════════════════════════════════════════════════════
+
+Long system prompts cause rule dilution. Check the current length:
+- How many tokens is buildSystemPrompt generating?
+- If over 3000 tokens, the model starts ignoring middle content
+- Move less critical info (full video lists, news) to be injected only when relevant
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 4: CHAT HISTORY NOT LOADING ON APP OPEN
+═══════════════════════════════════════════════════════════════════════════════
+
+Separate issue but still broken:
+- When user opens iOS app, previous chat is NOT displayed
+- Chat loads only AFTER user sends a new message
+- This is an auth timing or component mounting issue
+
+Check ios-chat.tsx or mobile-chat.tsx:
+1. Is loadChatHistory() in a useEffect that runs on mount?
+2. Is it waiting for userId to be available before fetching?
+3. Add console.log to see WHEN loadChatHistory runs and WHAT it returns
+
+The fix should be:
+```javascript
+useEffect(() => {
+  const loadHistory = async () => {
+    if (!userId) return;
+    console.log('[CHAT] Loading history for user:', userId);
+    const history = await fetchChatHistory(userId);
+    console.log('[CHAT] Loaded messages:', history.length);
+    setMessages(history);
+  };
+  loadHistory();
+}, [userId]);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+SHOW ME:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Current buildSystemPrompt.ts - first 50 lines
+1. Current buildSystemPrompt.ts - last 20 lines
+1. Total token count of generated system prompt
+1. The useEffect in chat component that loads history
+
+THEN make the changes and show me the updated code.
+
+This is the #1 priority. A coach that repeats himself is worthless.
+
+```
+
+```

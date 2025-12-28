@@ -1,0 +1,74 @@
+YOUTUBE VIDEO EXPANSION - USE REMAINING API QUOTA
+
+Let's maximize our YouTube API quota before it resets. Focus on existing high-value instructors to grow the library.
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK 1: CHECK CURRENT QUOTA STATUS
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me:
+- Current YouTube API quota usage today
+- Quota remaining before reset
+- When does quota reset?
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK 2: IDENTIFY TOP INSTRUCTORS FOR EXPANSION
+═══════════════════════════════════════════════════════════════════════════════
+
+Query the database:
+- Which instructors do we already have the most videos from?
+- Which instructors have high credibility scores?
+- Which channels likely have MORE videos we haven't grabbed yet?
+
+SELECT instructor_name, COUNT(*) as video_count, AVG(quality_score) as avg_quality
+FROM video_knowledge 
+GROUP BY instructor_name 
+ORDER BY video_count DESC 
+LIMIT 20;
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK 3: RUN VIDEO DISCOVERY FOR TOP INSTRUCTORS
+═══════════════════════════════════════════════════════════════════════════════
+
+For each top instructor, search their YouTube channel for videos we DON'T have yet.
+
+Priority order (S-tier instructors first):
+1. John Danaher
+2. Gordon Ryan
+3. Bernardo Faria
+4. Lachlan Giles
+5. Craig Jones
+6. Mikey Musumeci
+7. Andre Galvao
+8. Marcelo Garcia
+9. Roger Gracie
+10. Keenan Cornelius
+
+For each:
+- Search channel for BJJ instructional content
+- Filter out videos we already have (check video_url)
+- Add new videos to the library
+- Track how many new videos added per instructor
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK 4: QUEUE FOR GEMINI PROCESSING
+═══════════════════════════════════════════════════════════════════════════════
+
+All new videos should be added with:
+- gemini_status = 'pending'
+- extracted_knowledge = NULL
+
+Gemini batch processor will pick them up automatically.
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK 5: REPORT RESULTS
+═══════════════════════════════════════════════════════════════════════════════
+
+When complete, show me:
+- Total new videos added
+- Breakdown by instructor
+- New total video count
+- How many pending Gemini processing
+- Estimated time for Gemini to process all new videos
+
+Let's maximize the library before quota resets!

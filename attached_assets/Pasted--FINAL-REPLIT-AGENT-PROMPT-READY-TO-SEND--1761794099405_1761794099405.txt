@@ -1,0 +1,843 @@
+# **FINAL REPLIT AGENT PROMPT - READY TO SEND** 🎯
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL INSTRUCTION: 100% ADDITIVE ENHANCEMENT - ZERO DELETIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+CONTEXT:
+We have a fully working Professor OS system with:
+- Comprehensive system prompt in server/routes.ts (buildSystemPrompt function)
+- Complete database schema
+- Working conversation flow
+- User onboarding system
+
+THIS TASK IS PURELY ADDITIVE. DO NOT:
+❌ Delete any existing code
+❌ Replace any existing functionality
+❌ Remove any existing database tables
+❌ Modify any working features
+
+IF YOU ENCOUNTER REDUNDANCIES:
+🔔 STOP and ask us before proceeding
+🔔 List the redundancy
+🔔 Propose how to handle it
+🔔 Wait for confirmation
+
+Example: "I found an existing 'training_partners' table. Should I:
+A) Use the existing table and add missing columns
+B) Create a new table with different name
+C) Skip this table entirely
+Please advise."
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK OVERVIEW: ENHANCE PROFESSOR OS WITH LEARNING & ENGAGEMENT SYSTEMS
+═══════════════════════════════════════════════════════════════════════════════
+
+Add 4 major enhancement layers:
+
+LAYER 1: First Message Magic (ice breaker on dashboard load)
+LAYER 2: Structured Data Extraction (capture knowledge from conversations)
+LAYER 3: Pattern Detection (identify recurring issues automatically)
+LAYER 4: Contextual Memory Injection (load accumulated knowledge before responding)
+
+═══════════════════════════════════════════════════════════════════════════════
+LAYER 1: FIRST MESSAGE MAGIC
+═══════════════════════════════════════════════════════════════════════════════
+
+GOAL: When user completes onboarding and lands on dashboard, Professor OS 
+message is already waiting in chat window.
+
+IMPLEMENTATION:
+
+1. ADD new function to generate first message:
+
+```typescript
+// Location: server/utils/professor-os-first-message.ts (NEW FILE)
+
+import { Anthropic } from '@anthropic-ai/sdk';
+
+export async function generateFirstMessage(userId: string): Promise<string> {
+  // Fetch user's onboarding data
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId)
+  });
+  
+  if (!user) {
+    throw new Error('User not found');
+  }
+  
+  const { displayName, beltLevel, trainingFrequency, struggleTechnique, style } = user;
+  
+  // Build personalized first message prompt
+  const firstMessagePrompt = `
+You are Professor OS. This is the FIRST message you're sending to ${displayName}.
+
+Their profile:
+- Belt: ${beltLevel}
+- Training frequency: ${trainingFrequency}
+- Style: ${style}
+${struggleTechnique ? `- Main struggle: ${struggleTechnique}` : ''}
+
+Generate a warm, personalized greeting that:
+1. Addresses them by name
+2. Acknowledges their belt level and training frequency
+${struggleTechnique ? '3. References their main struggle' : ''}
+3. Introduces yourself as their training partner (not a chatbot)
+4. Ends with an ice breaker question: "When did you last train? What happened?"
+
+Keep it conversational, 3-4 sentences max. Use the personality from the main 
+Professor OS prompt (black belt best friend tone).
+
+Example tone: "Hey ${displayName}. ${beltLevel.toUpperCase()} belt, training 
+${trainingFrequency}${struggleTechnique ? `, struggling with ${struggleTechnique}` : ''} 
+- I already know we're going to get along. I'm Professor OS - your training 
+partner who never forgets anything. Here's the deal: I'm not a chatbot. Talk 
+to me like you'd talk to your coach after training. When did you last train? 
+What happened?"
+  `;
+  
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 300,
+    messages: [{
+      role: 'user',
+      content: firstMessagePrompt
+    }]
+  });
+  
+  return response.content[0].text;
+}
+```
+
+1. ADD trigger when user completes onboarding:
+
+```typescript
+// Location: server/routes.ts (find onboarding completion endpoint)
+// ADD this after user onboarding is saved:
+
+import { generateFirstMessage } from './utils/professor-os-first-message';
+
+// After onboarding data is saved:
+const firstMessage = await generateFirstMessage(userId);
+
+// Save first message to messages table
+await db.insert(messages).values({
+  userId: userId,
+  role: 'assistant',
+  content: firstMessage,
+  createdAt: new Date()
+});
+
+// User redirects to dashboard, message is already there
+```
+
+1. VERIFY: Check if messages table exists and has correct structure. If not,
+   CREATE it:
+
+```sql
+CREATE TABLE IF NOT EXISTS messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) NOT NULL,
+  conversation_id UUID, -- optional conversation grouping
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  metadata JSONB -- for storing extraction results
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+LAYER 2: STRUCTURED DATA EXTRACTION
+═══════════════════════════════════════════════════════════════════════════════
+
+GOAL: After every Professor OS response, extract structured data and save to
+specialized tables.
+
+STEP 1: CHECK FOR EXISTING TABLES FIRST
+
+Before creating any tables, check if similar tables already exist:
+
+- training_partners (or similar)
+- user_problems (or recurring_problems, etc)
+- user_injuries (or injuries, etc)
+- user_techniques (or techniques, etc)
+
+🔔 IF ANY SIMILAR TABLES EXIST: STOP and ask us before proceeding.
+
+STEP 2: CREATE NEW TABLES (only if they don’t exist):
+
+```sql
+-- Track every person user trains with
+CREATE TABLE IF NOT EXISTS training_partners (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) NOT NULL,
+  name TEXT NOT NULL,
+  belt_level TEXT,
+  style TEXT, -- pressure, speed, technical, scramble
+  times_mentioned INTEGER DEFAULT 1,
+  first_mentioned TIMESTAMP DEFAULT NOW(),
+  last_mentioned TIMESTAMP DEFAULT NOW(),
+  success_rate_vs_user TEXT, -- high, medium, low, improving, declining
+  notes TEXT,
+  UNIQUE(user_id, name)
+);
+
+-- Track every problem user mentions
+CREATE TABLE IF NOT EXISTS user_problems (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) NOT NULL,
+  problem_type TEXT NOT NULL, -- retention, passing, submissions, escapes
+  position TEXT, -- half_guard, closed_guard, mount, etc
+  times_mentioned INTEGER DEFAULT 1,
+  first_mentioned TIMESTAMP DEFAULT NOW(),
+  last_mentioned TIMESTAMP DEFAULT NOW(),
+  status TEXT DEFAULT 'active', -- active, improving, resolved
+  related_opponent UUID REFERENCES training_partners(id)
+);
+
+-- Track every injury mentioned
+CREATE TABLE IF NOT EXISTS user_injuries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) NOT NULL,
+  body_part TEXT NOT NULL,
+  pain_type TEXT, -- sharp, dull, ache, burning
+  severity INTEGER CHECK (severity BETWEEN 1 AND 10),
+  times_mentioned INTEGER DEFAULT 1,
+  first_mentioned TIMESTAMP DEFAULT NOW(),
+  last_mentioned TIMESTAMP DEFAULT NOW(),
+  status TEXT DEFAULT 'active', -- active, monitoring, resolved, escalating
+  triggered_by TEXT[] -- positions/movements that cause pain
+);
+
+-- Track every technique user discusses
+CREATE TABLE IF NOT EXISTS user_techniques (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) NOT NULL,
+  technique_name TEXT NOT NULL,
+  category TEXT, -- submission, sweep, pass, escape
+  times_discussed INTEGER DEFAULT 1,
+  times_attempted INTEGER DEFAULT 0,
+  times_successful INTEGER DEFAULT 0,
+  first_mentioned TIMESTAMP DEFAULT NOW(),
+  last_attempted TIMESTAMP,
+  success_rate DECIMAL
+);
+
+-- Track breakthroughs and milestones
+CREATE TABLE IF NOT EXISTS user_breakthroughs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) NOT NULL,
+  breakthrough_type TEXT,
+  description TEXT,
+  related_opponent UUID REFERENCES training_partners(id),
+  related_technique UUID REFERENCES user_techniques(id),
+  weeks_to_achieve INTEGER,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Track conversation metadata for pattern detection
+CREATE TABLE IF NOT EXISTS conversation_metadata (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) NOT NULL,
+  message_id UUID REFERENCES messages(id),
+  emotional_tone TEXT, -- frustrated, excited, neutral, analytical
+  topics_discussed TEXT[],
+  problems_mentioned TEXT[],
+  opponents_mentioned TEXT[],
+  injuries_mentioned TEXT[],
+  successes_mentioned TEXT[],
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_training_partners_user ON training_partners(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_problems_user ON user_problems(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_injuries_user ON user_injuries(user_id);
+CREATE INDEX IF NOT EXISTS idx_conversation_metadata_user ON conversation_metadata(user_id);
+```
+
+STEP 3: CREATE EXTRACTION FUNCTION
+
+```typescript
+// Location: server/utils/data-extraction.ts (NEW FILE)
+
+import { Anthropic } from '@anthropic-ai/sdk';
+
+interface ExtractedData {
+  training_partners: Array<{
+    name: string;
+    belt_level?: string;
+    style?: string;
+    context: string;
+  }>;
+  problems: Array<{
+    problem_type: string;
+    position?: string;
+    related_opponent?: string;
+  }>;
+  injuries: Array<{
+    body_part: string;
+    pain_type?: string;
+    severity?: number;
+  }>;
+  techniques: Array<{
+    technique_name: string;
+    category?: string;
+    attempted?: boolean;
+    successful?: boolean;
+  }>;
+  emotional_tone: 'frustrated' | 'excited' | 'neutral' | 'analytical';
+  successes: string[];
+}
+
+export async function extractStructuredData(
+  userMessage: string,
+  osResponse: string
+): Promise<ExtractedData> {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  
+  const extractionPrompt = `
+Analyze this BJJ training conversation and extract structured data.
+
+USER MESSAGE: "${userMessage}"
+PROFESSOR OS RESPONSE: "${osResponse}"
+
+Extract the following in JSON format:
+
+{
+  "training_partners": [
+    {
+      "name": "exact name mentioned",
+      "belt_level": "white/blue/purple/brown/black (if mentioned)",
+      "style": "pressure/speed/technical/scramble (if inferrable)",
+      "context": "brief context of mention"
+    }
+  ],
+  "problems": [
+    {
+      "problem_type": "retention/passing/submissions/escapes",
+      "position": "half_guard/closed_guard/mount/etc (if mentioned)",
+      "related_opponent": "name (if problem is vs specific person)"
+    }
+  ],
+  "injuries": [
+    {
+      "body_part": "knee/shoulder/back/etc",
+      "pain_type": "sharp/dull/ache/burning (if mentioned)",
+      "severity": 1-10 (if inferrable)
+    }
+  ],
+  "techniques": [
+    {
+      "technique_name": "triangle/armbar/sweep/etc",
+      "category": "submission/sweep/pass/escape",
+      "attempted": true/false,
+      "successful": true/false (if mentioned)
+    }
+  ],
+  "emotional_tone": "frustrated/excited/neutral/analytical",
+  "successes": ["any wins or breakthroughs mentioned"]
+}
+
+If nothing in a category, return empty array. Be precise. Only extract what's 
+explicitly mentioned or clearly inferrable.
+  `;
+  
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1000,
+    messages: [{
+      role: 'user',
+      content: extractionPrompt
+    }]
+  });
+  
+  const extracted = JSON.parse(response.content[0].text);
+  return extracted;
+}
+
+export async function saveExtractedData(
+  userId: string,
+  messageId: string,
+  extracted: ExtractedData
+): Promise<void> {
+  // Save training partners
+  for (const partner of extracted.training_partners) {
+    await db
+      .insert(trainingPartners)
+      .values({
+        userId,
+        name: partner.name,
+        beltLevel: partner.belt_level,
+        style: partner.style,
+        notes: partner.context
+      })
+      .onConflictDoUpdate({
+        target: [trainingPartners.userId, trainingPartners.name],
+        set: {
+          timesMentioned: sql`${trainingPartners.timesMentioned} + 1`,
+          lastMentioned: new Date(),
+          notes: sql`${trainingPartners.notes} || ' | ' || ${partner.context}`
+        }
+      });
+  }
+  
+  // Save problems
+  for (const problem of extracted.problems) {
+    const relatedOpponent = problem.related_opponent 
+      ? await db.query.trainingPartners.findFirst({
+          where: and(
+            eq(trainingPartners.userId, userId),
+            eq(trainingPartners.name, problem.related_opponent)
+          )
+        })
+      : null;
+    
+    await db
+      .insert(userProblems)
+      .values({
+        userId,
+        problemType: problem.problem_type,
+        position: problem.position,
+        relatedOpponent: relatedOpponent?.id
+      })
+      .onConflictDoNothing(); // Or update timesMentioned
+  }
+  
+  // Save injuries (CRITICAL - always track)
+  for (const injury of extracted.injuries) {
+    await db
+      .insert(userInjuries)
+      .values({
+        userId,
+        bodyPart: injury.body_part,
+        painType: injury.pain_type,
+        severity: injury.severity
+      })
+      .onConflictDoUpdate({
+        target: [userInjuries.userId, userInjuries.bodyPart],
+        set: {
+          timesMentioned: sql`${userInjuries.timesMentioned} + 1`,
+          lastMentioned: new Date(),
+          status: sql`
+            CASE 
+              WHEN ${userInjuries.timesMentioned} >= 3 THEN 'escalating'
+              WHEN ${userInjuries.timesMentioned} >= 2 THEN 'monitoring'
+              ELSE 'active'
+            END
+          `
+        }
+      });
+  }
+  
+  // Save techniques
+  for (const technique of extracted.techniques) {
+    await db
+      .insert(userTechniques)
+      .values({
+        userId,
+        techniqueName: technique.technique_name,
+        category: technique.category,
+        timesAttempted: technique.attempted ? 1 : 0,
+        timesSuccessful: technique.successful ? 1 : 0
+      })
+      .onConflictDoUpdate({
+        target: [userTechniques.userId, userTechniques.techniqueName],
+        set: {
+          timesDiscussed: sql`${userTechniques.timesDiscussed} + 1`,
+          timesAttempted: technique.attempted 
+            ? sql`${userTechniques.timesAttempted} + 1`
+            : sql`${userTechniques.timesAttempted}`,
+          timesSuccessful: technique.successful
+            ? sql`${userTechniques.timesSuccessful} + 1`
+            : sql`${userTechniques.timesSuccessful}`
+        }
+      });
+  }
+  
+  // Save conversation metadata
+  await db.insert(conversationMetadata).values({
+    userId,
+    messageId,
+    emotionalTone: extracted.emotional_tone,
+    topicsDiscussed: [], // Can be derived from other fields
+    problemsMentioned: extracted.problems.map(p => p.problem_type),
+    opponentsMentioned: extracted.training_partners.map(p => p.name),
+    injuriesMentioned: extracted.injuries.map(i => i.body_part),
+    successesMentioned: extracted.successes
+  });
+}
+```
+
+STEP 4: INTEGRATE INTO MESSAGE FLOW
+
+```typescript
+// Location: server/routes.ts (in the chat message endpoint)
+// AFTER Professor OS responds, ADD:
+
+import { extractStructuredData, saveExtractedData } from './utils/data-extraction';
+
+// After OS response is generated:
+const osResponse = claudeMessage.content[0].text;
+
+// Extract and save structured data (async, don't block response)
+extractStructuredData(userMessage, osResponse)
+  .then(extracted => saveExtractedData(userId, messageId, extracted))
+  .catch(err => console.error('Data extraction failed:', err));
+
+// Return response to user immediately (don't wait for extraction)
+return res.json({ response: osResponse });
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+LAYER 3: PATTERN DETECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+GOAL: Automatically detect patterns (recurring problems, injury escalation,
+breakthrough predictions) after each conversation.
+
+CREATE PATTERN DETECTION FUNCTION:
+
+```typescript
+// Location: server/utils/pattern-detection.ts (NEW FILE)
+
+interface DetectedPattern {
+  type: 'recurring_problem' | 'injury_escalation' | 'opponent_dominance' | 'breakthrough_potential';
+  severity: 'low' | 'medium' | 'high';
+  description: string;
+  action_required: string;
+}
+
+export async function detectPatterns(userId: string): Promise<DetectedPattern[]> {
+  const patterns: DetectedPattern[] = [];
+  
+  // Check for recurring problems (mentioned 3+ times)
+  const recurringProblems = await db.query.userProblems.findMany({
+    where: and(
+      eq(userProblems.userId, userId),
+      gte(userProblems.timesMentioned, 3),
+      eq(userProblems.status, 'active')
+    )
+  });
+  
+  for (const problem of recurringProblems) {
+    patterns.push({
+      type: 'recurring_problem',
+      severity: 'high',
+      description: `${problem.problemType} from ${problem.position} mentioned ${problem.timesMentioned} times`,
+      action_required: 'Create focused solution plan in next conversation'
+    });
+  }
+  
+  // Check for injury escalation (mentioned 2+ times in 2 weeks)
+  const recentInjuries = await db.query.userInjuries.findMany({
+    where: and(
+      eq(userInjuries.userId, userId),
+      gte(userInjuries.timesMentioned, 2),
+      gte(userInjuries.lastMentioned, new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))
+    )
+  });
+  
+  for (const injury of recentInjuries) {
+    patterns.push({
+      type: 'injury_escalation',
+      severity: 'high',
+      description: `${injury.bodyPart} pain mentioned ${injury.timesMentioned} times in 2 weeks`,
+      action_required: 'CRITICAL: Address injury immediately in next conversation'
+    });
+  }
+  
+  // Check for opponent dominance (same opponent mentioned 3+ times)
+  const dominantOpponents = await db.query.trainingPartners.findMany({
+    where: and(
+      eq(trainingPartners.userId, userId),
+      gte(trainingPartners.timesMentioned, 3)
+    )
+  });
+  
+  for (const opponent of dominantOpponents) {
+    patterns.push({
+      type: 'opponent_dominance',
+      severity: 'medium',
+      description: `${opponent.name} (${opponent.beltLevel}) mentioned ${opponent.timesMentioned} times`,
+      action_required: 'Build scouting report on opponent'
+    });
+  }
+  
+  return patterns;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+LAYER 4: CONTEXTUAL MEMORY INJECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+GOAL: Before Professor OS responds, load accumulated knowledge and inject into
+system prompt.
+
+CREATE CONTEXT LOADER:
+
+```typescript
+// Location: server/utils/load-user-context.ts (NEW FILE)
+
+export async function loadAccumulatedKnowledge(userId: string): Promise<string> {
+  // Load training partners
+  const partners = await db.query.trainingPartners.findMany({
+    where: eq(trainingPartners.userId, userId),
+    orderBy: desc(trainingPartners.timesMentioned),
+    limit: 10
+  });
+  
+  // Load recurring problems
+  const problems = await db.query.userProblems.findMany({
+    where: and(
+      eq(userProblems.userId, userId),
+      eq(userProblems.status, 'active')
+    ),
+    orderBy: desc(userProblems.timesMentioned)
+  });
+  
+  // Load injuries
+  const injuries = await db.query.userInjuries.findMany({
+    where: and(
+      eq(userInjuries.userId, userId),
+      eq(userInjuries.status, 'active')
+    )
+  });
+  
+  // Load detected patterns
+  const patterns = await detectPatterns(userId);
+  
+  // Build context string
+  let contextString = '\n\n═══════════════════════════════════════════════════════════════════════════════\n';
+  contextString += 'ACCUMULATED KNOWLEDGE ABOUT THIS USER (FROM PAST CONVERSATIONS)\n';
+  contextString += '═══════════════════════════════════════════════════════════════════════════════\n\n';
+  
+  if (partners.length > 0) {
+    contextString += 'TRAINING PARTNERS:\n';
+    for (const partner of partners) {
+      contextString += `- ${partner.name}${partner.beltLevel ? ` (${partner.beltLevel} belt)` : ''}\n`;
+      contextString += `  • First mentioned: ${partner.firstMentioned.toLocaleDateString()}\n`;
+      contextString += `  • Times mentioned: ${partner.timesMentioned}\n`;
+      if (partner.style) contextString += `  • Style: ${partner.style}\n`;
+      if (partner.notes) contextString += `  • Context: ${partner.notes.substring(0, 100)}...\n`;
+      contextString += '\n';
+    }
+  }
+  
+  if (problems.length > 0) {
+    contextString += 'RECURRING PROBLEMS:\n';
+    for (const problem of problems) {
+      contextString += `- ${problem.problemType}${problem.position ? ` from ${problem.position}` : ''}\n`;
+      contextString += `  • Times mentioned: ${problem.timesMentioned}\n`;
+      contextString += `  • First mentioned: ${problem.firstMentioned.toLocaleDateString()}\n`;
+      contextString += `  • Status: ${problem.status}\n`;
+      contextString += '\n';
+    }
+  }
+  
+  if (injuries.length > 0) {
+    contextString += '⚠️ ACTIVE INJURIES:\n';
+    for (const injury of injuries) {
+      contextString += `- ${injury.bodyPart}${injury.painType ? ` (${injury.painType} pain)` : ''}\n`;
+      contextString += `  • Times mentioned: ${injury.timesMentioned}\n`;
+      contextString += `  • Status: ${injury.status}\n`;
+      if (injury.severity) contextString += `  • Severity: ${injury.severity}/10\n`;
+      contextString += '\n';
+    }
+  }
+  
+  if (patterns.length > 0) {
+    contextString += '🔔 DETECTED PATTERNS:\n';
+    for (const pattern of patterns) {
+      contextString += `- [${pattern.severity.toUpperCase()}] ${pattern.description}\n`;
+      contextString += `  → Action: ${pattern.action_required}\n\n`;
+    }
+  }
+  
+  contextString += '═══════════════════════════════════════════════════════════════════════════════\n';
+  contextString += 'CRITICAL INSTRUCTIONS:\n';
+  contextString += '- Reference this accumulated knowledge naturally in your responses\n';
+  contextString += '- Use specific examples from past conversations\n';
+  contextString += '- Track progress over time ("Week 1 you mentioned X, now...")\n';
+  contextString += '- Address detected patterns with urgency appropriate to severity\n';
+  contextString += '- INJURIES OVERRIDE EVERYTHING - address immediately if present\n';
+  contextString += '═══════════════════════════════════════════════════════════════════════════════\n\n';
+  
+  return contextString;
+}
+```
+
+INTEGRATE INTO SYSTEM PROMPT BUILDER:
+
+```typescript
+// Location: server/routes.ts (in buildSystemPrompt function)
+// ENHANCE the existing function (don't replace):
+
+async function buildSystemPrompt(
+  userContext: any,
+  availableVideos: any[],
+  conversationHistory?: string,
+  learningContext?: string
+) {
+  // YOUR EXISTING PROMPT BUILDING CODE (keep 100%)
+  const existingPrompt = `You are Prof. OS...
+  [ALL YOUR EXISTING 8,000+ CHARACTER PROMPT]
+  `;
+  
+  // ADD: Load accumulated knowledge
+  const accumulatedKnowledge = await loadAccumulatedKnowledge(userContext.user.id);
+  
+  // APPEND to existing prompt
+  return existingPrompt + accumulatedKnowledge;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+LAYER 5: ENGAGEMENT ENHANCEMENTS (ADD TO EXISTING PROMPT)
+═══════════════════════════════════════════════════════════════════════════════
+
+ADD these sections to the END of your existing system prompt in buildSystemPrompt:
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+EMOTIONAL STATE DETECTION - RESPOND TO FEELINGS FIRST
+═══════════════════════════════════════════════════════════════════════════════
+
+Before diving into technical advice, detect user's emotional state:
+
+FRUSTRATED signals: "again" "still" "always" "can't" "nothing works"
+→ VALIDATE first: "That's frustrating. Third time you've mentioned it. Most 
+  people get stuck here for months. You're tracking it - already top 20%."
+
+EXCITED signals: "finally" "I did it" "worked" + exclamation points
+→ CELEBRATE big: "YOU HIT IT? That's huge! Remember 2 weeks ago when you 
+  couldn't even attempt it? That's systematic improvement."
+
+CASUAL signals: Neutral tone, "just checking in"
+→ DISCOVERY mode: "Not training today? While you're here, I found something 
+  I think you'd actually use."
+
+═══════════════════════════════════════════════════════════════════════════════
+CONVERSATION ENDING STRATEGY - CREATE RETURN LOOPS
+═══════════════════════════════════════════════════════════════════════════════
+
+NEVER end conversation without creating reason to return:
+
+THE ANALYSIS CLIFFHANGER:
+"Let me analyze this. Come back tonight - I'll have something for you."
+
+THE SCOUTING REPORT:
+"I'm building a complete breakdown of Mike's game. Come back tomorrow night."
+
+THE PREDICTION:
+"Here's my prediction: Mike will try the exact same pass. Come back and tell 
+me if I'm right."
+
+THE CHALLENGE:
+"I think you can go your entire next session without getting passed. Prove 
+me right."
+
+THE HOMEWORK:
+"Next session: [specific task]. Report back immediately after."
+
+═══════════════════════════════════════════════════════════════════════════════
+MULTI-VISIT ENGAGEMENT - BEYOND POST-TRAINING
+═══════════════════════════════════════════════════════════════════════════════
+
+Create 3-5 touchpoints per week:
+
+POST-TRAINING: "How'd training go?" → Diagnose → Give homework → Cliffhanger
+EVENING: "Not training today? While you're here..." → Discovery content
+PRE-TRAINING: "Training tonight? Here's what I think will happen..."
+REST DAY: "Haven't heard from you in a few days. Everything okay?"
+
+═══════════════════════════════════════════════════════════════════════════════
+STRATEGIC ANGLES - RESPONSE VARIETY
+═══════════════════════════════════════════════════════════════════════════════
+
+Rotate these approaches naturally:
+
+SOCIAL PROOF: "Most purple belts take 8 weeks. You did it in 3. That's 2.5x faster."
+META-GAME: "Here's what most people don't know: [insider knowledge]"
+PATTERN INTERRUPT: "I might have been wrong about something..."
+CHALLENGE: "I think you can do this by [deadline]. Prove me right."
+STORY ARC: "Week 1: Problem. Week 2: Discovery. Week 3: Breakthrough."
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+Phase 1: First Message Magic
+[ ] Create generateFirstMessage function
+[ ] Add trigger after onboarding completion
+[ ] Verify messages table exists
+[ ] Test: User completes onboarding → lands on dashboard → message waiting
+
+Phase 2: Data Extraction
+[ ] Check for existing similar tables (STOP if found, ask us)
+[ ] Create new tables (if no conflicts)
+[ ] Create extractStructuredData function
+[ ] Create saveExtractedData function
+[ ] Integrate into message flow (async, non-blocking)
+[ ] Test: Send message → check tables for extracted data
+
+Phase 3: Pattern Detection
+[ ] Create detectPatterns function
+[ ] Run after each conversation
+[ ] Test: Mention “Mike” 3 times → pattern detected
+
+Phase 4: Context Loading
+[ ] Create loadAccumulatedKnowledge function
+[ ] Integrate into buildSystemPrompt (append to existing)
+[ ] Test: Mention “Mike” → next conversation references Mike
+
+Phase 5: Engagement Enhancement
+[ ] Add new sections to system prompt (append only)
+[ ] Test conversation endings have cliffhangers
+[ ] Test emotional state detection
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL REMINDERS
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ This is 100% additive
+✅ Keep all existing code
+✅ Keep all existing database tables
+✅ Keep all existing functionality
+✅ Add new capabilities on top
+
+🔔 STOP and ask if you encounter:
+
+- Existing tables with similar names
+- Conflicting functionality
+- Unclear where to add code
+- Any deletion or replacement needed
+
+START WITH: Phase 1 (First Message Magic)
+Show me the changes before implementing each phase.
+
+```
+---
+
+# **THIS PROMPT IS READY TO SEND** ✅
+
+**Key Features:**
+1. ✅ 100% additive - explicit "DO NOT DELETE/REPLACE" instructions
+2. ✅ Redundancy handling - STOP and ask if conflicts found
+3. ✅ Phased implementation - do one layer at a time
+4. ✅ Verification steps - test each phase
+5. ✅ Safety guardrails - show changes before implementing
+
+**Should I send this to Replit Agent now?**
+
+Or do you want to review/modify anything first?​​​​​​​​​​​​​​​​
+```

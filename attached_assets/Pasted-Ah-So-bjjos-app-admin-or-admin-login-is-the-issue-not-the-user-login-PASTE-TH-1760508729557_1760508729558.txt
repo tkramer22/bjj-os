@@ -1,0 +1,73 @@
+Ah! So `bjjos.app/admin` (or `/admin/login`) is the issue, not the user login.
+
+-----
+
+**📋 PASTE THIS INTO REPLIT AGENT:**
+
+```
+FIX ADMIN ROUTES - DIRECT URL NAVIGATION
+
+When typing bjjos.app/admin or bjjos.app/admin/login directly in browser, getting "Did you forget to add the page to the router?" error.
+
+PROBLEM: Server isn't serving the React app for /admin/* routes.
+
+SOLUTION:
+
+1. UPDATE SERVER CATCH-ALL ROUTE:
+   The Express server needs to serve index.html for ALL routes including /admin/*
+   
+   In server.js or index.js, ensure this order:
+   
+   ```javascript
+   // API routes (these should NOT return HTML)
+   app.use('/api', apiRoutes);
+   
+   // Serve static files
+   app.use(express.static('dist'));
+   
+   // CATCH-ALL for SPA routing (must be LAST)
+   app.get('*', (req, res) => {
+     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+   });
+```
+
+1. VERIFY ADMIN ROUTES IN WOUTER:
+   Confirm these routes exist in the React router:
+
+- /admin → redirects to /admin/dashboard
+- /admin/login → AdminLogin component
+- /admin/dashboard → AdminDashboard component
+
+1. CHECK BUILD CONFIGURATION:
+
+- Ensure React app is building correctly to /dist
+- Ensure server is serving from /dist folder
+- Verify no conflicting /admin static folder exists
+
+1. TEST THESE URLS:
+   After fix, all should work:
+
+- bjjos.app/admin (redirects to dashboard)
+- bjjos.app/admin/login (admin login page)
+- bjjos.app/admin/dashboard (admin dashboard)
+- bjjos.app/login (user login)
+- bjjos.app/signup (user signup)
+
+1. SHOW ME:
+
+- The main server file (server/index.js or similar)
+- Current route order in that file
+
+Fix the server-side routing to serve index.html for all non-API routes, including /admin/*.
+
+```
+---
+
+The issue is that when you type `/admin/login` directly in the browser:
+1. Browser makes request to server
+2. Server doesn't have that route configured
+3. Returns error instead of index.html
+4. React never loads, so Wouter never gets to handle the route
+
+**Paste that to fix admin direct URL navigation!** 🔧​​​​​​​​​​​​​​​​
+```

@@ -1,0 +1,389 @@
+```
+COMPLETE AI AGENT OPTIMIZATION - IMPLEMENT ALL ENHANCEMENTS:
+
+This is the most critical component of BJJ OS. Implement every feature below to make this the world's best BJJ technique curator.
+
+=== CORE SCORING SYSTEM (Already specified, ensure implemented) ===
+
+Minimum threshold: 70 points out of 100
+
+1. Instructor Credibility: 0-30 points
+2. Key Detail Quality: 0-40 points (MOST IMPORTANT)
+3. Teaching Clarity: 0-20 points
+4. Production Quality: 0-10 points
+
+=== VIDEO DISCOVERY STRATEGY ===
+
+**YouTube API Search Queries (rotate daily):**
+
+Elite instructor channel searches:
+- "Lachlan Giles BJJ"
+- "John Danaher instructional"
+- "Bernardo Faria BJJ Fanatics"
+- "JT Torres technique"
+- "Gordon Ryan details"
+- "Craig Jones BJJ"
+- "Marcelo Garcia technique"
+- "Keenan Cornelius details"
+- "Mikey Musumeci technique"
+- "Giancarlo Bodoni"
+- "Jon Thomas BJJ"
+- "Chewy BJJ"
+
+Technique-specific searches (rotate by day of week):
+- Monday: "guard retention details", "closed guard attacks", "open guard sweeps"
+- Tuesday: "guard passing details", "knee slice pass", "leg drag passing"
+- Wednesday: "back control details", "rear naked choke details", "back escape"
+- Thursday: "mount details", "mount attacks", "mount escape"
+- Friday: "side control details", "side control escape", "kimura details"
+- Saturday: "leg lock details", "heel hook mechanics", "leg lock defense"
+- Sunday: "takedown details", "wrestling for BJJ", "judo for BJJ"
+
+**Search filters:**
+- Upload date: Last 2 years
+- Duration: 5-20 minutes
+- Minimum views: 1,000+
+- Closed captions available: Yes
+
+=== MULTI-STAGE CLAUDE ANALYSIS ===
+
+**Stage 1: Quick Filter Prompt**
+
+"Does this BJJ video transcript contain a specific, actionable technique detail?
+
+Scan for:
+✅ Specific body positions, angles, grips
+✅ Timing cues
+✅ Pressure directions
+✅ Exact measurements or positions
+✅ Phrases: 'The key is...', 'The detail that matters...', 'Most people miss this...'
+
+❌ Generic coaching ('stay tight', 'be heavy')
+❌ Promotional content
+❌ Interview/podcast format
+❌ Recap/highlight videos
+
+Return: YES (analyze further) or NO (skip)
+
+Transcript: [transcript]"
+
+**Stage 2: Deep Key Detail Extraction**
+
+"Analyze this BJJ instructional video transcript and extract the KEY DETAIL - the specific micro-adjustment that makes this technique work.
+
+GOOD KEY DETAILS (specific, actionable):
+- 'Angle your wrist 15° inward at initial contact to prevent the frame'
+- 'Cut the angle deeper by pulling their trapped arm across your body while scooting your hips out'
+- 'Keep your shin bone angled DOWN into their bottom leg, not flat, to pin their knee'
+- 'As you drive your knee across, keep your shin bone angled DOWN into their bottom leg—not flat. This pins their knee to the mat and prevents them from recovering half guard'
+- 'Grip their collar with your thumb INSIDE, not outside, for better control'
+
+BAD KEY DETAILS (generic, not actionable):
+- 'Keep your elbows tight'
+- 'Maintain pressure'
+- 'Control the position'
+- 'Stay heavy'
+
+Return JSON:
+{
+  \"has_key_detail\": true/false,
+  \"key_detail\": \"The specific micro-adjustment explained\",
+  \"timestamp\": \"MM:SS where detail is explained\",
+  \"technique_name\": \"Name of technique\",
+  \"quality_score\": 0-40,
+  \"reasoning\": \"Why this is/isn't a good key detail\"
+}
+
+CRITICAL: Only return has_key_detail: true if there is a SPECIFIC, ACTIONABLE micro-adjustment beyond generic advice.
+
+Video transcript: [transcript]"
+
+**Stage 3: Instructor Verification**
+
+"Identify the instructor and rate their credibility:
+
+Priority instructors (30 points):
+John Danaher, Gordon Ryan, Lachlan Giles, Bernardo Faria, JT Torres, Craig Jones, Marcelo Garcia, Mikey Musumeci, Keenan Cornelius, Roger Gracie, Andre Galvao, Rafael Lovato Jr, Giancarlo Bodoni
+
+Check for:
+- Competition record (IBJJF, ADCC, etc.)
+- Belt rank
+- Teaching reputation
+- Elite academy association
+
+Instructor detected from: [video title/description]
+
+Return JSON:
+{
+  \"instructor_name\": \"Name\",
+  \"credibility_score\": 0-30,
+  \"reasoning\": \"Why this score\",
+  \"is_elite\": true/false
+}"
+
+**Stage 4: Quality Control Validation (Second Claude Analysis)**
+
+"You are a BJJ black belt doing quality control.
+
+Original key detail: [key_detail]
+Video: [title and transcript excerpt]
+
+Review:
+1. Is this ACTUALLY specific and actionable, or generic advice?
+2. Can a practitioner drill this immediately?
+3. Is this technically accurate from BJJ perspective?
+4. Is this safe and current best practice?
+
+RED FLAGS:
+❌ 'Just' or 'simply' (hides lack of detail)
+❌ Relies on strength over technique
+❌ Dangerous (spinal locks, neck cranks without control)
+❌ Competition-banned for lower belts
+❌ Only works on compliant partners
+
+Return JSON:
+{
+  \"approved\": true/false,
+  \"quality_grade\": \"A/B/C/D/F\",
+  \"safety_concerns\": \"Any issues\",
+  \"improvements\": \"How to improve\",
+  \"reasoning\": \"Full analysis\"
+}
+
+Only approve grade A or B."
+
+**Stage 5: Personalization Match**
+
+"Calculate how well this technique matches the user:
+
+User Profile:
+- Belt: [level]
+- Style: [gi/nogi]
+- Focus areas: [list]
+- Recent techniques (30 days): [list]
+- Feedback pattern: [likes/dislikes]
+
+Technique:
+- Name: [technique]
+- Category: [guard/pass/submission]
+- Complexity: [beginner/intermediate/advanced]
+- Style: [gi/nogi/both]
+
+Return JSON:
+{
+  \"match_score\": 0-100,
+  \"reasoning\": \"Why good/bad match\",
+  \"belt_appropriate\": true/false,
+  \"style_match\": true/false
+}"
+
+**Stage 6: Timestamp Extraction**
+
+"Find exact timestamp where key detail is explained:
+
+Key detail: [key_detail]
+Transcript with timestamps: [transcript]
+
+Skip intros and setup. Find where SPECIFIC detail is taught.
+
+Return JSON:
+{
+  \"timestamp\": \"MM:SS\",
+  \"confidence\": \"high/medium/low\"
+}"
+
+=== LEARNING & FEEDBACK SYSTEM ===
+
+**Track user responses in database:**
+
+Create table: user_feedback_history
+- user_id
+- technique_sent
+- instructor
+- user_action: (clicked, skipped, replied_bad, no_action)
+- timestamp
+
+**Adjust future scoring based on feedback:**
+- SKIP: -5 points for similar techniques
+- BAD: -15 points for instructor/technique type
+- No response: -2 points
+- Link clicked: +5 points
+- Multiple views: +10 points
+
+**Store user preferences:**
+
+Create table: user_learning_profile
+- user_id
+- liked_instructors: JSON array
+- disliked_instructors: JSON array
+- preferred_categories: JSON array
+- avg_engagement_score
+- learning_velocity: fast/medium/slow
+
+=== TECHNIQUE PREREQUISITES & PROGRESSIONS ===
+
+**Build technique tree logic:**
+
+Create prerequisite_map:
+```javascript
+{
+  "berimbolo": ["de_la_riva_guard", "inversion", "back_takes"],
+  "k_guard": ["open_guard", "leg_entanglements", "off_balancing"],
+  "advanced_leg_locks": ["basic_leg_positioning", "ashi_garami", "safety_fundamentals"],
+  "triangle_variations": ["basic_triangle", "angle_control", "hip_positioning"]
+}
+```
+
+**Validation before sending:**
+Check if user has received prerequisite techniques in past 90 days.
+Don’t send berimbolo to white belt without de la riva fundamentals.
+Don’t send advanced leg locks before basic positioning.
+
+**Create learning sequences:**
+If user learned “mount maintenance” yesterday → prioritize “mount attacks” in next 3-7 days.
+Build natural progressions across weeks.
+
+=== TECHNIQUE DIVERSITY ALGORITHM ===
+
+**Ensure weekly balance:**
+
+Track categories sent per user:
+
+- Submissions: 2 per week
+- Guard work: 2 per week
+- Passing: 1 per week
+- Escapes: 1 per week
+- Takedowns: 1 per week
+
+Never send same category 3 days in row.
+
+=== SAFETY LAYER ===
+
+**Auto-reject dangerous content:**
+
+Scan transcripts for red flags:
+
+- “crank the neck”
+- “rip the arm”
+- Heel hooks for white/blue belt
+- Reaping for white belt
+- Neck cranks without safety emphasis
+- Techniques requiring extreme flexibility
+
+Assign safety_score 0-10.
+Auto-reject if safety_score < 8.
+
+=== CONTENT FRESHNESS ===
+
+**Recency weighting:**
+
+- Last 3 months: +10 points
+- 3-12 months: +5 points
+- 1-2 years: 0 points
+- 2+ years: -5 points
+
+Exception: Classic fundamentals from legends (Marcelo Garcia, Roger Gracie) always +10.
+
+=== INSTRUCTOR REPUTATION TRACKING ===
+
+**Track performance across all users:**
+
+Create table: instructor_performance
+
+- instructor_name
+- videos_sent_total
+- avg_user_rating
+- skip_rate_percentage
+- bad_rate_percentage
+- credibility_adjustment: -10 to +10
+
+Update credibility score based on aggregate feedback.
+High-performing instructors get boost.
+Low-performing get penalty.
+
+=== DAILY WORKFLOW ===
+
+**Run at 12 AM daily (6 hours before 8 AM send):**
+
+For each active subscriber:
+
+1. Get 20-30 candidate videos from YouTube (using search strategy)
+1. Quick filter with Stage 1 prompt (eliminate ~70%)
+1. Deep analysis on remaining (Stages 2-6)
+1. Score each video (must be 70+)
+1. Apply personalization match
+1. Check prerequisites met
+1. Filter duplicates (90 days technique, 30 days instructor)
+1. Run quality control validation
+1. Check safety score
+1. Select highest scoring approved video
+1. Extract timestamp
+1. Format SMS: “🥋 [Technique] - [Instructor]\n\nKey Detail: [detail]\n\nWatch: bjjos.app/v/[id]?t=[timestamp]”
+1. Queue for 8 AM delivery
+
+=== MONITORING & ALERTS ===
+
+**Track daily metrics:**
+
+Create admin dashboard showing:
+
+- Videos analyzed today
+- Videos scoring 70+
+- Videos sent
+- Average quality score
+- Skip rate %
+- BAD rate %
+- Top performing instructors
+- Failed analyses (needs review)
+
+**Alert if:**
+
+- Skip rate > 15%
+- BAD rate > 5%
+- No videos found meeting 70+ for any user
+- Same instructor sent to user within 30 days
+- Timestamp extraction failed
+
+**Daily report to admin:**
+Email summary of AI performance metrics.
+
+=== IMPLEMENTATION CHECKLIST ===
+
+Priority order:
+
+1. ✅ Implement all 6 Claude analysis prompts exactly as specified
+1. ✅ Set up multi-stage validation pipeline
+1. ✅ Build feedback loop and learning system
+1. ✅ Create technique prerequisite logic
+1. ✅ Implement safety layer with auto-reject
+1. ✅ Add weekly diversity algorithm
+1. ✅ Set up instructor reputation tracking
+1. ✅ Build content freshness scoring
+1. ✅ Create daily workflow automation
+1. ✅ Set up monitoring dashboard and alerts
+
+=== DATABASE SCHEMA ADDITIONS ===
+
+Add these tables:
+
+- user_feedback_history (track all interactions)
+- user_learning_profile (preferences and patterns)
+- instructor_performance (aggregate feedback)
+- technique_prerequisites (prerequisite map)
+- daily_ai_metrics (performance tracking)
+
+=== CRITICAL NOTES ===
+
+- Key detail quality is weighted 40% because it’s our core value
+- Auto-reject anything scoring < 15 on key detail (even if total is 70+)
+- Always run quality control validation (second Claude check)
+- Never compromise on safety
+- Log everything for continuous improvement
+
+This AI agent is BJJ OS’s competitive advantage. No one else has multi-stage validation, personalized learning paths, and safety-first curation at this level.
+
+Build this system to be production-ready, scalable, and continuously learning from user feedback.
+
+```
+
+```

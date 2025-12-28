@@ -1,0 +1,1115 @@
+# Master Replit Prompt: Prof. OS Power User Conversion System
+
+```
+I need to add power user conversion enhancements to my existing Prof. OS system in BJJ OS. This is ADDITIVE - do not modify existing functionality. These enhancements will convert video-only users into engaged power users naturally and non-intrusively.
+
+## CRITICAL: WHAT ALREADY EXISTS (DO NOT MODIFY)
+
+EXISTING TABLES (keep as-is):
+- users
+- training_sessions
+- ai_video_knowledge
+- user_engagement_profile
+- engagement_nudges
+- user_memory_markers
+- coaching_outcomes
+- (any other existing tables)
+
+EXISTING FEATURES (preserve completely):
+- Prof. OS personality and coaching tone
+- Video recommendation system (1-3 videos with context)
+- Journey-focused language ("YOUR game", "YOUR journey")
+- Belt-specific coaching
+- Basic engagement nudge system
+- User feedback system (👍 👎 on videos)
+- Tiered memory system
+- Coaching effectiveness tracking
+
+DO NOT modify existing Prof. OS system prompts or personality.
+DO NOT change existing database tables unless adding new fields.
+DO NOT alter core video recommendation logic.
+
+---
+
+## OVERVIEW: 6 CONVERSION ENHANCEMENTS
+
+We're adding:
+1. **Conversational Profile Extraction** - Learn about users through natural conversation
+2. **Video Engagement Tracking** - Know which videos they actually watch
+3. **Pattern Teasers** - Show intelligence even without session logs
+4. **Power User Showcase** - Demonstrate value through real examples
+5. **Enhanced Nudge Content** - Better conversion messaging
+6. **Smart Follow-Ups** - Engage based on behavior patterns
+
+**Goal: Increase video-only → power user conversion from ~15% to 40-50%**
+
+---
+
+## PART 1: NEW DATABASE TABLES & MODIFICATIONS
+
+### A. Video Engagement Tracking (NEW TABLE)
+
+```sql
+-- Track when users actually interact with recommended videos
+CREATE TABLE video_engagement (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  video_id UUID REFERENCES ai_video_knowledge(id),
+  
+  -- When recommended and when clicked
+  recommended_at TIMESTAMP DEFAULT NOW(),
+  clicked_at TIMESTAMP,
+  
+  -- User feedback on video
+  user_feedback VARCHAR(20),  -- 'helpful', 'not_helpful', null
+  feedback_at TIMESTAMP,
+  
+  -- Context about recommendation
+  recommended_for_technique VARCHAR(100),
+  recommendation_context JSONB
+);
+
+CREATE INDEX idx_video_engagement_user ON video_engagement(user_id, recommended_at DESC);
+CREATE INDEX idx_video_engagement_clicked ON video_engagement(user_id, clicked_at) WHERE clicked_at IS NOT NULL;
+```
+
+-----
+
+### B. Video Request History (NEW TABLE)
+
+```sql
+-- Track all video requests to detect patterns
+CREATE TABLE video_request_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  
+  query TEXT NOT NULL,
+  extracted_topics TEXT[],  -- ['triangle', 'closed_guard', etc.]
+  
+  videos_recommended UUID[],  -- Array of video IDs shown
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_video_requests_user ON video_request_history(user_id, created_at DESC);
+```
+
+-----
+
+### C. Expand User Engagement Profile (MODIFY EXISTING)
+
+```sql
+-- Add new fields to existing user_engagement_profile table
+ALTER TABLE user_engagement_profile ADD COLUMN IF NOT EXISTS
+  belt_level VARCHAR(20),
+  training_frequency DECIMAL(3,1),
+  main_position VARCHAR(50),
+  training_goals TEXT,
+  
+  profile_completion_score INT DEFAULT 0,  -- 0-100, higher = more complete
+  
+  last_pattern_teaser_at TIMESTAMP,
+  pattern_teasers_shown INT DEFAULT 0,
+  
+  last_power_user_example_at TIMESTAMP,
+  power_user_examples_shown INT DEFAULT 0;
+```
+
+-----
+
+### D. Power User Example Library (NEW TABLE)
+
+```sql
+-- Library of real anonymized power user examples to showcase
+CREATE TABLE power_user_examples (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  example_type VARCHAR(50),  -- 'pattern_detection', 'progress_tracking', 'breakthrough', etc.
+  
+  -- The example content
+  user_question TEXT NOT NULL,
+  prof_response_summary TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  
+  -- Meta
+  effectiveness_score INT,  -- How compelling is this example (1-10)
+  times_shown INT DEFAULT 0,
+  conversion_rate DECIMAL(4,2),  -- % of users who converted after seeing it
+  
+  active BOOLEAN DEFAULT true,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+-----
+
+## PART 2: CONVERSATIONAL PROFILE EXTRACTION
+
+Create `services/profileExtractor.js`:
+
+```javascript
+import { db } from './database';
+
+export class ProfileExtractor {
+  
+  // Check if we should ask a profile question
+  async getProfileQuestion(userId, interactionCount) {
+    const profile = await db.user_engagement_profile.findUnique({
+      where: { userId }
+    });
+    
+    if (!profile) return null;
+    
+    // Question sequence based on what we don't know
+    const questions = [
+      {
+        condition: !profile.belt_level && interactionCount === 1,
+        question: "Quick question - are you a beginner just learning this, or more experienced trying to refine your technique?",
+        extract: 'belt_level'
+      },
+      {
+        condition: !profile.training_frequency && interactionCount === 2,
+        question: "How often do you train? (Helps me gauge how quickly to progress recommendations - 2x/week? 3x? More?)",
+        extract: 'training_frequency'
+      },
+      {
+        condition: !profile.main_position && interactionCount === 3,
+        question: "Do you play more guard, or do you prefer being on top?",
+        extract: 'main_position'
+      },
+      {
+        condition: !profile.training_goals && interactionCount >= 4 && profile.profile_completion_score < 50,
+        question: "What are you working towards? Competition? Just getting better? Fitness?",
+        extract: 'training_goals'
+      }
+    ];
+    
+    return questions.find(q => q.condition) || null;
+  }
+  
+  // Extract profile data from user response
+  async extractFromResponse(userId, userMessage, field) {
+    const lowerMessage = userMessage.toLowerCase();
+    
+    let extracted = null;
+    
+    switch(field) {
+      case 'belt_level':
+        if (lowerMessage.includes('beginner') || lowerMessage.includes('white belt') || lowerMessage.includes('new')) {
+          extracted = 'white';
+        } else if (lowerMessage.includes('blue')) {
+          extracted = 'blue';
+        } else if (lowerMessage.includes('purple')) {
+          extracted = 'purple';
+        } else if (lowerMessage.includes('brown')) {
+          extracted = 'brown';
+        } else if (lowerMessage.includes('black')) {
+          extracted = 'black';
+        } else if (lowerMessage.includes('experienced') || lowerMessage.includes('advanced')) {
+          extracted = 'blue'; // Educated guess
+        }
+        break;
+        
+      case 'training_frequency':
+        const numbers = userMessage.match(/\d+/);
+        if (numbers) {
+          extracted = parseFloat(numbers[0]);
+        } else if (lowerMessage.includes('every day') || lowerMessage.includes('daily')) {
+          extracted = 6;
+        } else if (lowerMessage.includes('couple') || lowerMessage.includes('few')) {
+          extracted = 2.5;
+        }
+        break;
+        
+      case 'main_position':
+        if (lowerMessage.includes('guard')) {
+          extracted = 'guard';
+        } else if (lowerMessage.includes('top') || lowerMessage.includes('pass')) {
+          extracted = 'top';
+        } else if (lowerMessage.includes('both') || lowerMessage.includes('either')) {
+          extracted = 'balanced';
+        }
+        break;
+        
+      case 'training_goals':
+        if (lowerMessage.includes('compet')) {
+          extracted = 'competition';
+        } else if (lowerMessage.includes('better') || lowerMessage.includes('improve')) {
+          extracted = 'skill_development';
+        } else if (lowerMessage.includes('fit') || lowerMessage.includes('exercise')) {
+          extracted = 'fitness';
+        } else if (lowerMessage.includes('fun') || lowerMessage.includes('hobby')) {
+          extracted = 'recreational';
+        }
+        break;
+    }
+    
+    // Store extracted data
+    if (extracted) {
+      await db.user_engagement_profile.update({
+        where: { userId },
+        data: {
+          [field]: extracted,
+          profile_completion_score: { increment: 25 },
+          updated_at: new Date()
+        }
+      });
+      
+      return { success: true, extracted };
+    }
+    
+    return { success: false };
+  }
+  
+  // Calculate profile completion
+  async calculateCompletionScore(userId) {
+    const profile = await db.user_engagement_profile.findUnique({
+      where: { userId }
+    });
+    
+    let score = 0;
+    if (profile.belt_level) score += 25;
+    if (profile.training_frequency) score += 25;
+    if (profile.main_position) score += 25;
+    if (profile.training_goals) score += 25;
+    
+    return score;
+  }
+}
+
+export const profileExtractor = new ProfileExtractor();
+```
+
+-----
+
+## PART 3: PATTERN TEASER SYSTEM
+
+Create `services/patternTeaser.js`:
+
+```javascript
+import { db } from './database';
+
+export class PatternTeaser {
+  
+  // Generate pattern teasers from video request history
+  async generateTeaser(userId) {
+    const profile = await db.user_engagement_profile.findUnique({
+      where: { userId }
+    });
+    
+    // Don't spam - max 1 teaser per week
+    if (profile.last_pattern_teaser_at) {
+      const daysSince = (Date.now() - profile.last_pattern_teaser_at) / (1000 * 60 * 60 * 24);
+      if (daysSince < 7) return null;
+    }
+    
+    // Get recent video requests
+    const recentRequests = await db.video_request_history.findMany({
+      where: { userId },
+      orderBy: { created_at: 'desc' },
+      take: 10
+    });
+    
+    if (recentRequests.length < 3) return null;
+    
+    // Extract all topics
+    const allTopics = recentRequests.flatMap(r => r.extracted_topics || []);
+    const topicCounts = {};
+    allTopics.forEach(t => {
+      topicCounts[t] = (topicCounts[t] || 0) + 1;
+    });
+    
+    // Pattern 1: Multiple requests for same technique
+    const repeatedTechnique = Object.entries(topicCounts).find(([_, count]) => count >= 3);
+    if (repeatedTechnique) {
+      const [technique, count] = repeatedTechnique;
+      await this.markTeaserShown(userId);
+      return {
+        type: 'repeated_technique',
+        content: `I see you've been deep-diving ${technique} (${count} video requests). That's the right approach - focused repetition. Are you hitting it in training yet, or still drilling? If you tell me how it's going, I can recommend what to work on next based on your actual progress.`
+      };
+    }
+    
+    // Pattern 2: Complementary techniques (attack + defense)
+    const hasGuardPassing = topicCounts['guard_passing'] >= 2 || topicCounts['passing'] >= 2;
+    const hasTriangleDefense = topicCounts['triangle_defense'] >= 2 || topicCounts['triangle'] >= 2;
+    
+    if (hasGuardPassing && hasTriangleDefense) {
+      await this.markTeaserShown(userId);
+      return {
+        type: 'complementary_pattern',
+        content: `Quick observation - you've asked about guard passing and triangle defense. That combination usually means you're getting passed and then triangled from guard. If I'm reading that right, these videos will help with passing, but there's a defensive gap I could help you fix too. Am I onto something?`
+      };
+    }
+    
+    // Pattern 3: Position exploration
+    const positions = ['closed_guard', 'half_guard', 'mount', 'back', 'side_control'];
+    const positionRequests = positions.filter(p => topicCounts[p] >= 1);
+    
+    if (positionRequests.length >= 4) {
+      await this.markTeaserShown(userId);
+      return {
+        type: 'exploration_pattern',
+        content: `You're exploring a lot of different positions (${positionRequests.length} different areas). That's great for learning the whole game. But if you tell me what you're actually working on in training, I can help you prioritize instead of spreading thin across everything.`
+      };
+    }
+    
+    // Pattern 4: Gi vs No-gi mix
+    const hasGi = allTopics.some(t => t.includes('gi') && !t.includes('no-gi'));
+    const hasNoGi = allTopics.some(t => t.includes('no-gi') || t.includes('nogi'));
+    
+    if (hasGi && hasNoGi) {
+      await this.markTeaserShown(userId);
+      return {
+        type: 'gi_nogi_mix',
+        content: `I'm seeing requests for both gi and no-gi techniques. Do you train both, or focusing on one? (Helps me filter videos that match your actual training)`
+      };
+    }
+    
+    return null;
+  }
+  
+  async markTeaserShown(userId) {
+    await db.user_engagement_profile.update({
+      where: { userId },
+      data: {
+        last_pattern_teaser_at: new Date(),
+        pattern_teasers_shown: { increment: 1 }
+      }
+    });
+  }
+}
+
+export const patternTeaser = new PatternTeaser();
+```
+
+-----
+
+## PART 4: POWER USER SHOWCASE SYSTEM
+
+Create `services/powerUserShowcase.js`:
+
+```javascript
+import { db } from './database';
+
+export class PowerUserShowcase {
+  
+  // Seed initial examples (run once during deployment)
+  async seedExamples() {
+    const examples = [
+      {
+        example_type: 'pattern_detection',
+        user_question: "I keep losing position from side control",
+        prof_response_summary: "You've mentioned side control escapes 4 times in your last 6 sessions - that's a clear pattern. Here's what I'm seeing: you're trying to bench press them off instead of creating frames first. [Gives detailed coaching + specific video]",
+        outcome: "Result: Next session, they escaped side control 3 times.",
+        effectiveness_score: 9
+      },
+      {
+        example_type: 'progress_tracking',
+        user_question: "Trained today, hit my first triangle!",
+        prof_response_summary: "Nice! Remember 3 weeks ago when you were asking about triangle setups and getting frustrated? You went from 'can't hit it' to 'first success' in 21 days. That's the kind of progression I track automatically.",
+        outcome: "User is now logging every session and their triangle success rate is 68%.",
+        effectiveness_score: 8
+      },
+      {
+        example_type: 'breakthrough',
+        user_question: "Something clicked today with arm drags",
+        prof_response_summary: "You've been working on arm drags for 5 sessions. You had 3 failed attempts, then 2 close calls, now it's clicking. That's a typical 5-session breakthrough pattern for blue belts learning new techniques.",
+        outcome: "User understands their learning pattern now. Stays patient when learning new moves.",
+        effectiveness_score: 7
+      },
+      {
+        example_type: 'injury_prevention',
+        user_question: "Shoulder is bothering me again",
+        prof_response_summary: "This is the 3rd time you've mentioned shoulder pain in 2 weeks. That's concerning. I'm flagging videos with heavy shoulder load and prioritizing recovery-friendly techniques for you.",
+        outcome: "User took 1 week off, came back healthy, avoided re-injury.",
+        effectiveness_score: 9
+      },
+      {
+        example_type: 'game_development',
+        user_question: "What should I focus on?",
+        prof_response_summary: "Based on your last 20 sessions: Your closed guard is becoming dangerous (72% triangle success), but your half guard is weak (28% sweep success). Focus on half guard for the next 2 weeks to balance your bottom game.",
+        outcome: "User focused on half guard. Sweep success improved to 54% in 3 weeks.",
+        effectiveness_score: 10
+      }
+    ];
+    
+    for (const example of examples) {
+      await db.power_user_examples.create({
+        data: example
+      });
+    }
+    
+    console.log('✅ Power user examples seeded');
+  }
+  
+  // Should we show an example to this user?
+  async shouldShowExample(userId) {
+    const profile = await db.user_engagement_profile.findUnique({
+      where: { userId }
+    });
+    
+    // Don't show to power users (they already know)
+    if (profile.has_logged_session) return null;
+    
+    // Don't spam - max 1 example per week
+    if (profile.last_power_user_example_at) {
+      const daysSince = (Date.now() - profile.last_power_user_example_at) / (1000 * 60 * 60 * 24);
+      if (daysSince < 7) return null;
+    }
+    
+    // Show example every 5 video requests
+    if (profile.total_video_requests > 0 && profile.total_video_requests % 5 === 0) {
+      return await this.getExample(userId);
+    }
+    
+    return null;
+  }
+  
+  async getExample(userId) {
+    // Get example that hasn't been shown much (rotate through library)
+    const example = await db.power_user_examples.findFirst({
+      where: { active: true },
+      orderBy: [
+        { effectiveness_score: 'desc' },
+        { times_shown: 'asc' }
+      ]
+    });
+    
+    if (!example) return null;
+    
+    // Mark as shown
+    await db.power_user_examples.update({
+      where: { id: example.id },
+      data: { times_shown: { increment: 1 } }
+    });
+    
+    await db.user_engagement_profile.update({
+      where: { userId },
+      data: {
+        last_power_user_example_at: new Date(),
+        power_user_examples_shown: { increment: 1 }
+      }
+    });
+    
+    // Format for display
+    return {
+      content: this.formatExample(example)
+    };
+  }
+  
+  formatExample(example) {
+    return `
+By the way - someone using Prof. OS just had this exchange:
+
+User: "${example.user_question}"
+
+Prof. OS: "${example.prof_response_summary}"
+
+${example.outcome}
+
+That's what happens when I have context about YOUR training. Just video recommendations vs. actual coaching.
+
+Up to you if you want to try it.`.trim();
+  }
+  
+  // Track if showing example led to conversion
+  async trackConversion(exampleId, userId, converted) {
+    if (converted) {
+      const example = await db.power_user_examples.findUnique({
+        where: { id: exampleId }
+      });
+      
+      const newConversionRate = ((example.conversion_rate || 0) * example.times_shown + 100) / (example.times_shown + 1);
+      
+      await db.power_user_examples.update({
+        where: { id: exampleId },
+        data: {
+          conversion_rate: newConversionRate
+        }
+      });
+    }
+  }
+}
+
+export const powerUserShowcase = new PowerUserShowcase();
+```
+
+-----
+
+## PART 5: ENHANCED NUDGE SYSTEM
+
+Update `services/engagementSystem.js` (MODIFY EXISTING):
+
+```javascript
+// Add to existing engagementSystem.js
+
+export class EngagementSystem {
+  
+  // ... existing methods ...
+  
+  // NEW: Enhanced nudge content
+  getEnhancedNudgeContent(nudgeType, context) {
+    const nudges = {
+      discover_session_logging_v1: `By the way - these videos are great for learning basics.
+
+But quick experiment: next time you train, just tell me ONE thing that went well and ONE thing that was frustrating.
+
+That's it. Two sentences.
+
+I'll show you what I can do with just that.`,
+
+      discover_session_logging_v2: `Quick thing - you've asked for ${context.videoCount} different techniques now.
+
+I can't tell if you're working on all of these, or just exploring.
+
+If you share what you're actually working on in training, I can prioritize what matters for YOU right now.
+
+Otherwise I'm just throwing random videos at you.`,
+
+      video_follow_up: `Hey - did you get a chance to watch that ${context.instructorName} video?
+
+Curious which approach resonated with you.
+
+(I'm learning which instructors work best for different people)`,
+
+      pre_training_focus: `Training soon? 
+
+Quick question before you go: What's one thing you want to work on today?
+
+After training, come back and tell me:
+• Did you work on it?
+• Did it go well or did you struggle?
+
+Just those two things. I'll give you specific coaching based on how it actually went.`,
+
+      post_training_follow_up: `How'd training go?
+
+You mentioned wanting to work on ${context.technique} earlier.
+
+Did you get a chance to drill it?`
+    };
+    
+    return nudges[nudgeType] || nudges.discover_session_logging_v1;
+  }
+  
+  // NEW: Video engagement follow-up
+  async createVideoFollowUp(userId, videoEngagement) {
+    // Wait 24 hours after video click
+    const hoursSinceClick = (Date.now() - videoEngagement.clicked_at) / (1000 * 60 * 60);
+    
+    if (hoursSinceClick < 20 || hoursSinceClick > 48) return;
+    
+    // Check if they've logged a session since watching
+    const sessionSince = await db.training_sessions.findFirst({
+      where: {
+        userId,
+        created_at: { gte: videoEngagement.clicked_at }
+      }
+    });
+    
+    if (sessionSince) return; // They're already logging, don't nudge
+    
+    // Create follow-up nudge
+    const video = await db.ai_video_knowledge.findUnique({
+      where: { id: videoEngagement.video_id }
+    });
+    
+    await this.createNudge(userId, {
+      type: 'video_follow_up',
+      content: this.getEnhancedNudgeContent('video_follow_up', {
+        instructorName: video.instructor
+      }),
+      priority: 'low',
+      deliveryTime: new Date()
+    });
+  }
+  
+  // ... rest of existing methods ...
+}
+```
+
+-----
+
+## PART 6: INTEGRATION WITH VIDEO RECOMMENDATION FLOW
+
+Update your existing video recommendation handler:
+
+```javascript
+import { profileExtractor } from './services/profileExtractor';
+import { patternTeaser } from './services/patternTeaser';
+import { powerUserShowcase } from './services/powerUserShowcase';
+import { engagementSystem } from './services/engagementSystem';
+
+// Enhance your existing video recommendation handler
+export async function handleVideoRequest(userMessage, userId) {
+  
+  // 1. EXISTING: Get video recommendations (don't change this)
+  const videos = await getVideoRecommendations(userMessage, userId);
+  
+  // 2. NEW: Log video request for pattern detection
+  const extractedTopics = await extractTopicsFromQuery(userMessage);
+  await db.video_request_history.create({
+    data: {
+      userId,
+      query: userMessage,
+      extracted_topics: extractedTopics,
+      videos_recommended: videos.map(v => v.id)
+    }
+  });
+  
+  // 3. NEW: Track video engagement (when user clicks)
+  for (const video of videos) {
+    await db.video_engagement.create({
+      data: {
+        userId,
+        video_id: video.id,
+        recommended_for_technique: extractedTopics[0] || 'general',
+        recommendation_context: { query: userMessage }
+      }
+    });
+  }
+  
+  // 4. NEW: Get interaction count
+  const interactionCount = await db.video_request_history.count({
+    where: { userId }
+  });
+  
+  // 5. Build response with videos
+  let response = formatVideoResponse(videos);
+  
+  // 6. NEW: Add conversational profile question (early interactions only)
+  if (interactionCount <= 4) {
+    const profileQuestion = await profileExtractor.getProfileQuestion(userId, interactionCount);
+    if (profileQuestion) {
+      response += `\n\n${profileQuestion.question}`;
+    }
+  }
+  
+  // 7. NEW: Add pattern teaser (if detected)
+  const teaser = await patternTeaser.generateTeaser(userId);
+  if (teaser) {
+    response += `\n\n${teaser.content}`;
+  }
+  
+  // 8. NEW: Add power user example (occasionally)
+  const example = await powerUserShowcase.shouldShowExample(userId);
+  if (example) {
+    response += `\n\n---\n\n${example.content}`;
+  }
+  
+  // 9. NEW: Check for existing engagement nudge
+  if (!teaser && !example) {
+    const nudge = await engagementSystem.getPendingNudge(userId);
+    if (nudge) {
+      const enhancedContent = engagementSystem.getEnhancedNudgeContent(
+        nudge.nudge_type,
+        { videoCount: interactionCount }
+      );
+      response += `\n\n${enhancedContent}`;
+      await engagementSystem.markNudgeDelivered(nudge.id, 'shown');
+    }
+  }
+  
+  // 10. Update engagement profile
+  await engagementSystem.updateEngagement(userId, {
+    type: 'video_request'
+  });
+  
+  return response;
+}
+
+// Helper: Extract topics from user query
+async function extractTopicsFromQuery(query) {
+  const lowerQuery = query.toLowerCase();
+  const topics = [];
+  
+  // Technique detection
+  const techniques = [
+    'triangle', 'armbar', 'kimura', 'americana', 'omoplata', 'guillotine',
+    'rear_naked_choke', 'bow_and_arrow', 'loop_choke', 'baseball_choke',
+    'guard_passing', 'passing', 'sweep', 'takedown', 'throw'
+  ];
+  
+  techniques.forEach(tech => {
+    if (lowerQuery.includes(tech)) {
+      topics.push(tech);
+    }
+  });
+  
+  // Position detection
+  const positions = [
+    'closed_guard', 'open_guard', 'half_guard', 'mount', 'side_control',
+    'back_control', 'turtle', 'standing', 'butterfly_guard', 'x_guard'
+  ];
+  
+  positions.forEach(pos => {
+    if (lowerQuery.includes(pos.replace('_', ' '))) {
+      topics.push(pos);
+    }
+  });
+  
+  // Gi/No-gi detection
+  if (lowerQuery.includes('no-gi') || lowerQuery.includes('nogi')) {
+    topics.push('no-gi');
+  } else if (lowerQuery.includes('gi')) {
+    topics.push('gi');
+  }
+  
+  return topics;
+}
+```
+
+-----
+
+## PART 7: PROFILE RESPONSE HANDLER
+
+Create handler for when user responds to profile questions:
+
+```javascript
+// Add to your message handling logic
+
+async function handleUserMessage(userMessage, userId, context) {
+  
+  // Check if this is a response to a profile question
+  const lastInteraction = await getLastInteraction(userId);
+  
+  if (lastInteraction && lastInteraction.included_profile_question) {
+    // Extract profile data from response
+    const extracted = await profileExtractor.extractFromResponse(
+      userId,
+      userMessage,
+      lastInteraction.profile_question_field
+    );
+    
+    if (extracted.success) {
+      // Acknowledge and continue
+      return {
+        response: `Got it - ${formatExtractedData(extracted)}. ${continueConversation(userMessage)}`,
+        profileUpdated: true
+      };
+    }
+  }
+  
+  // Otherwise handle normally
+  return handleNormalMessage(userMessage, userId, context);
+}
+
+function formatExtractedData(extracted) {
+  if (extracted.field === 'belt_level') {
+    return `${extracted.extracted} belt`;
+  } else if (extracted.field === 'training_frequency') {
+    return `training ${extracted.extracted}x/week`;
+  } else if (extracted.field === 'main_position') {
+    return `you play ${extracted.extracted}`;
+  } else if (extracted.field === 'training_goals') {
+    return `focused on ${extracted.extracted}`;
+  }
+  return 'noted';
+}
+```
+
+-----
+
+## PART 8: VIDEO CLICK TRACKING
+
+Add to your frontend (when user clicks video link):
+
+```javascript
+// When user clicks a video link, track engagement
+async function trackVideoClick(videoId, userId) {
+  await fetch('/api/video-engagement/click', {
+    method: 'POST',
+    body: JSON.stringify({
+      userId,
+      videoId,
+      clickedAt: new Date()
+    })
+  });
+}
+
+// Backend endpoint
+app.post('/api/video-engagement/click', async (req, res) => {
+  const { userId, videoId, clickedAt } = req.body;
+  
+  await db.video_engagement.updateMany({
+    where: {
+      userId,
+      video_id: videoId,
+      clicked_at: null
+    },
+    data: {
+      clicked_at: new Date(clickedAt)
+    }
+  });
+  
+  // Schedule follow-up check in 24 hours
+  scheduleVideoFollowUp(userId, videoId);
+  
+  res.json({ success: true });
+});
+
+// Background job: Check for follow-ups
+async function scheduleVideoFollowUp(userId, videoId) {
+  setTimeout(async () => {
+    const engagement = await db.video_engagement.findFirst({
+      where: { userId, video_id: videoId }
+    });
+    
+    if (engagement) {
+      await engagementSystem.createVideoFollowUp(userId, engagement);
+    }
+  }, 24 * 60 * 60 * 1000); // 24 hours
+}
+```
+
+-----
+
+## PART 9: BACKGROUND JOBS
+
+Update `jobs/intelligenceUpdater.js`:
+
+```javascript
+import cron from 'node-cron';
+import { engagementSystem } from '../services/engagementSystem';
+import { db } from '../services/database';
+
+// Check for video follow-ups (run every 6 hours)
+cron.schedule('0 */6 * * *', async () => {
+  console.log('🎥 Checking for video follow-ups...');
+  
+  // Get video engagements from 20-48 hours ago
+  const startTime = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const endTime = new Date(Date.now() - 20 * 60 * 60 * 1000);
+  
+  const engagements = await db.video_engagement.findMany({
+    where: {
+      clicked_at: {
+        gte: startTime,
+        lte: endTime
+      },
+      user_feedback: null
+    }
+  });
+  
+  for (const engagement of engagements) {
+    await engagementSystem.createVideoFollowUp(engagement.userId, engagement);
+  }
+  
+  console.log(`✅ Processed ${engagements.length} video follow-ups`);
+});
+
+// Check for conversion opportunities (run daily at 6am)
+cron.schedule('0 6 * * *', async () => {
+  console.log('🎯 Checking for conversion opportunities...');
+  
+  // Find video-only users who haven't been nudged recently
+  const videoOnlyUsers = await db.user_engagement_profile.findMany({
+    where: {
+      has_logged_session: false,
+      last_video_request_at: {
+        gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Active in last week
+      }
+    }
+  });
+  
+  for (const user of videoOnlyUsers) {
+    // Check if they should get a nudge
+    await engagementSystem.checkForDiscoveryNudges(user.userId);
+  }
+  
+  console.log(`✅ Checked ${videoOnlyUsers.length} video-only users`);
+});
+
+console.log('📅 Conversion optimization jobs scheduled');
+```
+
+-----
+
+## PART 10: ANALYTICS DASHBOARD (OPTIONAL)
+
+Track conversion metrics:
+
+```sql
+-- Admin query: Conversion funnel
+CREATE VIEW conversion_funnel AS
+SELECT 
+  'Total Users' as stage,
+  COUNT(DISTINCT id) as count
+FROM users
+
+UNION ALL
+
+SELECT 
+  'Video Requesters' as stage,
+  COUNT(DISTINCT user_id) as count
+FROM video_request_history
+
+UNION ALL
+
+SELECT 
+  'Received Pattern Teaser' as stage,
+  COUNT(DISTINCT user_id) as count
+FROM user_engagement_profile
+WHERE pattern_teasers_shown > 0
+
+UNION ALL
+
+SELECT
+  'Received Power Example' as stage,
+  COUNT(DISTINCT user_id) as count
+FROM user_engagement_profile
+WHERE power_user_examples_shown > 0
+
+UNION ALL
+
+SELECT
+  'Logged First Session' as stage,
+  COUNT(DISTINCT user_id) as count
+FROM user_engagement_profile
+WHERE has_logged_session = true
+
+UNION ALL
+
+SELECT
+  'Power Users (5+ sessions)' as stage,
+  COUNT(DISTINCT user_id) as count
+FROM user_engagement_profile
+WHERE total_sessions_logged >= 5;
+```
+
+-----
+
+## TESTING CHECKLIST
+
+After implementation, test:
+
+1. ✅ **Profile extraction works:**
+
+- First video request includes profile question
+- User answer is correctly parsed and stored
+- Profile completion score updates
+
+1. ✅ **Video engagement tracked:**
+
+- Video clicks recorded in database
+- Follow-up nudges appear 24 hours later
+
+1. ✅ **Pattern teasers appear:**
+
+- After 3+ video requests on same topic
+- Max 1 per week per user
+- Content is relevant to detected pattern
+
+1. ✅ **Power user examples shown:**
+
+- Every 5 video requests
+- Max 1 per week per user
+- Examples rotate through library
+
+1. ✅ **Enhanced nudges work:**
+
+- Better messaging than before
+- Appear at right times
+- Don’t spam users
+
+1. ✅ **Conversion tracking:**
+
+- Can measure video-only → power user conversion
+- Can see which enhancements work best
+
+-----
+
+## DEPLOYMENT ORDER
+
+1. Add new database tables (video_engagement, video_request_history, power_user_examples)
+1. Modify existing user_engagement_profile table
+1. Install new services (profileExtractor, patternTeaser, powerUserShowcase)
+1. Update existing engagementSystem with enhanced nudges
+1. Integrate into video recommendation flow
+1. Add video click tracking to frontend
+1. Deploy background jobs
+1. Seed power user examples
+1. Test with real users
+1. Monitor conversion metrics
+
+-----
+
+## CRITICAL SUCCESS METRICS
+
+Track these to measure effectiveness:
+
+**Baseline (before enhancements):**
+
+- Video-only user conversion rate: ~15%
+- Time to first session log: ~14 days
+- Power user retention: ~60%
+
+**Target (after enhancements):**
+
+- Video-only user conversion rate: ~40-50%
+- Time to first session log: ~7 days
+- Power user retention: ~85%
+
+**Weekly monitoring:**
+
+- How many users received profile questions?
+- How many pattern teasers shown?
+- How many power user examples shown?
+- Conversion rate per enhancement type?
+- Which examples have highest conversion?
+
+-----
+
+## IMPORTANT NOTES
+
+**What this DOES:**
+
+- Naturally extracts user profile through conversation
+- Detects patterns even for video-only users
+- Shows real examples of power user value
+- Creates multiple conversion touchpoints
+- Tracks what works and what doesn’t
+
+**What this DOESN’T do:**
+
+- Spam users with notifications
+- Force session logging
+- Gate features behind paywall
+- Make users feel bad for not logging
+- Overwhelm with too many nudges
+
+**The philosophy:**
+
+- Build trust through value
+- Educate through demonstration
+- Convert through curiosity
+- Retain through intelligence
+
+**Maximum nudge frequency: 1 per week per user**
+
+-----
+
+**This is a complete conversion optimization system. Everything is additive. Existing functionality stays intact. New intelligence layers convert video users into power users naturally and effectively.**
+
+```
+---
+
+# THAT'S IT
+
+This master prompt adds everything needed to convert video-only users into power users:
+
+✅ **Conversational profile extraction** - Learn about them naturally  
+✅ **Video engagement tracking** - Know what they actually watch  
+✅ **Pattern teasers** - Show intelligence previews  
+✅ **Power user showcase** - Demonstrate value through real examples  
+✅ **Enhanced nudges** - Better conversion messaging  
+✅ **Smart follow-ups** - Engage based on behavior  
+
+**Expected outcome: 15% → 40-50% conversion rate**
+
+**Without being pushy or annoying.**
+
+**Copy this entire prompt and send it to Replit Agent.** 🚀​​​​​​​​​​​​​​​​
+```

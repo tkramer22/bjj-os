@@ -1,0 +1,211 @@
+That’s the right approach. Fix first, verify at 95%+, then human test.
+
+-----
+
+**Here’s the master prompt for your approval:**
+
+```
+PROFESSOR OS PERSONALITY + VIDEO ACCURACY OVERHAUL
+
+We need Professor OS responses to feel like texting a real coach, not ChatGPT with BJJ paint. Fix all issues and run a verification test.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: CONVERSATION PERSONALITY FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. REMOVE "TRAINING PARTNER"
+- Delete from system prompt entirely
+- Use user's actual name only 5% of responses, for emphasis
+- Example: "You got this, Todd" on a breakthrough moment
+- Otherwise: no name, just talk naturally
+
+2. RESPONSE LENGTH BY INTENT (not word count)
+Detect intent and match response:
+
+| Intent | Example message | Response length |
+|--------|-----------------|-----------------|
+| Greeting | "hey" "what's up" | 1-2 sentences |
+| Quick question | "show me triangles" | 2-3 sentences + video |
+| Troubleshoot | "hip bump not working" | 3-4 sentences + video |
+| Emotional | "got smashed today" | Empathy + 3-4 sentences |
+| Strategy | "what should I focus on" | 4-6 sentences max |
+| Deep dive (they ask) | "explain more" "why?" | Can go longer |
+
+DEFAULT: 400-600 characters. Only exceed for emotional support or when user explicitly asks for depth.
+
+3. QUOTE USER'S VOCABULARY BACK
+- Store summarized phrases with their language in profile
+- Example storage: { struggle: "getting smashed in half guard", their_word: "smashed" }
+- Claude references naturally: "You said you keep getting smashed in half guard - that's usually the underhook"
+- NOT: "We discussed half guard issues previously"
+
+4. VARY ENDINGS
+Remove formulaic "How's that feeling?" from every response.
+
+Mix:
+- 30% questions: "What happened when you tried it?"
+- 25% challenges: "Try it Tuesday. Report back."
+- 25% confidence: "You got this."
+- 20% anticipation: "This is gonna click soon."
+
+5. STORE COMMUNICATION STYLE IN PROFILE
+Add to user profile:
+
+```json
+{
+  "communication_style": {
+    "avg_message_length": number,
+    "follow_up_rate": 0.0-1.0,
+    "prefers_videos": true/false,
+    "vocabulary_notes": ["smashed", "stuck", etc]
+  }
+}
+```
+
+Track automatically over time. Inject into Claude context:
+“User typically sends brief messages. Follow-up rate is low. Be concise.”
+
+1. STRIP MARKDOWN FORMATTING
+
+- No **bold text**
+- No bullet points in responses
+- No headers
+- Write like a text message, not a blog post
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: COMBAT SPORTS INTELLIGENCE FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Tests showed “pass” but actual responses said “I don’t have access to recent ADCC results”
+
+The scraper exists but ISN’T delivering data to Claude.
+
+FIX:
+
+1. Trace the combat sports data flow end-to-end
+1. Show me: Where is scraper called? What does it return? Is it injected into prompt?
+1. Find the broken connection
+1. Fix it
+1. Test with: “Who won ADCC 2024?” - response MUST include real names (Gordon Ryan, Mica Galvao, etc.)
+
+If scraper hasn’t run recently:
+
+- Run it now
+- Store results
+- Inject into Professor OS context
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: VIDEO ACCURACY VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+When Professor OS recommends a video, verify:
+
+|Check               |Rule                                             |
+|--------------------|-------------------------------------------------|
+|Technique match     |Hip bump question → hip bump video               |
+|Position match      |Closed guard question → closed guard video       |
+|Instructor match    |Mentions “Danaher” → serves Danaher video        |
+|Level appropriate   |Blue belt → fundamentals, not advanced           |
+|Gi/No-gi match      |User trains gi → gi video priority               |
+|Attack/Defense match|“Getting passed” → guard retention, not passing  |
+|Video exists        |Only serve videos that exist in our 724 library  |
+|Timestamp accuracy  |If timestamp given, verify it shows the technique|
+
+ADD DIAGNOSTIC:
+For each video recommendation, log:
+
+```json
+{
+  "question_intent": "troubleshoot",
+  "technique_requested": "hip bump",
+  "video_served": {
+    "title": "...",
+    "instructor": "...",
+    "technique_tags": [...],
+    "match_score": 0.0-1.0
+  },
+  "match_reasons": ["technique_match", "instructor_mentioned", etc]
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: VERIFICATION TEST (100 questions)
+═══════════════════════════════════════════════════════════════════════════════
+
+Run 100 test questions across these categories:
+
+PERSONALITY (40 questions):
+
+- 10 greetings/casual → verify short responses
+- 10 technique questions → verify video + concise response
+- 10 troubleshooting → verify diagnosis + video
+- 10 emotional/frustration → verify empathy, appropriate length
+
+VIDEO ACCURACY (30 questions):
+
+- 10 specific technique requests → verify correct technique video
+- 10 instructor-specific requests → verify correct instructor video
+- 10 defensive vs offensive → verify attack/defense match
+
+COMBAT SPORTS (15 questions):
+
+- 5 ADCC questions → must return real data
+- 5 IBJJF questions → must return real data
+- 5 competitor questions → must return real info
+
+MEMORY/PERSONALIZATION (15 questions):
+
+- 5 referencing past conversation → verify vocabulary callback
+- 5 asking about their profile → verify personalization
+- 5 asking for recommendations → verify body type / level match
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: SCORING CRITERIA
+═══════════════════════════════════════════════════════════════════════════════
+
+Each response scored on:
+
+|Criteria             |Pass                             |Fail                               |
+|---------------------|---------------------------------|-----------------------------------|
+|No “Training Partner”|✅                                |Contains “Training Partner”        |
+|Correct length       |Within intent range              |Too long or too short              |
+|No markdown          |Plain text                       |Contains **bold** or bullets       |
+|Ending variety       |Not a question (unless 30% quota)|Formulaic question ending          |
+|Video accuracy       |Technique/instructor match       |Wrong video or no video when needed|
+|Combat sports        |Real data when asked             |“I don’t have access”              |
+|Memory callback      |Uses their vocabulary            |Generic reference                  |
+
+MINIMUM PASS RATE: 95% in each category
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: DELIVERABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+After fixes, provide:
+
+1. CONFIRMATION of each fix implemented
+1. FULL TEST RESULTS (100 questions)
+1. SCORE BY CATEGORY:
+
+- Personality: X/40
+- Video Accuracy: X/30
+- Combat Sports: X/15
+- Memory/Personalization: X/15
+- OVERALL: X/100
+
+1. SAMPLE RESPONSES showing before/after for:
+
+- Greeting
+- Technique question
+- Frustration message
+- Combat sports question
+
+1. Any categories below 95%: explain why and what additional fix is needed
+
+Save results to: /public/professor-os-FINAL-VERIFICATION.txt
+
+```
+---
+
+**Ready to send?**
+```

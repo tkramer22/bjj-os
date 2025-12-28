@@ -1,0 +1,231 @@
+**You’re right!** Let me search the project files to see what we designed for video curation controls.​​​​​​​​​​​​​​​​
+
+Let me search for more specific information about the curation toggle and admin controls:​​​​​​​​​​​​​​​​
+
+**YOU’RE ABSOLUTELY RIGHT!** Looking at the checkpoint file - **PROMPT 6.5 was supposed to include an Admin Video Dashboard with curation controls**, but it hasn’t been built yet!
+
+Here’s what was planned:
+
+-----
+
+## **PROMPT 6.5: ADMIN VIDEO DASHBOARD (NOT BUILT YET)**
+
+**Features that should exist:**
+
+```
+Admin Video Dashboard:
+
+📊 STATS CARDS:
+- Total videos: 260
+- Avg quality: 8/10
+- Helpful ratio: (not tracking yet)
+
+🎛️ CURATION CONTROLS:
+- Toggle: Automatic Curation ON/OFF
+- Manual review mode toggle
+- Quality threshold slider (7.0-9.0)
+- Run curation now button
+
+📅 RECENTLY ADDED:
+- Last 24 hours: 2 videos
+- This week
+- This month
+
+📋 ALL VIDEOS TABLE:
+- Search/filter
+- Sort by quality, date, technique
+- Remove video option
+- Manual approve/reject
+```
+
+-----
+
+## **WHAT’S MISSING:**
+
+Looking at your screenshot, the current admin dashboard only shows:
+
+- ✅ Video library (260 videos, 8/10 quality, 2 added today)
+- ✅ Search and filter
+- ✅ Watch video / Full video buttons
+- ❌ **NO curation toggle controls**
+- ❌ **NO auto-review on/off switch**
+- ❌ **NO manual curation controls**
+
+-----
+
+## **SEND THIS TO REPLIT AGENT:**
+
+```
+ADD: Curation control panel to Admin Video Dashboard
+
+CURRENT STATE:
+The admin video dashboard at /admin/videos shows the video library but is missing curation controls.
+
+REQUIRED ADDITIONS:
+
+1. ADD CURATION CONTROLS PANEL (above video library)
+
+┌────────────────────────────────────────────────────────┐
+│  CURATION SETTINGS                                     │
+├────────────────────────────────────────────────────────┤
+│                                                         │
+│  Automatic Curation                                    │
+│  ○ ON  ● OFF                                           │
+│  Videos automatically added when they meet threshold   │
+│                                                         │
+│  Manual Review Mode                                    │
+│  ● ON  ○ OFF                                           │
+│  All videos require manual approval before adding      │
+│                                                         │
+│  Quality Threshold: [======●==] 7.5                    │
+│  Only videos scoring above this are auto-added         │
+│                                                         │
+│  ┌──────────────────────┐  ┌─────────────────────┐   │
+│  │  Run Curation Now    │  │  Review Queue (0)   │   │
+│  └──────────────────────┘  └─────────────────────┘   │
+│                                                         │
+│  Last run: 2 hours ago                                 │
+│  Next scheduled: In 22 hours                           │
+│                                                         │
+└────────────────────────────────────────────────────────┘
+```
+
+1. TOGGLE BEHAVIORS:
+
+AUTOMATIC CURATION:
+
+- ON: System runs daily, auto-adds videos scoring above threshold
+- OFF: System still analyzes but doesn’t add anything automatically
+
+MANUAL REVIEW MODE:
+
+- ON: All videos go to review queue, admin must approve
+- OFF: Videos scoring above threshold auto-add to library
+
+QUALITY THRESHOLD SLIDER:
+
+- Range: 6.0 to 9.0
+- Default: 7.5
+- Updates in real-time
+- Shows: “Threshold: 7.5/10”
+
+RUN CURATION NOW BUTTON:
+
+- Manually triggers curation process
+- Shows loading state: “Running curation…”
+- After complete: “Added X videos, rejected Y videos”
+
+REVIEW QUEUE BUTTON:
+
+- Shows count of videos pending review
+- Opens modal with pending videos
+- Each video shows: Title, instructor, quality score, approve/reject buttons
+
+1. DATABASE CHANGES:
+
+Add curation_settings table:
+
+```sql
+CREATE TABLE curation_settings (
+  id SERIAL PRIMARY KEY,
+  automatic_curation_enabled BOOLEAN DEFAULT true,
+  manual_review_enabled BOOLEAN DEFAULT false,
+  quality_threshold DECIMAL DEFAULT 7.5,
+  last_run_at TIMESTAMP,
+  next_scheduled_run TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+Add video_review_queue table:
+
+```sql
+CREATE TABLE video_review_queue (
+  id SERIAL PRIMARY KEY,
+  video_url TEXT NOT NULL,
+  title TEXT,
+  instructor TEXT,
+  quality_score DECIMAL,
+  analysis_data JSONB,
+  status TEXT DEFAULT 'pending', -- pending, approved, rejected
+  reviewed_by INTEGER REFERENCES users(id),
+  reviewed_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+1. API ENDPOINTS:
+
+GET /api/admin/curation/settings
+
+- Returns current curation settings
+
+PATCH /api/admin/curation/settings
+
+- Updates curation settings
+- Body: { automatic_curation_enabled, manual_review_enabled, quality_threshold }
+
+POST /api/admin/curation/run
+
+- Manually triggers curation process
+- Returns: { videos_analyzed, videos_added, videos_rejected }
+
+GET /api/admin/curation/queue
+
+- Returns videos pending manual review
+
+POST /api/admin/curation/review/:videoId
+
+- Body: { action: ‘approve’ | ‘reject’ }
+- Approves or rejects video from queue
+
+1. CURATION LOGIC UPDATES:
+
+When curation runs:
+
+IF automatic_curation_enabled = false:
+
+- Don’t run curation at all
+- OR run but don’t add anything
+
+IF manual_review_enabled = true:
+
+- Analyze videos as normal
+- Add high-scoring videos to review_queue
+- Don’t add to main library until approved
+
+IF manual_review_enabled = false:
+
+- Analyze videos
+- Auto-add videos scoring >= quality_threshold
+- Add to library immediately
+
+1. UI/UX DETAILS:
+
+- Place controls panel ABOVE the video library
+- Use purple gradient buttons (match existing design)
+- Toggle switches should be clear ON/OFF states
+- Slider should update value in real-time
+- Show last run time and next scheduled time
+- “Run Curation Now” disabled if already running
+- Review queue badge shows count (like “Review Queue (5)”)
+
+1. PERMISSIONS:
+
+Only admins can:
+
+- Access /admin/videos
+- Change curation settings
+- Approve/reject videos
+- Manually trigger curation
+
+Regular users cannot access this panel.
+
+IMPLEMENTATION PRIORITY:
+This is a critical admin feature for controlling the video library growth and quality. Implement immediately.
+
+```
+---
+
+**That's what's missing! Send that prompt to Replit Agent and you'll get the curation toggle controls you were expecting.** 🎛️​​​​​​​​​​​​​​​​
+```

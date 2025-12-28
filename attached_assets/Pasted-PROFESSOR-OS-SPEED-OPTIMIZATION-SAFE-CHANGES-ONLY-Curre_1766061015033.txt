@@ -1,0 +1,70 @@
+PROFESSOR OS SPEED OPTIMIZATION - SAFE CHANGES ONLY
+
+Current response time: 2-4 seconds
+Target: <2 seconds
+
+ONLY implement changes that have ZERO impact on response quality.
+
+═══════════════════════════════════════════════════════════════════════════════
+1. ENABLE RESPONSE STREAMING (PRIORITY)
+═══════════════════════════════════════════════════════════════════════════════
+
+Enable Claude API streaming so users see text as it generates.
+
+- Set stream: true in Claude API call
+- Send tokens to frontend via SSE or WebSocket as they arrive
+- User sees first word in ~200ms instead of waiting 3 seconds
+
+This changes NOTHING about the response content - just delivery.
+
+═══════════════════════════════════════════════════════════════════════════════
+2. PARALLEL DATABASE QUERIES
+═══════════════════════════════════════════════════════════════════════════════
+
+Fetch all context data simultaneously:
+
+const [profile, videos, history, patterns] = await Promise.all([
+  getProfile(userId),
+  getVideoKnowledge(query),
+  getConversationHistory(userId),
+  getPatterns(userId)
+]);
+
+Same data, same queries - just parallel instead of sequential.
+Saves ~250-300ms.
+
+═══════════════════════════════════════════════════════════════════════════════
+3. CONTEXT CACHING WITH INVALIDATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Cache user context for 5 minutes BUT invalidate on:
+- Profile update
+- New session logged
+- Any user data change
+
+This ensures Claude always sees fresh data.
+
+═══════════════════════════════════════════════════════════════════════════════
+4. VIDEO CACHE (1 hour TTL)
+═══════════════════════════════════════════════════════════════════════════════
+
+Pre-cache top videos per technique category.
+Videos don't change frequently - safe to cache.
+
+═══════════════════════════════════════════════════════════════════════════════
+5. VERIFY DATABASE INDEXES
+═══════════════════════════════════════════════════════════════════════════════
+
+Check indexes exist on video_knowledge table for fast queries.
+One-time verification, no ongoing impact.
+
+═══════════════════════════════════════════════════════════════════════════════
+DO NOT CHANGE:
+═══════════════════════════════════════════════════════════════════════════════
+
+❌ System prompt - Do not modify, trim, or optimize
+❌ Field injection logic - We just optimized this to 96%
+❌ Claude model or parameters - Keep as-is
+❌ Video ranking algorithm - Keep as-is
+
+Show me before/after response times after implementing 1-4.

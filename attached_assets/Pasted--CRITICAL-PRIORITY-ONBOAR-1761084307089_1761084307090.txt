@@ -1,0 +1,204 @@
+```
+═══════════════════════════════════════════════════════════════════
+🚨 CRITICAL PRIORITY: ONBOARDING FROZEN - FIX IMMEDIATELY
+═══════════════════════════════════════════════════════════════════
+
+BLOCKING ISSUE: Users cannot complete onboarding. This blocks 100% of new users from accessing the app.
+
+CURRENT BEHAVIOR:
+- User reaches Step 4 of 4: "Language preference"
+- Screen shows:
+  • "Language preference" title
+  • "Prof. OS speaks both English and Portuguese"
+  • English option (selected - purple circle filled)
+  • Português (Portuguese) option
+  • "Back" button
+  • "Complete Setup" button (purple)
+- User clicks "Complete Setup"
+- NOTHING HAPPENS
+- No loading state
+- No error message
+- No navigation
+- Button appears to do nothing
+- User is completely stuck
+
+IMPACT:
+- Every new user hits this bug
+- Cannot access /chat
+- Cannot access /admin
+- Cannot use the app at all
+- Beta launch on Saturday is blocked
+- This is the #1 most critical bug
+
+REQUIRED FIX:
+Make the "Complete Setup" button actually work and complete the onboarding flow.
+
+INVESTIGATION STEPS:
+
+1. CHECK THE BUTTON COMPONENT
+   File: client/src/pages/Onboarding.tsx
+   
+   Find the "Complete Setup" button
+   Verify it has an onClick handler attached
+   Check if handler is being called (add console.log)
+   
+   Example of what should be there:
+   <button onClick={handleCompleteSetup}>Complete Setup</button>
+   
+   If onClick is missing or not working, this is the problem.
+
+2. CHECK THE HANDLER FUNCTION
+   
+   Should look something like:
+   const handleCompleteSetup = async () => {
+     try {
+       setLoading(true);
+       
+       // Save preferences to database
+       await fetch('/api/user/onboarding', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           language: selectedLanguage,
+           beltLevel: selectedBeltLevel,
+         })
+       });
+       
+       // Mark onboarding complete
+       localStorage.setItem('onboardingComplete', 'true');
+       
+       // Navigate to chat
+       navigate('/chat');
+     } catch (error) {
+       console.error('Onboarding error:', error);
+       setError('Failed to complete setup');
+     } finally {
+       setLoading(false);
+     }
+   };
+   
+   Check if this function exists
+   Check if it's actually being called
+   Add console.log at the start to verify
+
+3. CHECK THE API ENDPOINT
+   
+   Endpoint: POST /api/user/onboarding
+   
+   Verify this endpoint exists in server/routes
+   Check if it's returning 200 success
+   Check if it's saving to database
+   Check database table for saved preferences
+   
+   If endpoint is missing, create it
+
+4. CHECK BROWSER CONSOLE
+   
+   Open browser console (F12 or right-click → Inspect → Console)
+   Click "Complete Setup" button
+   Look for:
+   - JavaScript errors (red text)
+   - Network requests (Network tab)
+   - Failed API calls
+   - Any error messages
+
+5. CHECK NAVIGATION
+   
+   After API success, should navigate to /chat
+   Check if React Router navigate is working
+   Check if /chat route exists
+
+COMMON CAUSES & FIXES:
+
+CAUSE 1: Button onClick not attached
+FIX: Add onClick={handleCompleteSetup} to button
+
+CAUSE 2: Handler function doesn't exist
+FIX: Create handleCompleteSetup function
+
+CAUSE 3: API endpoint missing
+FIX: Create POST /api/user/onboarding endpoint
+
+CAUSE 4: Database save failing
+FIX: Check database connection and table schema
+
+CAUSE 5: Navigation not working
+FIX: Import and use useNavigate from react-router-dom
+
+CAUSE 6: Form validation blocking
+FIX: Remove or fix validation logic
+
+TESTING CHECKLIST:
+
+After fixing, test complete flow:
+1. Start onboarding from beginning
+2. Complete all 4 steps
+3. Click "Complete Setup"
+4. Button shows loading state
+5. API call succeeds (check Network tab)
+6. Preferences saved to database (verify in Supabase)
+7. User redirected to /chat
+8. Chat page loads successfully
+9. User can ask Prof. OS questions
+10. No console errors at any step
+
+ADD DEBUGGING:
+
+Add console.logs to help debug:
+
+const handleCompleteSetup = async () => {
+  console.log('Complete Setup clicked');
+  console.log('Current preferences:', { language, beltLevel });
+  
+  try {
+    setLoading(true);
+    console.log('Calling API...');
+    
+    const response = await fetch('/api/user/onboarding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language, beltLevel })
+    });
+    
+    console.log('API Response:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`API failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('API Success:', data);
+    
+    localStorage.setItem('onboardingComplete', 'true');
+    console.log('Saved to localStorage');
+    
+    console.log('Navigating to /chat...');
+    navigate('/chat');
+    
+  } catch (error) {
+    console.error('Error:', error);
+    setError(error.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+DELIVERABLES:
+
+1. Working "Complete Setup" button
+2. Successful API call to save preferences
+3. Navigation to /chat after completion
+4. No console errors
+5. Tested full onboarding flow end-to-end
+
+TIMELINE:
+
+This is the #1 blocker. Fix this BEFORE anything else.
+Target: Working within 30 minutes.
+
+After fixing, immediately test with a fresh browser session (incognito mode) to simulate new user experience.
+
+FIX THIS NOW. Beta launch depends on it.
+
+═══════════════════════════════════════════════════════════════════
+```

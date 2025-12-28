@@ -1,0 +1,111 @@
+```
+THE PROMPTS ARE NOT WORKING - I NEED TO SEE AND EDIT DIRECTLY
+
+Stop adding rules that don't work. I need to see the ACTUAL system prompt and edit it myself.
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK 1: SHOW ME THE COMPLETE SYSTEM PROMPT
+═══════════════════════════════════════════════════════════════════════════════
+
+Open server/utils/buildSystemPrompt.ts (or wherever the prompt is built)
+
+Copy and paste the ENTIRE system prompt text into this chat. 
+Every single line. I need to see exactly what Claude is receiving.
+
+Do not summarize. Do not paraphrase. Show me the raw text.
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK 2: SHOW ME WHERE RULES ARE POSITIONED
+═══════════════════════════════════════════════════════════════════════════════
+
+In the prompt you show me, mark:
+- Line numbers where behavioral rules appear
+- Are they at the TOP (first 20 lines)?
+- Are they at the BOTTOM (last 20 lines)?
+- Or buried in the MIDDLE?
+
+Rules in the middle of a long prompt get IGNORED by LLMs.
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK 3: COUNT THE TOKENS
+═══════════════════════════════════════════════════════════════════════════════
+
+How many tokens is the complete system prompt?
+
+If over 2500 tokens, the model starts losing focus on rules.
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK 4: I WILL REWRITE THE PROMPT
+═══════════════════════════════════════════════════════════════════════════════
+
+After you show me the current prompt, I will give you a rewritten version that:
+- Puts NO REPETITION rule in the FIRST 3 lines
+- Puts a reminder in the LAST 3 lines
+- Removes any fluff or redundant instructions
+- Is under 2000 tokens total
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK 5: FIND THE DUPLICATE MESSAGE BUG IN CODE
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS is sending what appears to be the SAME message content TWICE.
+This could be happening in multiple places:
+
+A. FRONTEND RENDERING BUG:
+   - Is the message being rendered twice in the chat component?
+   - Check ios-chat.tsx or mobile-chat.tsx
+   - Is setMessages being called multiple times?
+   - Is there a duplicate key in the messages array?
+   - Add console.log to show messages array length after each update
+
+B. STREAMING BUG:
+   - Is the streaming response being processed twice?
+   - Check the streaming handler in the chat component
+   - Is onChunk or onMessage being fired multiple times for the same content?
+   - Add console.log to each chunk received
+
+C. API BUG:
+   - Is the backend sending the response twice?
+   - Check server/routes/ai-chat-claude.ts (or equivalent)
+   - Is res.write or stream being called multiple times?
+   - Add server-side logging to track what's being sent
+
+D. DATABASE BUG:
+   - Is the message being saved twice to the database?
+   - Check the saveMessage function
+   - Is it being called multiple times per response?
+
+RUN THIS DEBUG:
+
+1. In the chat component, add:
+   console.log('[CHAT] Messages array:', messages.length, messages.map(m => m.id));
+
+2. In the streaming handler, add:
+   console.log('[STREAM] Chunk received:', chunk.substring(0, 50));
+
+3. In the API route, add:
+   console.log('[API] Sending response chunk');
+
+4. Show me the console output when a message is sent
+
+This will tell us if it's:
+- The LLM generating repetitive content (prompt issue)
+- The frontend rendering duplicates (React issue)
+- The streaming sending duplicates (API issue)
+
+═══════════════════════════════════════════════════════════════════════════════
+TASK 6: CHAT HISTORY BUG
+═══════════════════════════════════════════════════════════════════════════════
+
+When I open the iOS app, previous chat messages are NOT loading.
+Professor OS remembers context (my profile) but the actual messages don't appear.
+
+This is STILL broken. Show me:
+1. The useEffect in ios-chat.tsx or mobile-chat.tsx that loads history
+2. Console logs showing when loadChatHistory runs
+3. What the API returns
+
+═══════════════════════════════════════════════════════════════════════════════
+
+START WITH TASK 1 AND TASK 5: Show me the complete system prompt AND debug where the duplicate messages are coming from.
+```

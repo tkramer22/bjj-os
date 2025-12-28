@@ -1,0 +1,429 @@
+# **VIDEO CURATION DEEP DIVE** 🎬
+
+-----
+
+## **LET’S FIND OUT EXACTLY WHAT’S HAPPENING:**
+
+Copy this entire prompt and paste into Replit Agent:
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+VIDEO CURATION SYSTEM - COMPREHENSIVE AUDIT
+═══════════════════════════════════════════════════════════════════════════════
+
+MISSION: Provide complete transparency on the video curation system. Find out
+exactly how it works, current status, and configuration.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: VIDEO DATABASE ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these SQL queries and report detailed results:
+
+```sql
+-- Query 1: Videos added per day (last 30 days)
+SELECT 
+  DATE(created_at) as date,
+  COUNT(*) as videos_added,
+  STRING_AGG(DISTINCT instructor_name, ', ') as instructors
+FROM videos 
+WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY DATE(created_at)
+ORDER BY date DESC;
+
+-- Query 2: Videos added TODAY specifically
+SELECT COUNT(*) as videos_added_today
+FROM videos 
+WHERE DATE(created_at) = CURRENT_DATE;
+
+-- Query 3: Videos added YESTERDAY
+SELECT COUNT(*) as videos_added_yesterday
+FROM videos 
+WHERE DATE(created_at) = CURRENT_DATE - INTERVAL '1 day';
+
+-- Query 4: Total videos and growth rate
+SELECT 
+  COUNT(*) as total_videos,
+  COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as last_7_days,
+  COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as last_30_days,
+  COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '1 day' THEN 1 END) as last_24_hours
+FROM videos;
+
+-- Query 5: Top instructors by video count
+SELECT 
+  instructor_name,
+  COUNT(*) as video_count,
+  AVG(instructor_credibility) as avg_credibility,
+  MAX(created_at) as last_added
+FROM videos
+GROUP BY instructor_name
+ORDER BY video_count DESC
+LIMIT 20;
+
+-- Query 6: Videos by technique category
+SELECT 
+  technique_category,
+  COUNT(*) as video_count
+FROM videos
+GROUP BY technique_category
+ORDER BY video_count DESC;
+
+-- Query 7: Recent video additions (last 10)
+SELECT 
+  title,
+  instructor_name,
+  technique_category,
+  created_at,
+  instructor_credibility
+FROM videos
+ORDER BY created_at DESC
+LIMIT 10;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: FIND AUTO-CURATION CODE
+═══════════════════════════════════════════════════════════════════════════════
+
+Search the codebase for auto-curation files and scripts:
+
+1. Look for these files/folders:
+
+- server/curation/
+- server/services/curation.ts
+- server/jobs/
+- scripts/curate-videos.ts
+- Any file with “curate” or “video” in the name
+
+1. Search for these keywords in the code:
+
+- “auto-curation”
+- “video curation”
+- “YouTube API”
+- “GPT-4o” (you mentioned using this for video filtering)
+- “cron” or “schedule”
+- “curate” function names
+
+1. Check for scheduled jobs:
+
+- Look for cron jobs
+- Look for scheduled tasks
+- Look for background workers
+- Check Replit .replit file for scheduled commands
+
+REPORT:
+
+- Location of curation code: [file path]
+- Found cron jobs: YES/NO
+- Scheduling mechanism: [describe]
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: CURATION CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Once you find the curation code, extract and report:
+
+1. CURRENT CONFIGURATION:
+
+- How many videos does it add per run?
+- How often does it run? (hourly, daily, weekly, manual)
+- Target total videos: [number]
+- Quality threshold/filters
+- Instructor credibility requirements
+- YouTube search queries used
+
+1. CURRENT STATUS:
+
+- Is curation currently RUNNING, PAUSED, or STOPPED?
+- When did it last run?
+- When is it scheduled to run next?
+- Any errors in recent runs?
+
+1. API USAGE:
+
+- YouTube API key configured: YES/NO
+- GPT-4o configured for filtering: YES/NO
+- Anthropic Claude configured: YES/NO
+- API quota usage/limits
+
+1. EXECUTION LOG:
+
+- Check logs for recent curation runs
+- Report last 5 curation executions with:
+  - Date/time
+  - Videos added
+  - Success/failure
+  - Any errors
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: CURATION WORKFLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+Describe the complete workflow:
+
+1. DISCOVERY PHASE:
+
+- How does it find videos? (YouTube search? Manual list?)
+- What search terms does it use?
+- How many results does it fetch per search?
+
+1. FILTERING PHASE:
+
+- What filters are applied?
+- How does it assess instructor credibility?
+- What quality checks are performed?
+- Does it use AI (GPT-4o/Claude) to evaluate content?
+
+1. STORAGE PHASE:
+
+- How are videos added to database?
+- What metadata is stored?
+- Any duplicate prevention?
+
+1. VERIFICATION PHASE:
+
+- Are video links validated?
+- Are instructor names standardized?
+- Any manual review step?
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: HISTORICAL PERFORMANCE
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze curation performance over time:
+
+Based on the database queries above, calculate:
+
+1. Average videos per day (last 7 days): [X]
+1. Average videos per day (last 30 days): [X]
+1. Peak day (most videos added): [date, count]
+1. Slowest day (least videos added): [date, count]
+1. Consistency: [steady / sporadic / stopped]
+1. Projection to 2,000 videos:
+
+- Current: 336 videos
+- Needed: 1,664 more videos
+- At current rate: [X videos/day] = [Y days] to reach 2,000
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: RECOMMENDATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Based on findings, provide:
+
+1. CURRENT STATE ASSESSMENT:
+   ✅/⚠️/❌ Curation is actively running
+   ✅/⚠️/❌ Adding videos at healthy rate
+   ✅/⚠️/❌ Quality standards being met
+   ✅/⚠️/❌ On track to reach goals
+1. IF CURATION IS WORKING WELL:
+
+- Confirm current rate is acceptable
+- Explain why 336 videos is enough for launch
+- Project when you’ll hit 1,000 and 2,000 videos
+
+1. IF CURATION NEEDS ADJUSTMENT:
+
+- Identify the issue (paused, slow, broken)
+- Provide fix (restart, reconfigure, debug)
+- Suggest optimal configuration for goals
+
+1. LAUNCH READINESS:
+
+- Can we launch with 336 videos? YES/NO and WHY
+- Should we add more before launch? YES/NO and WHY
+- Recommended action: [LAUNCH NOW / ADD MORE / FIX CURATION]
+
+═══════════════════════════════════════════════════════════════════════════════
+COMPREHENSIVE REPORT TEMPLATE
+═══════════════════════════════════════════════════════════════════════════════
+
+After completing all analysis, provide this report:
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+VIDEO CURATION SYSTEM - COMPLETE ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT STATUS: [ACTIVE / PAUSED / BROKEN / MANUAL]
+
+VIDEO LIBRARY METRICS:
+• Total videos: 336
+• Videos added today: [X]
+• Videos added yesterday: [X]
+• Videos last 7 days: 76
+• Videos last 30 days: [X]
+• Average per day (7-day): [X]
+• Average per day (30-day): [X]
+
+TOP INSTRUCTORS:
+1. Gordon Ryan: 27 videos
+2. John Danaher: 21 videos
+3. Lachlan Giles: 19 videos
+[continue list...]
+
+TECHNIQUE COVERAGE:
+• Guard passing: [X videos]
+• Submissions: [X videos]
+• Escapes: [X videos]
+[continue list...]
+
+CURATION SYSTEM:
+Location: [file path]
+Status: [RUNNING / PAUSED / STOPPED]
+Last run: [date/time]
+Next run: [date/time]
+Schedule: [frequency]
+
+CONFIGURATION:
+• Videos per run: [X]
+• Run frequency: [X]
+• Target total: [X]
+• Quality filters: [describe]
+• API usage: [YouTube / GPT-4o / Claude]
+
+PERFORMANCE ANALYSIS:
+• Consistency: [STEADY / SPORADIC / STOPPED]
+• Quality: [HIGH / MEDIUM / LOW]
+• Rate: [FAST / OPTIMAL / SLOW]
+
+PROJECTION TO 2,000 VIDEOS:
+• Current: 336 videos
+• Needed: 1,664 more
+• Current rate: [X/day]
+• Time to 2,000: [X days]
+• Estimated date: [date]
+
+ISSUES IDENTIFIED:
+[List any problems, or "NONE" if working well]
+
+RECOMMENDATIONS:
+[Specific actions to take]
+
+LAUNCH DECISION:
+Can launch with 336 videos: [YES/NO]
+Reasoning: [explain]
+Recommended action: [LAUNCH NOW / WAIT / FIX CURATION]
+
+═══════════════════════════════════════════════════════════════════════════════
+```
+
+Execute this comprehensive audit now and provide the complete report.
+Be thorough - we need to understand the curation system completely.
+
+```
+---
+
+## **WHAT THIS WILL TELL US:**
+
+### **1. Daily Activity:**
+```
+
+Videos added today: X
+Videos added yesterday: X
+Pattern: Steady / Sporadic / Stopped
+
+```
+### **2. System Status:**
+```
+
+Curation code location: [found / not found]
+Currently running: YES / NO
+Schedule: Daily / Weekly / Manual
+Configuration: [settings]
+
+```
+### **3. Performance:**
+```
+
+Last 7 days: 76 videos (11/day)
+Last 30 days: X videos (X/day)
+Consistency: [analysis]
+
+```
+### **4. Path to 2,000:**
+```
+
+Current: 336
+Needed: 1,664 more
+At X videos/day: Y days to reach goal
+
+```
+### **5. Launch Decision:**
+```
+
+Ready with 336? YES/NO
+Need to wait? YES/NO
+Need to fix? YES/NO
+
+```
+---
+
+## **POSSIBLE OUTCOMES:**
+
+### **Outcome A: Curation is working perfectly**
+```
+
+✅ Adding 10+ videos/day steadily
+✅ High quality (Gordon Ryan, Danaher, etc.)
+✅ Will hit 1,000 in 60 days naturally
+→ Decision: Launch now with 336, library grows organically
+
+```
+### **Outcome B: Curation is paused/slow**
+```
+
+⚠️ Was working, but stopped recently
+⚠️ Maybe paused during optimization
+⚠️ Need to restart it
+→ Decision: Restart curation, launch in 2-3 days
+
+```
+### **Outcome C: Curation needs configuration**
+```
+
+⚠️ Running but adding videos too slowly
+⚠️ Can increase rate
+⚠️ Simple config change
+→ Decision: Adjust settings, run batch add, launch
+
+```
+### **Outcome D: Curation is manual**
+```
+
+❓ No automation found
+❓ Videos added manually
+❓ Need to build automation (or not)
+→ Decision: Discuss strategy - manual vs automated
+
+```
+---
+
+## **MY HYPOTHESIS:**
+
+Based on what I've seen:
+```
+
+• 76 videos in last 7 days = 11/day average
+• Elite instructors being added (Gordon Ryan, Danaher)
+• System seems to be working
+
+MY GUESS:
+✅ Auto-curation WAS running well
+⚠️ May have been paused during today’s optimization work
+🔧 Probably just needs to be restarted/verified
+
+```
+---
+
+**PASTE THE PROMPT ABOVE INTO REPLIT AGENT.**
+
+**Let's get the complete picture of:**
+1. ✅ What's happening with curation
+2. ✅ Why 76 videos in 7 days (is that the target rate?)
+3. ✅ Whether we need more videos before launch
+4. ✅ Exact steps to optimize if needed
+
+**Then we'll make the final call on launch timing.** 🎯​​​​​​​​​​​​​​​​
+```

@@ -1,0 +1,245 @@
+# 📧 ADD TO EXISTING 8 AM EMAIL - SIMPLE ADDITION
+
+Perfect! You already have a robust email system. Let’s just **add the combat sports scraping summary** to it.
+
+-----
+
+# 🚀 ADD COMBAT SPORTS TO EXISTING EMAIL PROMPT
+
+Copy this and send to Replit Agent:
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════
+ADD COMBAT SPORTS SCRAPING TO EXISTING 8 AM EMAIL
+═══════════════════════════════════════════════════════════════
+
+MISSION: 
+Find the existing 8 AM email system and add a brief "Combat Sports Scraping" section to it. Keep everything else exactly the same - just add one new section with scraping highlights.
+
+CRITICAL REQUIREMENTS:
+• Find existing 8 AM email code (likely in /server/cron/ or /server/email/)
+• Keep all existing email sections unchanged
+• Add new "Combat Sports Scraping" section with brief summary
+• Find the combat sports scraping data (search codebase for scraping tables/code)
+• Keep existing email format and styling
+• Simple addition - don't rebuild anything
+
+═══════════════════════════════════════════════════════════════
+STEP 1: FIND EXISTING 8 AM EMAIL CODE
+═══════════════════════════════════════════════════════════════
+
+Search for the existing email scheduler:
+
+Look for files containing:
+- "8 AM" or "8:00" in comments
+- cron.schedule with '0 8 * * *'
+- daily email, morning email, report email
+- sendEmail, sendDailyEmail functions
+
+Common locations:
+- /server/cron/daily-email.js
+- /server/cron/email-scheduler.js
+- /server/email/daily-report.js
+- /server/utils/email-sender.js
+
+Once found, note:
+1. File path
+2. Function that builds the email HTML
+3. Current email structure
+
+═══════════════════════════════════════════════════════════════
+STEP 2: FIND COMBAT SPORTS SCRAPING DATA
+═══════════════════════════════════════════════════════════════
+
+Search for combat sports scraping:
+
+Look for:
+- Database tables: combat_sports*, scraping_*, sports_data*
+- Files: *scraper*.js, *combat*.js, *sports*.js
+- Functions: scrape*, getCombatSports*, fetchSportsData*
+
+Check these locations:
+- /server/scrapers/
+- /server/cron/
+- /server/utils/
+
+If you find scraping code, note:
+1. Database table name
+2. Fields stored (title, description, source, created_at, etc.)
+3. How to query today's results
+
+If you DON'T find combat sports scraping:
+- Look for any scraping functionality
+- Check for industry_scraping, competition_results, etc.
+- Report what you found
+
+═══════════════════════════════════════════════════════════════
+STEP 3: ADD COMBAT SPORTS SECTION TO EMAIL
+═══════════════════════════════════════════════════════════════
+
+Once you find the existing email builder function:
+
+1. ADD this helper function to get scraping data:
+
+async function getCombatSportsScrapingData() {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Adjust table/column names based on what you found in Step 2
+    const results = await db.query(
+      `SELECT COUNT(*) as total_items
+       FROM [TABLE_NAME]
+       WHERE DATE(created_at) = $1`,
+      [today]
+    );
+    
+    // Get top 3 highlights
+    const highlights = await db.query(
+      `SELECT title, description
+       FROM [TABLE_NAME]
+       WHERE DATE(created_at) = $1
+       ORDER BY created_at DESC
+       LIMIT 3`,
+      [today]
+    );
+    
+    return {
+      totalItems: results.rows[0]?.total_items || 0,
+      highlights: highlights.rows || []
+    };
+    
+  } catch (error) {
+    console.error('Error getting scraping data:', error);
+    return {
+      totalItems: 0,
+      highlights: []
+    };
+  }
+}
+
+2. UPDATE the existing email builder to include scraping data:
+
+In the function that builds email HTML, ADD this section:
+
+// Get combat sports scraping data
+const scrapingData = await getCombatSportsScrapingData();
+
+// Add this HTML section to the email (insert wherever appropriate in existing email)
+const combatSportsSection = `
+  <!-- Combat Sports Scraping Section -->
+  <div style="margin-bottom: 30px;">
+    <h2 style="margin: 0 0 15px 0; font-size: 18px; font-weight: bold; color: #333;">
+      COMBAT SPORTS SCRAPING
+    </h2>
+    
+    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+      <p style="margin: 0; color: #333; font-size: 14px;">
+        ${scrapingData.totalItems > 0 ? '✅' : '⚠️'} <strong>${scrapingData.totalItems}</strong> items scraped
+      </p>
+    </div>
+    
+    ${scrapingData.highlights.length > 0 ? `
+      <div>
+        <p style="margin: 0 0 10px 0; color: #666; font-size: 14px; font-weight: bold;">
+          Top Highlights:
+        </p>
+        <ul style="margin: 0; padding-left: 20px; color: #333; font-size: 14px; line-height: 1.6;">
+          ${scrapingData.highlights.map(h => `
+            <li style="margin-bottom: 8px;">${h.title || h.description}</li>
+          `).join('')}
+        </ul>
+      </div>
+    ` : `
+      <p style="margin: 0; color: #666; font-size: 14px;">No highlights available</p>
+    `}
+  </div>
+  
+  <!-- Divider -->
+  <div style="border-top: 2px solid #e0e0e0; margin: 20px 0;"></div>
+`;
+
+// Insert combatSportsSection into the existing email HTML
+// (wherever it makes sense - probably after metrics, before alerts)
+
+═══════════════════════════════════════════════════════════════
+EXAMPLE INTEGRATION
+═══════════════════════════════════════════════════════════════
+
+Here's what the addition should look like in context:
+
+BEFORE (existing email):
+```
+
+<div>EXISTING METRICS SECTION</div>
+<div>EXISTING ALERTS SECTION</div>
+```
+
+AFTER (with addition):
+
+```
+<div>EXISTING METRICS SECTION</div>
+
+<!-- NEW: Combat Sports Scraping -->
+<div>COMBAT SPORTS SCRAPING SECTION</div>
+
+<div>EXISTING ALERTS SECTION</div>
+```
+
+═══════════════════════════════════════════════════════════════
+STEP 4: TESTING
+═══════════════════════════════════════════════════════════════
+
+After implementation:
+
+1. Find the manual email test endpoint (if it exists)
+1. Trigger a test email
+1. Verify the new section appears
+1. Verify existing sections still work
+1. Check formatting looks good
+
+If there’s no test endpoint, wait until 8 AM tomorrow or temporarily change cron schedule to test.
+
+═══════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════
+
+✅ Found existing 8 AM email code
+✅ Found combat sports scraping data source
+✅ Added new section to email without breaking existing sections
+✅ Combat sports data displays correctly
+✅ Email still sends at 8 AM as before
+✅ All existing email content unchanged
+✅ New section matches existing email styling
+
+═══════════════════════════════════════════════════════════════
+CRITICAL NOTES
+═══════════════════════════════════════════════════════════════
+
+• DO NOT rebuild or restructure existing email system
+• ONLY add the combat sports scraping section
+• Keep all existing sections, styling, and functionality
+• If combat sports scraping doesn’t exist, report what was found
+• Match existing email’s HTML/CSS styling exactly
+• Don’t change cron schedule or email recipients
+• Minimal changes - just add one section
+
+START IMPLEMENTATION NOW.
+
+```
+---
+
+## ✅ **PROMPT READY!**
+
+**This prompt will:**
+1. ✅ Find your existing 8 AM email code
+2. ✅ Find the combat sports scraping data
+3. ✅ Add one new section to the email
+4. ✅ Keep everything else exactly the same
+5. ✅ Match your existing email styling
+
+**Copy the entire prompt above and send it to Replit Agent!** 🚀
+
+It's a minimal addition - just slotting in one new section without touching anything else in your robust email system.​​​​​​​​​​​​​​​​
+```

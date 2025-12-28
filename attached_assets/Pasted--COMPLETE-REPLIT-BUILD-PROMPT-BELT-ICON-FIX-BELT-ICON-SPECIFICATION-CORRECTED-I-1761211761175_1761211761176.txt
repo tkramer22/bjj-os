@@ -1,0 +1,1401 @@
+# COMPLETE REPLIT BUILD PROMPT + BELT ICON FIX
+
+-----
+
+## BELT ICON SPECIFICATION (CORRECTED)
+
+### IBJJF Standard Belt Design
+
+**Requirements:**
+
+- Traditional martial arts knot (NOT straight)
+- Four white stripes running vertically on RIGHT side only
+- Belt colors: White, Blue, Purple, Brown (#654321), Black
+- Animated color cycling between belt levels
+- Clean, professional SVG format
+
+### Visual Structure
+
+```
+        ┌─────────────────────────┐
+        │                         │
+    ┌───┘                         └───┐
+    │                                 │
+    │          ┌───────┐              │
+    │          │ KNOT  │              │
+    │          └───────┘              │
+    │                                 │
+    │  ║ ║ ║ ║                       │ ← 4 white stripes (RIGHT side only)
+    │                                 │
+    └───┐                         ┌───┘
+        │                         │
+        └─────────────────────────┘
+```
+
+### SVG Code for Belt Icon
+
+```xml
+<svg width="200" height="45" viewBox="0 0 200 45" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient for belt color (will be animated) -->
+    <linearGradient id="beltGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:currentColor;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:currentColor;stop-opacity:0.8" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Left belt tail -->
+  <rect x="10" y="15" width="60" height="15" fill="url(#beltGradient)" rx="2"/>
+  
+  <!-- Right belt tail with stripes -->
+  <rect x="130" y="15" width="60" height="15" fill="url(#beltGradient)" rx="2"/>
+  
+  <!-- Four white stripes on RIGHT side (vertical) -->
+  <rect x="135" y="14" width="2" height="17" fill="white"/>
+  <rect x="140" y="14" width="2" height="17" fill="white"/>
+  <rect x="145" y="14" width="2" height="17" fill="white"/>
+  <rect x="150" y="14" width="2" height="17" fill="white"/>
+  
+  <!-- Knot (center) -->
+  <g id="knot">
+    <!-- Back loop -->
+    <ellipse cx="100" cy="22" rx="18" ry="12" fill="url(#beltGradient)"/>
+    
+    <!-- Front crossing -->
+    <path d="M 85 18 Q 90 10, 100 12 Q 110 10, 115 18 L 115 26 Q 110 34, 100 32 Q 90 34, 85 26 Z" 
+          fill="url(#beltGradient)" 
+          stroke="rgba(0,0,0,0.2)" 
+          stroke-width="0.5"/>
+    
+    <!-- Left fold -->
+    <path d="M 85 22 Q 80 22, 78 25 L 78 27 Q 80 30, 85 30 Z" 
+          fill="url(#beltGradient)" 
+          opacity="0.9"/>
+    
+    <!-- Right fold -->
+    <path d="M 115 22 Q 120 22, 122 25 L 122 27 Q 120 30, 115 30 Z" 
+          fill="url(#beltGradient)" 
+          opacity="0.9"/>
+  </g>
+  
+  <!-- Shadow for depth -->
+  <ellipse cx="100" cy="35" rx="30" ry="3" fill="rgba(0,0,0,0.1)"/>
+</svg>
+```
+
+### CSS Animation for Color Cycling
+
+```css
+.belt-icon {
+  width: 200px;
+  height: 45px;
+  animation: beltColorCycle 15s infinite;
+}
+
+/* Landing page hero - larger */
+.hero .belt-icon {
+  width: 600px;
+  height: 120px;
+}
+
+@keyframes beltColorCycle {
+  0% { 
+    color: #FFFFFF; /* White belt */
+    filter: drop-shadow(0 2px 4px rgba(255,255,255,0.3));
+  }
+  20% { 
+    color: #2563EB; /* Blue belt */
+    filter: drop-shadow(0 2px 8px rgba(37,99,235,0.4));
+  }
+  40% { 
+    color: #8B5CF6; /* Purple belt */
+    filter: drop-shadow(0 2px 8px rgba(139,92,246,0.4));
+  }
+  60% { 
+    color: #654321; /* Brown belt */
+    filter: drop-shadow(0 2px 6px rgba(101,67,33,0.4));
+  }
+  80% { 
+    color: #1F2937; /* Black belt */
+    filter: drop-shadow(0 2px 8px rgba(31,41,55,0.5));
+  }
+  100% { 
+    color: #FFFFFF; /* Back to white */
+    filter: drop-shadow(0 2px 4px rgba(255,255,255,0.3));
+  }
+}
+
+/* Ensure white stripes always stay white */
+.belt-icon rect[fill="white"] {
+  fill: white !important;
+}
+```
+
+-----
+
+## COMPLETE REPLIT AGENT PROMPT
+
+Copy everything below this line and paste into Replit Agent:
+
+-----
+
+# BJJ OS - Complete App Build Specification
+
+You are building BJJ OS, a premium progressive web app (PWA) for Brazilian Jiu-Jitsu training. This is a sophisticated, high-end product with excellence as the pillar.
+
+-----
+
+## CRITICAL BUG TO FIX FIRST
+
+**INPUT FIELD HIDDEN/UNUSABLE - TOP PRIORITY:**
+
+The textarea chat input exists in DOM but is not visible or usable:
+
+- Element: `<textarea placeholder="Ask about techniques..." class="mobile-chat-input" rows="1" data-testid="input-chat-message">`
+- Element exists but is hidden or covered by other elements
+- User cannot interact with it
+
+**ROOT CAUSE:**
+Video parsing errors (“insufficient data parts: 1”) are cascading and breaking chat UI rendering, preventing input field from displaying properly.
+
+**IMMEDIATE FIXES REQUIRED:**
+
+### 1. Fix Video Token Parsing
+
+```javascript
+// Current broken format:
+[VIDEO: Title]
+
+// Expected format:
+[VIDEO: Title | URL | Timestamp | Duration]
+
+// Add error handling:
+function parseVideoToken(token) {
+  try {
+    const parts = token.split('|').map(p => p.trim());
+    
+    if (parts.length < 4) {
+      console.warn('Video token incomplete, skipping:', token);
+      return null; // Don't crash
+    }
+    
+    return {
+      title: parts[0].replace('[VIDEO:', '').replace(/^\s*\[VIDEO:\s*/, '').trim(),
+      url: parts[1].trim(),
+      timestamp: parts[2].trim(),
+      duration: parts[3].replace(']', '').trim()
+    };
+  } catch (error) {
+    console.error('Video parsing error:', error);
+    return null; // Fail gracefully
+  }
+}
+```
+
+### 2. Always Render Input Field
+
+```javascript
+// In chat component, ALWAYS render input regardless of video parsing status
+function ChatInterface() {
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  return (
+    <div className="chat-container">
+      <MessageList messages={messages} />
+      
+      {/* ALWAYS render input, even if videos fail or Prof. OS is "typing" */}
+      <ChatInput 
+        onSend={handleSendMessage} 
+        disabled={isLoading}
+      />
+      
+      <BottomNav />
+    </div>
+  );
+}
+```
+
+### 3. Fix CSS for Input Visibility
+
+```css
+/* CRITICAL: Input must ALWAYS be visible */
+.chat-input-container {
+  display: flex !important; /* Force display */
+  visibility: visible !important; /* Force visibility */
+  opacity: 1 !important; /* Force opacity */
+  position: relative;
+  padding: 1.5rem 2rem 1rem;
+  background: var(--bg-card);
+  border-top: 1px solid var(--bg-hover);
+  z-index: 100;
+}
+
+.mobile-chat-input {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Mobile: Input ABOVE bottom nav */
+@media (max-width: 768px) {
+  .chat-input-container.mobile {
+    position: fixed !important;
+    bottom: 60px !important; /* Above bottom nav */
+    left: 0;
+    right: 0;
+    padding: 1rem;
+    background: var(--bg-card);
+    border-top: 1px solid var(--bg-hover);
+    z-index: 100 !important;
+  }
+  
+  .mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    z-index: 99; /* Below input */
+  }
+}
+
+.chat-input {
+  flex: 1;
+  min-height: 48px;
+  max-height: 200px;
+  padding: 0.875rem 1rem;
+  background: var(--bg-dark);
+  border: 1px solid var(--bg-hover);
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-family: inherit;
+  resize: none;
+  overflow-y: auto;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--primary-purple);
+}
+```
+
+### 4. Add Graceful Video Rendering
+
+```javascript
+function renderMessage(message) {
+  const videos = extractVideoTokens(message);
+  
+  return (
+    <>
+      {renderText(message)}
+      {videos.map((video, index) => {
+        try {
+          const parsed = parseVideoToken(video);
+          if (!parsed) return null; // Skip invalid, don't crash
+          return <VideoCard key={index} {...parsed} />;
+        } catch (error) {
+          console.error('Video render failed:', error);
+          return null; // Don't crash UI
+        }
+      })}
+    </>
+  );
+}
+```
+
+-----
+
+## TECH STACK
+
+- **Frontend:** React 18+ with Hooks
+- **Styling:** CSS-in-JS or CSS Modules (no Tailwind - use custom CSS)
+- **Backend:** Node.js with Express
+- **Database:** PostgreSQL with Prisma ORM
+- **Authentication:** Twilio (SMS verification)
+- **Payments:** Stripe
+- **Hosting:** Replit
+- **PWA:** Service Worker for offline functionality
+
+-----
+
+## DESIGN SYSTEM
+
+### Colors
+
+```css
+:root {
+  /* Primary */
+  --primary-purple: #8B5CF6;
+  --primary-blue: #3B82F6;
+  --gradient: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+
+  /* Belt Colors (for icon cycling) */
+  --belt-white: #FFFFFF;
+  --belt-blue: #2563EB;
+  --belt-purple: #8B5CF6;
+  --belt-brown: #654321; /* NOT orange */
+  --belt-black: #1F2937;
+
+  /* Backgrounds */
+  --bg-dark: #0F172A;
+  --bg-card: #1E293B;
+  --bg-hover: #334155;
+
+  /* Text */
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+
+  /* Accents */
+  --accent-green: #10B981;
+  --accent-yellow: #F59E0B;
+  --accent-red: #EF4444;
+}
+```
+
+### Typography
+
+```css
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 
+               'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+/* NO monospace fonts anywhere - even legal pages use system UI */
+```
+
+### Belt Icon (CORRECTED)
+
+**IBJJF Standard Belt with Martial Arts Knot:**
+
+- Traditional martial arts knot (center)
+- Four white vertical stripes on RIGHT side only
+- Animated color cycling through belt levels
+- Belt colors: White → Blue → Purple → Brown (#654321) → Black
+
+Use the SVG code and CSS animation provided in the “BELT ICON SPECIFICATION” section above.
+
+**Sizes:**
+
+- Landing hero: 600px × 120px
+- Sidebar logo: 200px × 45px
+- Login/onboarding: 200px × 45px
+
+-----
+
+## DATABASE SCHEMA
+
+### Users Table
+
+```prisma
+model User {
+  id                String    @id @default(uuid())
+  phone             String    @unique
+  email             String?
+  
+  // BJJ Profile (from onboarding - REQUIRED)
+  beltLevel         BeltLevel
+  trainingStyle     TrainingStyle
+  trainingFrequency Int       // 1-14 (sessions per week)
+  
+  // Physical Stats (optional)
+  birthday          DateTime?
+  heightCm          Int?
+  weightKg          Int?
+  
+  // Subscription
+  subscriptionTier   SubscriptionTier  @default(FREE)
+  subscriptionStatus SubscriptionStatus @default(ACTIVE)
+  stripeCustomerId   String?
+  
+  // Referrals
+  referralCodes      ReferralCode[]
+  usedReferralCode   String?
+  
+  // Metadata
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  totalSessions     Int       @default(0)
+  
+  // Relations
+  sessions          Session[]
+  injuries          Injury[]
+  savedVideos       SavedVideo[]
+}
+
+enum BeltLevel {
+  WHITE_BELT
+  BLUE_BELT
+  PURPLE_BELT
+  BROWN_BELT
+  BLACK_BELT
+}
+
+enum TrainingStyle {
+  PRESSURE_PASSER
+  GUARD_PLAYER
+  SCRAMBLER
+  WRESTLER
+  EXPLORING
+}
+
+enum SubscriptionTier {
+  FREE
+  FOUNDING_MEMBERS
+  PRO
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  CANCELED
+  EXPIRED
+}
+```
+
+### Sessions Table
+
+```prisma
+model Session {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  
+  userMessage String    @db.Text
+  profResponse String   @db.Text
+  
+  timestamp   DateTime  @default(now())
+  
+  // Related videos
+  videosRecommended Video[]
+}
+```
+
+### Injuries Table
+
+```prisma
+model Injury {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  
+  bodyPart    String
+  description String
+  severity    Severity
+  status      InjuryStatus @default(ACTIVE)
+  
+  dateAdded   DateTime  @default(now())
+  dateHealed  DateTime?
+}
+
+enum Severity {
+  MILD
+  MODERATE
+  SEVERE
+}
+
+enum InjuryStatus {
+  ACTIVE
+  HEALED
+}
+```
+
+### Videos Table
+
+```prisma
+model Video {
+  id          String    @id @default(uuid())
+  title       String
+  url         String
+  timestamp   String    // e.g., "2:35-3:45"
+  duration    String    // e.g., "1m10s"
+  instructor  String
+  
+  // Metadata for filtering
+  beltLevel   BeltLevel[]
+  positions   String[]  // e.g., ["closed_guard", "armbar"]
+  
+  sessions    Session[]
+  savedBy     SavedVideo[]
+}
+
+model SavedVideo {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  videoId   String
+  video     Video     @relation(fields: [videoId], references: [id])
+  
+  savedAt   DateTime  @default(now())
+  notes     String?
+}
+```
+
+### Referral Codes Table
+
+```prisma
+model ReferralCode {
+  id              String    @id @default(uuid())
+  code            String    @unique
+  ownerId         String
+  owner           User      @relation(fields: [ownerId], references: [id])
+  
+  usedBy          String?   // User ID who used this code
+  usageDate       DateTime?
+  monthsCompleted Int       @default(0) // Track progress toward 3 months
+  rewardEarned    Boolean   @default(false)
+  
+  createdAt       DateTime  @default(now())
+}
+```
+
+-----
+
+## API ENDPOINTS
+
+### Authentication
+
+```
+POST /api/auth/send-code
+Body: { phone: "+15551234567" }
+Response: { success: true, message: "Code sent" }
+
+POST /api/auth/verify-code
+Body: { phone: "+15551234567", code: "123456" }
+Response: { token: "jwt_token", user: {...}, isNewUser: true/false }
+```
+
+### Onboarding
+
+```
+POST /api/onboarding/complete
+Headers: { Authorization: "Bearer jwt_token" }
+Body: {
+  beltLevel: "PURPLE_BELT",
+  trainingStyle: "GUARD_PLAYER",
+  trainingFrequency: 4
+}
+Response: { success: true, user: {...} }
+```
+
+### Chat
+
+```
+POST /api/chat/message
+Headers: { Authorization: "Bearer jwt_token" }
+Body: { message: "User's message text" }
+Response: {
+  response: "Prof. OS response with [VIDEO:...] tokens",
+  sessionId: "uuid"
+}
+
+GET /api/chat/history
+Headers: { Authorization: "Bearer jwt_token" }
+Query: { limit: 50, offset: 0 }
+Response: { sessions: [...] }
+```
+
+### Profile
+
+```
+GET /api/profile
+Headers: { Authorization: "Bearer jwt_token" }
+Response: { user: {...}, injuries: [...] }
+
+PATCH /api/profile
+Headers: { Authorization: "Bearer jwt_token" }
+Body: { beltLevel: "BROWN_BELT" } // or any other field
+Response: { success: true, user: {...} }
+
+POST /api/profile/injury
+Headers: { Authorization: "Bearer jwt_token" }
+Body: {
+  bodyPart: "left_knee",
+  description: "meniscus tear",
+  severity: "MODERATE"
+}
+Response: { success: true, injury: {...} }
+
+PATCH /api/profile/injury/:id
+Headers: { Authorization: "Bearer jwt_token" }
+Body: { status: "HEALED" }
+Response: { success: true }
+```
+
+### Videos
+
+```
+GET /api/videos/saved
+Headers: { Authorization: "Bearer jwt_token" }
+Response: { videos: [...] }
+
+POST /api/videos/save
+Headers: { Authorization: "Bearer jwt_token" }
+Body: { videoId: "uuid", notes: "optional notes" }
+Response: { success: true }
+
+DELETE /api/videos/saved/:id
+Headers: { Authorization: "Bearer jwt_token" }
+Response: { success: true }
+```
+
+### Subscription
+
+```
+POST /api/subscription/create-checkout
+Headers: { Authorization: "Bearer jwt_token" }
+Body: {
+  tier: "FOUNDING_MEMBERS",
+  interval: "year", // or "month"
+  referralCode: "BJJOS-ABC123" // optional
+}
+Response: { checkoutUrl: "stripe_checkout_url" }
+
+POST /api/subscription/webhook
+Body: { Stripe webhook payload }
+Response: { received: true }
+
+GET /api/subscription/status
+Headers: { Authorization: "Bearer jwt_token" }
+Response: {
+  tier: "FOUNDING_MEMBERS",
+  status: "ACTIVE",
+  renewsAt: "2026-01-01",
+  sessionsUsed: 3, // for free tier
+  sessionsLimit: 5
+}
+```
+
+### Referrals
+
+```
+GET /api/referrals
+Headers: { Authorization: "Bearer jwt_token" }
+Response: {
+  codes: [
+    {
+      code: "BJJOS-ABC123",
+      status: "unused" | "active" | "completed",
+      monthsCompleted: 2,
+      rewardEarned: false
+    }
+  ],
+  freeMonthsEarned: 1,
+  totalRewards: 5
+}
+```
+
+-----
+
+## PROF. OS INTEGRATION
+
+### System Prompt (Server-Side)
+
+```javascript
+function generateProfOSPrompt(user, conversationHistory) {
+  const age = user.birthday ? calculateAge(user.birthday) : null;
+  
+  const systemPrompt = `
+You are Prof. OS, an AI Brazilian Jiu-Jitsu training partner with perfect memory.
+
+USER PROFILE:
+- Belt Level: ${user.beltLevel}
+- Training Style: ${user.trainingStyle}
+- Training Frequency: ${user.trainingFrequency} sessions/week
+${age ? `- Age: ${age} years old` : ''}
+${user.heightCm ? `- Height: ${user.heightCm}cm` : ''}
+${user.weightKg ? `- Weight: ${user.weightKg}kg` : ''}
+${user.injuries.length > 0 ? `
+- Active Injuries: ${user.injuries.map(i => `${i.bodyPart} (${i.description})`).join(', ')}
+` : ''}
+
+RESPONSE RULES:
+
+1. TECHNIQUE DIFFICULTY
+   - WHITE_BELT: Basics only (mount escapes, closed guard basics)
+   - BLUE_BELT: Intermediate (guard retention, basic submissions)
+   - PURPLE_BELT: Advanced (berimbolo, leg locks, complex sequences)
+   - BROWN_BELT: Expert (timing, pressure, high-level strategy)
+   - BLACK_BELT: Mastery (refinement, teaching, conceptual)
+
+2. POSITION PREFERENCES
+   - PRESSURE_PASSER: Top game, smash passing, pressure techniques
+   - GUARD_PLAYER: Guard retention, sweeps, submissions from bottom
+   - SCRAMBLER: Dynamic transitions, athletic techniques
+   - WRESTLER: Takedowns, top control, wrestling-based passing
+   - EXPLORING: Varied techniques, different styles
+
+3. TRAINING VOLUME
+   - 1-2x/week: Emphasize fundamentals
+   - 3-4x/week: Balanced approach
+   - 5-6x/week: Advanced techniques, competition prep
+   - 7+x/week: Recovery awareness, injury prevention
+
+4. INJURY SAFETY (CRITICAL)
+${user.injuries.length > 0 ? user.injuries.map(injury => `
+   - ${injury.bodyPart}: AVOID techniques that stress this area
+     DO NOT RECOMMEND: Any submission/position that could aggravate ${injury.bodyPart}
+`).join('') : '   - No active injuries'}
+
+5. VIDEO RECOMMENDATIONS
+   - ALWAYS use format: [VIDEO: Title | URL | Timestamp | Duration]
+   - Example: [VIDEO: Armbar from Closed Guard by Roger Gracie | https://youtube.com/watch?v=abc123 | 2:35-3:45 | 1m10s]
+   - 30-60 second clips only
+   - Match difficulty to belt level
+
+6. TONE
+   - Training partner, not coach
+   - Use "we" and "us"
+   - Reference perfect memory naturally
+   - Encouraging but honest
+
+CONVERSATION HISTORY:
+${conversationHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}
+
+USER MESSAGE: {user_message}
+`;
+
+  return systemPrompt;
+}
+```
+
+### Message Processing
+
+```javascript
+async function handleChatMessage(userId, message) {
+  // 1. Load user profile with injuries
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { injuries: { where: { status: 'ACTIVE' } } }
+  });
+  
+  // 2. Load conversation history (last 10 messages)
+  const history = await prisma.session.findMany({
+    where: { userId },
+    orderBy: { timestamp: 'desc' },
+    take: 10
+  });
+  
+  // 3. Generate system prompt
+  const systemPrompt = generateProfOSPrompt(user, history);
+  
+  // 4. Call AI API (OpenAI, Claude, etc.)
+  const response = await callAI({
+    system: systemPrompt,
+    message: message
+  });
+  
+  // 5. Save session
+  await prisma.session.create({
+    data: {
+      userId,
+      userMessage: message,
+      profResponse: response,
+      timestamp: new Date()
+    }
+  });
+  
+  // 6. Update total sessions count
+  await prisma.user.update({
+    where: { id: userId },
+    data: { totalSessions: { increment: 1 } }
+  });
+  
+  return response;
+}
+```
+
+### Video Token Parsing (Frontend)
+
+```javascript
+function parseAndRenderVideos(message) {
+  // Extract [VIDEO:...] tokens
+  const videoRegex = /\[VIDEO:\s*([^\]]+)\]/g;
+  const matches = [...message.matchAll(videoRegex)];
+  
+  const videos = [];
+  
+  for (const match of matches) {
+    const token = match[1];
+    const parsed = parseVideoToken(token);
+    
+    if (parsed) {
+      videos.push(parsed);
+    }
+  }
+  
+  // Replace tokens with video cards
+  let renderedMessage = message;
+  
+  matches.forEach((match, index) => {
+    const video = videos[index];
+    if (video) {
+      const videoCard = `<VideoCard 
+        title="${video.title}" 
+        url="${video.url}" 
+        timestamp="${video.timestamp}" 
+        duration="${video.duration}" 
+      />`;
+      
+      renderedMessage = renderedMessage.replace(match[0], videoCard);
+    }
+  });
+  
+  return { text: renderedMessage, videos };
+}
+```
+
+-----
+
+## PAGES TO BUILD
+
+### 1. Landing Page (`/`)
+
+**Components:**
+
+- Header with logo + “Login” + “Sign Up” buttons
+- Hero section with belt icon (600px × 120px, animated)
+- Headline: “Train Smarter, Win More”
+- Subheadline: “Your AI training partner with perfect memory…”
+- CTA buttons: “Start Free Preview” + “Start 7-Day Free Trial”
+- Features grid (4 cards: Timestamped Perfection, Pattern Recognition, Perfect Memory, 10,000+ Techniques)
+- Social proof section (optional)
+- Footer with links (Terms, Privacy, Refund Policy, Contact)
+
+### 2. Pricing Page (`/pricing`)
+
+**Components:**
+
+- Back link to home
+- Belt icon (200px × 45px, animated)
+- “Choose Your Plan” headline
+- Toggle: [Annual ●] [Monthly]
+- 3 pricing cards:
+  - Free: $0, 5 sessions/month
+  - Founding Members: $89/year (featured with ⭐ BEST VALUE badge)
+  - Pro: $179/year
+- Referral code input (optional)
+- “Continue to Phone Verification” button
+
+**Default view:** Annual
+
+### 3. Login/Phone Entry (`/login`)
+
+**Components:**
+
+- Back link to home
+- Belt icon (200px × 45px, animated)
+- “Welcome to BJJ OS” headline
+- Country code dropdown + phone input
+- “We’ll send you a verification code via SMS”
+- “Continue” button
+
+### 4. SMS Verification (`/verify`)
+
+**Components:**
+
+- “Enter verification code” headline
+- 6-digit code input
+- “Verify” button
+- “Resend code” link
+
+### 5. Onboarding (`/onboarding`)
+
+**Three steps (cannot skip):**
+
+**Step 1/3: Belt Level**
+
+- Progress bar (33%)
+- “What’s your current belt level?”
+- 5 options with belt dot colors
+- Continue button
+
+**Step 2/3: Training Style**
+
+- Progress bar (66%)
+- “What’s your training style?”
+- 5 options with icons and descriptions
+- Back + Continue buttons
+
+**Step 3/3: Training Frequency**
+
+- Progress bar (100%)
+- “How often do you train?”
+- 4 options (1-2x, 3-4x, 5-6x, 7+x per week)
+- Back + “Get Started” button
+
+After completion → Redirect to `/chat` with personalized first message
+
+### 6. Chat Interface (`/chat`)
+
+**Desktop Layout:**
+
+- Sidebar (left):
+  - Belt icon (200px × 45px, animated)
+  - “BJJ OS” logo
+  - Nav: Chat | Saved Videos | Progress | Settings
+  - User profile at bottom (avatar, name, subscription badge, logout)
+- Main area:
+  - Header: “Prof. OS - Your AI BJJ Training Partner” + Voice toggle + Settings icon
+  - Messages area (scrollable)
+  - Input container (ALWAYS VISIBLE)
+  - Footer hint: “Press Enter to send…”
+
+**Mobile Layout:**
+
+- Header: Menu button + “Prof. OS” + Voice + Settings
+- Messages area
+- Input container (FIXED above bottom nav)
+- Bottom nav: [Chat] [Saved] [Settings]
+
+**First message after onboarding:**
+
+```
+Hey! I'm Prof. OS
+
+I can see you're a [belt level] who plays [style] and trains [frequency].
+
+I've analyzed 10,000+ technique videos and I'm about to learn everything about YOUR specific game.
+
+Here's how this works:
+• You share → I remember forever
+• I spot patterns → You fix gaps
+• You improve → I get smarter
+
+The more details you give me about your training, the more accurate my recommendations become.
+
+Let's start building your profile.
+
+How did your last training session go?
+```
+
+**NO suggested prompt buttons**
+
+### 7. Saved Videos (`/saved`)
+
+**Components:**
+
+- List of saved videos (cards)
+- Each card: thumbnail, title, timestamp, duration, notes, remove button
+- Empty state: “No saved videos yet”
+
+### 8. Progress (Optional - `/progress`)
+
+**Components:**
+
+- Sessions logged count
+- Techniques drilled
+- Patterns identified
+- Charts/visualizations
+
+### 9. Settings → Profile (`/settings/profile`)
+
+**Tabs:** Profile | Subscription | Preferences | Referrals | Data & Privacy
+
+**Profile Tab Sections:**
+
+1. Contact Info (phone, email)
+1. BJJ Profile (belt, style, frequency) - editable, auto-filled from onboarding
+1. Physical Stats (birthday, height, weight) - optional, add later
+1. Health & Safety (injuries) - optional, can add multiple
+1. Account Info (member since, last updated, total sessions)
+1. Actions (export data, delete account)
+
+### 10. Settings → Subscription (`/settings/subscription`)
+
+**Components:**
+
+- Current plan info
+- Renewal date
+- Payment method
+- Manage subscription button (change plan, update payment, cancel)
+
+### 11. Settings → Referrals (`/settings/referrals`)
+
+**Components:**
+
+- Explanation of referral program
+- 5 referral codes with status
+- Each code: Copy button, Share button
+- Free months earned counter
+
+### 12. Terms of Service (`/terms`)
+
+**Full legal page with sections:**
+
+1. Acceptance of Terms
+1. Service Description
+1. Subscription Tiers (including Founding Members)
+1. User Accounts
+1. User Content and Data
+1. Acceptable Use
+1. Payment and Billing
+1. Free Trial
+1. Cancellation and Refunds
+1. Medical Disclaimer
+1. Content and Copyright
+1. AI-Generated Content
+1. Limitation of Liability
+1. Referral Program (complete details)
+1. Termination
+1. Changes to Terms
+1. Governing Law
+1. Contact
+
+**Font:** System UI (NOT monospace)
+
+### 13. Privacy Policy (`/privacy`)
+
+**Full legal page with sections:**
+
+1. Introduction
+1. Information We Collect (including referral data, voice data)
+1. How We Use Your Information
+1. How We Share Your Information
+1. Data Security
+1. Data Retention
+1. Your Rights
+1. Children’s Privacy
+1. International Users
+1. Cookies and Tracking
+1. Third-Party Links
+1. California Privacy Rights (CCPA)
+1. European Users (GDPR)
+1. Changes to This Policy
+1. Contact Us
+
+**Font:** System UI (NOT monospace)
+
+### 14. Refund Policy (`/refund`)
+
+**Full legal page with sections:**
+
+1. Overview
+1. 7-Day Free Trial
+1. Refund Eligibility
+1. Non-Refundable Items
+1. Founding Members (special considerations - price locked forever warning)
+1. How to Request a Refund
+1. Refund Processing
+1. Cancellation Without Refund
+1. Annual Subscriptions
+1. Free Tier
+1. Disputes and Chargebacks
+1. Questions or Issues?
+
+**Font:** System UI (NOT monospace)
+
+-----
+
+## CRITICAL IMPLEMENTATION NOTES
+
+### 1. Input Field Must Always Render
+
+```javascript
+// In ChatInterface component
+return (
+  <div className="chat-page">
+    <MessageList />
+    
+    {/* ALWAYS render, never conditional */}
+    <ChatInputContainer>
+      <textarea 
+        className="chat-input"
+        placeholder="Ask Prof. OS anything..."
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyPress={handleKeyPress}
+      />
+      <button onClick={handleSend}>→</button>
+    </ChatInputContainer>
+    
+    <BottomNav />
+  </div>
+);
+```
+
+### 2. Video Parsing Must Not Crash UI
+
+```javascript
+try {
+  const videos = parseVideos(message);
+  return videos.map(v => <VideoCard {...v} />);
+} catch (error) {
+  console.error('Video parsing failed:', error);
+  return null; // Don't render videos, but don't crash
+}
+```
+
+### 3. Profile Changes Must Sync Immediately
+
+```javascript
+async function updateProfile(field, value) {
+  // 1. Update database
+  await api.patch('/profile', { [field]: value });
+  
+  // 2. Update local state
+  setUser({ ...user, [field]: value });
+  
+  // 3. Invalidate cache (so Prof. OS gets fresh data)
+  invalidateProfileCache();
+  
+  // 4. Show confirmation
+  toast.success('Profile updated!');
+}
+```
+
+### 4. Injury Checking in Prof. OS
+
+```javascript
+// Server-side, before generating response
+function checkInjurySafety(technique, userInjuries) {
+  const risks = {
+    'kimura': ['shoulder', 'elbow'],
+    'armbar': ['elbow', 'shoulder'],
+    'triangle': ['neck'],
+    'heel_hook': ['knee', 'ankle']
+    // ... more mappings
+  };
+  
+  const techniqueRisks = risks[technique] || [];
+  
+  for (const injury of userInjuries) {
+    if (techniqueRisks.includes(injury.bodyPart)) {
+      return {
+        safe: false,
+        warning: `⚠️ This may aggravate your ${injury.bodyPart} injury`
+      };
+    }
+  }
+  
+  return { safe: true };
+}
+```
+
+### 5. Free Tier Session Limiting
+
+```javascript
+async function handleChatMessage(userId, message) {
+  const user = await getUser(userId);
+  
+  if (user.subscriptionTier === 'FREE') {
+    const sessionsThisMonth = await countSessionsThisMonth(userId);
+    
+    if (sessionsThisMonth >= 5) {
+      throw new Error('SESSION_LIMIT_REACHED');
+    }
+  }
+  
+  // Process message...
+}
+
+// Frontend error handling
+catch (error) {
+  if (error.message === 'SESSION_LIMIT_REACHED') {
+    showUpgradeModal({
+      title: "You've reached your 5 sessions this month",
+      message: "Upgrade to Founding Members or Pro for unlimited sessions",
+      cta: "View Plans"
+    });
+  }
+}
+```
+
+-----
+
+## PWA CONFIGURATION
+
+### manifest.json
+
+```json
+{
+  "name": "BJJ OS",
+  "short_name": "BJJ OS",
+  "description": "Train Smarter, Win More - Your AI BJJ Training Partner",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#8B5CF6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+```
+
+### Service Worker
+
+```javascript
+// Basic offline caching
+const CACHE_NAME = 'bjj-os-v1';
+const urlsToCache = [
+  '/',
+  '/chat',
+  '/saved',
+  '/settings',
+  '/styles.css',
+  '/app.js'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(urlsToCache))
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => response || fetch(event.request))
+  );
+});
+```
+
+-----
+
+## TESTING CHECKLIST
+
+Before deploying:
+
+**Critical Path:**
+
+- [ ] Signup flow (phone → SMS → onboarding → chat)
+- [ ] Login flow (phone → SMS → chat, skip onboarding)
+- [ ] Input field visible and functional on all pages
+- [ ] Video recommendations display properly
+- [ ] Video parsing errors don’t crash UI
+- [ ] Free tier limit enforcement (5 sessions)
+- [ ] Payment processing (Stripe test mode)
+- [ ] Referral code generation and tracking
+- [ ] Profile editing syncs to Prof. OS immediately
+- [ ] Injury filtering works (Prof. OS avoids dangerous techniques)
+
+**Desktop Browsers:**
+
+- [ ] Chrome
+- [ ] Safari
+- [ ] Firefox
+- [ ] Edge
+
+**Mobile:**
+
+- [ ] iOS Safari (iPhone)
+- [ ] Android Chrome
+- [ ] Input above bottom nav (not hidden)
+- [ ] Touch targets minimum 48px
+- [ ] PWA install prompt works
+
+**Edge Cases:**
+
+- [ ] User hits Free tier limit → upgrade modal shown
+- [ ] SMS fails to send → error message shown
+- [ ] Payment fails → user notified
+- [ ] Video parsing fails → text-only response shown
+- [ ] Network offline → cached pages work
+- [ ] Profile update fails → error handling
+
+-----
+
+## DEPLOYMENT
+
+1. Set environment variables:
+
+```
+DATABASE_URL=postgresql://...
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=...
+STRIPE_SECRET_KEY=...
+STRIPE_WEBHOOK_SECRET=...
+JWT_SECRET=...
+AI_API_KEY=... (OpenAI or Claude)
+```
+
+1. Run migrations:
+
+```
+npx prisma migrate deploy
+```
+
+1. Build frontend:
+
+```
+npm run build
+```
+
+1. Start server:
+
+```
+npm start
+```
+
+1. Test production URL:
+
+```
+https://bjjos.app
+```
+
+-----
+
+## COPY CONSISTENCY
+
+**Use throughout:**
+
+- “Training partner” NOT “coach”
+- “Sessions” NOT “questions”
+- “Prof. OS” NOT “Professor OS” or “OS”
+- “Timestamped videos” NOT “video clips”
+- “Perfect memory” (key differentiator)
+- Belt icon with martial arts knot (NOT straight belt)
+- Brown belt color: #654321 (NOT orange)
+- System UI font (NOT monospace, even on legal pages)
+
+-----
+
+## BUILD THIS APP ACCORDING TO THESE SPECIFICATIONS
+
+**Priority order:**
+
+1. Fix input field bug (CRITICAL)
+1. Implement authentication (Twilio SMS)
+1. Build onboarding flow (3 steps, cannot skip)
+1. Implement chat interface with Prof. OS
+1. Add profile management (Settings)
+1. Implement video parsing and display
+1. Add subscription management (Stripe)
+1. Implement referral system
+1. Add PWA features (offline, install)
+1. Legal pages (Terms, Privacy, Refund)
+
+**This is a premium product. Excellence is the pillar. Every detail matters.**
+
+-----
+
+END OF PROMPT​​​​​​​​​​​​​​​​

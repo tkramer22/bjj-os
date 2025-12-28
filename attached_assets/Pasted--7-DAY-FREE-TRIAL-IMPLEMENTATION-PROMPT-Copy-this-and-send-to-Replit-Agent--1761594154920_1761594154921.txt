@@ -1,0 +1,1323 @@
+# 🚀 7-DAY FREE TRIAL IMPLEMENTATION PROMPT
+
+Copy this and send to Replit Agent:
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════
+7-DAY FREE TRIAL - REMOVE FREE TIER, ADD STRIPE VALIDATION
+═══════════════════════════════════════════════════════════════
+
+MISSION: 
+Replace the entire free tier system with a 7-day free trial that requires credit card validation at signup. Bad credit cards will be rejected before account creation. Users will be automatically charged $14.99 after 7 days.
+
+CRITICAL REQUIREMENTS:
+• Remove ALL free tier functionality (10 sessions/month)
+• Remove ALL session tracking code
+• Require credit card BEFORE account creation
+• Validate payment method with Stripe (reject bad cards immediately)
+• Create 7-day trial subscription via Stripe
+• Auto-charge $14.99 on day 8 (no reminder email)
+• Update ALL CTAs to "Start 7-Day Trial"
+• Keep rest of site exactly the same
+• DO NOT create user account if payment validation fails
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: DATABASE CLEANUP - REMOVE FREE TIER
+═══════════════════════════════════════════════════════════════
+
+Execute these SQL commands to remove session tracking:
+
+-- Remove session tracking columns
+ALTER TABLE users DROP COLUMN IF EXISTS ai_sessions_used;
+ALTER TABLE users DROP COLUMN IF EXISTS quota_reset_date;
+ALTER TABLE users DROP COLUMN IF EXISTS session_limit;
+
+-- Add trial tracking columns
+ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50) DEFAULT 'trialing';
+
+-- Update existing free users to trialing status
+UPDATE users 
+SET subscription_type = 'trial',
+    subscription_status = 'trialing',
+    trial_ends_at = NOW() + INTERVAL '7 days'
+WHERE subscription_type = 'free';
+
+-- Drop session tracking tables if they exist
+DROP TABLE IF EXISTS ai_session_usage CASCADE;
+DROP TABLE IF EXISTS session_limits CASCADE;
+
+-- Comments
+COMMENT ON COLUMN users.trial_ends_at IS 'When the 7-day free trial ends';
+COMMENT ON COLUMN users.subscription_status IS 'trialing, active, past_due, canceled, or paused';
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: UPDATE AUTH FLOW - ADD STRIPE PAYMENT VALIDATION
+═══════════════════════════════════════════════════════════════
+
+CRITICAL: User accounts should ONLY be created AFTER Stripe confirms the payment method is valid.
+
+UPDATE FILE: /server/auth.js
+
+Add new endpoint for completing signup with payment:
+
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+// New endpoint: Complete signup with payment validation
+router.post('/complete-signup', async (req, res) => {
+  try {
+    const { 
+      email, 
+      username, 
+      setupIntentId,
+      referralCode 
+    } = req.body;
+    
+    if (!email || !username || !setupIntentId) {
+      return res.status(400).json({ 
+        error: 'Missing required fields' 
+      });
+    }
+    
+    // Retrieve the SetupIntent from Stripe to verify payment method
+    const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
+    
+    if (setupIntent.status !== 'succeeded') {
+      return res.status(400).json({ 
+        error: 'Payment method validation failed. Please check your card details.' 
+      });
+    }
+    
+    const paymentMethodId = setupIntent.payment_method;
+    
+    // Normalize email and username
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedUsername = username.toLowerCase().trim().replace(/[^a-z0-9_]/g, '');
+    
+    // Check if user already exists
+    const existingUser = await db.query(
+      'SELECT id FROM users WHERE email = $1',
+      [normalizedEmail]
+    );
+    
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ 
+        error: 'An account with this email already exists' 
+      });
+    }
+    
+    // Check if username taken
+    const existingUsername = await db.query(
+      'SELECT id FROM users WHERE username = $1',
+      [normalizedUsername]
+    );
+    
+    if (existingUsername.rows.length > 0) {
+      return res.status(400).json({ 
+        error: 'Username already taken' 
+      });
+    }
+    
+    // Create Stripe customer
+    const customer = await stripe.customers.create({
+      email: normalizedEmail,
+      payment_method: paymentMethodId,
+      invoice_settings: {
+        default_payment_method: paymentMethodId,
+      },
+      metadata: {
+        username: normalizedUsername
+      }
+    });
+    
+    // Create subscription with 7-day trial
+    const subscription = await stripe.subscriptions.create({
+      customer: customer.id,
+      items: [{ 
+        price: process.env.STRIPE_PRICE_ID || 'price_1QNqOoP3eFSuPAIQvKaO2rZZ'
+      }],
+      trial_period_days: 7,
+      payment_behavior: 'default_incomplete',
+      trial_settings: {
+        end_behavior: {
+          missing_payment_method: 'cancel'
+        }
+      },
+      metadata: {
+        username: normalizedUsername,
+        referral_code: referralCode || null
+      }
+    });
+    
+    // Calculate trial end date
+    const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    
+    // Process referral code if provided
+    let referredByUserId = null;
+    if (referralCode) {
+      const referralResult = await db.query(
+        `SELECT id, assigned_to_user_id FROM referral_codes 
+         WHERE code = $1 AND is_active = true 
+         AND (expires_at IS NULL OR expires_at > NOW())
+         AND (max_uses = 0 OR times_used < max_uses)`,
+        [referralCode.toUpperCase()]
+      );
+      
+      if (referralResult.rows.length > 0) {
+        const referral = referralResult.rows[0];
+        referredByUserId = referral.assigned_to_user_id;
+        
+        // Increment usage
+        await db.query(
+          'UPDATE referral_codes SET times_used = times_used + 1 WHERE id = $1',
+          [referral.id]
+        );
+      }
+    }
+    
+    // NOW create user account (only after Stripe validation successful)
+    const userResult = await db.query(`
+      INSERT INTO users (
+        email,
+        username,
+        email_verified,
+        stripe_customer_id,
+        stripe_subscription_id,
+        subscription_type,
+        subscription_status,
+        trial_ends_at,
+        referral_code_used,
+        referred_by_user_id,
+        created_at,
+        updated_at
+      ) VALUES ($1, $2, true, $3, $4, 'trial', 'trialing', $5, $6, $7, NOW(), NOW())
+      RETURNING id, email, username, subscription_type, subscription_status, trial_ends_at
+    `, [
+      normalizedEmail,
+      normalizedUsername,
+      customer.id,
+      subscription.id,
+      trialEnd,
+      referralCode ? referralCode.toUpperCase() : null,
+      referredByUserId
+    ]);
+    
+    const user = userResult.rows[0];
+    
+    // Record referral redemption if applicable
+    if (referralCode && referredByUserId) {
+      await db.query(
+        `INSERT INTO referral_redemptions (code_id, redeemed_by_user_id, reward_applied)
+         SELECT id, $1, '7-day trial' FROM referral_codes WHERE code = $2`,
+        [user.id, referralCode.toUpperCase()]
+      );
+    }
+    
+    // Generate auth token
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '30d' }
+    );
+    
+    // Log successful signup
+    console.log(`✅ New trial user: ${user.email} (${user.username})`);
+    
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        subscriptionType: user.subscription_type,
+        subscriptionStatus: user.subscription_status,
+        trialEndsAt: user.trial_ends_at
+      }
+    });
+    
+  } catch (error) {
+    console.error('Signup error:', error);
+    
+    // Handle Stripe-specific errors
+    if (error.type === 'StripeCardError') {
+      return res.status(400).json({ 
+        error: error.message 
+      });
+    }
+    
+    if (error.type === 'StripeInvalidRequestError') {
+      return res.status(400).json({ 
+        error: 'Invalid payment information. Please check your card details.' 
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to create account. Please try again.' 
+    });
+  }
+});
+
+// Create Stripe SetupIntent endpoint (for payment method validation)
+router.post('/create-setup-intent', async (req, res) => {
+  try {
+    const setupIntent = await stripe.setupIntents.create({
+      payment_method_types: ['card'],
+      usage: 'off_session',
+    });
+    
+    res.json({ 
+      clientSecret: setupIntent.client_secret 
+    });
+    
+  } catch (error) {
+    console.error('Error creating setup intent:', error);
+    res.status(500).json({ 
+      error: 'Failed to initialize payment' 
+    });
+  }
+});
+
+module.exports = router;
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: UPDATE FRONTEND - PAYMENT COLLECTION
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /client/src/pages/Login.jsx
+
+Replace the signup flow to include Stripe payment collection:
+
+import { useState, useEffect } from 'react';
+import { useLocation } from 'wouter';
+import { loadStripe } from '@stripe/stripe-js';
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements
+} from '@stripe/react-stripe-js';
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+
+function PaymentForm({ email, username, referralCode, onSuccess }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!stripe || !elements) {
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // Confirm the setup
+      const { error: submitError, setupIntent } = await stripe.confirmSetup({
+        elements,
+        confirmParams: {
+          return_url: window.location.origin + '/onboarding',
+        },
+        redirect: 'if_required'
+      });
+
+      if (submitError) {
+        setError(submitError.message);
+        setLoading(false);
+        return;
+      }
+
+      // Payment method validated - complete signup
+      const response = await fetch('/api/auth/complete-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          username,
+          setupIntentId: setupIntent.id,
+          referralCode
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Signup failed');
+        setLoading(false);
+        return;
+      }
+
+      // Success!
+      localStorage.setItem('token', data.token);
+      onSuccess(data.user);
+
+    } catch (err) {
+      console.error('Payment error:', err);
+      setError('An error occurred. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  const today = new Date();
+  const trialEndDate = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const formattedDate = trialEndDate.toLocaleDateString('en-US', { 
+    month: 'long', 
+    day: 'numeric', 
+    year: 'numeric' 
+  });
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <h3 className="font-semibold text-blue-900 mb-2">7-Day Free Trial</h3>
+        <p className="text-sm text-blue-800">
+          Your trial starts today and ends {formattedDate}.
+        </p>
+        <p className="text-sm text-blue-800 mt-2">
+          After your trial, you'll be charged <strong>$14.99/month</strong> until you cancel.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="font-semibold text-gray-900">Payment Details</h3>
+        <PaymentElement />
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-4">
+        <button
+          type="submit"
+          disabled={!stripe || loading}
+          className="w-full bg-black text-white p-3 rounded-lg font-bold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+        >
+          {loading ? 'Processing...' : 'Start Free Trial'}
+        </button>
+
+        <p className="text-xs text-gray-500 text-center">
+          By continuing, you agree to our Terms of Service.<br />
+          Cancel anytime before {formattedDate} to avoid charges.
+        </p>
+      </div>
+    </form>
+  );
+}
+
+export default function Login() {
+  const [step, setStep] = useState('email'); // 'email', 'code', 'username', 'payment'
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [username, setUsername] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [referralStatus, setReferralStatus] = useState(null);
+  const [clientSecret, setClientSecret] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [, setLocation] = useLocation();
+
+  // Check for referral code in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      setReferralCode(ref.toUpperCase().trim());
+      validateReferralCode(ref.toUpperCase().trim());
+    }
+  }, []);
+
+  // Validate referral code
+  useEffect(() => {
+    if (!referralCode) {
+      setReferralStatus(null);
+      return;
+    }
+
+    setReferralStatus('checking');
+
+    const timer = setTimeout(() => {
+      validateReferralCode(referralCode);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [referralCode]);
+
+  const validateReferralCode = async (code) => {
+    try {
+      const response = await fetch('/api/referrals/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+
+      const data = await response.json();
+
+      if (data.valid) {
+        setReferralStatus('valid');
+      } else if (data.expired) {
+        setReferralStatus('expired');
+      } else {
+        setReferralStatus('invalid');
+      }
+    } catch (error) {
+      console.error('Referral validation error:', error);
+      setReferralStatus('invalid');
+    }
+  };
+
+  const sendCode = async () => {
+    if (!email.includes('@')) {
+      setError('Please enter a valid email');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setStep('code');
+      } else {
+        setError(data.error || 'Failed to send code');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyCode = async () => {
+    if (code.length !== 6) {
+      setError('Please enter the 6-digit code');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setStep('username');
+      } else {
+        setError(data.error || 'Invalid code');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const proceedToPayment = async () => {
+    if (!username || username.length < 3) {
+      setError('Username must be at least 3 characters');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // Create SetupIntent for payment validation
+      const response = await fetch('/api/auth/create-setup-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setClientSecret(data.clientSecret);
+        setStep('payment');
+      } else {
+        setError('Failed to initialize payment');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignupSuccess = (user) => {
+    console.log('Signup successful:', user);
+    setLocation('/dashboard');
+  };
+
+  const appearance = {
+    theme: 'stripe',
+    variables: {
+      colorPrimary: '#000000',
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-black p-4">
+      <div className="max-w-md w-full p-8 bg-white rounded-lg shadow-2xl">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2">🥋 BJJ OS</h1>
+          <p className="text-gray-600 text-sm">The World's Smartest BJJ Coach</p>
+        </div>
+
+        {step === 'email' && (
+          <>
+            <h2 className="text-2xl font-bold mb-6">Start Your Free Trial</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && sendCode()}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Referral Code (optional)
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Enter code"
+                    value={referralCode}
+                    onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  />
+                  {referralCode && (
+                    <button
+                      onClick={() => {
+                        setReferralCode('');
+                        setReferralStatus(null);
+                      }}
+                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {referralStatus === 'checking' && (
+                  <p className="text-sm text-gray-500 mt-1">🔄 Checking code...</p>
+                )}
+                {referralStatus === 'valid' && (
+                  <p className="text-sm text-green-600 mt-1">✅ Valid referral code!</p>
+                )}
+                {referralStatus === 'invalid' && (
+                  <p className="text-sm text-red-600 mt-1">❌ Invalid code</p>
+                )}
+                {referralStatus === 'expired' && (
+                  <p className="text-sm text-orange-600 mt-1">⚠️ Code expired</p>
+                )}
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <button
+                onClick={sendCode}
+                disabled={loading || !email.includes('@')}
+                className="w-full bg-black text-white p-3 rounded-lg font-bold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'Sending...' : 'Continue'}
+              </button>
+
+              <p className="text-center text-sm text-gray-600">
+                Already have an account?{' '}
+                <button
+                  onClick={() => setStep('login')}
+                  className="text-black font-semibold hover:underline"
+                >
+                  Log in
+                </button>
+              </p>
+            </div>
+          </>
+        )}
+
+        {step === 'code' && (
+          <>
+            <h2 className="text-2xl font-bold mb-6">Verify Your Email</h2>
+            <div className="space-y-4">
+              <p className="text-gray-600 text-sm mb-4">
+                We sent a 6-digit code to <strong>{email}</strong>
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Verification Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="000000"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onKeyPress={(e) => e.key === 'Enter' && verifyCode()}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-center text-2xl tracking-widest focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  autoFocus
+                  maxLength={6}
+                />
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <button
+                onClick={verifyCode}
+                disabled={loading || code.length !== 6}
+                className="w-full bg-black text-white p-3 rounded-lg font-bold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'Verifying...' : 'Verify Code'}
+              </button>
+
+              <button
+                onClick={() => setStep('email')}
+                className="w-full text-gray-600 text-sm hover:underline"
+              >
+                ← Back to email
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'username' && (
+          <>
+            <h2 className="text-2xl font-bold mb-6">Choose Your Username</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  placeholder="your_username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  onKeyPress={(e) => e.key === 'Enter' && proceedToPayment()}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Letters, numbers, and underscores only
+                </p>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <button
+                onClick={proceedToPayment}
+                disabled={loading || username.length < 3}
+                className="w-full bg-black text-white p-3 rounded-lg font-bold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'Processing...' : 'Continue to Payment'}
+              </button>
+
+              <button
+                onClick={() => setStep('code')}
+                className="w-full text-gray-600 text-sm hover:underline"
+              >
+                ← Back
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'payment' && clientSecret && (
+          <>
+            <h2 className="text-2xl font-bold mb-6">Start Your Free Trial</h2>
+            <Elements stripe={stripePromise} options={{ clientSecret, appearance }}>
+              <PaymentForm
+                email={email}
+                username={username}
+                referralCode={referralCode}
+                onSuccess={handleSignupSuccess}
+              />
+            </Elements>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: UPDATE STRIPE WEBHOOKS - HANDLE TRIAL END
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/stripe-webhooks.js
+
+Add webhook handlers for trial ending and subscription updates:
+
+router.post('/webhook', async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    switch (event.type) {
+      // Trial ending soon (optional notification)
+      case 'customer.subscription.trial_will_end':
+        const trialEndingSub = event.data.object;
+        console.log(`Trial ending soon for subscription: ${trialEndingSub.id}`);
+        // Optional: Send email reminder (but we decided not to)
+        break;
+
+      // Successful payment after trial
+      case 'invoice.payment_succeeded':
+        const invoice = event.data.object;
+        const customerId = invoice.customer;
+        const amountPaid = invoice.amount_paid / 100;
+
+        // Find user
+        const userResult = await db.query(
+          'SELECT * FROM users WHERE stripe_customer_id = $1',
+          [customerId]
+        );
+
+        if (userResult.rows.length > 0) {
+          const user = userResult.rows[0];
+
+          // Update user to active subscription
+          await db.query(
+            `UPDATE users 
+             SET subscription_type = 'paid',
+                 subscription_status = 'active',
+                 trial_ends_at = NULL,
+                 updated_at = NOW()
+             WHERE id = $1`,
+            [user.id]
+          );
+
+          console.log(`✅ User ${user.email} converted from trial to paid`);
+
+          // Process referral commission if applicable
+          if (user.referred_by_user_id && user.referral_code_used) {
+            const referralCodeResult = await db.query(
+              'SELECT * FROM referral_codes WHERE code = $1',
+              [user.referral_code_used]
+            );
+
+            if (referralCodeResult.rows.length > 0) {
+              const referralCode = referralCodeResult.rows[0];
+              const commissionPercent = referralCode.commission_percent;
+              const commissionAmount = (amountPaid * commissionPercent) / 100;
+
+              const paymentDate = new Date();
+              const payoutEligibleDate = new Date(paymentDate);
+              payoutEligibleDate.setDate(payoutEligibleDate.getDate() + 60);
+
+              await db.query(
+                `INSERT INTO referral_commissions (
+                  referral_code_id,
+                  code_owner_user_id,
+                  referred_user_id,
+                  payment_amount,
+                  commission_amount,
+                  commission_percent,
+                  payment_date,
+                  payout_eligible_date,
+                  stripe_payment_id,
+                  subscription_id,
+                  status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')`,
+                [
+                  referralCode.id,
+                  referralCode.assigned_to_user_id,
+                  user.id,
+                  amountPaid,
+                  commissionAmount,
+                  commissionPercent,
+                  paymentDate,
+                  payoutEligibleDate,
+                  invoice.payment_intent,
+                  invoice.subscription
+                ]
+              );
+
+              console.log(`✅ Commission recorded: $${commissionAmount} for user ${referralCode.assigned_to_user_id}`);
+            }
+          }
+        }
+        break;
+
+      // Payment failed
+      case 'invoice.payment_failed':
+        const failedInvoice = event.data.object;
+        const failedCustomerId = failedInvoice.customer;
+
+        await db.query(
+          `UPDATE users 
+           SET subscription_status = 'past_due',
+               updated_at = NOW()
+           WHERE stripe_customer_id = $1`,
+          [failedCustomerId]
+        );
+
+        console.log(`⚠️ Payment failed for customer: ${failedCustomerId}`);
+        break;
+
+      // Subscription deleted/cancelled
+      case 'customer.subscription.deleted':
+        const deletedSub = event.data.object;
+        const deletedCustomerId = deletedSub.customer;
+
+        await db.query(
+          `UPDATE users 
+           SET subscription_type = 'free',
+               subscription_status = 'canceled',
+               stripe_subscription_id = NULL,
+               updated_at = NOW()
+           WHERE stripe_customer_id = $1`,
+          [deletedCustomerId]
+        );
+
+        console.log(`❌ Subscription cancelled for customer: ${deletedCustomerId}`);
+        break;
+
+      // Subscription updated
+      case 'customer.subscription.updated':
+        const updatedSub = event.data.object;
+        const updatedCustomerId = updatedSub.customer;
+        const status = updatedSub.status;
+
+        let subscriptionType = 'free';
+        if (status === 'trialing') {
+          subscriptionType = 'trial';
+        } else if (status === 'active') {
+          subscriptionType = 'paid';
+        }
+
+        await db.query(
+          `UPDATE users 
+           SET subscription_type = $1,
+               subscription_status = $2,
+               updated_at = NOW()
+           WHERE stripe_customer_id = $3`,
+          [subscriptionType, status, updatedCustomerId]
+        );
+
+        console.log(`📝 Subscription updated for customer: ${updatedCustomerId}, status: ${status}`);
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    res.json({ received: true });
+
+  } catch (error) {
+    console.error('Webhook processing error:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+module.exports = router;
+
+═══════════════════════════════════════════════════════════════
+PHASE 5: UPDATE UI - REMOVE SESSION TRACKING, UPDATE CTA
+═══════════════════════════════════════════════════════════════
+
+FIND AND REPLACE across ALL files:
+
+Old CTA text → New CTA text:
+"Try Free" → "Start 7-Day Trial"
+"Sign Up" → "Start 7-Day Trial"
+"Get Started" → "Start 7-Day Trial"
+"Try BJJ OS Free" → "Start Your 7-Day Free Trial"
+
+REMOVE all references to:
+- Session limits (7/10 sessions)
+- Session tracking UI
+- Upgrade prompts about sessions
+- Progress bars for sessions
+
+UPDATE FILE: /client/src/components/Header.jsx (or wherever your main CTA is)
+
+Replace main CTA button:
+
+<button 
+  onClick={() => window.location.href = '/signup'}
+  className="bg-black text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-800 transition-colors"
+>
+  Start 7-Day Trial
+</button>
+
+UPDATE FILE: Homepage, Landing Page, Any Marketing Pages
+
+Replace ALL CTAs with:
+
+[Start Your 7-Day Free Trial]
+
+═══════════════════════════════════════════════════════════════
+PHASE 6: UPDATE USER DASHBOARD - SHOW TRIAL STATUS
+═══════════════════════════════════════════════════════════════
+
+CREATE OR UPDATE: /client/src/components/TrialBanner.jsx
+
+import { useEffect, useState } from 'react';
+
+export default function TrialBanner({ user }) {
+  const [daysLeft, setDaysLeft] = useState(0);
+
+  useEffect(() => {
+    if (user?.subscriptionStatus === 'trialing' && user?.trialEndsAt) {
+      const trialEnd = new Date(user.trialEndsAt);
+      const now = new Date();
+      const days = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+      setDaysLeft(days);
+    }
+  }, [user]);
+
+  if (user?.subscriptionStatus !== 'trialing') {
+    return null;
+  }
+
+  const trialEndDate = new Date(user.trialEndsAt).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  return (
+    <div className="bg-blue-50 border-b border-blue-200 px-4 py-3">
+      <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-blue-900 font-medium">
+            Free Trial: {daysLeft} {daysLeft === 1 ? 'day' : 'days'} remaining
+          </span>
+          <span className="text-blue-700 text-sm">
+            Ends {trialEndDate}
+          </span>
+        </div>
+        <a
+          href="/settings/subscription"
+          className="text-blue-900 text-sm hover:underline font-medium"
+        >
+          Manage subscription
+        </a>
+      </div>
+    </div>
+  );
+}
+
+Add to your main app layout:
+
+import TrialBanner from './components/TrialBanner';
+
+function App() {
+  return (
+    <>
+      <TrialBanner user={currentUser} />
+      {/* Rest of app */}
+    </>
+  );
+}
+
+═══════════════════════════════════════════════════════════════
+PHASE 7: UPDATE SETTINGS - SUBSCRIPTION MANAGEMENT
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /client/src/pages/Settings.jsx (or create subscription settings page)
+
+Add subscription management section:
+
+<div className="bg-white rounded-lg shadow p-6">
+  <h2 className="text-xl font-bold mb-4">Subscription</h2>
+  
+  {user.subscriptionStatus === 'trialing' && (
+    <div className="space-y-4">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="font-semibold text-blue-900">Free Trial Active</p>
+        <p className="text-sm text-blue-800 mt-1">
+          Trial ends: {new Date(user.trialEndsAt).toLocaleDateString()}
+        </p>
+        <p className="text-sm text-blue-800 mt-1">
+          After trial: $14.99/month
+        </p>
+      </div>
+      
+      <button
+        onClick={cancelSubscription}
+        className="text-red-600 text-sm hover:underline"
+      >
+        Cancel subscription
+      </button>
+    </div>
+  )}
+  
+  {user.subscriptionStatus === 'active' && (
+    <div className="space-y-4">
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <p className="font-semibold text-green-900">Active Subscription</p>
+        <p className="text-sm text-green-800 mt-1">
+          $14.99/month
+        </p>
+        <p className="text-sm text-green-800 mt-1">
+          Next billing: {/* calculate from subscription */}
+        </p>
+      </div>
+      
+      <button
+        onClick={cancelSubscription}
+        className="text-red-600 text-sm hover:underline"
+      >
+        Cancel subscription
+      </button>
+    </div>
+  )}
+</div>
+
+Add cancel subscription function:
+
+const cancelSubscription = async () => {
+  if (!confirm('Are you sure you want to cancel your subscription?')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/subscriptions/cancel', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (response.ok) {
+      alert('Subscription cancelled. You\'ll keep access until your trial/billing period ends.');
+      window.location.reload();
+    } else {
+      alert('Failed to cancel subscription');
+    }
+  } catch (error) {
+    console.error('Cancel error:', error);
+    alert('An error occurred');
+  }
+};
+
+═══════════════════════════════════════════════════════════════
+PHASE 8: ADD SUBSCRIPTION MANAGEMENT ENDPOINTS
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/subscriptions.js
+
+const express = require('express');
+const router = express.Router();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { authenticateToken } = require('./middleware/auth');
+const { db } = require('./db');
+
+// Cancel subscription
+router.post('/cancel', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    // Get user
+    const userResult = await db.query(
+      'SELECT * FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const user = userResult.rows[0];
+    
+    if (!user.stripe_subscription_id) {
+      return res.status(400).json({ error: 'No active subscription' });
+    }
+    
+    // Cancel subscription in Stripe (at period end)
+    await stripe.subscriptions.update(user.stripe_subscription_id, {
+      cancel_at_period_end: true
+    });
+    
+    console.log(`Subscription cancelled for user: ${user.email}`);
+    
+    res.json({ 
+      success: true,
+      message: 'Subscription cancelled. You\'ll keep access until the end of your current period.'
+    });
+    
+  } catch (error) {
+    console.error('Cancel subscription error:', error);
+    res.status(500).json({ error: 'Failed to cancel subscription' });
+  }
+});
+
+// Get subscription status
+router.get('/status', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    const userResult = await db.query(
+      'SELECT subscription_type, subscription_status, trial_ends_at, stripe_subscription_id FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const user = userResult.rows[0];
+    
+    // Get detailed info from Stripe if subscription exists
+    if (user.stripe_subscription_id) {
+      const subscription = await stripe.subscriptions.retrieve(user.stripe_subscription_id);
+      
+      return res.json({
+        type: user.subscription_type,
+        status: user.subscription_status,
+        trialEndsAt: user.trial_ends_at,
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        cancelAtPeriodEnd: subscription.cancel_at_period_end
+      });
+    }
+    
+    res.json({
+      type: user.subscription_type,
+      status: user.subscription_status,
+      trialEndsAt: user.trial_ends_at
+    });
+    
+  } catch (error) {
+    console.error('Get subscription status error:', error);
+    res.status(500).json({ error: 'Failed to get subscription status' });
+  }
+});
+
+module.exports = router;
+
+ADD TO: /server/index.js
+
+const subscriptionRoutes = require('./subscriptions');
+app.use('/api/subscriptions', subscriptionRoutes);
+
+═══════════════════════════════════════════════════════════════
+PHASE 9: ENVIRONMENT VARIABLES
+═══════════════════════════════════════════════════════════════
+
+ADD TO: .env
+
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_your_key_here
+STRIPE_SECRET_KEY=sk_test_your_key_here
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+STRIPE_PRICE_ID=price_1QNqOoP3eFSuPAIQvKaO2rZZ
+
+Make sure these are set in Replit Secrets.
+
+═══════════════════════════════════════════════════════════════
+PHASE 10: TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+After implementation, test the following:
+
+✅ Signup flow requires credit card
+✅ Invalid cards are rejected (use 4000 0000 0000 0002)
+✅ Valid cards work (use 4242 4242 4242 4242)
+✅ Account is NOT created if payment fails
+✅ Trial period shows correctly (7 days)
+✅ User can access all features during trial
+✅ User can cancel during trial
+✅ After 7 days, Stripe charges automatically
+✅ User converts from trial to paid status
+✅ Referral codes still work
+✅ Referral commissions are tracked correctly
+✅ All "session tracking" UI is removed
+✅ All CTAs say "Start 7-Day Trial"
+
+Use Stripe test cards:
+- Success: 4242 4242 4242 4242
+- Decline: 4000 0000 0000 0002
+- Expired: 4000 0000 0000 0069
+
+═══════════════════════════════════════════════════════════════
+CRITICAL NOTES
+═══════════════════════════════════════════════════════════════
+
+• DO NOT change Professor OS, technique library, or any other features
+• DO NOT change existing paid users - they stay as-is
+• Existing free users should be grandfathered (keep free access)
+• Focus ONLY on removing free tier and adding 7-day trial
+• Credit card validation MUST happen BEFORE account creation
+• No reminder emails before charge (as requested)
+• Keep entire site design/layout the same
+• Only change: CTAs and signup flow
+
+START IMPLEMENTATION NOW.
+```
+
+-----
+
+## ✅ **PROMPT READY!**
+
+**This prompt includes:**
+
+1. ✅ Removes ALL free tier functionality
+1. ✅ Removes session tracking completely
+1. ✅ Adds Stripe payment validation at signup
+1. ✅ Bad cards rejected immediately (before account creation)
+1. ✅ Creates 7-day trial subscription
+1. ✅ Auto-charges $14.99 on day 8
+1. ✅ No reminder email
+1. ✅ Updates all CTAs to “Start 7-Day Trial”
+1. ✅ Keeps rest of site exactly the same
+1. ✅ Handles referral codes
+1. ✅ Trial status display
+1. ✅ Easy cancellation
+1. ✅ Webhooks for subscription management
+
+**Copy the entire prompt above and send it to Replit Agent!** 🚀​​​​​​​​​​​​​​​​

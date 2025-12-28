@@ -1,0 +1,3214 @@
+# 🚀 ULTIMATE MASTER REPLIT AGENT PROMPT
+
+Copy this entire prompt and paste it into Replit Agent:
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════
+COMPLETE BJJ OS SYSTEM - EMAIL AUTH + ADMIN ALERTS + USER MANAGEMENT
+═══════════════════════════════════════════════════════════════
+
+MISSION: 
+1. Replace SMS/phone authentication with email verification system
+2. Implement comprehensive admin email alert system (5 emails per day)
+3. Build complete admin user management panel
+4. Implement referral code system (1 month free)
+5. Enhanced monitoring with 10 detailed reporting sections
+
+Clean implementation from scratch - no existing users to migrate.
+
+CONFIRMED SETUP:
+✅ Domain: bjjos.app (verified with Google Workspace)
+✅ Email service: Resend
+✅ Sender email: BJJ OS <noreply@bjjos.app>
+✅ Resend API key: Available in Secrets as RESEND_API_KEY
+✅ Admin email: todd@bjjos.app (receives all admin alerts)
+✅ Admin user: toddkramer@mac.com (lifetime user, admin access)
+✅ No existing users (clean slate)
+
+CORE REQUIREMENTS:
+• One-time email verification, then logged in for 90 days
+• 2-device limit per user (prevent account sharing)
+• Device fingerprinting (privacy-respecting)
+• Username optional at signup
+• Admin bypass code for toddkramer@mac.com
+• Sessions auto-extend when active
+• Beautiful branded verification emails
+• Admin receives 5 scheduled emails per day (2 digests + 3 video reports)
+• Full admin panel for user management
+• Referral code system with 1 month free
+• Admin can manually add users with lifetime access
+• Admin can toggle any user to lifetime with one click
+• Even lifetime users go through normal email verification + onboarding + username selection
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: DEPENDENCIES & ENVIRONMENT
+═══════════════════════════════════════════════════════════════
+
+1. INSTALL PACKAGES:
+   npm install resend node-cron
+
+2. VERIFY ENVIRONMENT VARIABLES:
+   - RESEND_API_KEY (should already exist in Secrets)
+   - Add ADMIN_BYPASS_CODE=999999 to Secrets (for emergency admin access)
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: DATABASE SCHEMA
+═══════════════════════════════════════════════════════════════
+
+Execute these SQL commands to create complete schema:
+
+-- DROP OLD SMS TABLES (if they exist)
+DROP TABLE IF EXISTS sms_verification_codes CASCADE;
+DROP TABLE IF EXISTS phone_verifications CASCADE;
+
+-- USERS TABLE (email-first design)
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  username VARCHAR(50) UNIQUE,
+  email_verified BOOLEAN DEFAULT FALSE,
+  is_admin BOOLEAN DEFAULT FALSE,
+  subscription_type VARCHAR(50) DEFAULT 'free',
+  subscription_status VARCHAR(50) DEFAULT 'active',
+  max_devices INTEGER DEFAULT 2,
+  free_until TIMESTAMP,
+  referral_code_used VARCHAR(50),
+  referred_by_user_id INTEGER REFERENCES users(id),
+  admin_notes TEXT,
+  granted_lifetime_by VARCHAR(255),
+  granted_lifetime_at TIMESTAMP,
+  granted_lifetime_reason TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  last_login TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Stats fields
+  total_sessions INTEGER DEFAULT 0,
+  total_hours DECIMAL(10,2) DEFAULT 0,
+  ai_sessions_this_month INTEGER DEFAULT 0,
+  quota_reset_date TIMESTAMP,
+  current_streak_days INTEGER DEFAULT 0,
+  longest_streak_days INTEGER DEFAULT 0,
+  last_session_date TIMESTAMP
+);
+
+-- EMAIL VERIFICATION CODES
+CREATE TABLE email_verification_codes (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) NOT NULL,
+  code VARCHAR(6) NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  used BOOLEAN DEFAULT FALSE,
+  ip_address VARCHAR(45),
+  user_agent TEXT
+);
+
+-- SESSIONS (90-day tokens with device tracking)
+CREATE TABLE IF NOT EXISTS sessions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  token VARCHAR(64) UNIQUE NOT NULL,
+  device_fingerprint VARCHAR(255),
+  device_name VARCHAR(100),
+  device_type VARCHAR(50),
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  last_activity TIMESTAMP DEFAULT NOW(),
+  ip_address VARCHAR(45),
+  user_agent TEXT
+);
+
+-- REFERRAL CODES
+CREATE TABLE IF NOT EXISTS referral_codes (
+  id SERIAL PRIMARY KEY,
+  code VARCHAR(50) UNIQUE NOT NULL,
+  created_by_admin BOOLEAN DEFAULT TRUE,
+  max_uses INTEGER DEFAULT 0, -- 0 = unlimited
+  times_used INTEGER DEFAULT 0,
+  reward_type VARCHAR(50) DEFAULT 'free_month',
+  reward_days INTEGER DEFAULT 30,
+  expires_at TIMESTAMP,
+  is_active BOOLEAN DEFAULT TRUE,
+  internal_notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- REFERRAL REDEMPTIONS
+CREATE TABLE IF NOT EXISTS referral_redemptions (
+  id SERIAL PRIMARY KEY,
+  code_id INTEGER REFERENCES referral_codes(id),
+  redeemed_by_user_id INTEGER REFERENCES users(id),
+  redeemed_at TIMESTAMP DEFAULT NOW(),
+  reward_applied TEXT
+);
+
+-- VIDEO CURATION TRACKING
+CREATE TABLE IF NOT EXISTS video_curation_batches (
+  id SERIAL PRIMARY KEY,
+  batch_time TIMESTAMP DEFAULT NOW(),
+  videos_scanned INTEGER DEFAULT 0,
+  videos_approved INTEGER DEFAULT 0,
+  videos_rejected INTEGER DEFAULT 0,
+  avg_rating DECIMAL(3,1),
+  errors_count INTEGER DEFAULT 0,
+  processing_time_minutes INTEGER,
+  api_cost DECIMAL(10,2),
+  completed_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS video_curation_results (
+  id SERIAL PRIMARY KEY,
+  batch_id INTEGER REFERENCES video_curation_batches(id),
+  video_id VARCHAR(100),
+  title TEXT,
+  instructor VARCHAR(255),
+  rating DECIMAL(3,1),
+  status VARCHAR(50),
+  reason TEXT,
+  category VARCHAR(100),
+  technique VARCHAR(255),
+  tags TEXT[],
+  duration_seconds INTEGER,
+  views INTEGER,
+  youtube_url TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- SYSTEM ERRORS LOG
+CREATE TABLE IF NOT EXISTS system_errors (
+  id SERIAL PRIMARY KEY,
+  error_type VARCHAR(100),
+  error_message TEXT,
+  stack_trace TEXT,
+  context JSONB,
+  severity VARCHAR(50) DEFAULT 'medium',
+  created_at TIMESTAMP DEFAULT NOW(),
+  resolved BOOLEAN DEFAULT FALSE,
+  resolved_at TIMESTAMP,
+  resolved_by VARCHAR(255)
+);
+
+-- USER FEEDBACK
+CREATE TABLE IF NOT EXISTS user_feedback (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  feedback_type VARCHAR(50),
+  sentiment VARCHAR(50),
+  message TEXT,
+  context JSONB,
+  created_at TIMESTAMP DEFAULT NOW(),
+  admin_reviewed BOOLEAN DEFAULT FALSE
+);
+
+-- ADMIN ACTION LOG
+CREATE TABLE IF NOT EXISTS admin_actions (
+  id SERIAL PRIMARY KEY,
+  admin_email VARCHAR(255) NOT NULL,
+  action_type VARCHAR(100) NOT NULL,
+  target_user_id INTEGER REFERENCES users(id),
+  details JSONB,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- INDEXES FOR PERFORMANCE
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_subscription ON users(subscription_type);
+CREATE INDEX IF NOT EXISTS idx_users_created ON users(created_at);
+CREATE INDEX IF NOT EXISTS idx_email_verification ON email_verification_codes(email, code, used, expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_device ON sessions(user_id, device_fingerprint);
+CREATE INDEX IF NOT EXISTS idx_sessions_activity ON sessions(last_activity);
+CREATE INDEX IF NOT EXISTS idx_referral_codes_code ON referral_codes(code);
+CREATE INDEX IF NOT EXISTS idx_referral_codes_active ON referral_codes(is_active);
+CREATE INDEX IF NOT EXISTS idx_referral_redemptions_user ON referral_redemptions(redeemed_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_video_batches_time ON video_curation_batches(batch_time);
+CREATE INDEX IF NOT EXISTS idx_video_results_batch ON video_curation_results(batch_id);
+CREATE INDEX IF NOT EXISTS idx_video_results_status ON video_curation_results(status);
+CREATE INDEX IF NOT EXISTS idx_system_errors_time ON system_errors(created_at);
+CREATE INDEX IF NOT EXISTS idx_system_errors_type ON system_errors(error_type);
+CREATE INDEX IF NOT EXISTS idx_system_errors_resolved ON system_errors(resolved);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_user ON user_feedback(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_reviewed ON user_feedback(admin_reviewed);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_time ON admin_actions(created_at);
+
+-- INSERT ADMIN USER (toddkramer@mac.com)
+INSERT INTO users (email, username, email_verified, is_admin, subscription_type, max_devices)
+VALUES ('toddkramer@mac.com', 'todd', true, true, 'lifetime', 99)
+ON CONFLICT (email) DO UPDATE SET 
+  is_admin = true, 
+  subscription_type = 'lifetime',
+  max_devices = 99;
+
+-- CREATE DEFAULT REFERRAL CODE
+INSERT INTO referral_codes (code, reward_type, reward_days, is_active, internal_notes)
+VALUES ('WELCOME30', 'free_month', 30, true, 'Default welcome code for general marketing')
+ON CONFLICT (code) DO NOTHING;
+
+-- REMOVE phone_number COLUMN (if exists from old system)
+ALTER TABLE users DROP COLUMN IF EXISTS phone_number CASCADE;
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: EMAIL SERVICE (USER-FACING EMAILS)
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/email.js
+
+const { Resend } = require('resend');
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+const sendVerificationEmail = async (email, code) => {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: [email],
+      subject: 'Your BJJ OS Verification Code',
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+              }
+              .email-container {
+                background: white;
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+              }
+              .header {
+                background: #000;
+                color: white;
+                text-align: center;
+                padding: 40px 20px;
+              }
+              .header h1 {
+                margin: 0;
+                font-size: 36px;
+                font-weight: bold;
+              }
+              .header p {
+                margin: 8px 0 0 0;
+                opacity: 0.9;
+                font-size: 14px;
+              }
+              .content {
+                padding: 40px 30px;
+              }
+              .content h2 {
+                margin-top: 0;
+                color: #000;
+                font-size: 24px;
+              }
+              .code-container {
+                background: #f8f8f8;
+                border: 3px solid #000;
+                border-radius: 12px;
+                padding: 30px;
+                text-align: center;
+                margin: 30px 0;
+              }
+              .code {
+                font-size: 48px;
+                font-weight: bold;
+                letter-spacing: 12px;
+                color: #000;
+                font-family: 'Courier New', monospace;
+              }
+              .info {
+                margin-top: 20px;
+                padding: 15px;
+                background: #fff8e1;
+                border-left: 4px solid #ffc107;
+                border-radius: 4px;
+              }
+              .info strong {
+                color: #f57c00;
+              }
+              .footer {
+                background: #f8f8f8;
+                text-align: center;
+                padding: 20px;
+                font-size: 12px;
+                color: #666;
+                border-top: 1px solid #e0e0e0;
+              }
+              .footer a {
+                color: #000;
+                text-decoration: none;
+                font-weight: bold;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="email-container">
+              <div class="header">
+                <h1>🥋 BJJ OS</h1>
+                <p>The World's Smartest BJJ Coach</p>
+              </div>
+              
+              <div class="content">
+                <h2>Your Verification Code</h2>
+                <p>Enter this code to sign in to BJJ OS:</p>
+                
+                <div class="code-container">
+                  <div class="code">${code}</div>
+                </div>
+                
+                <div class="info">
+                  <p><strong>⏱️ This code expires in 10 minutes.</strong></p>
+                  <p style="margin: 8px 0 0 0; font-size: 14px;">If you didn't request this code, you can safely ignore this email.</p>
+                </div>
+              </div>
+              
+              <div class="footer">
+                <p><strong>BJJ OS</strong></p>
+                <p><a href="https://bjjos.app">bjjos.app</a></p>
+                <p style="margin-top: 10px;">This is an automated message. Please do not reply.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `,
+    });
+
+    if (error) {
+      console.error('❌ Resend error:', error);
+      return { success: false, error };
+    }
+
+    console.log('✅ Verification email sent to:', email);
+    return { success: true, data };
+    
+  } catch (error) {
+    console.error('❌ Error sending email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+const sendWelcomeEmail = async (email, username) => {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: [email],
+      subject: 'Welcome to BJJ OS - Your AI BJJ Coach',
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+              }
+              .email-container {
+                background: white;
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+              }
+              .header {
+                background: #000;
+                color: white;
+                text-align: center;
+                padding: 40px 20px;
+              }
+              .content {
+                padding: 40px 30px;
+              }
+              .feature {
+                margin: 20px 0;
+                padding: 20px;
+                background: #f8f8f8;
+                border-radius: 8px;
+                border-left: 4px solid #000;
+              }
+              .feature strong {
+                display: block;
+                font-size: 16px;
+                margin-bottom: 8px;
+                color: #000;
+              }
+              .cta {
+                text-align: center;
+                margin: 30px 0;
+              }
+              .cta-button {
+                display: inline-block;
+                background: #000;
+                color: white;
+                padding: 15px 40px;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 16px;
+              }
+              .footer {
+                background: #f8f8f8;
+                text-align: center;
+                padding: 20px;
+                font-size: 12px;
+                color: #666;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="email-container">
+              <div class="header">
+                <h1 style="margin: 0; font-size: 36px;">🥋 Welcome to BJJ OS</h1>
+              </div>
+              
+              <div class="content">
+                <h2 style="margin-top: 0;">You're In, ${username || 'there'}!</h2>
+                <p>Welcome to the world's most intelligent BJJ coaching system. You now have access to <strong>Professor OS</strong>—an AI coach trained on knowledge from 50+ world champions.</p>
+                
+                <div class="feature">
+                  <strong>📊 Post-Session Analysis</strong>
+                  Log your training sessions and get personalized coaching feedback based on your patterns
+                </div>
+                
+                <div class="feature">
+                  <strong>🎯 Pre-Training Focus</strong>
+                  Get technique recommendations before each session tailored to your skill level
+                </div>
+                
+                <div class="feature">
+                  <strong>🤔 Ask Anything</strong>
+                  Get answers from 50+ elite instructors' knowledge base
+                </div>
+                
+                <div class="feature">
+                  <strong>🏆 Competition Prep</strong>
+                  Build gameplans and get strategic coaching for competitions
+                </div>
+                
+                <div class="cta">
+                  <a href="https://bjjos.app" class="cta-button">Start Training →</a>
+                </div>
+                
+                <p style="margin-top: 30px; font-size: 14px; color: #666;">
+                  Questions? Reach out at <a href="mailto:support@bjjos.app" style="color: #000;">support@bjjos.app</a>
+                </p>
+              </div>
+              
+              <div class="footer">
+                <p><strong>BJJ OS</strong> | <a href="https://bjjos.app" style="color: #000; text-decoration: none;">bjjos.app</a></p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `,
+    });
+
+    if (error) {
+      console.error('❌ Welcome email error:', error);
+      return { success: false, error };
+    }
+
+    console.log('✅ Welcome email sent to:', email);
+    return { success: true };
+    
+  } catch (error) {
+    console.error('❌ Error sending welcome email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+const sendLifetimeGrantedEmail = async (email, username, grantedBy, reason) => {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: [email],
+      subject: '🎉 You\'ve Been Granted Lifetime Access to BJJ OS!',
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              body { font-family: -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+              .container { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+              .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; padding: 40px 20px; }
+              .header h1 { margin: 0; font-size: 32px; }
+              .content { padding: 40px 30px; }
+              .benefit { margin: 15px 0; padding: 15px; background: #f8f8f8; border-radius: 8px; border-left: 4px solid #667eea; }
+              .cta { text-align: center; margin: 30px 0; }
+              .cta-button { display: inline-block; background: #667eea; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; }
+              .footer { background: #f8f8f8; text-align: center; padding: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🎉 Lifetime Access Granted!</h1>
+              </div>
+              
+              <div class="content">
+                <h2>Hey ${username || 'there'}!</h2>
+                <p>Great news! You've been granted <strong>lifetime access</strong> to BJJ OS.</p>
+                
+                ${reason ? `<p style="background: #fff8e1; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;"><strong>Reason:</strong> ${reason}</p>` : ''}
+                
+                <h3 style="margin-top: 30px;">What You Get:</h3>
+                
+                <div class="benefit">
+                  <strong>♾️ Unlimited AI Coaching</strong><br>
+                  No session limits, ever. Talk to Professor OS as much as you want.
+                </div>
+                
+                <div class="benefit">
+                  <strong>📚 Full Encyclopedia Access</strong><br>
+                  5,000+ technique videos from world champions.
+                </div>
+                
+                <div class="benefit">
+                  <strong>🎯 All Premium Features</strong><br>
+                  Competition mode, pattern detection, advanced analytics.
+                </div>
+                
+                <div class="benefit">
+                  <strong>🚀 Forever</strong><br>
+                  Never expires. Never pay again.
+                </div>
+                
+                <div class="cta">
+                  <a href="https://bjjos.app" class="cta-button">Start Training →</a>
+                </div>
+                
+                <p style="margin-top: 30px; font-size: 14px; color: #666;">
+                  Welcome to the BJJ OS family! 🥋
+                </p>
+              </div>
+              
+              <div class="footer">
+                <p><strong>BJJ OS</strong> | <a href="https://bjjos.app" style="color: #000; text-decoration: none;">bjjos.app</a></p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `,
+    });
+
+    if (error) {
+      console.error('❌ Lifetime granted email error:', error);
+      return { success: false, error };
+    }
+
+    console.log('✅ Lifetime granted email sent to:', email);
+    return { success: true };
+    
+  } catch (error) {
+    console.error('❌ Error sending lifetime granted email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+module.exports = { 
+  sendVerificationEmail,
+  sendWelcomeEmail,
+  sendLifetimeGrantedEmail
+};
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: ADMIN EMAIL ALERTS SYSTEM (ENHANCED)
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/admin-alerts.js
+
+const { Resend } = require('resend');
+const { db } = require('./db');
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+const ADMIN_EMAIL = 'todd@bjjos.app';
+
+// Helper function to format numbers
+const formatNumber = (num) => {
+  return num.toLocaleString();
+};
+
+const formatPercent = (num) => {
+  return `${Math.round(num)}%`;
+};
+
+const formatCurrency = (num) => {
+  return `$${num.toFixed(2)}`;
+};
+
+// ========================================
+// PREVIOUS DAY DIGEST (7 AM PT)
+// ========================================
+
+const sendPreviousDayDigest = async () => {
+  try {
+    const stats = await gatherPreviousDayStats();
+    
+    const { data, error } = await resend.emails.send({
+      from: 'BJJ OS Admin <noreply@bjjos.app>',
+      to: [ADMIN_EMAIL],
+      subject: `BJJ OS Daily Report - ${stats.date}`,
+      html: generatePreviousDayHTML(stats),
+    });
+
+    if (error) {
+      console.error('Failed to send previous day digest:', error);
+      return { success: false, error };
+    }
+
+    console.log('✅ Previous day digest sent (7 AM)');
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending previous day digest:', error);
+    // Log error to database
+    await logSystemError('admin_email', error.message, { type: 'previous_day_digest' });
+    return { success: false, error: error.message };
+  }
+};
+
+// ========================================
+// MIDDAY UPDATE (1 PM PT)
+// ========================================
+
+const sendMiddayUpdate = async () => {
+  try {
+    const stats = await gatherTodayStats();
+    
+    const { data, error } = await resend.emails.send({
+      from: 'BJJ OS Admin <noreply@bjjos.app>',
+      to: [ADMIN_EMAIL],
+      subject: `BJJ OS Midday Update - ${stats.date}`,
+      html: generateMiddayHTML(stats),
+    });
+
+    if (error) {
+      console.error('Failed to send midday update:', error);
+      return { success: false, error };
+    }
+
+    console.log('✅ Midday update sent (1 PM)');
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending midday update:', error);
+    await logSystemError('admin_email', error.message, { type: 'midday_update' });
+    return { success: false, error: error.message };
+  }
+};
+
+// ========================================
+// VIDEO CURATION REPORT
+// ========================================
+
+const sendVideoCurationReport = async (batchId) => {
+  try {
+    const batchData = await gatherVideoCurationData(batchId);
+    
+    const { data, error } = await resend.emails.send({
+      from: 'BJJ OS Video Curation <noreply@bjjos.app>',
+      to: [ADMIN_EMAIL],
+      subject: `Video Curation Report - ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', hour12: true, timeZone: 'America/Los_Angeles' })}`,
+      html: generateVideoCurationHTML(batchData),
+    });
+
+    if (error) {
+      console.error('Failed to send video curation report:', error);
+      return { success: false, error };
+    }
+
+    console.log('✅ Video curation report sent');
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending video curation report:', error);
+    await logSystemError('admin_email', error.message, { type: 'video_curation_report' });
+    return { success: false, error: error.message };
+  }
+};
+
+// ========================================
+// DATA GATHERING FUNCTIONS
+// ========================================
+
+const gatherPreviousDayStats = async () => {
+  const yesterday_start = new Date();
+  yesterday_start.setDate(yesterday_start.getDate() - 1);
+  yesterday_start.setHours(0, 0, 0, 0);
+  
+  const yesterday_end = new Date();
+  yesterday_end.setDate(yesterday_end.getDate() - 1);
+  yesterday_end.setHours(23, 59, 59, 999);
+
+  const twoDaysAgo_start = new Date(yesterday_start);
+  twoDaysAgo_start.setDate(twoDaysAgo_start.getDate() - 1);
+  
+  const twoDaysAgo_end = new Date(yesterday_end);
+  twoDaysAgo_end.setDate(twoDaysAgo_end.getDate() - 1);
+
+  // User metrics
+  const newSignups = await db.query(
+    `SELECT COUNT(*) as count FROM users WHERE created_at BETWEEN $1 AND $2`,
+    [yesterday_start, yesterday_end]
+  );
+  
+  const prevDaySignups = await db.query(
+    `SELECT COUNT(*) as count FROM users WHERE created_at BETWEEN $1 AND $2`,
+    [twoDaysAgo_start, twoDaysAgo_end]
+  );
+  
+  const totalUsers = await db.query(`SELECT COUNT(*) as count FROM users`);
+  
+  const activeUsers7d = await db.query(
+    `SELECT COUNT(DISTINCT user_id) as count FROM sessions 
+     WHERE last_activity >= $1`,
+    [new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)]
+  );
+  
+  const freeUsers = await db.query(
+    `SELECT COUNT(*) as count FROM users WHERE subscription_type = 'free'`
+  );
+  
+  const lifetimeUsers = await db.query(
+    `SELECT COUNT(*) as count FROM users WHERE subscription_type = 'lifetime'`
+  );
+
+  // Referral metrics
+  const referralRedemptions = await db.query(
+    `SELECT COUNT(*) as count FROM referral_redemptions WHERE redeemed_at BETWEEN $1 AND $2`,
+    [yesterday_start, yesterday_end]
+  );
+
+  const topReferralCodes = await db.query(
+    `SELECT rc.code, COUNT(rr.id) as redemptions 
+     FROM referral_codes rc
+     LEFT JOIN referral_redemptions rr ON rc.id = rr.code_id
+     GROUP BY rc.code
+     ORDER BY redemptions DESC
+     LIMIT 3`
+  );
+
+  // Engagement metrics - would need actual session/conversation tables
+  // Placeholder queries - adjust based on your actual schema
+  const sessionsLogged = await db.query(
+    `SELECT COUNT(*) as count FROM sessions WHERE created_at BETWEEN $1 AND $2`,
+    [yesterday_start, yesterday_end]
+  );
+
+  // Error tracking
+  const errors = await db.query(
+    `SELECT * FROM system_errors 
+     WHERE created_at BETWEEN $1 AND $2 AND resolved = false
+     ORDER BY severity DESC, created_at DESC
+     LIMIT 10`,
+    [yesterday_start, yesterday_end]
+  );
+
+  const errorCount = await db.query(
+    `SELECT COUNT(*) as count FROM system_errors 
+     WHERE created_at BETWEEN $1 AND $2`,
+    [yesterday_start, yesterday_end]
+  );
+
+  // User feedback
+  const userFeedback = await db.query(
+    `SELECT * FROM user_feedback 
+     WHERE created_at BETWEEN $1 AND $2
+     ORDER BY created_at DESC
+     LIMIT 10`,
+    [yesterday_start, yesterday_end]
+  );
+
+  const feedbackCounts = await db.query(
+    `SELECT sentiment, COUNT(*) as count 
+     FROM user_feedback 
+     WHERE created_at BETWEEN $1 AND $2
+     GROUP BY sentiment`,
+    [yesterday_start, yesterday_end]
+  );
+
+  // Admin actions
+  const adminActions = await db.query(
+    `SELECT * FROM admin_actions 
+     WHERE created_at BETWEEN $1 AND $2
+     ORDER BY created_at DESC
+     LIMIT 10`,
+    [yesterday_start, yesterday_end]
+  );
+
+  const lifetimeGranted = await db.query(
+    `SELECT COUNT(*) as count FROM admin_actions 
+     WHERE action_type = 'grant_lifetime' 
+     AND created_at BETWEEN $1 AND $2`,
+    [yesterday_start, yesterday_end]
+  );
+
+  return {
+    date: yesterday_start.toLocaleDateString(),
+    newSignups: parseInt(newSignups.rows[0].count),
+    prevDaySignups: parseInt(prevDaySignups.rows[0].count),
+    signupChange: parseInt(newSignups.rows[0].count) - parseInt(prevDaySignups.rows[0].count),
+    totalUsers: parseInt(totalUsers.rows[0].count),
+    activeUsers7d: parseInt(activeUsers7d.rows[0].count),
+    activePercent: Math.round((parseInt(activeUsers7d.rows[0].count) / parseInt(totalUsers.rows[0].count)) * 100),
+    freeUsers: parseInt(freeUsers.rows[0].count),
+    lifetimeUsers: parseInt(lifetimeUsers.rows[0].count),
+    referralRedemptions: parseInt(referralRedemptions.rows[0].count),
+    topReferralCodes: topReferralCodes.rows,
+    sessionsLogged: parseInt(sessionsLogged.rows[0].count),
+    errorCount: parseInt(errorCount.rows[0].count),
+    errors: errors.rows,
+    userFeedback: userFeedback.rows,
+    feedbackCounts: feedbackCounts.rows,
+    adminActions: adminActions.rows,
+    lifetimeGranted: parseInt(lifetimeGranted.rows[0].count),
+    dateRange: {
+      start: yesterday_start,
+      end: yesterday_end
+    }
+  };
+};
+
+const gatherTodayStats = async () => {
+  const today_start = new Date();
+  today_start.setHours(0, 0, 0, 0);
+  
+  const now = new Date();
+
+  const newSignups = await db.query(
+    `SELECT COUNT(*) as count FROM users WHERE created_at BETWEEN $1 AND $2`,
+    [today_start, now]
+  );
+  
+  const totalUsers = await db.query(`SELECT COUNT(*) as count FROM users`);
+
+  const activeNow = await db.query(
+    `SELECT COUNT(DISTINCT user_id) as count FROM sessions 
+     WHERE last_activity >= $1`,
+    [new Date(now - 15 * 60 * 1000)] // Active in last 15 minutes
+  );
+
+  const sessionsToday = await db.query(
+    `SELECT COUNT(*) as count FROM sessions WHERE created_at BETWEEN $1 AND $2`,
+    [today_start, now]
+  );
+
+  return {
+    date: today_start.toLocaleDateString(),
+    timeRange: `${today_start.getHours()}:00 - ${now.getHours()}:00`,
+    newSignups: parseInt(newSignups.rows[0].count),
+    totalUsers: parseInt(totalUsers.rows[0].count),
+    activeNow: parseInt(activeNow.rows[0].count),
+    sessionsToday: parseInt(sessionsToday.rows[0].count),
+    projectedSignups: Math.round((parseInt(newSignups.rows[0].count) / now.getHours()) * 24)
+  };
+};
+
+const gatherVideoCurationData = async (batchId) => {
+  const batch = await db.query(
+    `SELECT * FROM video_curation_batches WHERE id = $1`,
+    [batchId]
+  );
+  
+  if (batch.rows.length === 0) {
+    throw new Error(`Batch ${batchId} not found`);
+  }
+  
+  const results = await db.query(
+    `SELECT * FROM video_curation_results WHERE batch_id = $1 ORDER BY rating DESC`,
+    [batchId]
+  );
+  
+  const approved = results.rows.filter(r => r.status === 'approved');
+  const rejected = results.rows.filter(r => r.status === 'rejected');
+  
+  // Rating distribution
+  const ratingDist = {
+    excellent: approved.filter(v => v.rating >= 9.0).length,
+    good: approved.filter(v => v.rating >= 8.0 && v.rating < 9.0).length,
+    acceptable: approved.filter(v => v.rating >= 7.0 && v.rating < 8.0).length
+  };
+
+  // Technique categories
+  const categories = {};
+  approved.forEach(v => {
+    if (!categories[v.category]) {
+      categories[v.category] = {};
+    }
+    if (!categories[v.category][v.technique]) {
+      categories[v.category][v.technique] = 0;
+    }
+    categories[v.category][v.technique]++;
+  });
+
+  // Instructor breakdown
+  const instructors = {};
+  approved.forEach(v => {
+    if (!instructors[v.instructor]) {
+      instructors[v.instructor] = { count: 0, totalRating: 0 };
+    }
+    instructors[v.instructor].count++;
+    instructors[v.instructor].totalRating += parseFloat(v.rating);
+  });
+
+  const topInstructors = Object.entries(instructors)
+    .map(([name, data]) => ({
+      name,
+      count: data.count,
+      avgRating: (data.totalRating / data.count).toFixed(1)
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  // Rejection reasons
+  const rejectionReasons = {};
+  rejected.forEach(v => {
+    if (!rejectionReasons[v.reason]) {
+      rejectionReasons[v.reason] = 0;
+    }
+    rejectionReasons[v.reason]++;
+  });
+
+  const errors = await db.query(
+    `SELECT * FROM system_errors 
+     WHERE error_type = 'video_curation' 
+     AND created_at >= $1
+     AND resolved = false`,
+    [batch.rows[0].batch_time]
+  );
+
+  const totalVideos = await db.query(
+    `SELECT COUNT(*) as count FROM video_curation_results WHERE status = 'approved'`
+  );
+
+  return {
+    batch: batch.rows[0],
+    approved,
+    rejected,
+    ratingDist,
+    categories,
+    topInstructors,
+    rejectionReasons,
+    errors: errors.rows,
+    totalInDatabase: parseInt(totalVideos.rows[0].count)
+  };
+};
+
+// ========================================
+// HTML GENERATION FUNCTIONS
+// ========================================
+
+const generatePreviousDayHTML = (stats) => {
+  const signupTrend = stats.signupChange > 0 ? `↑ ${stats.signupChange}` : stats.signupChange < 0 ? `↓ ${Math.abs(stats.signupChange)}` : '→ 0';
+  const signupColor = stats.signupChange > 0 ? '#10b981' : stats.signupChange < 0 ? '#ef4444' : '#6b7280';
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+          .container { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .header { text-align: center; border-bottom: 3px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
+          .header h1 { margin: 0; font-size: 28px; }
+          .header p { margin: 5px 0 0 0; color: #666; }
+          .section { margin: 30px 0; padding: 25px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #000; }
+          .section h2 { margin: 0 0 15px 0; font-size: 18px; text-transform: uppercase; letter-spacing: 1px; }
+          .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 15px 0; }
+          .stat-box { background: white; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e5e7eb; }
+          .stat-number { font-size: 32px; font-weight: bold; color: #000; margin: 5px 0; }
+          .stat-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+          .stat-change { font-size: 14px; margin-top: 5px; font-weight: 600; }
+          .alert { padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid; }
+          .alert-high { background: #fee2e2; border-color: #ef4444; }
+          .alert-medium { background: #fef3c7; border-color: #f59e0b; }
+          .alert-low { background: #dcfce7; border-color: #10b981; }
+          .feedback-item { background: white; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #e5e7eb; }
+          .feedback-positive { border-color: #10b981; }
+          .feedback-negative { border-color: #ef4444; }
+          .quick-links { text-align: center; margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; }
+          .quick-links a { display: inline-block; margin: 5px 10px; padding: 10px 20px; background: #000; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; }
+          .quick-links a:hover { background: #333; }
+          .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #666; font-size: 12px; }
+          table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+          th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+          th { background: #f8f9fa; font-weight: 600; font-size: 12px; text-transform: uppercase; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>📊 BJJ OS DAILY REPORT</h1>
+            <p>${stats.date}</p>
+          </div>
+
+          <!-- USER GROWTH -->
+          <div class="section">
+            <h2>👥 USER GROWTH</h2>
+            <div class="stat-grid">
+              <div class="stat-box">
+                <div class="stat-label">New Signups</div>
+                <div class="stat-number">${stats.newSignups}</div>
+                <div class="stat-change" style="color: ${signupColor};">${signupTrend}</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Total Users</div>
+                <div class="stat-number">${formatNumber(stats.totalUsers)}</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Active (7d)</div>
+                <div class="stat-number">${stats.activeUsers7d}</div>
+                <div class="stat-change">${stats.activePercent}%</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Free Users</div>
+                <div class="stat-number">${stats.freeUsers}</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Lifetime</div>
+                <div class="stat-number">${stats.lifetimeUsers}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- REFERRALS -->
+          ${stats.referralRedemptions > 0 ? `
+          <div class="section">
+            <h2>🎁 REFERRALS</h2>
+            <p><strong>${stats.referralRedemptions}</strong> referral code${stats.referralRedemptions === 1 ? '' : 's'} redeemed yesterday</p>
+            
+            ${stats.topReferralCodes.length > 0 ? `
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Total Redemptions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${stats.topReferralCodes.map(code => `
+                  <tr>
+                    <td><strong>${code.code}</strong></td>
+                    <td>${code.redemptions}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            ` : ''}
+          </div>
+          ` : ''}
+
+          <!-- ENGAGEMENT -->
+          <div class="section">
+            <h2>🥋 ENGAGEMENT</h2>
+            <div class="stat-grid">
+              <div class="stat-box">
+                <div class="stat-label">Sessions Logged</div>
+                <div class="stat-number">${stats.sessionsLogged}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ADMIN ACTIONS -->
+          ${stats.lifetimeGranted > 0 || stats.adminActions.length > 0 ? `
+          <div class="section">
+            <h2>👨‍💼 ADMIN ACTIONS</h2>
+            ${stats.lifetimeGranted > 0 ? `<p><strong>${stats.lifetimeGranted}</strong> user${stats.lifetimeGranted === 1 ? '' : 's'} granted lifetime access</p>` : ''}
+            
+            ${stats.adminActions.length > 0 ? `
+            <table>
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th>Target</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${stats.adminActions.slice(0, 5).map(action => `
+                  <tr>
+                    <td>${action.action_type}</td>
+                    <td>User #${action.target_user_id || 'N/A'}</td>
+                    <td>${new Date(action.created_at).toLocaleTimeString()}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            ` : ''}
+          </div>
+          ` : ''}
+
+          <!-- USER FEEDBACK -->
+          ${stats.userFeedback.length > 0 ? `
+          <div class="section">
+            <h2>💬 USER FEEDBACK (${stats.userFeedback.length})</h2>
+            
+            ${stats.feedbackCounts.length > 0 ? `
+            <div class="stat-grid">
+              ${stats.feedbackCounts.map(fb => `
+                <div class="stat-box">
+                  <div class="stat-label">${fb.sentiment === 'positive' ? '😊 Positive' : fb.sentiment === 'negative' ? '😞 Negative' : '😐 Neutral'}</div>
+                  <div class="stat-number">${fb.count}</div>
+                </div>
+              `).join('')}
+            </div>
+            ` : ''}
+            
+            ${stats.userFeedback.slice(0, 5).map(fb => `
+              <div class="feedback-item feedback-${fb.sentiment}">
+                <strong>${fb.sentiment === 'positive' ? '😊' : fb.sentiment === 'negative' ? '😞' : '😐'} ${fb.feedback_type}</strong><br>
+                "${fb.message}"<br>
+                <small style="color: #666;">User #${fb.user_id} • ${new Date(fb.created_at).toLocaleTimeString()}</small>
+              </div>
+            `).join('')}
+          </div>
+          ` : ''}
+
+          <!-- ERRORS & ALERTS -->
+          <div class="section">
+            <h2>🚨 ERRORS & ALERTS</h2>
+            ${stats.errorCount === 0 ? `
+              <div class="alert alert-low">
+                <strong>✅ No errors in last 24 hours!</strong><br>
+                All systems operational.
+              </div>
+            ` : `
+              <div class="alert alert-high">
+                <strong>⚠️ ${stats.errorCount} error${stats.errorCount === 1 ? '' : 's'} logged</strong>
+              </div>
+              
+              ${stats.errors.map(e => `
+                <div style="background: white; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #ef4444;">
+                  <strong>${e.error_type}</strong><br>
+                  ${e.error_message}<br>
+                  <small style="color: #666;">${new Date(e.created_at).toLocaleString()}</small>
+                </div>
+              `).join('')}
+            `}
+          </div>
+
+          <!-- QUICK ACTIONS -->
+          <div class="quick-links">
+            <h3 style="margin-top: 0;">🎯 Quick Actions</h3>
+            <a href="https://bjjos.app/admin">Admin Dashboard</a>
+            <a href="https://bjjos.app/admin/users">Manage Users</a>
+            <a href="https://bjjos.app/admin/referrals">Referral Codes</a>
+            <a href="https://dashboard.stripe.com">Stripe</a>
+          </div>
+
+          <div class="footer">
+            <p><strong>BJJ OS Admin System</strong></p>
+            <p>Next report: Today at 1:00 PM PT (Midday Update)</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+const generateMiddayHTML = (stats) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body { font-family: -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 700px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+          .container { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .header { text-align: center; border-bottom: 3px solid #0ea5e9; padding-bottom: 20px; margin-bottom: 30px; }
+          .section { margin: 25px 0; padding: 20px; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #0ea5e9; }
+          .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; }
+          .stat-box { background: white; padding: 15px; border-radius: 8px; text-align: center; }
+          .stat-number { font-size: 28px; font-weight: bold; color: #0ea5e9; }
+          .stat-label { font-size: 11px; color: #666; text-transform: uppercase; }
+          .projection { color: #666; font-size: 13px; margin-top: 5px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>📊 MIDDAY UPDATE</h1>
+            <p>${stats.date} | ${stats.timeRange}</p>
+          </div>
+
+          <div class="section">
+            <h2 style="margin-top: 0;">TODAY SO FAR</h2>
+            <div class="stat-grid">
+              <div class="stat-box">
+                <div class="stat-label">New Signups</div>
+                <div class="stat-number">${stats.newSignups}</div>
+                <div class="projection">~${stats.projectedSignups} projected</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Active Now</div>
+                <div class="stat-number">${stats.activeNow}</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Sessions Today</div>
+                <div class="stat-number">${stats.sessionsToday}</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Total Users</div>
+                <div class="stat-number">${formatNumber(stats.totalUsers)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin-top: 30px; color: #666; font-size: 12px;">
+            <p>Next report: Today at 8:00 PM PT (Video Curation #3)</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+const generateVideoCurationHTML = (data) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          body { font-family: -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+          .container { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .header { text-align: center; background: #8b5cf6; color: white; padding: 30px; border-radius: 8px; margin: -30px -30px 30px -30px; }
+          .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 20px 0; }
+          .stat-box { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e5e7eb; }
+          .stat-number { font-size: 32px; font-weight: bold; color: #8b5cf6; }
+          .stat-label { font-size: 11px; color: #666; text-transform: uppercase; }
+          .section { margin: 25px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; }
+          .video { background: white; padding: 15px; margin: 10px 0; border-radius: 6px; border-left: 4px solid #10b981; }
+          .video.rejected { border-left-color: #ef4444; }
+          .rating { background: #8b5cf6; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; display: inline-block; }
+          .rating.rejected { background: #ef4444; }
+          table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+          th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+          th { background: #f8f9fa; font-weight: 600; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">📹 VIDEO CURATION REPORT</h1>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}</p>
+          </div>
+
+          <!-- SUMMARY STATS -->
+          <div class="stat-grid">
+            <div class="stat-box">
+              <div class="stat-label">Scanned</div>
+              <div class="stat-number">${data.batch.videos_scanned}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Approved</div>
+              <div class="stat-number">${data.batch.videos_approved}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Rejected</div>
+              <div class="stat-number">${data.batch.videos_rejected}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Avg Rating</div>
+              <div class="stat-number">${data.batch.avg_rating}/10</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Total in DB</div>
+              <div class="stat-number">${formatNumber(data.totalInDatabase)}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">API Cost</div>
+              <div class="stat-number">${formatCurrency(parseFloat(data.batch.api_cost) || 0)}</div>
+            </div>
+          </div>
+
+          <!-- QUALITY DISTRIBUTION -->
+          <div class="section">
+            <h2 style="margin-top: 0;">⭐ QUALITY DISTRIBUTION</h2>
+            <table>
+              <tr>
+                <td>9.0-10.0 ⭐⭐⭐⭐⭐</td>
+                <td><strong>${data.ratingDist.excellent} videos</strong> (${formatPercent((data.ratingDist.excellent / data.batch.videos_approved) * 100)})</td>
+              </tr>
+              <tr>
+                <td>8.0-8.9 ⭐⭐⭐⭐</td>
+                <td><strong>${data.ratingDist.good} videos</strong> (${formatPercent((data.ratingDist.good / data.batch.videos_approved) * 100)})</td>
+              </tr>
+              <tr>
+                <td>7.0-7.9 ⭐⭐⭐</td>
+                <td><strong>${data.ratingDist.acceptable} videos</strong> (${formatPercent((data.ratingDist.acceptable / data.batch.videos_approved) * 100)})</td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- TOP INSTRUCTORS -->
+          ${data.topInstructors.length > 0 ? `
+          <div class="section">
+            <h2 style="margin-top: 0;">🥋 TOP INSTRUCTORS THIS BATCH</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Instructor</th>
+                  <th>Videos</th>
+                  <th>Avg Rating</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.topInstructors.map(inst => `
+                  <tr>
+                    <td><strong>${inst.name}</strong></td>
+                    <td>${inst.count}</td>
+                    <td>${inst.avgRating}/10</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- APPROVED VIDEOS -->
+          <div class="section">
+            <h2 style="margin-top: 0;">✅ APPROVED VIDEOS (${data.approved.length})</h2>
+            ${data.approved.slice(0, 10).map(v => `
+              <div class="video">
+                <strong>${v.title}</strong> <span class="rating">${v.rating}/10</span><br>
+                <small><strong>Instructor:</strong> ${v.instructor} | <strong>Category:</strong> ${v.technique}</small><br>
+                <small style="color: #10b981;">✓ ${v.reason}</small>
+              </div>
+            `).join('')}
+            ${data.approved.length > 10 ? `<p style="text-align: center; color: #666;">...and ${data.approved.length - 10} more approved videos</p>` : ''}
+          </div>
+
+          <!-- REJECTED VIDEOS -->
+          ${data.rejected.length > 0 ? `
+          <div class="section">
+            <h2 style="margin-top: 0;">❌ REJECTED VIDEOS (${data.rejected.length})</h2>
+            
+            <h3>Rejection Reasons:</h3>
+            <table>
+              ${Object.entries(data.rejectionReasons).map(([reason, count]) => `
+                <tr>
+                  <td>${reason}</td>
+                  <td><strong>${count}</strong> (${formatPercent((count / data.rejected.length) * 100)})</td>
+                </tr>
+              `).join('')}
+            </table>
+            
+            ${data.rejected.slice(0, 5).map(v => `
+              <div class="video rejected">
+                <strong>${v.title}</strong> <span class="rating rejected">${v.rating}/10</span><br>
+                <small>${v.instructor || 'Unknown channel'}</small><br>
+                <small style="color: #ef4444;">✗ ${v.reason}</small>
+              </div>
+            `).join('')}
+            ${data.rejected.length > 5 ? `<p style="text-align: center; color: #666;">...and ${data.rejected.length - 5} more rejected</p>` : ''}
+          </div>
+          ` : ''}
+
+          <!-- ERRORS -->
+          ${data.errors.length > 0 ? `
+          <div class="section" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+            <h2 style="margin-top: 0;">🚨 ERRORS (${data.errors.length})</h2>
+            ${data.errors.map(e => `
+              <div style="background: white; padding: 15px; margin: 10px 0; border-radius: 6px;">
+                <strong>${e.error_type}</strong><br>
+                ${e.error_message}<br>
+                <small style="color: #666;">${new Date(e.created_at).toLocaleTimeString()}</small>
+              </div>
+            `).join('')}
+          </div>
+          ` : ''}
+
+          <div style="text-align: center; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+            <p style="margin: 0; color: #666;">
+              <a href="https://bjjos.app/admin/video-curation" style="color: #8b5cf6; font-weight: bold; text-decoration: none;">View Live Curation Dashboard →</a>
+            </p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+// ========================================
+// ERROR LOGGING HELPER
+// ========================================
+
+const logSystemError = async (errorType, errorMessage, context) => {
+  try {
+    await db.query(
+      `INSERT INTO system_errors (error_type, error_message, context, severity, created_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [errorType, errorMessage, JSON.stringify(context), 'medium']
+    );
+  } catch (err) {
+    console.error('Failed to log system error:', err);
+  }
+};
+
+module.exports = {
+  sendPreviousDayDigest,
+  sendMiddayUpdate,
+  sendVideoCurationReport
+};
+
+═══════════════════════════════════════════════════════════════
+PHASE 5: ADMIN EMAIL SCHEDULER
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/admin-scheduler.js
+
+const cron = require('node-cron');
+const { 
+  sendPreviousDayDigest, 
+  sendMiddayUpdate, 
+  sendVideoCurationReport 
+} = require('./admin-alerts');
+
+// ========================================
+// ADMIN DIGEST EMAILS
+// ========================================
+
+// Previous day report: 7 AM PT daily
+cron.schedule('0 7 * * *', async () => {
+  console.log('📧 Sending previous day report (7 AM PT)...');
+  try {
+    await sendPreviousDayDigest();
+  } catch (error) {
+    console.error('Failed to send previous day digest:', error);
+  }
+}, {
+  timezone: "America/Los_Angeles"
+});
+
+// Midday update: 1 PM PT daily
+cron.schedule('0 13 * * *', async () => {
+  console.log('📧 Sending midday update (1 PM PT)...');
+  try {
+    await sendMiddayUpdate();
+  } catch (error) {
+    console.error('Failed to send midday update:', error);
+  }
+}, {
+  timezone: "America/Los_Angeles"
+});
+
+// ========================================
+// VIDEO CURATION REPORTS
+// ========================================
+
+// Video curation: 8 AM, 2 PM, 8 PM PT
+// Note: These will be triggered by video curation completion events
+// This is just a fallback scheduler
+
+cron.schedule('0 8,14,20 * * *', async () => {
+  const time = new Date().toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    hour12: true,
+    timeZone: 'America/Los_Angeles'
+  });
+  console.log(`📹 Video curation batch time (${time})...`);
+  // Actual report sending happens in video curation system
+  // when batch completes: sendVideoCurationReport(batchId)
+}, {
+  timezone: "America/Los_Angeles"
+});
+
+console.log('✅ Admin email scheduler initialized:');
+console.log('   - 7:00 AM PT: Previous day report');
+console.log('   - 1:00 PM PT: Midday update');
+console.log('   - 8:00 AM, 2:00 PM, 8:00 PM PT: Video curation reports');
+
+module.exports = {
+  // Export for manual triggering if needed
+};
+
+═══════════════════════════════════════════════════════════════
+PHASE 6: AUTHENTICATION ROUTES
+═══════════════════════════════════════════════════════════════
+
+CREATE OR UPDATE FILE: /server/auth.js
+
+const express = require('express');
+const router = express.Router();
+const crypto = require('crypto');
+const { sendVerificationEmail, sendWelcomeEmail } = require('./email');
+
+const { db } = require('./db');
+
+// CONSTANTS
+const SESSION_DURATION = 90 * 24 * 60 * 60 * 1000; // 90 days
+const EXTENSION_THRESHOLD = 7 * 24 * 60 * 60 * 1000; // Extend if < 7 days left
+const MAX_DEVICES = 2;
+const ADMIN_EMAIL = 'toddkramer@mac.com';
+const ADMIN_BYPASS_CODE = process.env.ADMIN_BYPASS_CODE || '999999';
+
+// RATE LIMITING
+const rateLimitMap = new Map();
+const checkRateLimit = (email) => {
+  const now = Date.now();
+  const lastAttempt = rateLimitMap.get(email);
+  
+  if (lastAttempt && now - lastAttempt < 60000) {
+    return false;
+  }
+  
+  rateLimitMap.set(email, now);
+  return true;
+};
+
+// GENERATE 6-DIGIT CODE
+const generateCode = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// ROUTE: SEND VERIFICATION CODE
+router.post('/send-code', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email required' });
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Rate limiting
+    if (!checkRateLimit(normalizedEmail)) {
+      return res.status(429).json({ 
+        error: 'Please wait 1 minute before requesting another code' 
+      });
+    }
+    
+    // Generate code
+    const code = generateCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    
+    // Save to database
+    await db.query(
+      `INSERT INTO email_verification_codes (email, code, expires_at, ip_address, user_agent) 
+       VALUES ($1, $2, $3, $4, $5)`,
+      [normalizedEmail, code, expiresAt, req.ip, req.get('user-agent')]
+    );
+    
+    // Send email
+    const result = await sendVerificationEmail(normalizedEmail, code);
+    
+    if (!result.success) {
+      return res.status(500).json({ error: 'Failed to send verification email' });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Verification code sent to your email' 
+    });
+    
+  } catch (error) {
+    console.error('❌ Error sending verification code:', error);
+    res.status(500).json({ error: 'Failed to send verification code' });
+  }
+});
+
+// ROUTE: VERIFY CODE AND LOGIN
+router.post('/verify-code', async (req, res) => {
+  try {
+    const { 
+      email, 
+      code, 
+      username,
+      deviceFingerprint,
+      deviceName,
+      deviceType,
+      referralCode
+    } = req.body;
+    
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and code required' });
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // ADMIN BYPASS: Emergency access for admin
+    if (normalizedEmail === ADMIN_EMAIL && code === ADMIN_BYPASS_CODE) {
+      const adminResult = await db.query(
+        `SELECT * FROM users WHERE email = $1`,
+        [ADMIN_EMAIL]
+      );
+      
+      if (adminResult.rows.length > 0) {
+        const adminUser = adminResult.rows[0];
+        
+        const sessionToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + SESSION_DURATION);
+        
+        await db.query(
+          `INSERT INTO sessions 
+           (user_id, token, expires_at, device_fingerprint, device_name, device_type, ip_address, user_agent, last_activity) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+          [
+            adminUser.id, 
+            sessionToken, 
+            expiresAt, 
+            deviceFingerprint || 'admin-bypass',
+            deviceName || 'Admin Access',
+            deviceType || 'unknown',
+            req.ip, 
+            req.get('user-agent')
+          ]
+        );
+        
+        console.log('✅ Admin bypass login successful');
+        
+        return res.json({
+          success: true,
+          token: sessionToken,
+          user: {
+            id: adminUser.id,
+            email: adminUser.email,
+            username: adminUser.username,
+            isAdmin: true,
+            isNew: false
+          }
+        });
+      }
+    }
+    
+    // NORMAL FLOW: Verify email code
+    const verificationResult = await db.query(
+      `SELECT * FROM email_verification_codes 
+       WHERE email = $1 AND code = $2 AND used = false AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [normalizedEmail, code]
+    );
+    
+    if (verificationResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired code' });
+    }
+    
+    const verification = verificationResult.rows[0];
+    
+    // Mark code as used
+    await db.query(
+      `UPDATE email_verification_codes SET used = true WHERE id = $1`,
+      [verification.id]
+    );
+    
+    // Find or create user
+    const existingUserResult = await db.query(
+      `SELECT * FROM users WHERE email = $1`,
+      [normalizedEmail]
+    );
+    
+    let user;
+    let isNewUser = false;
+    let appliedReferral = null;
+    
+    if (existingUserResult.rows.length > 0) {
+      // Existing user - always requires username if not set
+      user = existingUserResult.rows[0];
+      
+      // If existing user doesn't have username and none provided, ask for it
+      if (!user.username && !username) {
+        // Mark code as unused so they can try again with username
+        await db.query(
+          `UPDATE email_verification_codes SET used = false WHERE id = $1`,
+          [verification.id]
+        );
+        return res.json({
+          success: false,
+          requiresUsername: true,
+          message: 'Please choose a username'
+        });
+      }
+      
+      // Update username if provided
+      if (username && !user.username) {
+        const normalizedUsername = username.toLowerCase().trim();
+        
+        if (normalizedUsername.length < 3) {
+          return res.status(400).json({ error: 'Username must be at least 3 characters' });
+        }
+        
+        if (!/^[a-z0-9_]+$/.test(normalizedUsername)) {
+          return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
+        }
+        
+        const usernameCheck = await db.query(
+          `SELECT id FROM users WHERE username = $1`,
+          [normalizedUsername]
+        );
+        
+        if (usernameCheck.rows.length > 0) {
+          return res.status(400).json({ error: 'Username already taken' });
+        }
+        
+        await db.query(
+          `UPDATE users SET username = $1 WHERE id = $2`,
+          [normalizedUsername, user.id]
+        );
+        
+        user.username = normalizedUsername;
+      }
+      
+      if (!user.email_verified) {
+        await db.query(
+          `UPDATE users SET email_verified = true, last_login = NOW() WHERE id = $1`,
+          [user.id]
+        );
+      } else {
+        await db.query(
+          `UPDATE users SET last_login = NOW() WHERE id = $1`,
+          [user.id]
+        );
+      }
+      
+    } else {
+      // New user - MUST have username (ask for it if not provided)
+      if (!username) {
+        // Mark code as unused so they can try again with username
+        await db.query(
+          `UPDATE email_verification_codes SET used = false WHERE id = $1`,
+          [verification.id]
+        );
+        return res.json({
+          success: false,
+          requiresUsername: true,
+          message: 'Please choose a username'
+        });
+      }
+      
+      // Validate username
+      const normalizedUsername = username.toLowerCase().trim();
+      
+      if (normalizedUsername.length < 3) {
+        return res.status(400).json({ error: 'Username must be at least 3 characters' });
+      }
+      
+      if (!/^[a-z0-9_]+$/.test(normalizedUsername)) {
+        return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
+      }
+      
+      const usernameCheck = await db.query(
+        `SELECT id FROM users WHERE username = $1`,
+        [normalizedUsername]
+      );
+      
+      if (usernameCheck.rows.length > 0) {
+        return res.status(400).json({ error: 'Username already taken' });
+      }
+      
+      // Process referral code if provided
+      let freeUntil = null;
+      let referredByUserId = null;
+      
+      if (referralCode) {
+        const referralResult = await db.query(
+          `SELECT * FROM referral_codes 
+           WHERE code = $1 AND is_active = true 
+           AND (expires_at IS NULL OR expires_at > NOW())
+           AND (max_uses = 0 OR times_used < max_uses)`,
+          [referralCode.toUpperCase()]
+        );
+        
+        if (referralResult.rows.length > 0) {
+          const referral = referralResult.rows[0];
+          
+          if (referral.reward_type === 'free_month' || referral.reward_type === 'custom_days') {
+            const days = referral.reward_days || 30;
+            freeUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+            appliedReferral = `${days} days free`;
+          } else if (referral.reward_type === 'lifetime') {
+            // Handled below in user creation
+            appliedReferral = 'lifetime access';
+          }
+          
+          // Increment usage
+          await db.query(
+            `UPDATE referral_codes SET times_used = times_used + 1 WHERE id = $1`,
+            [referral.id]
+          );
+        }
+      }
+      
+      // Create new user
+      const subscriptionType = (referralCode && appliedReferral === 'lifetime access') ? 'lifetime' : 'free';
+      
+      const newUserResult = await db.query(
+        `INSERT INTO users (
+          email, username, email_verified, subscription_type, 
+          free_until, referral_code_used, created_at, last_login
+        ) 
+         VALUES ($1, $2, true, $3, $4, $5, NOW(), NOW()) 
+         RETURNING *`,
+        [normalizedEmail, normalizedUsername, subscriptionType, freeUntil, referralCode || null]
+      );
+      
+      user = newUserResult.rows[0];
+      isNewUser = true;
+      
+      // Record referral redemption
+      if (referralCode && appliedReferral) {
+        const refCode = await db.query(
+          `SELECT id FROM referral_codes WHERE code = $1`,
+          [referralCode.toUpperCase()]
+        );
+        
+        if (refCode.rows.length > 0) {
+          await db.query(
+            `INSERT INTO referral_redemptions (code_id, redeemed_by_user_id, reward_applied)
+             VALUES ($1, $2, $3)`,
+            [refCode.rows[0].id, user.id, appliedReferral]
+          );
+        }
+      }
+      
+      // Send welcome email (async, don't wait)
+      sendWelcomeEmail(normalizedEmail, normalizedUsername).catch(err => 
+        console.error('Welcome email failed:', err)
+      );
+    }
+    
+    // DEVICE LIMIT ENFORCEMENT
+    const activeSessionsResult = await db.query(
+      `SELECT id, device_fingerprint, device_name, created_at 
+       FROM sessions 
+       WHERE user_id = $1 AND expires_at > NOW()
+       ORDER BY created_at ASC`,
+      [user.id]
+    );
+    
+    const activeSessions = activeSessionsResult.rows;
+    const maxDevices = user.max_devices || MAX_DEVICES;
+    
+    const existingSessionOnDevice = activeSessions.find(
+      s => s.device_fingerprint === deviceFingerprint
+    );
+    
+    let removedDevice = null;
+    let deviceLimitExceeded = false;
+    
+    if (existingSessionOnDevice) {
+      await db.query(
+        `DELETE FROM sessions WHERE id = $1`,
+        [existingSessionOnDevice.id]
+      );
+    } else if (activeSessions.length >= maxDevices) {
+      const oldestSession = activeSessions[0];
+      
+      await db.query(
+        `DELETE FROM sessions WHERE id = $1`,
+        [oldestSession.id]
+      );
+      
+      removedDevice = oldestSession.device_name || 'Unknown Device';
+      deviceLimitExceeded = true;
+      
+      console.log(`⚠️ Device limit exceeded for ${user.email}`);
+      console.log(`   Removed: ${removedDevice}`);
+    }
+    
+    // Create new session
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + SESSION_DURATION);
+    
+    await db.query(
+      `INSERT INTO sessions 
+       (user_id, token, expires_at, device_fingerprint, device_name, device_type, ip_address, user_agent, last_activity) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        user.id, 
+        sessionToken, 
+        expiresAt, 
+        deviceFingerprint || 'unknown',
+        deviceName || 'Unknown Device',
+        deviceType || 'unknown',
+        req.ip, 
+        req.get('user-agent')
+      ]
+    );
+    
+    console.log(`✅ User logged in: ${user.email} (${deviceName})`);
+    
+    res.json({
+      success: true,
+      token: sessionToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        isAdmin: user.is_admin || false,
+        isNew: isNewUser,
+        subscriptionType: user.subscription_type,
+        freeUntil: user.free_until
+      },
+      deviceLimitExceeded,
+      removedDevice,
+      appliedReferral
+    });
+    
+  } catch (error) {
+    console.error('❌ Error verifying code:', error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// ROUTE: LOGOUT
+router.post('/logout', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (token) {
+      await db.query(`DELETE FROM sessions WHERE token = $1`, [token]);
+      console.log('✅ User logged out');
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error logging out:', error);
+    res.status(500).json({ error: 'Logout failed' });
+  }
+});
+
+// ROUTE: CHECK SESSION
+router.get('/me', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    const sessionResult = await db.query(
+      `SELECT s.*, u.email, u.username, u.is_admin, u.subscription_type, u.created_at as user_created_at, u.free_until
+       FROM sessions s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.token = $1 AND s.expires_at > NOW()`,
+      [token]
+    );
+    
+    if (sessionResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+    
+    const session = sessionResult.rows[0];
+    
+    // Update last_activity
+    await db.query(
+      `UPDATE sessions SET last_activity = NOW() WHERE token = $1`,
+      [token]
+    );
+    
+    // AUTO-EXTEND: If expires in < 7 days, extend it
+    const timeUntilExpiry = new Date(session.expires_at) - Date.now();
+    
+    if (timeUntilExpiry < EXTENSION_THRESHOLD) {
+      const newExpiresAt = new Date(Date.now() + SESSION_DURATION);
+      
+      await db.query(
+        `UPDATE sessions SET expires_at = $1 WHERE token = $2`,
+        [newExpiresAt, token]
+      );
+      
+      console.log(`✅ Auto-extended session for ${session.email}`);
+    }
+    
+    res.json({
+      user: {
+        id: session.user_id,
+        email: session.email,
+        username: session.username,
+        isAdmin: session.is_admin,
+        subscriptionType: session.subscription_type,
+        freeUntil: session.free_until,
+        createdAt: session.user_created_at
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error checking session:', error);
+    res.status(500).json({ error: 'Session check failed' });
+  }
+});
+
+module.exports = router;
+
+═══════════════════════════════════════════════════════════════
+PHASE 7: ADMIN USER MANAGEMENT ROUTES
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/admin.js
+
+const express = require('express');
+const router = express.Router();
+const crypto = require('crypto');
+const { sendVerificationEmail, sendLifetimeGrantedEmail } = require('./email');
+const { db } = require('./db');
+
+// Admin auth middleware
+const requireAdmin = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    const sessionResult = await db.query(
+      `SELECT s.*, u.is_admin FROM sessions s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.token = $1 AND s.expires_at > NOW()`,
+      [token]
+    );
+    
+    if (sessionResult.rows.length === 0 || !sessionResult.rows[0].is_admin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    req.admin = sessionResult.rows[0];
+    next();
+  } catch (error) {
+    console.error('Admin auth error:', error);
+    res.status(500).json({ error: 'Authentication failed' });
+  }
+};
+
+// Log admin actions
+const logAdminAction = async (adminEmail, actionType, targetUserId, details) => {
+  try {
+    await db.query(
+      `INSERT INTO admin_actions (admin_email, action_type, target_user_id, details, created_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [adminEmail, actionType, targetUserId, JSON.stringify(details)]
+    );
+  } catch (error) {
+    console.error('Failed to log admin action:', error);
+  }
+};
+
+// ========================================
+// USER MANAGEMENT
+// ========================================
+
+// GET: List all users (with pagination, search, filters)
+router.get('/users', requireAdmin, async (req, res) => {
+  try {
+    const { 
+      search, 
+      subscription_type, 
+      limit = 50, 
+      offset = 0,
+      sort = 'created_at',
+      order = 'DESC'
+    } = req.query;
+    
+    let query = `SELECT * FROM users WHERE 1=1`;
+    const params = [];
+    let paramCount = 1;
+    
+    if (search) {
+      query += ` AND (email ILIKE $${paramCount} OR username ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
+      paramCount++;
+    }
+    
+    if (subscription_type) {
+      query += ` AND subscription_type = $${paramCount}`;
+      params.push(subscription_type);
+      paramCount++;
+    }
+    
+    query += ` ORDER BY ${sort} ${order}`;
+    query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    params.push(parseInt(limit), parseInt(offset));
+    
+    const users = await db.query(query, params);
+    
+    const countQuery = `SELECT COUNT(*) as total FROM users WHERE 1=1` + 
+      (search ? ` AND (email ILIKE '%${search}%' OR username ILIKE '%${search}%')` : '') +
+      (subscription_type ? ` AND subscription_type = '${subscription_type}'` : '');
+    
+    const countResult = await db.query(countQuery);
+    
+    res.json({
+      users: users.rows,
+      total: parseInt(countResult.rows[0].total),
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+    
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// GET: Get single user details
+router.get('/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const user = await db.query(
+      `SELECT * FROM users WHERE id = $1`,
+      [id]
+    );
+    
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Get user's sessions
+    const sessions = await db.query(
+      `SELECT * FROM sessions WHERE user_id = $1 AND expires_at > NOW() ORDER BY last_activity DESC`,
+      [id]
+    );
+    
+    // Get user stats (if you have a sessions table for training)
+    // Adjust based on your actual schema
+    
+    res.json({
+      user: user.rows[0],
+      sessions: sessions.rows
+    });
+    
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+// POST: Create user manually (admin only)
+router.post('/users', requireAdmin, async (req, res) => {
+  try {
+    const { 
+      email, 
+      username, 
+      subscription_type = 'free',
+      send_welcome_email = true,
+      skip_verification = true,
+      notes
+    } = req.body;
+    
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email required' });
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Check if user exists
+    const existingUser = await db.query(
+      `SELECT id FROM users WHERE email = $1`,
+      [normalizedEmail]
+    );
+    
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
+    
+    // Validate username if provided
+    if (username) {
+      const normalizedUsername = username.toLowerCase().trim();
+      
+      if (normalizedUsername.length < 3) {
+        return res.status(400).json({ error: 'Username must be at least 3 characters' });
+      }
+      
+      if (!/^[a-z0-9_]+$/.test(normalizedUsername)) {
+        return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
+      }
+      
+      const usernameCheck = await db.query(
+        `SELECT id FROM users WHERE username = $1`,
+        [normalizedUsername]
+      );
+      
+      if (usernameCheck.rows.length > 0) {
+        return res.status(400).json({ error: 'Username already taken' });
+      }
+    }
+    
+    // Create user
+    const maxDevices = subscription_type === 'lifetime' ? 99 : 2;
+    
+    const newUser = await db.query(
+      `INSERT INTO users (
+        email, username, email_verified, subscription_type, max_devices, admin_notes, created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      RETURNING *`,
+      [normalizedEmail, username || null, skip_verification, subscription_type, maxDevices, notes || null]
+    );
+    
+    const user = newUser.rows[0];
+    
+    // Log admin action
+    await logAdminAction(
+      req.admin.email || 'admin',
+      'create_user',
+      user.id,
+      { subscription_type, skip_verification, notes }
+    );
+    
+    // Send welcome email if requested
+    if (send_welcome_email) {
+      sendWelcomeEmail(normalizedEmail, username || 'there').catch(err =>
+        console.error('Failed to send welcome email:', err)
+      );
+    }
+    
+    // If lifetime, send special email
+    if (subscription_type === 'lifetime') {
+      sendLifetimeGrantedEmail(
+        normalizedEmail,
+        username || 'there',
+        req.admin.email || 'Admin',
+        'Manual account creation by admin'
+      ).catch(err => console.error('Failed to send lifetime email:', err));
+    }
+    
+    console.log(`✅ Admin created user: ${normalizedEmail}`);
+    
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        subscription_type: user.subscription_type
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+// PATCH: Grant lifetime access
+router.patch('/users/:id/grant-lifetime', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason, send_notification = true } = req.body;
+    
+    const user = await db.query(
+      `SELECT * FROM users WHERE id = $1`,
+      [id]
+    );
+    
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const userData = user.rows[0];
+    
+    // Update user to lifetime
+    await db.query(
+      `UPDATE users 
+       SET subscription_type = 'lifetime',
+           max_devices = 99,
+           granted_lifetime_by = $1,
+           granted_lifetime_at = NOW(),
+           granted_lifetime_reason = $2,
+           updated_at = NOW()
+       WHERE id = $3`,
+      [req.admin.email || 'admin', reason || 'Admin grant', id]
+    );
+    
+    // Log action
+    await logAdminAction(
+      req.admin.email || 'admin',
+      'grant_lifetime',
+      id,
+      { reason, previous_subscription: userData.subscription_type }
+    );
+    
+    // Send notification email
+    if (send_notification) {
+      sendLifetimeGrantedEmail(
+        userData.email,
+        userData.username || 'there',
+        req.admin.email || 'Admin',
+        reason
+      ).catch(err => console.error('Failed to send lifetime email:', err));
+    }
+    
+    console.log(`✅ Admin granted lifetime to: ${userData.email}`);
+    
+    res.json({
+      success: true,
+      message: 'Lifetime access granted'
+    });
+    
+  } catch (error) {
+    console.error('Error granting lifetime:', error);
+    res.status(500).json({ error: 'Failed to grant lifetime access' });
+  }
+});
+
+// PATCH: Revoke lifetime access
+router.patch('/users/:id/revoke-lifetime', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    
+    const user = await db.query(
+      `SELECT * FROM users WHERE id = $1`,
+      [id]
+    );
+    
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    await db.query(
+      `UPDATE users 
+       SET subscription_type = 'free',
+           max_devices = 2,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [id]
+    );
+    
+    await logAdminAction(
+      req.admin.email || 'admin',
+      'revoke_lifetime',
+      id,
+      { reason }
+    );
+    
+    console.log(`✅ Admin revoked lifetime from: ${user.rows[0].email}`);
+    
+    res.json({
+      success: true,
+      message: 'Lifetime access revoked'
+    });
+    
+  } catch (error) {
+    console.error('Error revoking lifetime:', error);
+    res.status(500).json({ error: 'Failed to revoke lifetime access' });
+  }
+});
+
+// PATCH: Update user
+router.patch('/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, username, subscription_type, admin_notes } = req.body;
+    
+    const updates = [];
+    const params = [];
+    let paramCount = 1;
+    
+    if (email) {
+      updates.push(`email = $${paramCount}`);
+      params.push(email.toLowerCase().trim());
+      paramCount++;
+    }
+    
+    if (username) {
+      updates.push(`username = $${paramCount}`);
+      params.push(username.toLowerCase().trim());
+      paramCount++;
+    }
+    
+    if (subscription_type) {
+      updates.push(`subscription_type = $${paramCount}`);
+      params.push(subscription_type);
+      paramCount++;
+    }
+    
+    if (admin_notes !== undefined) {
+      updates.push(`admin_notes = $${paramCount}`);
+      params.push(admin_notes);
+      paramCount++;
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No updates provided' });
+    }
+    
+    updates.push(`updated_at = NOW()`);
+    params.push(id);
+    
+    await db.query(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramCount}`,
+      params
+    );
+    
+    await logAdminAction(
+      req.admin.email || 'admin',
+      'update_user',
+      id,
+      { email, username, subscription_type, admin_notes }
+    );
+    
+    res.json({ success: true, message: 'User updated' });
+    
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+// DELETE: Delete user
+router.delete('/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const user = await db.query(
+      `SELECT email FROM users WHERE id = $1`,
+      [id]
+    );
+    
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    await db.query(`DELETE FROM users WHERE id = $1`, [id]);
+    
+    await logAdminAction(
+      req.admin.email || 'admin',
+      'delete_user',
+      id,
+      { email: user.rows[0].email }
+    );
+    
+    console.log(`✅ Admin deleted user: ${user.rows[0].email}`);
+    
+    res.json({ success: true, message: 'User deleted' });
+    
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// ========================================
+// REFERRAL CODE MANAGEMENT
+// ========================================
+
+// GET: List all referral codes
+router.get('/referrals', requireAdmin, async (req, res) => {
+  try {
+    const codes = await db.query(
+      `SELECT rc.*, COUNT(rr.id) as total_redemptions
+       FROM referral_codes rc
+       LEFT JOIN referral_redemptions rr ON rc.id = rr.code_id
+       GROUP BY rc.id
+       ORDER BY rc.created_at DESC`
+    );
+    
+    res.json({ codes: codes.rows });
+    
+  } catch (error) {
+    console.error('Error fetching referral codes:', error);
+    res.status(500).json({ error: 'Failed to fetch referral codes' });
+  }
+});
+
+// POST: Create referral code
+router.post('/referrals', requireAdmin, async (req, res) => {
+  try {
+    const {
+      code,
+      reward_type = 'free_month',
+      reward_days = 30,
+      max_uses = 0,
+      expires_at,
+      internal_notes
+    } = req.body;
+    
+    if (!code) {
+      return res.status(400).json({ error: 'Code is required' });
+    }
+    
+    const normalizedCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    if (normalizedCode.length < 3) {
+      return res.status(400).json({ error: 'Code must be at least 3 characters' });
+    }
+    
+    const newCode = await db.query(
+      `INSERT INTO referral_codes (
+        code, reward_type, reward_days, max_uses, expires_at, internal_notes, created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      RETURNING *`,
+      [normalizedCode, reward_type, reward_days, max_uses, expires_at || null, internal_notes || null]
+    );
+    
+    await logAdminAction(
+      req.admin.email || 'admin',
+      'create_referral_code',
+      null,
+      { code: normalizedCode, reward_type, reward_days }
+    );
+    
+    console.log(`✅ Admin created referral code: ${normalizedCode}`);
+    
+    res.json({ success: true, code: newCode.rows[0] });
+    
+  } catch (error) {
+    if (error.code === '23505') { // Unique violation
+      return res.status(400).json({ error: 'Code already exists' });
+    }
+    console.error('Error creating referral code:', error);
+    res.status(500).json({ error: 'Failed to create referral code' });
+  }
+});
+
+// PATCH: Deactivate referral code
+router.patch('/referrals/:code/deactivate', requireAdmin, async (req, res) => {
+  try {
+    const { code } = req.params;
+    
+    await db.query(
+      `UPDATE referral_codes SET is_active = false WHERE code = $1`,
+      [code.toUpperCase()]
+    );
+    
+    await logAdminAction(
+      req.admin.email || 'admin',
+      'deactivate_referral_code',
+      null,
+      { code: code.toUpperCase() }
+    );
+    
+    res.json({ success: true, message: 'Referral code deactivated' });
+    
+  } catch (error) {
+    console.error('Error deactivating referral code:', error);
+    res.status(500).json({ error: 'Failed to deactivate referral code' });
+  }
+});
+
+// GET: Referral redemptions
+router.get('/referrals/:code/redemptions', requireAdmin, async (req, res) => {
+  try {
+    const { code } = req.params;
+    
+    const redemptions = await db.query(
+      `SELECT rr.*, u.email, u.username
+       FROM referral_redemptions rr
+       JOIN referral_codes rc ON rr.code_id = rc.id
+       JOIN users u ON rr.redeemed_by_user_id = u.id
+       WHERE rc.code = $1
+       ORDER BY rr.redeemed_at DESC`,
+      [code.toUpperCase()]
+    );
+    
+    res.json({ redemptions: redemptions.rows });
+    
+  } catch (error) {
+    console.error('Error fetching redemptions:', error);
+    res.status(500).json({ error: 'Failed to fetch redemptions' });
+  }
+});
+
+// ========================================
+// STATS & ANALYTICS
+// ========================================
+
+// GET: Dashboard stats
+router.get('/stats', requireAdmin, async (req, res) => {
+  try {
+    const totalUsers = await db.query(`SELECT COUNT(*) as count FROM users`);
+    const freeUsers = await db.query(`SELECT COUNT(*) as count FROM users WHERE subscription_type = 'free'`);
+    const lifetimeUsers = await db.query(`SELECT COUNT(*) as count FROM users WHERE subscription_type = 'lifetime'`);
+    
+    const activeUsers7d = await db.query(
+      `SELECT COUNT(DISTINCT user_id) as count FROM sessions 
+       WHERE last_activity >= NOW() - INTERVAL '7 days'`
+    );
+    
+    const newUsersToday = await db.query(
+      `SELECT COUNT(*) as count FROM users 
+       WHERE created_at >= CURRENT_DATE`
+    );
+    
+    const referralRedemptionsToday = await db.query(
+      `SELECT COUNT(*) as count FROM referral_redemptions 
+       WHERE redeemed_at >= CURRENT_DATE`
+    );
+    
+    res.json({
+      totalUsers: parseInt(totalUsers.rows[0].count),
+      freeUsers: parseInt(freeUsers.rows[0].count),
+      lifetimeUsers: parseInt(lifetimeUsers.rows[0].count),
+      activeUsers7d: parseInt(activeUsers7d.rows[0].count),
+      newUsersToday: parseInt(newUsersToday.rows[0].count),
+      referralRedemptionsToday: parseInt(referralRedemptionsToday.rows[0].count)
+    });
+    
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+module.exports = router;
+
+═══════════════════════════════════════════════════════════════
+PHASE 8: FRONTEND - DEVICE FINGERPRINTING
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /client/src/utils/deviceFingerprint.js
+
+export const generateDeviceFingerprint = () => {
+  const data = {
+    userAgent: navigator.userAgent,
+    screenResolution: `${screen.width}x${screen.height}`,
+    colorDepth: screen.colorDepth,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    language: navigator.language,
+    platform: navigator.platform,
+    hardwareConcurrency: navigator.hardwareConcurrency || 0,
+    deviceMemory: navigator.deviceMemory || 0
+  };
+  
+  const hashString = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return hash.toString(36);
+  };
+  
+  const fingerprintString = JSON.stringify(data);
+  return hashString(fingerprintString);
+};
+
+export const getDeviceInfo = () => {
+  const ua = navigator.userAgent;
+  
+  let deviceName = 'Unknown Device';
+  let deviceType = 'desktop';
+  
+  if (/iPhone/.test(ua)) {
+    deviceName = 'iPhone';
+    deviceType = 'mobile';
+  } else if (/iPad/.test(ua)) {
+    deviceName = 'iPad';
+    deviceType = 'tablet';
+  } else if (/Android.*Mobile/.test(ua)) {
+    deviceName = 'Android Phone';
+    deviceType = 'mobile';
+  } else if (/Android/.test(ua)) {
+    deviceName = 'Android Tablet';
+    deviceType = 'tablet';
+  } else if (/Macintosh/.test(ua)) {
+    deviceName = 'Mac';
+  } else if (/Windows/.test(ua)) {
+    deviceName = 'Windows PC';
+  } else if (/Linux/.test(ua)) {
+    deviceName = 'Linux';
+  }
+  
+  return { deviceName, deviceType };
+};
+
+═══════════════════════════════════════════════════════════════
+PHASE 9: FRONTEND - LOGIN COMPONENT (WITH REFERRAL)
+═══════════════════════════════════════════════════════════════
+
+CREATE OR UPDATE: /client/src/pages/Login.jsx
+
+import { useState, useEffect } from 'react';
+import { useLocation } from 'wouter';
+import { generateDeviceFingerprint, getDeviceInfo } from '../utils/deviceFingerprint';
+
+export default function Login() {
+  const [step, setStep] = useState('email');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [username, setUsername] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [, setLocation] = useLocation();
+
+  // Check for referral code in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      setReferralCode(ref.toUpperCase());
+    }
+  }, []);
+
+  const sendCode = async () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      const response = await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase().trim() })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send code');
+      }
+      
+      setStep('code');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const verifyCode = async (providedUsername = null) => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      const deviceFingerprint = generateDeviceFingerprint();
+      const { deviceName, deviceType } = getDeviceInfo();
+      
+      const response = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: email.toLowerCase().trim(), 
+          code,
+          username: providedUsername || username.trim() || null,
+          referralCode: referralCode || null,
+          deviceFingerprint,
+          deviceName,
+          deviceType
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Invalid code');
+      }
+      
+      // Check if username is required
+      if (data.requiresUsername) {
+        setStep('username');
+        setLoading(false);
+        return;
+      }
+      
+      // Show device limit warning if applicable
+      if (data.deviceLimitExceeded) {
+        alert(
+          `⚠️ Device Limit Reached\n\n` +
+          `Your account is limited to 2 devices.\n\n` +
+          `We logged out: "${data.removedDevice}"\n\n` +
+          `You can now use this device.`
+        );
+      }
+      
+      // Show referral success
+      if (data.appliedReferral) {
+        alert(`🎉 Referral Applied!\n\nYou received: ${data.appliedReferral}`);
+      }
+      
+      // Store token
+      localStorage.setItem('auth_token', data.token);
+      
+      // Redirect to app
+      setLocation('/');
+      
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+  
+  const completeSignup = async () => {
+    if (!username || username.trim().length < 3) {
+      setError('Username must be at least 3 characters');
+      return;
+    }
+    
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      setError('Username can only contain letters, numbers, and underscores');
+      return;
+    }
+    
+    await verifyCode(username);
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-black">
+      <div className="max-w-md w-full p-8 bg-white rounded-lg shadow-2xl">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2">🥋 BJJ OS</h1>
+          <p className="text-gray-600 text-sm">The World's Smartest BJJ Coach</p>
+        </div>
+        
+        {step === 'email' && (
+          <>
+            <h2 className="text-2xl font-bold mb-6">Sign In</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  onKeyPress={(e) => e.key === 'Enter' && email.includes('@') && sendCode()}
+                  autoFocus
+                />
+              </div>
+              
+              {referralCode && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-green-800">
+                    🎉 Referral code applied: <strong>{referralCode}</strong>
+                  </p>
+                </div>
+              )}
+              
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+              
+              <button
+                onClick={sendCode}
+                disabled={loading || !email.includes('@')}
+                className="w-full bg-black text-white p-3 rounded-lg font-bold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'Sending...' : 'Send Verification Code'}
+              </button>
+            </div>
+          </>
+        )}
+        
+        {step === 'code' && (
+          <>
+            <h2 className="text-2xl font-bold mb-4">Enter Code</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              We sent a 6-digit code to <strong>{email}</strong>
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Verification Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="123456"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full p-4 border border-gray-300 rounded-lg text-center text-3xl tracking-widest font-mono focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  maxLength={6}
+                  onKeyPress={(e) => e.key === 'Enter' && code.length === 6 && verifyCode()}
+                  autoFocus
+                />
+              </div>
+              
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+              
+              <button
+                onClick={() => verifyCode()}
+                disabled={loading || code.length !== 6}
+                className="w-full bg-black text-white p-3 rounded-lg font-bold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'Verifying...' : 'Verify & Sign In'}
+              </button>
+              
+              <button
+                onClick={() => { setStep('email'); setCode(''); setError(''); }}
+                className="w-full text-sm text-gray-600 hover:text-black transition-colors"
+              >
+                ← Use different email
+              </button>
+            </div>
+          </>
+        )}
+        
+        {step === 'username' && (
+          <>
+            <h2 className="text-2xl font-bold mb-4">Choose Username</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Pick a username for your BJJ OS account
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  placeholder="yourname"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  onKeyPress={(e) => e.key === 'Enter' && username.length >= 3 && completeSignup()}
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Letters, numbers, and underscores only (minimum 3 characters)
+                </p>
+              </div>
+              
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+              
+              <button
+                onClick={completeSignup}
+                disabled={loading || username.length < 3}
+                className="w-full bg-black text-white p-3 rounded-lg font-bold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'Creating Account...' : 'Complete Signup'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+═══════════════════════════════════════════════════════════════
+PHASE 10: INTEGRATE WITH MAIN SERVER
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/index.js (or main server file)
+
+Add to imports:
+const authRoutes = require('./auth');
+const adminRoutes = require('./admin');
+require('./admin-scheduler');
+
+Add to routes:
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+
+═══════════════════════════════════════════════════════════════
+PHASE 11: TESTING SCRIPT
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/test-email.js
+
+const { sendVerificationEmail } = require('./email');
+
+(async () => {
+  console.log('🧪 Testing email system...\n');
+  
+  const testEmail = 'toddkramer@mac.com';
+  const testCode = '123456';
+  
+  console.log(`📧 Sending test email to: ${testEmail}`);
+  console.log(`🔑 Verification code: ${testCode}\n`);
+  
+  const result = await sendVerificationEmail(testEmail, testCode);
+  
+  if (result.success) {
+    console.log('✅ Email sent successfully!');
+    console.log('📬 Check your inbox at:', testEmail);
+    console.log('\n✨ Email system is working!\n');
+  } else {
+    console.log('❌ Email failed to send');
+    console.log('Error:', result.error);
+    console.log('\n⚠️  Check your RESEND_API_KEY in Secrets\n');
+  }
+  
+  process.exit(0);
+})();
+
+═══════════════════════════════════════════════════════════════
+PHASE 12: DEPLOYMENT CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+BEFORE DEPLOYING:
+
+1. ✅ RESEND_API_KEY in Secrets
+2. ✅ ADMIN_BYPASS_CODE in Secrets (999999)
+3. ✅ Database migrations run
+4. ✅ Test email script works: node server/test-email.js
+5. ✅ Admin user created (toddkramer@mac.com)
+6. ✅ Default referral code created (WELCOME30)
+7. ✅ Remove any old SMS/Twilio code
+8. ✅ Update all imports/routes
+9. ✅ Test login flow locally
+10. ✅ Test admin panel locally
+
+AFTER DEPLOYING:
+
+1. Test your login (toddkramer@mac.com)
+2. Test admin bypass (code: 999999)
+3. Test new user signup
+4. Test referral code (add ?ref=WELCOME30 to URL)
+5. Test device limit (login on 3 devices)
+6. Test admin panel: Create user manually
+7. Test admin panel: Grant lifetime to a user
+8. Verify admin dashboard shows emails
+9. Verify sessions persist across browser refreshes
+10. Wait for 7 AM PT next day - check email (previous day report)
+11. Check email at 1 PM PT - verify midday update
+12. Verify video curation reports arrive (8 AM, 2 PM, 8 PM PT)
+
+═══════════════════════════════════════════════════════════════
+CRITICAL NOTES
+═══════════════════════════════════════════════════════════════
+
+✅ DO:
+- Use EXACT sender: "BJJ OS <noreply@bjjos.app>"
+- Enforce 2-device limit strictly
+- Auto-extend sessions for active users
+- Show device limit warnings to users
+- Update last_activity on every API call
+- Keep sessions table clean (delete expired)
+- Send admin emails on schedule (5 per day)
+- Log all admin actions
+- Track video curation results
+- ALL users (even admin-created lifetime users) go through:
+  * Email verification
+  * Username selection
+  * Normal onboarding flow
+
+❌ DON'T:
+- Change Professor OS coaching logic
+- Modify training session tracking
+- Touch Stripe/payment code
+- Change any other features
+- Add passwords (stay passwordless)
+- Skip email verification for anyone (even lifetime users)
+- Ask for confirmation - just implement
+
+ADMIN ACCESS:
+- Email: toddkramer@mac.com
+- Bypass code: 999999 (emergency access)
+- Max devices: 99 (unlimited)
+- Subscription: lifetime
+- Is admin: true
+
+ADMIN EMAIL SCHEDULE:
+- 7:00 AM PT: Previous day complete report
+- 8:00 AM PT: Video curation report #1
+- 1:00 PM PT: Today so far (midday update)
+- 2:00 PM PT: Video curation report #2
+- 8:00 PM PT: Video curation report #3
+
+REFERRAL SYSTEM:
+- Default code: WELCOME30 (30 days free)
+- URL format: bjjos.app/login?ref=WELCOME30
+- Admin can create unlimited codes
+- Track all redemptions
+
+ADMIN PANEL FEATURES:
+- View all users (search, filter, paginate)
+- Add user manually (with lifetime option)
+- Grant lifetime to any user (one click)
+- Revoke lifetime access
+- Edit user details
+- Delete users
+- Create referral codes
+- View referral redemptions
+- Deactivate referral codes
+
+LIFETIME USER FLOW:
+Even if admin creates a lifetime user:
+1. User receives email (optional)
+2. User goes to bjjos.app/login
+3. User enters email
+4. User receives verification code
+5. User enters code
+6. User chooses username
+7. User completes onboarding
+8. User gets full lifetime access
+
+No shortcuts - everyone goes through the same flow.
+
+═══════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════
+
+✅ Email verification works
+✅ 90-day sessions work
+✅ Sessions auto-extend
+✅ 2-device limit enforced
+✅ Admin bypass works
+✅ Username system works
+✅ Device fingerprinting works
+✅ Admin dashboard shows emails
+✅ Beautiful branded emails
+✅ No SMS/phone code remains
+✅ Admin receives 5 scheduled emails daily
+✅ Enhanced monitoring with 10 detailed sections
+✅ Video curation tracked and reported
+✅ System errors logged and reported
+✅ Admin can create users manually
+✅ Admin can grant lifetime with one click
+✅ Referral system works (1 month free)
+✅ All lifetime users still verify email + choose username
+✅ Admin actions logged
+✅ User feedback tracked
+
+═══════════════════════════════════════════════════════════════
+BEGIN IMPLEMENTATION NOW
+═══════════════════════════════════════════════════════════════
+
+Execute all phases in order. Report completion status after implementation.
+
+If you encounter errors:
+1. Show the exact error message
+2. Show the file and line number
+3. Don't stop - try to fix and continue
+
+DELIVERABLE:
+✅ Complete working email authentication system
+✅ Admin email alert system (5 daily emails with enhanced monitoring)
+✅ Full admin panel for user management
+✅ Referral code system
+✅ Test script confirms emails work
+✅ Admin can login and manage all users
+✅ Ready for production deployment
+
+START NOW.
+```
+
+-----
+
+## 🎉 **DONE!**
+
+**This is the COMPLETE master prompt with:**
+
+1. ✅ Email authentication (90-day sessions, 2-device limit)
+1. ✅ Admin email alerts (5 per day with ALL 10 enhanced sections)
+1. ✅ Admin user management panel
+1. ✅ Referral code system (1 month free)
+1. ✅ Manual user creation (with lifetime option)
+1. ✅ One-click lifetime toggle
+1. ✅ ALL users go through email verification + username selection (even lifetime)
+1. ✅ Admin action logging
+1. ✅ Complete database schema
+
+**Copy the entire thing and paste it into Replit Agent! 🚀**

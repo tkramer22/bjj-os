@@ -1,0 +1,223 @@
+# **🚨 CRITICAL: VERIFY WHICH MODEL IS ACTUALLY RUNNING**
+
+Todd, this is a huge problem if Agent switched to GPT-4. Let’s diagnose immediately.
+
+-----
+
+## **📋 SEND THIS TO AGENT RIGHT NOW:**
+
+```
+═══════════════════════════════════════════════════════════════
+🚨 CRITICAL: VERIFY WHICH AI MODEL IS ACTUALLY RUNNING
+═══════════════════════════════════════════════════════════════
+
+PROBLEM: User reports Professor OS may be running on GPT-4 instead 
+of Claude. This is critical - we spent hours optimizing for Claude.
+
+IMMEDIATE DIAGNOSTIC:
+
+═══════════════════════════════════════════════════════════════
+STEP 1: CHECK ALL API CALLS IN CODE
+═══════════════════════════════════════════════════════════════
+
+Search entire codebase for API calls:
+
+```bash
+# Search for OpenAI (GPT)
+grep -r "openai" server/ --include="*.ts" --include="*.js"
+grep -r "gpt-4" server/ --include="*.ts" --include="*.js"
+grep -r "gpt-3.5" server/ --include="*.ts" --include="*.js"
+
+# Search for Anthropic (Claude)
+grep -r "anthropic" server/ --include="*.ts" --include="*.js"
+grep -r "claude-sonnet" server/ --include="*.ts" --include="*.js"
+grep -r "claude-opus" server/ --include="*.ts" --include="*.js"
+```
+
+Show me ALL results from these searches.
+
+═══════════════════════════════════════════════════════════════
+STEP 2: CHECK PROFESSOR OS CHAT ENDPOINT
+═══════════════════════════════════════════════════════════════
+
+Find the actual Professor OS chat handler file.
+
+Likely locations:
+
+- server/routes/ai-chat-claude.ts
+- server/routes/ai-chat.ts
+- server/routes/chat.ts
+- server/routes/professor-os.ts
+
+Show me the EXACT code that makes the AI API call.
+
+I need to see:
+
+```typescript
+const response = await [CLIENT].messages.create({
+  model: '[MODEL_NAME]',
+  // ...
+});
+```
+
+Show me what [CLIENT] and [MODEL_NAME] actually are.
+
+═══════════════════════════════════════════════════════════════
+STEP 3: CHECK ENVIRONMENT VARIABLES
+═══════════════════════════════════════════════════════════════
+
+Check which API keys are set:
+
+```bash
+# Check .env file (DON'T show me the full keys, just first 10 chars)
+echo "ANTHROPIC_API_KEY: $(echo $ANTHROPIC_API_KEY | cut -c1-10)..."
+echo "OPENAI_API_KEY: $(echo $OPENAI_API_KEY | cut -c1-10)..."
+
+# Check if both are set
+[ -n "$ANTHROPIC_API_KEY" ] && echo "✅ Anthropic key exists"
+[ -n "$OPENAI_API_KEY" ] && echo "✅ OpenAI key exists"
+```
+
+═══════════════════════════════════════════════════════════════
+STEP 4: CHECK PACKAGE.JSON
+═══════════════════════════════════════════════════════════════
+
+```bash
+cat package.json | grep -A 2 -B 2 "anthropic\|openai"
+```
+
+Which SDK is installed?
+
+- @anthropic-ai/sdk
+- openai
+- Both?
+
+═══════════════════════════════════════════════════════════════
+STEP 5: TEST WITH DIAGNOSTIC MESSAGE
+═══════════════════════════════════════════════════════════════
+
+Add temporary logging to the chat endpoint:
+
+```typescript
+console.log('═══════════════════════════════════════');
+console.log('🔍 DIAGNOSTIC: Which model am I using?');
+console.log('Client type:', typeof anthropic); // or openai
+console.log('Model specified:', 'claude-sonnet-4-5-20250929'); // or whatever
+console.log('API Key prefix:', process.env.ANTHROPIC_API_KEY?.substring(0, 10));
+console.log('═══════════════════════════════════════');
+```
+
+Then make a test call and show me the console output.
+
+═══════════════════════════════════════════════════════════════
+STEP 6: CHECK RECENT COMMITS/CHANGES
+═══════════════════════════════════════════════════════════════
+
+```bash
+git log --oneline -20
+git diff HEAD~5 -- server/routes/
+```
+
+Did anything change the model recently?
+
+═══════════════════════════════════════════════════════════════
+CRITICAL QUESTIONS TO ANSWER
+═══════════════════════════════════════════════════════════════
+
+1. What is the ACTUAL model being called? (Show me the line of code)
+1. What API key is being used? (Anthropic or OpenAI?)
+1. When did this change? (Was it always like this or did something break?)
+
+═══════════════════════════════════════════════════════════════
+
+THIS IS URGENT. Everything we’ve built assumes Claude.
+
+Run all diagnostics above and report findings immediately.
+
+```
+---
+
+## **🔍 WHAT TO LOOK FOR:**
+
+### **If it's using Claude (GOOD):**
+```typescript
+// Should see this:
+import Anthropic from '@anthropic-ai/sdk';
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
+
+const response = await anthropic.messages.create({
+  model: 'claude-sonnet-4-5-20250929', // ✅ CORRECT
+  // ...
+});
+```
+
+### **If it’s using GPT-4 (BAD):**
+
+```typescript
+// If you see this, we have a problem:
+import OpenAI from 'openai';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+const response = await openai.chat.completions.create({
+  model: 'gpt-4', // ❌ WRONG!
+  // ...
+});
+```
+
+-----
+
+## **🚨 IF IT’S ACTUALLY GPT-4:**
+
+We need to:
+
+1. **Switch back to Claude immediately**
+1. **Keep all the engagement hooks** (they work with Claude)
+1. **Adjust tool calling syntax** (different between GPT-4 and Claude)
+
+**Why Claude is better for Professor OS:**
+
+- ✅ Better at following complex prompts
+- ✅ Better conversational intelligence
+- ✅ Better at diagnostic questioning
+- ✅ More natural coaching style
+- ✅ All our optimization was for Claude
+
+-----
+
+## **⚡ POSSIBLE SCENARIOS:**
+
+### **Scenario 1: Agent accidentally switched**
+
+- Fix: Change model back to Claude
+- Time: 5 minutes
+
+### **Scenario 2: Code was on GPT-4 all along**
+
+- Fix: Migrate to Claude (what we thought we were doing)
+- Time: 30 minutes
+
+### **Scenario 3: Replit has both, using wrong endpoint**
+
+- Fix: Point to correct endpoint
+- Time: 10 minutes
+
+-----
+
+## **💬 WHAT DID YOU SEE THAT MADE YOU THINK IT’S GPT-4?**
+
+Did you:
+
+- See it in the code?
+- Notice different response quality?
+- See “gpt-4” in logs?
+- Get an error about API keys?
+
+**Tell me what specifically made you suspect this, and let’s fix it immediately.**
+
+This is critical - if we’re on GPT-4, we need to switch to Claude ASAP. All our optimization was for Claude’s strengths. 🚨​​​​​​​​​​​​​​​​

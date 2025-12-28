@@ -1,0 +1,291 @@
+import { Switch, Route, useLocation } from "wouter";
+import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "@/components/theme-provider";
+import { ChatProvider } from "@/contexts/ChatContext";
+import { checkVersion } from "@/lib/version";
+import { useEffect, useState } from "react";
+import { restoreAuthFromNative, isNativeApp } from "@/lib/capacitorAuth";
+import "./analytics"; // Initialize analytics tracking
+import Landing from "@/pages/landing";
+import Pricing from "@/pages/pricing";
+import Success from "@/pages/success";
+import Terms from "@/pages/terms";
+import Privacy from "@/pages/privacy";
+import Refund from "@/pages/refund";
+import Login from "@/pages/login";
+import Signup from "@/pages/signup";
+import EmailSignup from "@/pages/email-signup";
+import EmailLogin from "@/pages/email-login";
+import ForgotPassword from "@/pages/forgot-password";
+import IOSLogin from "@/pages/ios-login";
+import IOSForgotPassword from "@/pages/ios-forgot-password";
+import IOSVerifyReset from "@/pages/ios-verify-reset";
+import IOSResetPassword from "@/pages/ios-reset-password";
+import LifetimeSignup from "@/pages/lifetime-signup";
+import WelcomeLifetime from "@/pages/WelcomeLifetime";
+import OnboardingPage from "@/pages/onboarding";
+import OnboardingFlow from "@/pages/OnboardingFlow";
+import AuthMagic from "@/pages/auth-magic";
+import AdminLogin from "@/pages/admin/login";
+import AdminDashboard from "@/pages/admin/dashboard";
+import LaunchDayAdmin from "@/pages/admin-launch";
+import AdminUsers from "@/pages/admin/users";
+import AdminReferrals from "@/pages/admin/referrals";
+import AdminLifetime from "@/pages/admin/lifetime";
+import AdminVideos from "@/pages/admin/videos";
+import AdminFeedback from "@/pages/admin/feedback";
+import AdminMeta from "@/pages/admin/meta";
+import AdminMagicLinks from "@/pages/admin/magic-links";
+import AdminInstructors from "@/pages/admin/instructors";
+import AdminPartnerships from "@/pages/admin/partnerships";
+import AdminChains from "@/pages/admin/chains";
+import AdminLogs from "@/pages/admin/logs";
+import AdminSchedules from "@/pages/admin/schedules";
+import AdminTechniques from "@/pages/admin/techniques";
+import AdminFlaggedAccounts from "@/pages/admin/flagged-accounts";
+import AdminInstructorPriority from "@/pages/admin/instructor-priority";
+import AdminActivity from "@/pages/admin/activity";
+import AdminAutoCuration from "@/pages/admin/auto-curation";
+import AdminAnalytics from "@/pages/admin/analytics";
+import AdminChat from "@/pages/admin/chat";
+import AdminCommandCenter from "@/pages/admin/command-center";
+import AdminUsersDashboard from "@/pages/admin-users";
+import AdminEmails from "@/pages/admin-emails";
+import AddFreeUser from "@/pages/add-free-user";
+import AIMonitoring from "@/pages/ai-monitoring";
+import AIIntelligence from "@/pages/ai-intelligence";
+import AdminDevOS from "@/pages/admin-dev-os";
+import NotFound from "@/pages/not-found";
+
+// Web Chat
+import ChatPage from "@/pages/chat";
+
+// Settings Pages
+import ProfileSettings from "@/pages/settings/profile";
+import SecuritySettings from "@/pages/settings/security";
+import SubscriptionSettings from "@/pages/settings/subscription";
+import ReferralsSettings from "@/pages/settings/referrals";
+import Settings from "@/pages/settings-mobile";
+
+// Progress Page
+import ProgressPage from "@/pages/progress";
+
+// Saved Videos Page (with technique and instructor filters)
+import SavedVideosPage from "@/pages/saved-videos";
+import PaymentPage from "@/pages/payment";
+import LibraryPage from "@/pages/library";
+
+// Mobile PWA Pages
+import MobileCoachPage from "@/pages/mobile-coach";
+import MobileSavedPage from "@/pages/mobile-saved";
+import MobileSettingsPage from "@/pages/mobile-settings";
+import MobileProgressPage from "@/pages/mobile-progress";
+import MobileOnboardingPage from "@/pages/mobile-onboarding";
+import MobileProfilePage from "@/pages/mobile-profile";
+import ThemeSettings from "@/pages/theme-settings";
+
+// iOS Native App Pages
+import IOSHomePage from "@/pages/ios-home";
+import IOSChatPage from "@/pages/ios-chat";
+import IOSLibraryPage from "@/pages/ios-library";
+import IOSSavedPage from "@/pages/ios-saved";
+import IOSProfilePage from "@/pages/ios-profile";
+
+// Native app landing redirect component
+function NativeAwareHome() {
+  const [, setLocation] = useLocation();
+  const isAuthenticated = localStorage.getItem('mobileUserId') !== null;
+  
+  useEffect(() => {
+    if (isNativeApp()) {
+      // Native iOS app: use iOS-specific routes for consistent navigation
+      if (isAuthenticated) {
+        setLocation("/ios-chat"); // Use iOS chat page with IOSBottomNav
+      } else {
+        // Use ios-login for App Store compliant login (email+password, no signup)
+        setLocation("/ios-login");
+      }
+    }
+  }, [isAuthenticated, setLocation]);
+  
+  // Only show landing page for web visitors
+  if (isNativeApp()) {
+    return null; // Will redirect
+  }
+  
+  return <Landing />;
+}
+
+export default function App() {
+  const [authRestored, setAuthRestored] = useState(!isNativeApp());
+  const isAuthenticated = localStorage.getItem('mobileUserId') !== null;
+
+  // Restore auth from Capacitor Preferences on native app startup
+  useEffect(() => {
+    async function initAuth() {
+      if (isNativeApp()) {
+        await restoreAuthFromNative();
+        setAuthRestored(true);
+      }
+    }
+    initAuth();
+  }, []);
+
+  // Check version on app load and force reload if changed
+  useEffect(() => {
+    checkVersion();
+  }, []);
+
+  // Show loading splash while restoring auth on native
+  if (!authRestored) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center">
+        <h1 className="text-4xl font-black text-white tracking-tight mb-4">BJJ OS</h1>
+        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ChatProvider>
+        <TooltipProvider>
+          <ThemeProvider defaultTheme="dark">
+            <Switch>
+            {/* Public pages - Native app skips landing page */}
+            <Route path="/" component={NativeAwareHome} />
+            <Route path="/pricing" component={Pricing} />
+            <Route path="/success" component={Success} />
+            <Route path="/terms" component={Terms} />
+            <Route path="/privacy" component={Privacy} />
+            <Route path="/refund" component={Refund} />
+            
+            {/* User Authentication */}
+            <Route path="/login" component={Login} />
+            <Route path="/signup" component={Signup} />
+            <Route path="/email-signup" component={EmailSignup} />
+            <Route path="/email-login" component={EmailLogin} />
+            <Route path="/ios-login" component={IOSLogin} />
+            <Route path="/ios-forgot-password" component={IOSForgotPassword} />
+            <Route path="/ios-verify-reset" component={IOSVerifyReset} />
+            <Route path="/ios-reset-password" component={IOSResetPassword} />
+            <Route path="/forgot-password" component={ForgotPassword} />
+            <Route path="/lifetime-signup" component={LifetimeSignup} />
+            <Route path="/welcome/lifetime" component={WelcomeLifetime} />
+            <Route path="/auth/magic" component={AuthMagic} />
+            
+            {/* iOS Native App Routes */}
+            <Route path="/ios-home" component={IOSHomePage} />
+            <Route path="/ios-chat" component={IOSChatPage} />
+            <Route path="/ios-library" component={IOSLibraryPage} />
+            <Route path="/ios-saved" component={IOSSavedPage} />
+            <Route path="/ios-profile" component={IOSProfilePage} />
+            
+            {/* Web Chat */}
+            <Route path="/chat" component={ChatPage} />
+            
+            {/* Dashboard redirect (legacy - redirects to /chat) */}
+            <Route path="/dashboard">
+              {() => {
+                const [, setLocation] = useLocation();
+                useEffect(() => {
+                  setLocation("/chat");
+                }, [setLocation]);
+                return null;
+              }}
+            </Route>
+            
+            {/* Settings Pages */}
+            <Route path="/settings" component={Settings} />
+            <Route path="/settings/profile" component={ProfileSettings} />
+            <Route path="/settings/security" component={SecuritySettings} />
+            <Route path="/settings/subscription" component={SubscriptionSettings} />
+            <Route path="/settings/referrals" component={ReferralsSettings} />
+            <Route path="/mobile-settings" component={MobileSettingsPage} />
+            
+            {/* Progress Page */}
+            <Route path="/progress" component={ProgressPage} />
+            
+            {/* Saved Videos Page */}
+            <Route path="/saved-videos" component={SavedVideosPage} />
+            <Route path="/saved" component={SavedVideosPage} />
+            
+            {/* Video Library Page */}
+            <Route path="/library" component={LibraryPage} />
+            
+            {/* Onboarding */}
+            <Route path="/onboarding" component={OnboardingFlow} />
+            <Route path="/onboarding/full" component={OnboardingPage} />
+            
+            {/* Payment */}
+            <Route path="/payment" component={PaymentPage} />
+            <Route path="/payment/success" component={Success} />
+            
+            {/* Theme Settings */}
+            <Route path="/theme-settings" component={ThemeSettings} />
+            
+            {/* Mobile PWA Routes */}
+            <Route path="/mobile-onboarding" component={MobileOnboardingPage} />
+            <Route path="/app">
+              {isAuthenticated ? <MobileCoachPage /> : <MobileOnboardingPage />}
+            </Route>
+            <Route path="/app/chat">
+              {isAuthenticated ? <MobileCoachPage /> : <MobileOnboardingPage />}
+            </Route>
+            <Route path="/app/saved">
+              {isAuthenticated ? <MobileSavedPage /> : <MobileOnboardingPage />}
+            </Route>
+            <Route path="/app/progress">
+              {isAuthenticated ? <MobileProgressPage /> : <MobileOnboardingPage />}
+            </Route>
+            <Route path="/app/settings">
+              {isAuthenticated ? <MobileSettingsPage /> : <MobileOnboardingPage />}
+            </Route>
+            <Route path="/app/profile">
+              {isAuthenticated ? <MobileProfilePage /> : <MobileOnboardingPage />}
+            </Route>
+            
+            {/* Launch Day Admin (Simple) */}
+            <Route path="/launch-admin" component={LaunchDayAdmin} />
+            
+            {/* Admin Routes */}
+            <Route path="/admin/login" component={AdminLogin} />
+            <Route path="/admin" component={AdminDashboard} />
+            <Route path="/admin/dashboard" component={AdminDashboard} />
+            <Route path="/admin/chat" component={AdminChat} />
+            <Route path="/admin/command-center" component={AdminCommandCenter} />
+            <Route path="/admin/videos" component={AdminVideos} />
+            <Route path="/admin/users" component={AdminUsers} />
+            <Route path="/admin/users-management" component={AdminUsersDashboard} />
+            <Route path="/admin/referrals" component={AdminReferrals} />
+            <Route path="/admin/lifetime" component={AdminLifetime} />
+            <Route path="/admin/lifetime-access" component={AdminLifetime} />
+            <Route path="/admin/feedback" component={AdminFeedback} />
+            <Route path="/admin/meta" component={AdminMeta} />
+            <Route path="/admin/instructors" component={AdminInstructors} />
+            <Route path="/admin/partnerships" component={AdminPartnerships} />
+            <Route path="/admin/chains" component={AdminChains} />
+            <Route path="/admin/logs" component={AdminLogs} />
+            <Route path="/admin/schedules" component={AdminSchedules} />
+            <Route path="/admin/techniques" component={AdminTechniques} />
+            <Route path="/admin/flagged-accounts" component={AdminFlaggedAccounts} />
+            <Route path="/admin/instructor-priority" component={AdminInstructorPriority} />
+            <Route path="/admin/activity" component={AdminActivity} />
+            <Route path="/admin/magic-links" component={AdminMagicLinks} />
+            <Route path="/admin/auto-curation" component={AdminAutoCuration} />
+            <Route path="/admin/dev-os" component={AdminDevOS} />
+            <Route path="/admin/analytics" component={AdminAnalytics} />
+            <Route path="/admin/emails" component={AdminEmails} />
+            
+            <Route component={NotFound} />
+            </Switch>
+            <Toaster />
+          </ThemeProvider>
+        </TooltipProvider>
+      </ChatProvider>
+    </QueryClientProvider>
+  );
+}

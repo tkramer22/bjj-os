@@ -1,0 +1,107 @@
+**Send this to Replit Agent:**
+
+```
+IMPLEMENT "KEEP ME SIGNED IN" - 30 DAY PERSISTENT LOGIN
+
+═══════════════════════════════════════════════════════════════════════════════
+CURRENT PROBLEM:
+═══════════════════════════════════════════════════════════════════════════════
+
+Users have to:
+1. Enter email
+2. Get verification code
+3. Enter code
+4. Log in
+
+And they have to do this EVERY time they visit the app. This is too much friction.
+
+═══════════════════════════════════════════════════════════════════════════════
+DESIRED BEHAVIOR:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. On login screen, add a checkbox: "Keep me signed in for 30 days"
+
+2. If checked:
+   - Store a persistent session token/cookie that lasts 30 days
+   - User stays logged in across browser sessions
+   - User stays logged in after closing/reopening app
+   - User stays logged in after device restart
+
+3. If NOT checked:
+   - Session expires when browser closes (current behavior)
+
+4. After 30 days:
+   - Token expires
+   - User must re-authenticate with email code
+   - This is good for security
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. ADD CHECKBOX TO LOGIN UI:
+   - Label: "Keep me signed in for 30 days"
+   - Default: checked (most users want this)
+   - Place it below the email/code input, above submit button
+
+2. BACKEND - SESSION/TOKEN HANDLING:
+   - If "keep me signed in" is true:
+     - Set cookie/token expiry to 30 days
+     - Use httpOnly, secure cookie
+     - Store refresh token if using JWT
+   - If false:
+     - Session cookie (expires on browser close)
+
+3. TOKEN STORAGE OPTIONS (pick best for our stack):
+   
+   Option A - Long-lived JWT in httpOnly cookie:
+   - Set cookie with 30 day expiry
+   - maxAge: 30 * 24 * 60 * 60 * 1000 (30 days in ms)
+   
+   Option B - Refresh token pattern:
+   - Short-lived access token (1 hour)
+   - Long-lived refresh token (30 days) in httpOnly cookie
+   - Auto-refresh access token silently
+   
+   Option C - Session ID in database:
+   - Store session ID in cookie
+   - Session record in database with 30 day expiry
+   - Check session on each request
+
+4. ON APP LOAD:
+   - Check for valid persistent token/session
+   - If valid: auto-login, skip email verification
+   - If expired/missing: show login screen
+
+5. LOGOUT:
+   - Clear the persistent token/cookie
+   - Next visit requires full login
+
+═══════════════════════════════════════════════════════════════════════════════
+SECURITY CONSIDERATIONS:
+═══════════════════════════════════════════════════════════════════════════════
+
+- Use httpOnly cookies (not accessible via JavaScript)
+- Use secure flag (HTTPS only)
+- Use sameSite: 'strict' or 'lax'
+- Invalidate token on password change (if we add passwords later)
+- Consider device fingerprinting for additional security (optional)
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST CASES:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Login with "keep me signed in" checked
+2. Close browser completely
+3. Reopen browser, go to bjjos.app
+4. Should be automatically logged in (no email code needed)
+
+5. Login with "keep me signed in" unchecked
+6. Close browser
+7. Reopen browser, go to bjjos.app
+8. Should see login screen
+
+9. After 30 days, persistent login should expire
+
+═══════════════════════════════════════════════════════════════════════════════
+```

@@ -1,0 +1,491 @@
+import { useState } from "react";
+import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { 
+  LayoutDashboard, Users, Gift, Star, 
+  FileText, LogOut, Menu, X, MessageSquare,
+  ThumbsUp, Award, Video, Link2, Shield, Calculator, RefreshCw, BarChart, Zap,
+  ChevronDown, ChevronRight, Play
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { clearAdminAuth } from "@/lib/adminApi";
+import { ActivityDashboard } from "@/components/admin/ActivityDashboard";
+
+interface AdminLayoutProps {
+  children: React.ReactNode;
+}
+
+export function AdminLayout({ children }: AdminLayoutProps) {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const handleLogout = async () => {
+    // Clear any local storage
+    clearAdminAuth();
+    
+    // Call logout endpoint to clear cookie
+    try {
+      await fetch('/api/admin/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (e) {
+      // Ignore errors - redirect anyway
+    }
+    
+    toast({
+      title: "Logged Out",
+      description: "You have been securely logged out",
+    });
+    navigate('/admin/login');
+  };
+
+  const closeMenu = () => setIsSidebarOpen(false);
+
+  return (
+    <div className="flex h-screen bg-background page-container">
+      {/* Floating Hamburger Button - Mobile Only */}
+      <button
+        className="fixed top-5 left-5 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-purple-600 text-white border-none shadow-lg z-[1000] flex items-center justify-center transition-transform active:scale-95 lg:hidden"
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        aria-label="Menu"
+        data-testid="button-floating-menu"
+      >
+        {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+      </button>
+
+      {/* Menu Overlay */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[998] lg:hidden"
+          onClick={closeMenu}
+          data-testid="overlay-menu"
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`fixed inset-y-0 left-0 z-[999] w-[280px] bg-card border-r transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-auto ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex flex-col h-full">
+          {/* Sidebar Header */}
+          <div className="p-6 border-b" style={{ marginTop: '80px' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)' }}>
+                <span className="text-white font-bold text-lg">BJJ</span>
+              </div>
+              <div>
+                <h2 className="font-bold text-lg">BJJ OS</h2>
+                <p className="text-xs text-muted-foreground">Admin Dashboard</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+            <NavLink href="/admin/dashboard" icon={<LayoutDashboard />} label="Dashboard" onClick={closeMenu} />
+            <NavLink href="/admin/command-center" icon={<Zap />} label="Command Center" onClick={closeMenu} />
+            <NavLink href="/admin/videos" icon={<Video />} label="Videos" onClick={closeMenu} />
+            <NavLink href="/admin/users" icon={<Users />} label="Users" onClick={closeMenu} />
+            <NavLink href="/admin/analytics" icon={<BarChart />} label="Analytics" onClick={closeMenu} />
+            <NavLink href="/admin/lifetime-access" icon={<Star />} label="Lifetime Access" onClick={closeMenu} />
+            <NavLink href="/admin/referrals" icon={<Gift />} label="Referrals" onClick={closeMenu} />
+            <NavLink href="/admin/feedback" icon={<ThumbsUp />} label="Feedback" onClick={closeMenu} />
+            <NavLink href="/admin/chat" icon={<MessageSquare />} label="Chat" onClick={closeMenu} />
+            <NavLink href="/admin/techniques" icon={<Award />} label="Techniques" onClick={closeMenu} />
+            <NavLink href="/admin/chains" icon={<Link2 />} label="Chains" onClick={closeMenu} />
+            <NavLink href="/admin/instructors" icon={<Users />} label="Instructors" onClick={closeMenu} />
+            <NavLink href="/admin/partnerships" icon={<Calculator />} label="Partnerships" onClick={closeMenu} />
+            <NavLink href="/admin/meta" icon={<FileText />} label="Meta" onClick={closeMenu} />
+            <NavLink href="/admin/flagged-accounts" icon={<Shield />} label="Flagged Accounts" onClick={closeMenu} />
+          </nav>
+
+          {/* Logout */}
+          <div className="p-4 border-t">
+            <Button
+              variant="ghost"
+              className="w-full justify-start"
+              onClick={handleLogout}
+              data-testid="button-logout"
+            >
+              <LogOut className="w-5 h-5 mr-3" />
+              Logout
+            </Button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Desktop Header Only */}
+        <header className="hidden lg:flex items-center gap-4 p-4 border-b bg-card">
+          <div className="flex-1">
+            <h1 className="text-xl font-semibold">Admin Dashboard</h1>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6" style={{ paddingTop: '80px' }}>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+interface NavLinkProps {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+}
+
+function NavLink({ href, icon, label, onClick }: NavLinkProps) {
+  const [location] = useLocation();
+  const isActive = location === href;
+
+  return (
+    <Link 
+      href={href}
+      onClick={onClick}
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors min-h-[44px] ${
+        isActive 
+          ? 'bg-primary text-primary-foreground' 
+          : 'hover:bg-muted text-muted-foreground hover:text-foreground active:bg-muted/80'
+      }`}
+      data-testid={`nav-${label.toLowerCase().replace(' ', '-')}`}
+    >
+      <span className="w-5 h-5">{icon}</span>
+      <span className="font-medium text-base">{label}</span>
+    </Link>
+  );
+}
+
+interface QuickMetrics {
+  curationRunning: boolean;
+  curationStatus?: 'active' | 'paused_target_reached' | 'offline';
+  targetReached?: boolean;
+  minutesSinceRun: number;
+  totalVideos: number;
+  videosToday: number;
+  totalUsers: number;
+  signedUpToday: number;
+  activeSubscriptions: number;
+  mrr: string;
+  curationEfficiency: {
+    discovered: number;      // Videos found from YouTube
+    analyzed: number;        // Videos that went through AI
+    accepted: number;        // Videos added to library
+    rejected: number;        // Videos rejected by AI
+    skipped: number;         // Filtered before analysis
+    acceptanceRate: number;  // % of analyzed that were accepted
+    status: 'unknown' | 'too_strict' | 'strict' | 'optimal' | 'loose' | 'too_loose';
+  };
+}
+
+// Helper to format curation status display
+function getCurationStatusDisplay(metrics: QuickMetrics): { text: string; color: string } {
+  if (metrics.curationStatus === 'active' || metrics.curationRunning) {
+    return { text: '✅ Active', color: 'text-green-500' };
+  }
+  if (metrics.curationStatus === 'paused_target_reached' || metrics.targetReached) {
+    return { text: '⏸️ Target Reached', color: 'text-blue-500' };
+  }
+  return { text: '🔴 Offline', color: 'text-red-500' };
+}
+
+// Floating Action Button Component
+function FloatingActionButton() {
+  return (
+    <Link
+      href="/admin/command-center"
+      className="fixed bottom-6 right-6 bg-gradient-to-br from-primary to-purple-600 text-white px-6 py-4 rounded-full shadow-lg z-[900] flex items-center gap-2 text-base font-semibold transition-transform active:scale-95 hover:shadow-xl"
+      data-testid="fab-run-curation"
+    >
+      <Play className="w-5 h-5" />
+      <span className="hidden sm:inline">Run Curation</span>
+    </Link>
+  );
+}
+
+// Collapsible Section Component
+interface CollapsibleSectionProps {
+  title: string;
+  icon: string;
+  children: React.ReactNode;
+  defaultExpanded?: boolean;
+  testId?: string;
+}
+
+function CollapsibleSection({ title, icon, children, defaultExpanded = false, testId }: CollapsibleSectionProps) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+
+  return (
+    <div className="bg-card rounded-lg border overflow-hidden" data-testid={testId}>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full px-6 py-4 flex items-center justify-between bg-muted/30 hover:bg-muted/50 transition-colors active:bg-muted/70 min-h-[56px]"
+        data-testid={`${testId}-toggle`}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">{icon}</span>
+          <h3 className="text-lg font-semibold text-left">{title}</h3>
+        </div>
+        {isExpanded ? (
+          <ChevronDown className="w-5 h-5 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="w-5 h-5 text-muted-foreground" />
+        )}
+      </button>
+      {isExpanded && (
+        <div className="p-6">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function AdminDashboard() {
+  const { data: metrics, isLoading, isError, error, refetch } = useQuery<QuickMetrics>({
+    queryKey: ['/api/admin/quick-metrics'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/quick-metrics', {
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      });
+      
+      if (res.status === 401) {
+        window.location.href = '/admin/login';
+        throw new Error('Authentication required');
+      }
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to fetch metrics (${res.status})`);
+      }
+      
+      return res.json();
+    },
+    refetchInterval: 30000,
+    retry: 2,
+    retryDelay: 1000
+  });
+
+  if (isError) {
+    return (
+      <AdminLayout>
+        <div className="text-center py-12 space-y-4">
+          <p className="text-destructive text-lg">Failed to load dashboard metrics</p>
+          <p className="text-sm text-muted-foreground">{error instanceof Error ? error.message : 'Unknown error'}</p>
+          <Button onClick={() => refetch()} variant="outline" data-testid="button-retry-metrics">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (isLoading || !metrics) {
+    return (
+      <AdminLayout>
+        <div className="text-center py-12 text-muted-foreground">
+          Loading metrics...
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  return (
+    <AdminLayout>
+      <div className="space-y-4 pb-24">
+        {/* Header - Mobile Optimized */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-bold">BJJ OS Dashboard</h2>
+            <p className="text-sm text-muted-foreground">Real-time curation efficiency metrics</p>
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            className="self-start sm:self-auto"
+            data-testid="button-refresh-dashboard"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {/* Priority Metrics - Always Visible */}
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="bg-card rounded-lg border p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-3xl">📚</span>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-muted-foreground">Library</p>
+                <p className="text-2xl font-bold" data-testid="value-total-videos">{metrics.totalVideos}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">+{metrics.videosToday} today</p>
+          </div>
+
+          <div className="bg-card rounded-lg border p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-3xl">🤖</span>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-muted-foreground">Curation</p>
+                <p className={`text-2xl font-bold ${getCurationStatusDisplay(metrics).color}`} data-testid="value-curation-status">
+                  {getCurationStatusDisplay(metrics).text}
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {metrics.minutesSinceRun < 999 ? `${metrics.minutesSinceRun}m ago` : 'Never run'}
+            </p>
+          </div>
+
+          <div className="bg-card rounded-lg border p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-3xl">👥</span>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-muted-foreground">Users</p>
+                <p className="text-2xl font-bold" data-testid="value-total-users">{metrics.totalUsers}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">{metrics.activeSubscriptions} subscriptions</p>
+          </div>
+
+          <div className="bg-card rounded-lg border p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-3xl">💰</span>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-muted-foreground">MRR</p>
+                <p className="text-2xl font-bold">${metrics.mrr}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">{metrics.signedUpToday} new today</p>
+          </div>
+        </div>
+
+        {/* CURATION EFFICIENCY - Collapsible */}
+        <CollapsibleSection 
+          title="Curation Efficiency (Today)" 
+          icon="📊" 
+          defaultExpanded={true}
+          testId="section-curation-efficiency"
+        >
+          <div className="space-y-6">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-muted-foreground">
+                Today = {new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })} EST
+              </p>
+              <Badge 
+                variant={
+                  metrics.curationEfficiency.status === 'optimal' ? 'default' :
+                  metrics.curationEfficiency.status === 'strict' ? 'secondary' :
+                  metrics.curationEfficiency.status === 'too_strict' ? 'destructive' :
+                  metrics.curationEfficiency.status === 'loose' ? 'secondary' :
+                  metrics.curationEfficiency.status === 'too_loose' ? 'destructive' :
+                  'outline'
+                }
+                data-testid="badge-efficiency-status"
+              >
+                {metrics.curationEfficiency.status === 'optimal' && '🟢 OPTIMAL'}
+                {metrics.curationEfficiency.status === 'strict' && '🟡 STRICT'}
+                {metrics.curationEfficiency.status === 'too_strict' && '🔴 TOO STRICT'}
+                {metrics.curationEfficiency.status === 'loose' && '🟡 LOOSE'}
+                {metrics.curationEfficiency.status === 'too_loose' && '🔴 TOO LOOSE'}
+                {metrics.curationEfficiency.status === 'unknown' && '⚪ NO DATA'}
+              </Badge>
+            </div>
+
+            <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-1">Discovered</p>
+                <p className="text-2xl sm:text-3xl font-bold" data-testid="value-discovered">{metrics.curationEfficiency.discovered}</p>
+                <p className="text-xs text-muted-foreground mt-1">From YouTube</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-1">Analyzed</p>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-500" data-testid="value-analyzed">{metrics.curationEfficiency.analyzed}</p>
+                <p className="text-xs text-muted-foreground mt-1">AI processed</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-1">Accepted</p>
+                <p className="text-2xl sm:text-3xl font-bold text-green-500" data-testid="value-accepted">{metrics.curationEfficiency.accepted}</p>
+                <p className="text-xs text-muted-foreground mt-1">To library</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-1">Rejected</p>
+                <p className="text-2xl sm:text-3xl font-bold text-red-500" data-testid="value-rejected">{metrics.curationEfficiency.rejected}</p>
+                <p className="text-xs text-muted-foreground mt-1">Quality check</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-1">Skipped</p>
+                <p className="text-2xl sm:text-3xl font-bold text-yellow-500" data-testid="value-skipped">{metrics.curationEfficiency.skipped}</p>
+                <p className="text-xs text-muted-foreground mt-1">Pre-filtered</p>
+              </div>
+            </div>
+            
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-1">Acceptance Rate (of analyzed videos)</p>
+              <p className="text-xl sm:text-2xl font-bold text-primary" data-testid="value-acceptance-rate">
+                {metrics.curationEfficiency.acceptanceRate.toFixed(1)}%
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {metrics.curationEfficiency.acceptanceRate < 0.5 && '⚠️ Too strict - might miss good content'}
+                {metrics.curationEfficiency.acceptanceRate >= 0.5 && metrics.curationEfficiency.acceptanceRate <= 2 && '✅ High quality bar'}
+                {metrics.curationEfficiency.acceptanceRate > 2 && metrics.curationEfficiency.acceptanceRate <= 5 && '✅ Optimal elite curation'}
+                {metrics.curationEfficiency.acceptanceRate > 5 && metrics.curationEfficiency.acceptanceRate <= 15 && '⚠️ Quality may be diluting'}
+                {metrics.curationEfficiency.acceptanceRate > 15 && '🚨 Accepting too much'}
+              </p>
+            </div>
+          </div>
+        </CollapsibleSection>
+
+        {/* System Overview - Collapsible */}
+        <CollapsibleSection 
+          title="System Overview" 
+          icon="⚙️" 
+          defaultExpanded={false}
+          testId="section-system-overview"
+        >
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Curation Pipeline</p>
+              <p className={`font-medium text-lg ${getCurationStatusDisplay(metrics).color}`}>
+                {getCurationStatusDisplay(metrics).text}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Monthly Revenue</p>
+              <p className="font-medium text-lg">${metrics.mrr}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">New Users Today</p>
+              <p className="font-medium text-lg">{metrics.signedUpToday}</p>
+            </div>
+          </div>
+        </CollapsibleSection>
+
+        {/* Activity Dashboard - Collapsible */}
+        <CollapsibleSection 
+          title="User Activity" 
+          icon="📈" 
+          defaultExpanded={false}
+          testId="section-activity"
+        >
+          <ActivityDashboard />
+        </CollapsibleSection>
+
+        {/* Floating Action Button */}
+        <FloatingActionButton />
+      </div>
+    </AdminLayout>
+  );
+}

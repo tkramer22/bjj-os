@@ -1,0 +1,595 @@
+**YES - Absolutely include it in Prompt 6.5!**
+
+Here’s why it makes perfect sense:
+
+-----
+
+## **Why Video Player Belongs in Prompt 6.5 (Admin Dashboard)**
+
+### **Logical Flow:**
+
+1. **Prompt 6** = AI curates videos autonomously ✅ (Done)
+1. **Prompt 6.5** = Admin sees and manages video library → **Should be able to PREVIEW videos**
+1. Prompt 7+ = User feedback system, gap detection, etc.
+
+### **Admin Dashboard Needs:**
+
+When you’re reviewing the video library as admin, you need to:
+
+- ✅ See video list
+- ✅ See quality scores
+- ✅ **Preview videos to verify quality**
+- ✅ **Test the key detail timestamps**
+- ✅ See if videos play correctly
+- ✅ Remove bad videos
+
+**You can’t manage a video library without being able to WATCH the videos!**
+
+-----
+
+## **Updated Prompt 6.5 Structure**
+
+```
+PROMPT 6.5: Admin Video Dashboard + Video Player Component
+
+Build two things:
+1. Admin Dashboard (manage video library)
+2. Embedded Video Player Component (used everywhere)
+
+This way:
+- Admin can preview videos in dashboard
+- User can watch videos in chat
+- Same video player component, reused everywhere
+```
+
+-----
+
+## **Here’s the Complete Prompt 6.5:**
+
+-----
+
+# **PROMPT 6.5: Admin Video Dashboard + Embedded Video Player**
+
+Copy this entire prompt and send to Replit Agent:
+
+-----
+
+```
+Build the Admin Video Dashboard with embedded video player functionality.
+
+## PART 1: EMBEDDED VIDEO PLAYER COMPONENT
+
+Create a reusable video player component that works on web and mobile.
+
+### Component: VideoPlayer.tsx (or VideoPlayer.jsx)
+
+**Props:**
+- videoId (string) - YouTube video ID
+- startTime (number) - Timestamp in seconds to start at
+- title (string) - Video title
+- instructor (string) - Instructor name
+- onClose (function) - Called when player closes
+
+**Features:**
+- Opens in modal/fullscreen overlay
+- Uses YouTube iframe embed API
+- Starts at specified timestamp automatically
+- Shows video title and instructor at top
+- Close button (X) in corner
+- Fullscreen capability
+- Responsive (works on mobile and desktop)
+
+**Implementation:**
+
+Web version (React):
+```jsx
+import React from 'react';
+
+interface VideoPlayerProps {
+  videoId: string;
+  startTime?: number;
+  title: string;
+  instructor: string;
+  onClose: () => void;
+}
+
+export const VideoPlayer: React.FC<VideoPlayerProps> = ({
+  videoId,
+  startTime = 0,
+  title,
+  instructor,
+  onClose
+}) => {
+  const embedUrl = `https://www.youtube.com/embed/${videoId}?start=${startTime}&rel=0&modestbranding=1&autoplay=1`;
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-4xl">
+        {/* Header */}
+        <div className="bg-gray-900 p-4 rounded-t-lg flex justify-between items-center">
+          <div>
+            <h3 className="text-white font-semibold">{title}</h3>
+            <p className="text-gray-400 text-sm">{instructor}</p>
+          </div>
+          <button 
+            onClick={onClose}
+            className="text-white hover:text-gray-300"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        {/* Video Player */}
+        <div className="relative" style={{ paddingBottom: '56.25%' }}>
+          <iframe
+            className="absolute top-0 left-0 w-full h-full"
+            src={embedUrl}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+Mobile version (React Native):
+
+```jsx
+import React from 'react';
+import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { WebView } from 'react-native-webview';
+
+export const VideoPlayer = ({ videoId, startTime = 0, title, instructor, visible, onClose }) => {
+  const embedUrl = `https://www.youtube.com/embed/${videoId}?start=${startTime}&rel=0&modestbranding=1&autoplay=1`;
+  
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.instructor}>{instructor}</Text>
+          </View>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Text style={styles.closeText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+        <WebView
+          source={{ uri: embedUrl }}
+          allowsFullscreenVideo={true}
+          style={styles.webview}
+        />
+      </View>
+    </Modal>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#000' },
+  header: { flexDirection: 'row', padding: 16, backgroundColor: '#1a1a1a' },
+  titleContainer: { flex: 1 },
+  title: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  instructor: { color: '#999', fontSize: 14, marginTop: 4 },
+  closeButton: { padding: 8 },
+  closeText: { color: '#fff', fontSize: 24 },
+  webview: { flex: 1 }
+});
+```
+
+### Component: VideoCard.tsx
+
+Create a video card component for displaying videos in chat and admin:
+
+**Props:**
+
+- video (object) - Complete video data
+- onPlay (function) - Called when user clicks play
+- showAdminControls (boolean) - Show delete/edit buttons
+
+**Features:**
+
+- Thumbnail from YouTube
+- Title and instructor name
+- Video length display
+- “Key Detail at MM:SS” badge
+- “Watch Key Detail” button (plays at timestamp)
+- “Watch Full Video” button (plays from start)
+- Optional admin controls (delete, edit)
+
+**Implementation:**
+
+```jsx
+interface VideoCardProps {
+  video: {
+    id: string;
+    video_id: string;
+    title: string;
+    instructor: string;
+    key_detail: string;
+    key_detail_timestamp: number;
+    video_length_seconds: number;
+    quality_score: number;
+  };
+  onPlay: (videoId: string, startTime: number) => void;
+  showAdminControls?: boolean;
+  onDelete?: (id: string) => void;
+}
+
+export const VideoCard: React.FC<VideoCardProps> = ({
+  video,
+  onPlay,
+  showAdminControls = false,
+  onDelete
+}) => {
+  const thumbnailUrl = `https://img.youtube.com/vi/${video.video_id}/mqdefault.jpg`;
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  return (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      {/* Thumbnail */}
+      <div className="relative">
+        <img src={thumbnailUrl} alt={video.title} className="w-full" />
+        <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
+          {formatTime(video.video_length_seconds)}
+        </div>
+      </div>
+      
+      {/* Content */}
+      <div className="p-4">
+        <h3 className="font-semibold text-lg mb-1">{video.title}</h3>
+        <p className="text-gray-600 text-sm mb-3">👤 {video.instructor}</p>
+        
+        {/* Key Detail Badge */}
+        <div className="bg-blue-50 border border-blue-200 rounded p-2 mb-3">
+          <p className="text-xs text-blue-600 font-semibold mb-1">
+            🎯 Key Detail at {formatTime(video.key_detail_timestamp)}
+          </p>
+          <p className="text-sm text-gray-700">{video.key_detail}</p>
+        </div>
+        
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => onPlay(video.video_id, video.key_detail_timestamp)}
+            className="flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700"
+          >
+            ▶️ Watch Key Detail
+          </button>
+          <button
+            onClick={() => onPlay(video.video_id, 0)}
+            className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded hover:bg-gray-300"
+          >
+            📺 Full Video
+          </button>
+        </div>
+        
+        {/* Admin Controls */}
+        {showAdminControls && (
+          <div className="mt-3 pt-3 border-t flex gap-2">
+            <span className="text-sm text-gray-600">Quality: {video.quality_score}/10</span>
+            <button
+              onClick={() => onDelete?.(video.id)}
+              className="ml-auto text-red-600 text-sm hover:text-red-800"
+            >
+              🗑️ Delete
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+```
+
+## PART 2: ADMIN VIDEO DASHBOARD
+
+Create route: `/admin/videos`
+
+Requires admin authentication (check user role).
+
+### Dashboard Layout:
+
+**Top Section - Stats Cards:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  📊 Video Library Stats                                 │
+├─────────────┬─────────────┬─────────────┬──────────────┤
+│ Total Videos│ Avg Quality │ Added Today │ Helpful Rate │
+│    1,247    │    8.2/10   │     23      │     87%      │
+└─────────────┴─────────────┴─────────────┴──────────────┘
+```
+
+**Filters & Search:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🔍 Search: [___________]  Belt: [All ▼]  Style: [All ▼]│
+│                                                          │
+│ Position: [All ▼]  Type: [All ▼]  Quality: [7+ ▼]      │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Recent Additions Section:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  📅 Recently Added (Last 24 Hours)                      │
+├─────────────────────────────────────────────────────────┤
+│  [Video Card] [Video Card] [Video Card]                │
+│  23 videos added today                                  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**All Videos Table:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Thumbnail  │ Title              │ Instructor    │ Quality │ ... │
+├─────────────┼────────────────────┼───────────────┼─────────┼─────┤
+│  [IMG]      │ Triangle Setup...  │ Lachlan Giles │  8.5    │ [▶️] │
+│  [IMG]      │ Half Guard...      │ Craig Jones   │  9.2    │ [▶️] │
+│  [IMG]      │ Armbar Details...  │ Danaher       │  9.8    │ [▶️] │
+└─────────────┴────────────────────┴───────────────┴─────────┴─────┘
+```
+
+### Features:
+
+1. **Video Preview:**
+
+- Click ▶️ button on any video
+- Opens VideoPlayer modal
+- Admin can verify quality and timestamp
+- Can watch key detail or full video
+
+1. **Filtering:**
+
+- By belt level (white, blue, purple, brown, black)
+- By style (gi, nogi, both)
+- By position (guard, mount, side control, etc.)
+- By technique type (submission, sweep, pass, escape)
+- By quality score (7+, 8+, 9+)
+- By instructor name
+
+1. **Search:**
+
+- Search by title, technique name, or instructor
+- Real-time filtering as you type
+
+1. **Actions:**
+
+- Preview video (▶️ button)
+- Delete video (🗑️ button with confirmation)
+- Edit video metadata (✏️ button - opens form)
+- View helpful/not helpful ratio
+
+1. **Manual Add Button:**
+
+- “+ Add Video Manually” button
+- Opens form to add video by URL
+- Auto-fetches YouTube metadata
+- Admin fills in key detail and timestamp
+
+1. **Run Curation Button:**
+
+- “🤖 Run Curation Now” button
+- Triggers the autonomous curation process
+- Shows progress (analyzing X videos…)
+- Shows results when complete
+
+### Database Queries:
+
+```typescript
+// Get all videos with filters
+async function getVideos(filters: {
+  search?: string;
+  beltLevel?: string[];
+  style?: string;
+  position?: string;
+  techniqueType?: string;
+  minQuality?: number;
+  limit?: number;
+  offset?: number;
+}) {
+  let query = `
+    SELECT * FROM ai_video_knowledge
+    WHERE 1=1
+  `;
+  
+  const params = [];
+  
+  if (filters.search) {
+    query += ` AND (title ILIKE $${params.length + 1} OR instructor ILIKE $${params.length + 1})`;
+    params.push(`%${filters.search}%`);
+  }
+  
+  if (filters.beltLevel?.length) {
+    query += ` AND belt_level && $${params.length + 1}`;
+    params.push(filters.beltLevel);
+  }
+  
+  if (filters.style) {
+    query += ` AND (gi_or_nogi = $${params.length + 1} OR gi_or_nogi = 'both')`;
+    params.push(filters.style);
+  }
+  
+  if (filters.position) {
+    query += ` AND position = $${params.length + 1}`;
+    params.push(filters.position);
+  }
+  
+  if (filters.techniqueType) {
+    query += ` AND technique_type = $${params.length + 1}`;
+    params.push(filters.techniqueType);
+  }
+  
+  if (filters.minQuality) {
+    query += ` AND quality_score >= $${params.length + 1}`;
+    params.push(filters.minQuality);
+  }
+  
+  query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  params.push(filters.limit || 50, filters.offset || 0);
+  
+  return db.query(query, params);
+}
+
+// Get stats
+async function getVideoStats() {
+  return db.query(`
+    SELECT 
+      COUNT(*) as total_videos,
+      AVG(quality_score) as avg_quality,
+      COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as added_today,
+      ROUND(
+        100.0 * SUM(helpful_count) / NULLIF(SUM(helpful_count + not_helpful_count), 0), 
+        1
+      ) as helpful_rate
+    FROM ai_video_knowledge
+  `);
+}
+
+// Delete video
+async function deleteVideo(videoId: string) {
+  return db.query(
+    'DELETE FROM ai_video_knowledge WHERE id = $1',
+    [videoId]
+  );
+}
+```
+
+### API Endpoints:
+
+```typescript
+// GET /api/admin/videos
+// Returns paginated video list with filters
+app.get('/api/admin/videos', requireAdmin, async (req, res) => {
+  const filters = {
+    search: req.query.search,
+    beltLevel: req.query.beltLevel ? JSON.parse(req.query.beltLevel) : undefined,
+    style: req.query.style,
+    position: req.query.position,
+    techniqueType: req.query.techniqueType,
+    minQuality: req.query.minQuality ? parseFloat(req.query.minQuality) : undefined,
+    limit: req.query.limit ? parseInt(req.query.limit) : 50,
+    offset: req.query.offset ? parseInt(req.query.offset) : 0
+  };
+  
+  const videos = await getVideos(filters);
+  const stats = await getVideoStats();
+  
+  res.json({ videos, stats });
+});
+
+// DELETE /api/admin/videos/:id
+// Deletes a video
+app.delete('/api/admin/videos/:id', requireAdmin, async (req, res) => {
+  await deleteVideo(req.params.id);
+  res.json({ success: true });
+});
+
+// POST /api/admin/videos/manual
+// Manually add a video
+app.post('/api/admin/videos/manual', requireAdmin, async (req, res) => {
+  const { youtube_url, key_detail, key_detail_timestamp } = req.body;
+  
+  // Extract video ID from URL
+  const videoId = extractYouTubeId(youtube_url);
+  
+  // Fetch video metadata from YouTube API
+  const metadata = await fetchYouTubeMetadata(videoId);
+  
+  // Insert into database
+  await db.query(`
+    INSERT INTO ai_video_knowledge 
+    (video_id, video_url, title, instructor, key_detail, key_detail_timestamp, ...)
+    VALUES ($1, $2, $3, $4, $5, $6, ...)
+  `, [videoId, youtube_url, metadata.title, ...]);
+  
+  res.json({ success: true });
+});
+```
+
+## PART 3: USER-FACING VIDEO INTEGRATION
+
+When Professor OS recommends videos in chat:
+
+**Chat Message Format:**
+
+```jsx
+<div className="professor-os-message">
+  <p>Based on your last 3 sessions, here's what will help with half guard retention:</p>
+  
+  <VideoCard
+    video={video}
+    onPlay={(videoId, startTime) => {
+      setCurrentVideo({ videoId, startTime, ...video });
+      setShowPlayer(true);
+    }}
+  />
+  
+  <p>This addresses the exact timing issue you mentioned Tuesday.</p>
+</div>
+
+{showPlayer && (
+  <VideoPlayer
+    videoId={currentVideo.videoId}
+    startTime={currentVideo.startTime}
+    title={currentVideo.title}
+    instructor={currentVideo.instructor}
+    onClose={() => setShowPlayer(false)}
+  />
+)}
+```
+
+## TESTING CHECKLIST:
+
+After implementing:
+
+1. [ ] Admin can access /admin/videos route
+1. [ ] Video stats display correctly
+1. [ ] Search and filters work
+1. [ ] Can preview videos by clicking ▶️
+1. [ ] Video player opens in modal/fullscreen
+1. [ ] Video starts at correct timestamp
+1. [ ] Can watch key detail vs full video
+1. [ ] Can delete videos (with confirmation)
+1. [ ] Recently added section shows last 24h
+1. [ ] Mobile responsive (table becomes cards)
+1. [ ] User can watch videos in chat
+1. [ ] Video player works on mobile web/app
+1. [ ] Closing player returns to conversation
+
+## MOBILE CONSIDERATIONS:
+
+- Admin dashboard should be responsive (stack on mobile)
+- Video table becomes scrollable cards on mobile
+- Video player should work in mobile WebView
+- Touch targets at least 44px for buttons
+- Thumbnails should load quickly
+
+Implement both the video player components and admin dashboard as described above.
+
+```
+---
+
+## **Why This Works:**
+
+✅ **Video player built FIRST** - Used everywhere (admin + user)  
+✅ **Admin can test videos** - Preview before users see them  
+✅ **Reusable component** - Same player for admin and chat  
+✅ **Complete dashboard** - Manage entire video library  
+✅ **Timestamp verification** - Admin can confirm key details work  
+
+---
+
+**Ready to send this as Prompt 6.5?** This gives you both the video management AND the video playback system in one cohesive prompt.​​​​​​​​​​​​​​​​
+```

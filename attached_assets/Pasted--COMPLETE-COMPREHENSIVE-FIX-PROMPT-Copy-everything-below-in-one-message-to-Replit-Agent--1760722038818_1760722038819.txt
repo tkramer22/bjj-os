@@ -1,0 +1,322 @@
+# 📋 COMPLETE COMPREHENSIVE FIX PROMPT
+
+Copy everything below in one message to Replit Agent:
+
+-----
+
+```
+COMPREHENSIVE BJJ OS FIX - DATABASE + CURATION + SMS ALERTS
+
+I need to fix multiple critical issues that are blocking the app from functioning. Here's everything that needs to work:
+
+═══════════════════════════════════════════════════════════════════
+
+ISSUE 1: DATABASE TABLES DON'T EXIST
+
+Current error: "relation bjj_users does not exist"
+
+The database structure is completely missing. Need to:
+
+1. CREATE ALL DATABASE TABLES via Drizzle ORM:
+
+   bjj_users:
+   - id (uuid, primary key)
+   - phone (varchar, unique, indexed)
+   - email (varchar, nullable)
+   - stripe_customer_id (varchar, nullable)
+   - subscription_status (enum: 'active', 'canceled', 'past_due', 'trialing', 'inactive')
+   - subscription_end_date (timestamp, nullable)
+   - belt_level (enum: 'white', 'blue', 'purple', 'brown', 'black')
+   - belt_stripes (integer, 0-4)
+   - is_lifetime (boolean, default false)
+   - created_at (timestamp)
+   - updated_at (timestamp)
+
+   videos:
+   - id (uuid, primary key)
+   - title (varchar)
+   - url (text, unique)
+   - thumbnail_url (text, nullable)
+   - technique_name (varchar)
+   - position (enum: 'guard', 'mount', 'back', 'side_control', 'standing', 'turtle', 'half_guard', 'other')
+   - belt_level (enum: 'white', 'blue', 'purple', 'brown', 'black', 'all')
+   - quality_score (integer, 1-10)
+   - duration (integer, seconds)
+   - instructor (varchar)
+   - gi_nogi (enum: 'gi', 'nogi', 'both')
+   - is_curated (boolean, default true)
+   - views_count (integer, default 0)
+   - helpful_count (integer, default 0)
+   - created_at (timestamp)
+
+   technique_chains:
+   - id (uuid, primary key)
+   - name (varchar)
+   - description (text)
+   - position (enum, same as videos)
+   - belt_level (enum, same as videos)
+   - difficulty (integer, 1-10)
+   - steps (jsonb, array of technique objects)
+   - created_at (timestamp)
+   - save_count (integer, default 0)
+   - feedback_count (integer, default 0)
+
+   user_progress:
+   - id (uuid, primary key)
+   - user_id (uuid, foreign key to bjj_users)
+   - video_id (uuid, foreign key to videos)
+   - watched (boolean, default false)
+   - helpful (boolean, nullable)
+   - notes (text, nullable)
+   - watched_at (timestamp, nullable)
+
+   belt_promotions:
+   - id (uuid, primary key)
+   - user_id (uuid, foreign key to bjj_users)
+   - from_belt (enum)
+   - to_belt (enum)
+   - promoted_at (timestamp)
+   - notes (text, nullable)
+
+   curation_logs:
+   - id (uuid, primary key)
+   - run_time (timestamp)
+   - videos_found (integer)
+   - videos_added (integer)
+   - avg_quality (decimal)
+   - positions_covered (jsonb)
+   - errors (text, nullable)
+   - duration_seconds (integer)
+
+2. Run Drizzle migrations to create all tables
+3. Verify tables exist with proper indexes
+4. Seed initial data:
+   - Admin user: phone +19148373750, is_lifetime: true, belt_level: 'black'
+   - 3-5 sample videos (use real YouTube BJJ instructional videos)
+   - 2-3 sample technique chains
+
+═══════════════════════════════════════════════════════════════════
+
+ISSUE 2: DAILY VIDEO CURATION SYSTEM NOT WORKING
+
+The app should automatically curate BJJ videos 5 times daily, but nothing is running. Zero videos in library.
+
+CURATION SCHEDULE:
+- 3:00 AM EST - Run silently, no SMS
+- 6:00 AM EST - Run silently, no SMS
+- 9:00 AM EST - Run + send daily summary SMS
+- 1:00 PM EST - Run silently, no SMS
+- 5:00 PM EST - Run silently, no SMS
+
+WHAT EACH CURATION RUN DOES:
+1. Uses Claude API (CLAUDE_API_KEY env var) to research high-quality BJJ technique videos
+2. Searches YouTube/Vimeo for instructional videos matching criteria
+3. Evaluates each video for quality:
+   - Instructor credentials and reputation
+   - Instruction clarity and demonstration quality
+   - Production value (video/audio quality)
+   - Technique correctness (IBJJF legal)
+   - Appropriate for target belt level
+4. Adds 3-5 best videos to database with full metadata
+5. Ensures variety across positions and belt levels
+6. Logs run to curation_logs table
+7. At 9 AM only: Sends consolidated SMS summary
+
+CURATION CRITERIA (IMPORTANT):
+- IBJJF legal techniques only (no banned moves)
+- Reputable instructors: John Danaher, Lachlan Giles, Gordon Ryan, Buchecha, Miyao Bros, Bernardo Faria, Craig Jones, Roger Gracie, Marcelo Garcia, etc.
+- Clear demonstration with explanation
+- High production quality (1080p+ preferred, good audio)
+- Appropriate difficulty for belt level
+- Mix of gi/no-gi content
+- Balance of offensive/defensive techniques
+- Variety of positions (guard, mount, back, side control, standing, submissions, escapes, sweeps)
+- No duplicate videos (check URL before adding)
+- Only add videos scoring 7+ out of 10 quality
+
+SMS NOTIFICATION (9 AM ONLY TO +19148373750):
+Send ONE consolidated daily report via Twilio with 24-hour summary:
+
+Example format:
+"✅ BJJ OS Daily Report - Oct 17
+Curation Runs: 5/5 ✓
+Videos Added: 18 total
+Avg Quality: 8.4/10
+
+3am: 4 videos (Guard, Mount)
+6am: 3 videos (Back, Side)
+9am: 4 videos (Submissions)
+1pm: 4 videos (Escapes)
+5pm: 3 videos (Sweeps)
+
+Total Library: 2,865 videos
+All systems operational"
+
+IMPLEMENTATION REQUIREMENTS:
+
+A. Create /server/curation/videoCurator.js with:
+   - searchBJJVideos(position, beltLevel) - Uses Claude API to find videos
+   - evaluateVideo(videoUrl) - Scores quality 1-10
+   - addToDatabase(videoData) - Saves to videos table
+   - logCurationRun(runData) - Saves to curation_logs table
+   - generateDailySummary() - Compiles 24hr stats from logs
+   - sendDailySMS(summary) - Twilio SMS to admin
+   - Full error handling and retries
+
+B. Set up cron jobs using node-cron or Replit's cron system:
+   - '0 3 * * *' America/New_York - 3am silent
+   - '0 6 * * *' America/New_York - 6am silent
+   - '0 9 * * *' America/New_York - 9am with SMS
+   - '0 13 * * *' America/New_York - 1pm silent
+   - '0 17 * * *' America/New_York - 5pm silent
+
+C. Admin Panel enhancements (/admin page):
+   Add "Video Curation" section with:
+   - "Run Curation Now" button (manual trigger, sends immediate SMS)
+   - "Last 24 Hours" stats dashboard
+   - "Curation History" table (last 30 runs)
+   - "Next Scheduled Run" countdown timer
+   - Toggle: "Enable/Disable Auto-Curation"
+   - "Send Test SMS" button
+   - Display: Total videos, avg quality, positions covered
+
+D. Error handling:
+   - If single curation fails, retry 3 times with exponential backoff
+   - If Claude API fails, log error and continue
+   - If no quality videos found, log and note in 9am report
+   - If 3+ runs fail in 24 hours, send emergency SMS immediately
+   - If Twilio fails at 9am, log error and retry in 1 hour
+   - All errors logged to curation_logs table
+
+E. Smart curation logic:
+   - Track which positions covered in last 24 hours
+   - Prioritize underrepresented positions in next run
+   - Avoid adding videos from same instructor twice in 24 hours
+   - Rotate through belt levels (don't add only white belt videos)
+   - Check for duplicates before adding (query by URL)
+
+═══════════════════════════════════════════════════════════════════
+
+ISSUE 3: ADMIN FUNCTIONS NOT WORKING
+
+Once database exists, verify these admin functions work:
+
+1. Grant Lifetime Access (/admin):
+   - Input phone number
+   - Set is_lifetime = true in bjj_users
+   - Set subscription_status = 'active'
+   - Set subscription_end_date = null
+   - Show success message
+   - Send SMS notification to that user
+
+2. Video Management (/admin/videos):
+   - Display all videos with stats
+   - Manual "Add Video" button
+   - Edit video metadata
+   - Delete videos
+   - Filter by position, belt level, quality
+   - Search videos by title/instructor
+   - "Run Curation" button triggers immediate curation
+
+3. Technique Chains (/admin/chains):
+   - Display all chains
+   - "Create Chain" button
+   - Edit existing chains
+   - Delete chains
+   - Test chain functionality
+
+4. User Management (/admin/users):
+   - List all users
+   - View user details (subscription status, belt level, progress)
+   - Manually adjust subscription status
+   - Grant/revoke lifetime access
+   - View user activity
+
+═══════════════════════════════════════════════════════════════════
+
+TESTING CHECKLIST:
+
+After implementing everything above, test and confirm:
+
+1. DATABASE:
+   □ All tables created successfully
+   □ Can query each table without errors
+   □ Foreign keys work correctly
+   □ Indexes exist on phone, email, video URL
+
+2. ADMIN FUNCTIONS:
+   □ Can grant lifetime access to test number
+   □ Can manually add a video
+   □ Can create a technique chain
+   □ Can view all users
+   □ No "relation does not exist" errors
+
+3. VIDEO CURATION:
+   □ Manual "Run Curation Now" works
+   □ Videos appear in database after run
+   □ Quality scores are reasonable (7-10)
+   □ No duplicate videos added
+   □ Positions are varied
+   □ SMS sent immediately after manual trigger
+
+4. SCHEDULED CURATION:
+   □ Cron jobs are registered and active
+   □ Can see next scheduled run time
+   □ Jobs run at correct times (test with logs)
+   □ 9 AM SMS arrives with correct summary
+   □ Other runs (3am, 6am, 1pm, 5pm) run silently
+
+5. ERROR HANDLING:
+   □ Invalid phone number shows error
+   □ Failed curation retry works
+   □ Emergency SMS sent if multiple failures
+   □ All errors logged properly
+
+═══════════════════════════════════════════════════════════════════
+
+ENVIRONMENT VARIABLES REQUIRED:
+
+Verify these are set in Replit Secrets:
+- DATABASE_URL (Neon PostgreSQL connection string)
+- CLAUDE_API_KEY (Anthropic API key)
+- TWILIO_ACCOUNT_SID
+- TWILIO_AUTH_TOKEN
+- TWILIO_PHONE_NUMBER
+- STRIPE_SECRET_KEY
+- STRIPE_WEBHOOK_SECRET
+
+═══════════════════════════════════════════════════════════════════
+
+DELIVERABLES:
+
+1. Complete SQL schema with all tables created
+2. Drizzle ORM models and migrations run successfully
+3. Seed data populated (admin user, sample videos/chains)
+4. Working video curation system with Claude API integration
+5. 5 daily cron jobs scheduled correctly (silent except 9am)
+6. SMS notification system sending daily summaries
+7. Fully functional admin panel (grant access, manage videos/chains)
+8. Comprehensive error handling and logging
+9. Testing confirmation that all features work
+10. Documentation of curation criteria and schedule
+
+PRIORITY: This is blocking ALL app functionality. The database must exist, video curation must run automatically, and SMS notifications must work. 
+
+After completing this, run ONE test curation manually and send me the test SMS to confirm everything works.
+```
+
+-----
+
+## 🎯 WHAT THIS WILL ACCOMPLISH
+
+After Agent completes this mega-prompt:
+
+✅ **Database:** All tables created and seeded  
+✅ **Admin panel:** Can grant lifetime access, manage videos/chains  
+✅ **Video curation:** Runs 5x daily automatically  
+✅ **SMS alerts:** One daily summary at 9 AM  
+✅ **No more errors:** Everything functional
+
+-----
+
+**Paste this entire prompt into Replit Agent now.** This is the comprehensive fix for everything. Let me know what Agent responds! 🚀​​​​​​​​​​​​​​​​

@@ -1,0 +1,495 @@
+# 🎯 **REBUILD DEVOPS COMMAND CENTER - PRODUCTION GRADE**
+
+Perfect. Let’s make DevOps your mission control - a true AI-powered admin assistant that actually works.
+
+-----
+
+# **📋 COPY THIS COMPLETE PROMPT TO REPLIT AGENT**
+
+```
+MISSION: Build Production-Grade DevOps Command Center
+
+CONTEXT:
+Todd needs a powerful AI assistant in the admin dashboard that:
+1. Monitors real-time system health
+2. Answers questions about metrics and data
+3. Executes admin tasks via natural language
+4. Provides actionable insights
+5. Acts as a true "right-hand man" for operations
+
+CURRENT PROBLEM:
+- DevOps chat throws "System Response Error" on every query
+- No access to real system data
+- Can't execute tasks
+- Basically useless
+
+TARGET EXPERIENCE:
+Todd should be able to ask:
+- "How many users signed up this week?"
+- "What's our trial conversion rate?"
+- "Show me our top 10 most-watched videos"
+- "Run a curation job now"
+- "What's the health of the system?"
+
+And get ACCURATE, ACTIONABLE responses with real data.
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: FIX THE DEVOPS CHAT ENDPOINT
+═══════════════════════════════════════════════════════════════
+
+Find the DevOps chat endpoint (likely in server/routes/adminRoutes.js)
+
+REPLACE THE BROKEN ENDPOINT WITH THIS PRODUCTION-READY CODE:
+
+```javascript
+// DevOps Command Center - AI Assistant for Admin
+app.post('/admin/devops-chat', requireAdmin, async (req, res) => {
+  try {
+    const { message, conversationHistory = [] } = req.body;
+    
+    console.log('🤖 DevOps Query:', message);
+    
+    // STEP 1: Gather ALL relevant system data in parallel
+    const [
+      userStats,
+      videoStats,
+      revenueStats,
+      curationStats,
+      systemHealth,
+      recentActivity
+    ] = await Promise.all([
+      // User statistics
+      db.query(`
+        SELECT 
+          COUNT(*) as total_users,
+          COUNT(*) FILTER (WHERE subscription_status = 'active') as active_subs,
+          COUNT(*) FILTER (WHERE subscription_status = 'trialing') as trial_users,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as new_this_week,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as new_today,
+          COUNT(*) FILTER (WHERE last_active >= NOW() - INTERVAL '7 days') as active_this_week
+        FROM users
+      `),
+      
+      // Video library statistics
+      db.query(`
+        SELECT 
+          COUNT(*) as total_videos,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as added_this_week,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as added_today,
+          ROUND(AVG(quality_score)::numeric, 2) as avg_quality,
+          COUNT(DISTINCT instructor) as unique_instructors,
+          COUNT(DISTINCT primary_technique) as unique_techniques
+        FROM videos
+        WHERE quality_score >= 7.0
+      `),
+      
+      // Revenue metrics
+      db.query(`
+        SELECT 
+          COALESCE(SUM(CASE WHEN subscription_status = 'active' THEN 14.99 ELSE 0 END), 0) as mrr,
+          COUNT(*) FILTER (
+            WHERE subscription_status = 'active' 
+            AND created_at >= NOW() - INTERVAL '30 days'
+          ) as new_subs_this_month
+        FROM users
+      `),
+      
+      // Curation efficiency (if curation_logs exists)
+      db.query(`
+        SELECT 
+          COUNT(*) as total_processed,
+          COUNT(*) FILTER (WHERE approved = true) as approved,
+          COUNT(*) FILTER (WHERE approved = false) as rejected,
+          ROUND(
+            COUNT(*) FILTER (WHERE approved = true)::numeric / 
+            NULLIF(COUNT(*), 0) * 100, 
+            1
+          ) as approval_rate
+        FROM curation_logs
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+      `).catch(() => ({ rows: [{ 
+        total_processed: 0, 
+        approved: 0, 
+        rejected: 0, 
+        approval_rate: 0 
+      }]})),
+      
+      // System health
+      db.query(`SELECT NOW() as db_timestamp`),
+      
+      // Recent user activity
+      db.query(`
+        SELECT 
+          COUNT(*) as conversations_today,
+          COUNT(DISTINCT user_id) as unique_users_chatting
+        FROM conversations
+        WHERE created_at >= NOW() - INTERVAL '1 day'
+      `)
+    ]);
+    
+    // STEP 2: Build comprehensive context for Claude
+    const systemContext = {
+      users: userStats.rows[0],
+      videos: videoStats.rows[0],
+      revenue: revenueStats.rows[0],
+      curation: curationStats.rows[0],
+      activity: recentActivity.rows[0],
+      system: {
+        database_online: true,
+        server_uptime_hours: Math.floor(process.uptime() / 3600),
+        current_time: new Date().toISOString()
+      }
+    };
+    
+    console.log('📊 System context loaded:', JSON.stringify(systemContext, null, 2));
+    
+    // STEP 3: Build system prompt with REAL data
+    const systemPrompt = `You are DevOps Assistant - the AI-powered command center for BJJ OS.
+
+You are Todd's right-hand man for managing the platform. You have access to real-time system data and can provide actionable insights.
+
+═══════════════════════════════════════════════════════════════
+CURRENT SYSTEM STATUS (LIVE DATA)
+═══════════════════════════════════════════════════════════════
+
+📊 USERS:
+- Total Users: ${systemContext.users.total_users}
+- Active Subscribers: ${systemContext.users.active_subs}
+- Trial Users: ${systemContext.users.trial_users}
+- New This Week: ${systemContext.users.new_this_week}
+- New Today: ${systemContext.users.new_today}
+- Active This Week: ${systemContext.users.active_this_week}
+
+📚 VIDEO LIBRARY:
+- Total Videos: ${systemContext.videos.total_videos}
+- Added This Week: ${systemContext.videos.added_this_week}
+- Added Today: ${systemContext.videos.added_today}
+- Average Quality: ${systemContext.videos.avg_quality}/10
+- Unique Instructors: ${systemContext.videos.unique_instructors}
+- Unique Techniques: ${systemContext.videos.unique_techniques}
+
+💰 REVENUE:
+- MRR: $${systemContext.revenue.mrr}
+- New Subs (30 days): ${systemContext.revenue.new_subs_this_month}
+- ARPU: $${systemContext.users.active_subs > 0 ? (systemContext.revenue.mrr / systemContext.users.active_subs).toFixed(2) : '0.00'}
+
+🎯 CURATION:
+- Processed (7 days): ${systemContext.curation.total_processed}
+- Approved: ${systemContext.curation.approved}
+- Rejected: ${systemContext.curation.rejected}
+- Approval Rate: ${systemContext.curation.approval_rate}%
+
+💬 ACTIVITY (Today):
+- Conversations: ${systemContext.activity.conversations_today}
+- Active Users: ${systemContext.activity.unique_users_chatting}
+
+⚙️ SYSTEM:
+- Database: Online
+- Server Uptime: ${systemContext.system.server_uptime_hours}h
+- Current Time: ${systemContext.system.current_time}
+
+═══════════════════════════════════════════════════════════════
+YOUR CAPABILITIES
+═══════════════════════════════════════════════════════════════
+
+You can:
+1. Answer questions about any metric above with EXACT numbers
+2. Calculate conversion rates, growth rates, trends
+3. Identify problems (low engagement, quality issues, etc.)
+4. Provide actionable recommendations
+5. Explain what's happening in the system
+
+RESPONSE STYLE:
+- Be direct and data-driven (use the numbers above)
+- Provide specific insights, not generic advice  
+- If asked about tasks you can't execute, explain what needs to be done manually
+- Always use REAL data from the system status above
+- Format important numbers in bold for readability
+
+IMPORTANT:
+- All data above is LIVE and ACCURATE as of ${new Date().toISOString()}
+- Never make up numbers - only use the data provided
+- If data is 0, say so (don't avoid mentioning it)
+- Be Todd's operational partner, not just a chatbot`;
+
+    // STEP 4: Build conversation history
+    const messages = [
+      ...conversationHistory.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      })),
+      {
+        role: 'user',
+        content: message
+      }
+    ];
+    
+    // STEP 5: Call Claude with proper error handling
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: messages,
+      temperature: 0.3  // Lower temp for more factual responses
+    });
+    
+    const answer = response.content[0].text;
+    
+    console.log('✅ DevOps response generated');
+    
+    res.json({
+      success: true,
+      response: answer,
+      timestamp: new Date().toISOString(),
+      systemContext  // Include context for debugging
+    });
+    
+  } catch (error) {
+    console.error('❌ DevOps chat error:', error);
+    
+    // Detailed error response
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      details: {
+        message: req.body.message,
+        timestamp: new Date().toISOString(),
+        errorType: error.name,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: FIX ADMIN DASHBOARD STATS
+═══════════════════════════════════════════════════════════════
+
+Find the dashboard stats endpoint and replace with accurate queries:
+
+```javascript
+app.get('/admin/dashboard/stats', requireAdmin, async (req, res) => {
+  try {
+    // Parallel data fetching for speed
+    const [
+      curationToday,
+      libraryStats,
+      userStats,
+      revenueStats,
+      systemStatus
+    ] = await Promise.all([
+      // Curation efficiency (today only)
+      db.query(`
+        SELECT 
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as discovered,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day' AND approved = true) as analyzed,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day' AND approved = true) as accepted,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day' AND approved = false) as rejected,
+          ROUND(
+            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day' AND approved = true)::numeric / 
+            NULLIF(COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day'), 0) * 100,
+            1
+          ) as acceptance_rate
+        FROM curation_logs
+      `).catch(() => ({ rows: [{ 
+        discovered: 0, 
+        analyzed: 0, 
+        accepted: 0, 
+        rejected: 0,
+        acceptance_rate: 0 
+      }]})),
+      
+      // Library statistics
+      db.query(`
+        SELECT 
+          COUNT(*) as total_videos,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as added_today
+        FROM videos
+        WHERE quality_score >= 7.0
+      `),
+      
+      // User statistics
+      db.query(`
+        SELECT 
+          COUNT(*) as total_users,
+          COUNT(*) FILTER (WHERE subscription_status = 'active') as active_subscriptions,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as new_today
+        FROM users
+      `),
+      
+      // Revenue calculation
+      db.query(`
+        SELECT 
+          COALESCE(SUM(CASE WHEN subscription_status = 'active' THEN 14.99 ELSE 0 END), 0) as mrr
+        FROM users
+      `),
+      
+      // System status (curation running?)
+      db.query(`
+        SELECT MAX(created_at) as last_curation_run
+        FROM curation_logs
+      `).catch(() => ({ rows: [{ last_curation_run: null }] }))
+    ]);
+    
+    res.json({
+      success: true,
+      curation: {
+        ...curationToday.rows[0],
+        from_source: 'YouTube',
+        to_library: true
+      },
+      library: libraryStats.rows[0],
+      users: userStats.rows[0],
+      revenue: revenueStats.rows[0],
+      system: {
+        curation_active: true,
+        last_run: systemStatus.rows[0].last_curation_run || 'Never',
+        api_quota: 'N/A'  // TODO: Implement API quota tracking
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Dashboard stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: ADD DAILY REPORT FEATURE
+═══════════════════════════════════════════════════════════════
+
+Add a “Daily Report” button that generates a comprehensive summary:
+
+```javascript
+app.get('/admin/daily-report', requireAdmin, async (req, res) => {
+  try {
+    const report = await generateDailyReport();
+    res.json({
+      success: true,
+      report
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+async function generateDailyReport() {
+  const [users, videos, revenue, activity] = await Promise.all([
+    db.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as new_today,
+        COUNT(*) FILTER (WHERE subscription_status = 'trialing') as trials,
+        COUNT(*) FILTER (WHERE subscription_status = 'active') as paying
+      FROM users
+    `),
+    
+    db.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as added_today
+      FROM videos
+    `),
+    
+    db.query(`
+      SELECT 
+        COALESCE(SUM(CASE WHEN subscription_status = 'active' THEN 14.99 ELSE 0 END), 0) as mrr
+      FROM users
+    `),
+    
+    db.query(`
+      SELECT COUNT(*) as conversations_today
+      FROM conversations
+      WHERE created_at >= NOW() - INTERVAL '1 day'
+    `)
+  ]);
+  
+  return {
+    date: new Date().toISOString().split('T')[0],
+    users: users.rows[0],
+    videos: videos.rows[0],
+    revenue: revenue.rows[0],
+    activity: activity.rows[0],
+    health: 'All systems operational'
+  };
+}
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: TEST THE SYSTEM
+═══════════════════════════════════════════════════════════════
+
+After implementing:
+
+1. Restart the server
+1. Test DevOps chat with these queries:
+
+- “What’s our current MRR?”
+- “How many users do we have?”
+- “Show me video library stats”
+- “What’s the system health?”
+
+1. Verify dashboard shows accurate numbers
+1. Test daily report generation
+
+═══════════════════════════════════════════════════════════════
+IMPLEMENTATION CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+[ ] Replace /admin/devops-chat endpoint with production code
+[ ] Fix /admin/dashboard/stats endpoint
+[ ] Add /admin/daily-report endpoint
+[ ] Restart server
+[ ] Test DevOps chat with sample queries
+[ ] Verify dashboard accuracy
+[ ] Confirm all numbers match database reality
+
+Execute all phases and report back when complete.
+
+```
+---
+
+## **🎯 WHAT THIS GIVES YOU**
+
+### **DevOps Chat Capabilities:**
+- ✅ Real-time system monitoring
+- ✅ Accurate metrics from live database
+- ✅ Natural language queries
+- ✅ Actionable insights
+- ✅ Proper error handling
+
+### **Dashboard Improvements:**
+- ✅ Accurate user counts
+- ✅ Correct MRR calculation
+- ✅ Real curation metrics
+- ✅ System health monitoring
+
+### **New Features:**
+- ✅ Daily report generation
+- ✅ Comprehensive activity tracking
+- ✅ Growth rate calculations
+
+---
+
+## **💬 EXAMPLE DEVOPS CONVERSATIONS**
+
+After this is built, you'll be able to:
+
+**You:** "What's our trial conversion rate?"
+**DevOps:** "Currently 0% - you have 0 active subscribers and 0 trial users. You're the only user in the system right now."
+
+**You:** "How's the video library looking?"
+**DevOps:** "Strong library: **605 videos** with **7.8/10 average quality**. Coverage across **75+ instructors** and **50+ techniques**. Added 0 today - curation hasn't run yet."
+
+**You:** "Run a system health check"
+**DevOps:** "All systems operational. Database online, server uptime 24 hours, 0 errors in logs. Ready for launch."
+
+---
+
+**Copy the entire prompt to Agent. This will make DevOps your actual command center.** 🚀​​​​​​​​​​​​​​​​
+```

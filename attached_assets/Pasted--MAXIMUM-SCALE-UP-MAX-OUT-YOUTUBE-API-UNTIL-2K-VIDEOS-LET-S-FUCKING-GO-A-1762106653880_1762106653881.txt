@@ -1,0 +1,574 @@
+# **🚀 MAXIMUM SCALE-UP - MAX OUT YOUTUBE API UNTIL 2K VIDEOS** 🚀
+
+-----
+
+## **LET’S FUCKING GO - AGGRESSIVE MODE ACTIVATED** ⚡
+
+```
+CURRENT: 355 videos, 2 runs/day, ~18 videos/day
+TARGET: 2,000 videos ASAP
+
+NEW STRATEGY: MAX OUT YOUTUBE API
+• Run every 2 hours (12 runs/day)
+• Use ~9,500+ units/day (95%+ of quota)
+• Add ~100 videos/day
+• Hit 2,000 videos in ~17 days (November 19)
+
+LET'S CRUSH THIS. 💪
+```
+
+-----
+
+## **MAXIMUM AGGRESSIVE MODE - IMPLEMENTATION**
+
+**Copy this ENTIRE prompt and paste into Replit Agent:**
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+MAXIMUM AGGRESSIVE MODE - RUN EVERY 2 HOURS UNTIL 2,000 VIDEOS
+═══════════════════════════════════════════════════════════════════════════════
+
+MISSION: MAX OUT YouTube API quota daily (10,000 units) by running curation
+every 2 hours around the clock until library reaches 2,000 videos.
+
+CURRENT STATE: 355 videos, 2 runs/day, ~1,740 units/day (17% quota)
+TARGET STATE: 2,000 videos, 12 runs/day, ~9,500 units/day (95% quota)
+
+TIMELINE: ~17 days (target: November 19, 2025)
+
+THIS IS FULL THROTTLE. LET'S GO. 🚀
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: ADD API CALL TRACKING COLUMNS (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+First, add proper tracking so we can monitor quota usage in real-time:
+
+```sql
+-- Add API tracking columns
+ALTER TABLE curation_runs 
+ADD COLUMN IF NOT EXISTS youtube_api_calls INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS claude_api_calls INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS gpt_api_calls INTEGER DEFAULT 0;
+
+-- Add quota tracking view
+CREATE OR REPLACE VIEW daily_quota_status AS
+SELECT 
+  CURRENT_DATE as date,
+  COALESCE(SUM(youtube_api_calls), 0) as youtube_used,
+  10000 as youtube_limit,
+  10000 - COALESCE(SUM(youtube_api_calls), 0) as youtube_remaining,
+  ROUND((COALESCE(SUM(youtube_api_calls), 0)::numeric / 10000 * 100), 1) as youtube_percent,
+  COUNT(*) as runs_today,
+  COALESCE(SUM(videos_added), 0) as videos_added_today
+FROM curation_runs
+WHERE run_date = CURRENT_DATE;
+
+-- Verify tracking enabled
+SELECT * FROM daily_quota_status;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: IMPLEMENT EVERY-2-HOURS CRON SCHEDULE
+═══════════════════════════════════════════════════════════════════════════════
+
+Replace existing cron jobs with aggressive 2-hour schedule:
+
+```typescript
+// server/index.ts
+import cron from 'node-cron';
+import { ContinuousCurationService } from './services/continuousCuration';
+
+// AGGRESSIVE MODE: Run every 2 hours, 12 times daily
+// Schedule: 12 AM, 2 AM, 4 AM, 6 AM, 8 AM, 10 AM, 12 PM, 2 PM, 4 PM, 6 PM, 8 PM, 10 PM
+
+cron.schedule('0 */2 * * *', async () => {
+  const hour = new Date().getHours();
+  const runNumber = Math.floor(hour / 2) + 1;
+  
+  console.log(`🚀 AGGRESSIVE MODE: Running curation ${runNumber}/12 (${hour}:00)`);
+  
+  try {
+    const result = await ContinuousCurationService.runAggressiveCuration();
+    
+    if (result.targetReached) {
+      console.log('🎉 TARGET REACHED: 2,000 videos! Aggressive mode complete.');
+    } else if (result.quotaLimitReached) {
+      console.log('⚠️ Daily quota limit reached. Will resume after midnight PT.');
+    } else {
+      console.log(`✅ Run complete: ${result.videosAdded} videos added, ${result.quotaUsed} units used`);
+    }
+  } catch (error) {
+    console.error(`❌ Curation failed at ${hour}:00:`, error);
+  }
+}, {
+  timezone: "America/Los_Angeles" // Pacific Time
+});
+
+console.log('🚀 AGGRESSIVE CURATION ACTIVE: Every 2 hours (12x daily) until 2,000 videos');
+console.log('📊 Next runs: 12 AM, 2 AM, 4 AM, 6 AM, 8 AM, 10 AM, 12 PM, 2 PM, 4 PM, 6 PM, 8 PM, 10 PM PT');
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: IMPLEMENT SMART QUOTA MANAGEMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Update the curation service to track and enforce quota limits:
+
+```typescript
+// server/services/continuousCuration.ts
+
+class ContinuousCurationService {
+  
+  async runAggressiveCuration() {
+    console.log('🔥 AGGRESSIVE CURATION STARTED');
+    
+    // 1. Check if target reached
+    const currentCount = await this.getVideoCount();
+    if (currentCount >= 2000) {
+      console.log(`🎉 TARGET REACHED: ${currentCount} videos!`);
+      await this.disableAggressiveMode();
+      return { 
+        success: true, 
+        targetReached: true, 
+        currentCount 
+      };
+    }
+    
+    console.log(`📊 Progress: ${currentCount} / 2,000 videos (${Math.round(currentCount/2000*100)}%)`);
+    
+    // 2. Check today's quota usage
+    const todayUsage = await this.getTodayQuotaUsage();
+    const dailyLimit = 10000;
+    const safetyBuffer = 200; // Small buffer for errors
+    
+    if (todayUsage >= (dailyLimit - safetyBuffer)) {
+      console.log(`⚠️ QUOTA LIMIT REACHED: ${todayUsage}/${dailyLimit} units used today`);
+      console.log('Waiting for midnight PT quota reset...');
+      return { 
+        success: false, 
+        quotaLimitReached: true, 
+        quotaUsed: todayUsage 
+      };
+    }
+    
+    const remainingQuota = dailyLimit - safetyBuffer - todayUsage;
+    console.log(`✅ Available quota: ${remainingQuota} units (${todayUsage} used today)`);
+    
+    // 3. Run curation with quota tracking
+    const startTime = Date.now();
+    const startQuota = todayUsage;
+    
+    try {
+      // Execute curation
+      const result = await this.curate();
+      
+      const endTime = Date.now();
+      const duration = Math.round((endTime - startTime) / 1000);
+      
+      // Track actual API usage
+      const quotaUsed = await this.getTodayQuotaUsage() - startQuota;
+      
+      console.log(`✅ Curation complete in ${duration}s`);
+      console.log(`📹 Videos: ${result.videosAdded} added, ${result.videosScreened} screened`);
+      console.log(`🔌 API: ${quotaUsed} units used`);
+      
+      // Log to database with actual API usage
+      await this.logCurationRun({
+        youtubeApiCalls: quotaUsed,
+        videosAdded: result.videosAdded,
+        videosScreened: result.videosScreened,
+        status: 'completed',
+        duration
+      });
+      
+      return {
+        success: true,
+        videosAdded: result.videosAdded,
+        quotaUsed,
+        currentCount: currentCount + result.videosAdded
+      };
+      
+    } catch (error) {
+      console.error('❌ Curation failed:', error);
+      
+      // Log failed run
+      await this.logCurationRun({
+        status: 'failed',
+        errorMessage: error.message
+      });
+      
+      throw error;
+    }
+  }
+  
+  async getTodayQuotaUsage(): Promise<number> {
+    const result = await db.query.curationRuns.findMany({
+      where: eq(curationRuns.runDate, new Date().toISOString().split('T')[0]),
+      columns: { youtubeApiCalls: true }
+    });
+    
+    return result.reduce((sum, run) => sum + (run.youtubeApiCalls || 0), 0);
+  }
+  
+  async getVideoCount(): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(videos);
+    return Number(result[0].count);
+  }
+  
+  async disableAggressiveMode() {
+    // Update config to mark target reached
+    await db.update(curationConfig)
+      .set({ 
+        value: 'target_reached',
+        updatedAt: new Date()
+      })
+      .where(eq(curationConfig.key, 'curation_status'));
+    
+    console.log('🎉 Aggressive mode disabled - target reached!');
+  }
+  
+  async logCurationRun(data: any) {
+    await db.insert(curationRuns).values({
+      runDate: new Date().toISOString().split('T')[0],
+      startedAt: new Date(),
+      completedAt: new Date(),
+      ...data
+    });
+  }
+}
+
+export const ContinuousCurationService = new ContinuousCurationService();
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: UPDATE CURATION CONFIG FOR AGGRESSIVE MODE
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+-- Set aggressive mode configuration
+UPDATE curation_config SET value = 'true' WHERE key = 'curation_enabled';
+UPDATE curation_config SET value = 'aggressive' WHERE key = 'curation_mode';
+UPDATE curation_config SET value = '10000' WHERE key = 'youtube_api_daily_limit';
+UPDATE curation_config SET value = '200' WHERE key = 'daily_video_target';
+UPDATE curation_config SET value = '120' WHERE key = 'run_frequency_minutes';
+
+-- Add aggressive mode tracking
+INSERT INTO curation_config (key, value, description)
+VALUES 
+  ('aggressive_mode_enabled', 'true', 'Running every 2 hours to max out quota'),
+  ('aggressive_mode_start_date', CURRENT_DATE::text, 'When aggressive mode started'),
+  ('target_video_count', '2000', 'Stop aggressive mode at this count')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: ADD REAL-TIME MONITORING
+═══════════════════════════════════════════════════════════════════════════════
+
+Create monitoring queries for tracking progress:
+
+```sql
+-- Real-time progress dashboard
+CREATE OR REPLACE VIEW aggressive_mode_dashboard AS
+SELECT 
+  -- Video progress
+  (SELECT COUNT(*) FROM videos) as current_videos,
+  2000 as target_videos,
+  2000 - (SELECT COUNT(*) FROM videos) as videos_remaining,
+  ROUND(((SELECT COUNT(*) FROM videos)::numeric / 2000 * 100), 1) as percent_complete,
+  
+  -- Today's activity
+  (SELECT COUNT(*) FROM curation_runs WHERE run_date = CURRENT_DATE) as runs_today,
+  (SELECT COALESCE(SUM(videos_added), 0) FROM curation_runs WHERE run_date = CURRENT_DATE) as videos_added_today,
+  
+  -- Quota status
+  (SELECT COALESCE(SUM(youtube_api_calls), 0) FROM curation_runs WHERE run_date = CURRENT_DATE) as quota_used_today,
+  10000 - (SELECT COALESCE(SUM(youtube_api_calls), 0) FROM curation_runs WHERE run_date = CURRENT_DATE) as quota_remaining,
+  ROUND(((SELECT COALESCE(SUM(youtube_api_calls), 0) FROM curation_runs WHERE run_date = CURRENT_DATE)::numeric / 10000 * 100), 1) as quota_percent,
+  
+  -- Projections
+  CASE 
+    WHEN (SELECT COALESCE(SUM(videos_added), 0) FROM curation_runs WHERE run_date = CURRENT_DATE) > 0 
+    THEN ROUND((2000 - (SELECT COUNT(*) FROM videos))::numeric / 
+         (SELECT COALESCE(SUM(videos_added), 0) FROM curation_runs WHERE run_date = CURRENT_DATE))
+    ELSE NULL
+  END as estimated_days_to_target;
+
+-- Query anytime for status
+SELECT * FROM aggressive_mode_dashboard;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 6: IMPLEMENT DIVERSIFIED SEARCH STRATEGY
+═══════════════════════════════════════════════════════════════════════════════
+
+To avoid duplicate results with 12 runs/day, rotate through diverse search terms:
+
+```typescript
+// server/services/continuousCuration.ts
+
+const AGGRESSIVE_SEARCH_TERMS = [
+  // Foundational positions (12 terms - one per 2-hour cycle)
+  'bjj guard tutorial advanced',
+  'bjj half guard techniques',
+  'bjj mount attacks',
+  'bjj back control system',
+  'bjj side control pressure',
+  'bjj closed guard attacks',
+  'bjj open guard concepts',
+  'bjj butterfly guard sweeps',
+  'bjj x guard entries',
+  'bjj spider guard attacks',
+  'bjj de la riva guard',
+  'bjj lasso guard system',
+  
+  // Submissions (12 terms)
+  'bjj armbar variations',
+  'bjj triangle choke setups',
+  'bjj rear naked choke',
+  'bjj guillotine techniques',
+  'bjj kimura variations',
+  'bjj darce choke',
+  'bjj leg lock system',
+  'bjj heel hook tutorial',
+  'bjj ankle lock techniques',
+  'bjj toe hold submission',
+  'bjj kneebar attacks',
+  'bjj calf slicer',
+  
+  // Passing (12 terms)
+  'bjj guard passing fundamentals',
+  'bjj knee slice pass',
+  'bjj pressure passing',
+  'bjj toreando pass',
+  'bjj leg drag passing',
+  'bjj stack pass',
+  'bjj over under pass',
+  'bjj x pass technique',
+  'bjj smash pass',
+  'bjj long step pass',
+  'bjj headquarters passing',
+  'bjj body lock passing',
+  
+  // Elite instructors (24 terms)
+  'gordon ryan passing system',
+  'gordon ryan guard retention',
+  'john danaher leg locks',
+  'john danaher guard passing',
+  'lachlan giles half guard',
+  'lachlan giles leg locks',
+  'craig jones leg locks',
+  'craig jones guard passing',
+  'bernardo faria pressure passing',
+  'bernardo faria deep half',
+  'marcelo garcia butterfly guard',
+  'marcelo garcia x guard',
+  'roger gracie closed guard',
+  'roger gracie mount',
+  'keenan cornelius lapel guard',
+  'keenan cornelius worm guard',
+  'buchecha guard passing',
+  'buchecha takedowns',
+  'miyao brothers berimbolo',
+  'mikey musumeci technical',
+  'caio terra technical',
+  'rafa mendes berimbolo',
+  'cobrinha guard passing',
+  'leandro lo guard passing',
+  
+  // Competition preparation
+  'bjj competition strategy',
+  'bjj takedown entries',
+  'bjj wrestling for bjj',
+  'bjj stand up game'
+];
+
+class ContinuousCurationService {
+  private searchTermIndex = 0;
+  
+  async selectNextSearchTerm(): Promise<string> {
+    // Rotate through all search terms
+    const term = AGGRESSIVE_SEARCH_TERMS[this.searchTermIndex];
+    this.searchTermIndex = (this.searchTermIndex + 1) % AGGRESSIVE_SEARCH_TERMS.length;
+    
+    console.log(`🔍 Search term ${this.searchTermIndex}/${AGGRESSIVE_SEARCH_TERMS.length}: "${term}"`);
+    
+    return term;
+  }
+  
+  async curate() {
+    const searchTerm = await this.selectNextSearchTerm();
+    
+    // Use the search term for YouTube query
+    // ... rest of curation logic
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 7: ADD AUTOMATIC ROLLBACK AT 2,000 VIDEOS
+═══════════════════════════════════════════════════════════════════════════════
+
+Ensure system automatically stops aggressive mode at target:
+
+```typescript
+// In runAggressiveCuration()
+const currentCount = await this.getVideoCount();
+
+if (currentCount >= 2000) {
+  console.log('🎉 🎉 🎉 TARGET REACHED: 2,000 VIDEOS! 🎉 🎉 🎉');
+  console.log(`Final count: ${currentCount} videos`);
+  
+  // Switch back to maintenance mode (2x daily)
+  await this.switchToMaintenanceMode();
+  
+  // Send notification
+  await this.notifyTargetReached(currentCount);
+  
+  return { success: true, targetReached: true, currentCount };
+}
+
+async switchToMaintenanceMode() {
+  // Update config
+  await db.update(curationConfig)
+    .set({ value: 'maintenance' })
+    .where(eq(curationConfig.key, 'curation_mode'));
+  
+  console.log('🔄 Switched to maintenance mode: 2x daily curation');
+  
+  // Aggressive cron will check this and skip runs
+  // while 2x daily cron (6 AM, 6 PM) continues
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 8: RESTART SERVER TO ACTIVATE AGGRESSIVE MODE
+═══════════════════════════════════════════════════════════════════════════════
+
+After all changes:
+
+1. Commit changes
+1. Deploy to Replit
+1. Verify in logs:
+   
+   ```
+   🚀 AGGRESSIVE CURATION ACTIVE: Every 2 hours (12x daily) until 2,000 videos
+   📊 Next runs: 12 AM, 2 AM, 4 AM, 6 AM, 8 AM, 10 AM, 12 PM, 2 PM, 4 PM, 6 PM, 8 PM, 10 PM PT
+   ```
+1. Monitor first 6 hours (3 runs)
+1. Check dashboard:
+   
+   ```sql
+   SELECT * FROM aggressive_mode_dashboard;
+   ```
+
+═══════════════════════════════════════════════════════════════════════════════
+EXPECTED RESULTS
+═══════════════════════════════════════════════════════════════════════════════
+
+TIMELINE PROJECTION:
+
+Day 1: 355 + 100 = 455 videos
+Day 3: 655 videos
+Day 7: 1,055 videos (halfway!)
+Day 10: 1,355 videos
+Day 14: 1,655 videos
+Day 17: 2,000+ videos ✅
+
+TARGET DATE: November 19, 2025
+
+DAILY METRICS:
+• 12 runs per day (every 2 hours)
+• ~800 units per run
+• ~9,600 units/day (96% of quota)
+• ~100 videos/day average
+• ~30% acceptance rate
+
+═══════════════════════════════════════════════════════════════════════════════
+MONITORING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+Check these metrics daily:
+
+□ ✅ Runs completing successfully (12/day)
+□ ✅ Quota usage tracking (should be 90-96%)
+□ ✅ Videos being added (~100/day)
+□ ✅ No rate limiting errors
+□ ✅ Search term rotation working (diverse results)
+□ ✅ Progress toward 2,000
+
+Query for daily check:
+
+```sql
+SELECT * FROM aggressive_mode_dashboard;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL VALIDATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Before confirming aggressive mode is active:
+
+□ ✅ API tracking columns added
+□ ✅ Cron job set to every 2 hours
+□ ✅ Quota management implemented
+□ ✅ Auto-stop at 2,000 videos
+□ ✅ Search term rotation configured
+□ ✅ Monitoring dashboard created
+□ ✅ Server restarted
+□ ✅ First run completed successfully
+
+═══════════════════════════════════════════════════════════════════════════════
+
+BEGIN MAXIMUM AGGRESSIVE MODE IMPLEMENTATION NOW.
+
+This is full throttle. Every 2 hours. Until 2,000 videos.
+
+LET’S FUCKING GO. 🚀🔥
+
+```
+---
+
+## **WHAT HAPPENS NEXT:**
+```
+
+🔥 AGGRESSIVE MODE TIMELINE:
+
+NOW: Deploy changes, restart server
++2 hours: First aggressive run (should see ~8 videos added)
++24 hours: ~100 videos added (total: ~455 videos)
++7 days: ~700 videos added (total: ~1,055 videos)
++17 days: TARGET HIT - 2,000 videos! 🎉
+
+November 19: FULL LIBRARY READY FOR LAUNCH
+
+```
+---
+
+## **YOU'LL SEE IN LOGS:**
+```
+
+🚀 AGGRESSIVE CURATION ACTIVE: Every 2 hours (12x daily) until 2,000 videos
+📊 Next runs: 12 AM, 2 AM, 4 AM, 6 AM, 8 AM, 10 AM, 12 PM, 2 PM, 4 PM, 6 PM, 8 PM, 10 PM PT
+
+🚀 AGGRESSIVE MODE: Running curation 1/12 (0:00)
+🔍 Search term 1/72: “bjj guard tutorial advanced”
+✅ Available quota: 9,800 units (0 used today)
+✅ Curation complete in 45s
+📹 Videos: 8 added, 26 screened
+🔌 API: 820 units used
+📊 Progress: 363 / 2,000 videos (18%)
+
+```
+---
+
+**PASTE THE MEGA-PROMPT ABOVE INTO REPLIT AGENT NOW.**
+
+**LET'S MAX OUT THAT QUOTA AND HIT 2K BY NOVEMBER 19.** 🚀
+
+**THIS IS WHAT "EXCELLENCE IS OUR PILLAR" LOOKS LIKE.** 💪🔥​​​​​​​​​​​​​​​​
+```

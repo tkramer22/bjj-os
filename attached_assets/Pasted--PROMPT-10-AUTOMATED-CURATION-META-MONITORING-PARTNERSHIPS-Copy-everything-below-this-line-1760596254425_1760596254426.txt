@@ -1,0 +1,793 @@
+# PROMPT 10: AUTOMATED CURATION + META MONITORING + PARTNERSHIPS 🚀
+
+Copy everything below this line:
+
+-----
+
+```markdown
+# PROMPT 10: AUTOMATED CURATION SYSTEM + META MONITORING + INSTRUCTOR PARTNERSHIPS
+
+Build a complete automated video curation system with meta monitoring and instructor partnership management. This is a large build with 8 sections. Build all sections sequentially without waiting for confirmation between sections. Only pause if a critical error occurs that prevents continuation.
+
+After each section, mark "✓ Section X complete" in console and continue immediately to next section.
+
+Total estimated build time: 3-4 hours
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 1: DATABASE SCHEMA (Build First - 20 min)
+
+Create the following new tables:
+
+### 1.1 Instructor Credibility Table
+
+```sql
+CREATE TABLE IF NOT EXISTS instructor_credibility (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  tier INTEGER NOT NULL, -- 1, 2, or 3
+  quality_threshold DECIMAL NOT NULL, -- 7.0, 7.5, or 8.0
+  
+  -- Credentials
+  competition_record TEXT,
+  belt_rank TEXT DEFAULT 'Black Belt',
+  academy_affiliation TEXT,
+  
+  -- Specialties
+  specialties TEXT[], -- ["pressure passing", "leg locks"]
+  best_for_belt_level TEXT[], -- ["white", "blue", "purple", "brown", "black"]
+  
+  -- Teaching style
+  teaching_language TEXT DEFAULT 'english', -- "english", "portuguese", "both"
+  instruction_style TEXT, -- "systematic", "conceptual", "technical_detail"
+  
+  -- Analytics
+  videos_in_library INTEGER DEFAULT 0,
+  avg_helpful_ratio DECIMAL,
+  total_recommendations INTEGER DEFAULT 0,
+  
+  -- Notes
+  notes TEXT,
+  is_user_instructor BOOLEAN DEFAULT false,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 1.2 Curation Search Queue Table
+
+```sql
+CREATE TABLE IF NOT EXISTS curation_search_queue (
+  id SERIAL PRIMARY KEY,
+  
+  -- Basic info
+  search_query TEXT NOT NULL,
+  category TEXT, -- "submissions", "passing", "guards", etc.
+  priority INTEGER DEFAULT 5, -- 1-10 (10 = highest)
+  
+  -- Source tracking
+  search_type TEXT DEFAULT 'pre_written', -- "pre_written", "ai_generated", "manual"
+  generated_reason TEXT, -- "user_gap", "youtube_trend", "coverage_gap", "week_1_plan"
+  generated_by TEXT DEFAULT 'system',
+  
+  -- Targeting
+  instructor_focus TEXT, -- "JT Torres", "Danaher", null
+  belt_level_target TEXT, -- "white/blue", "purple+", "all"
+  technique_focus TEXT,
+  
+  -- Execution tracking
+  executed BOOLEAN DEFAULT false,
+  executed_at TIMESTAMP,
+  videos_found INTEGER DEFAULT 0,
+  videos_added INTEGER DEFAULT 0,
+  acceptance_rate DECIMAL,
+  
+  -- Meta
+  week_number INTEGER, -- 1, 2, 3...
+  day_number INTEGER, -- 1-7 (for Week 1 structure)
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 1.3 Curation Runs Table
+
+```sql
+CREATE TABLE IF NOT EXISTS curation_runs (
+  id SERIAL PRIMARY KEY,
+  run_date TIMESTAMP DEFAULT NOW(),
+  run_type TEXT DEFAULT 'scheduled', -- "scheduled", "manual", "test"
+  
+  search_category TEXT, -- "Day 1: JT Torres + Meta", "Smart Searches", etc.
+  
+  searches_planned INTEGER,
+  searches_completed INTEGER DEFAULT 0,
+  searches_failed INTEGER DEFAULT 0,
+  
+  videos_analyzed INTEGER DEFAULT 0,
+  videos_added INTEGER DEFAULT 0,
+  videos_rejected INTEGER DEFAULT 0,
+  
+  acceptance_rate DECIMAL,
+  
+  status TEXT DEFAULT 'running', -- "running", "completed", "failed", "paused"
+  error_message TEXT,
+  
+  started_at TIMESTAMP DEFAULT NOW(),
+  completed_at TIMESTAMP
+);
+```
+
+### 1.4 Search Queries Log Table
+
+```sql
+CREATE TABLE IF NOT EXISTS search_queries_log (
+  id SERIAL PRIMARY KEY,
+  run_id INTEGER REFERENCES curation_runs(id),
+  search_queue_id INTEGER REFERENCES curation_search_queue(id),
+  
+  query_text TEXT NOT NULL,
+  results_found INTEGER DEFAULT 0,
+  videos_analyzed INTEGER DEFAULT 0,
+  videos_added INTEGER DEFAULT 0,
+  videos_rejected INTEGER DEFAULT 0,
+  
+  acceptance_rate DECIMAL,
+  error_message TEXT,
+  
+  executed_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 1.5 User Technique Requests Table
+
+```sql
+CREATE TABLE IF NOT EXISTS user_technique_requests (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  technique_mentioned TEXT NOT NULL,
+  request_context TEXT, -- Their actual question
+  
+  -- Pattern detection
+  request_type TEXT, -- "how_to_do", "how_to_defend", "drilling", "general"
+  belt_level TEXT,
+  gi_preference TEXT,
+  
+  -- For gap detection
+  videos_available_count INTEGER DEFAULT 0,
+  was_gap BOOLEAN DEFAULT false, -- Library had <5 videos
+  
+  requested_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 1.6 Technique Meta Status Table
+
+```sql
+CREATE TABLE IF NOT EXISTS technique_meta_status (
+  id SERIAL PRIMARY KEY,
+  technique_name TEXT UNIQUE NOT NULL,
+  technique_category TEXT, -- "submissions", "guards", "passing", etc.
+  
+  -- Trend signals
+  user_request_count INTEGER DEFAULT 0, -- Last 7 days
+  user_request_trend TEXT, -- "rising", "hot", "cooling", "stable"
+  
+  youtube_search_volume INTEGER DEFAULT 0,
+  youtube_trend_score DECIMAL DEFAULT 0,
+  youtube_week_over_week_change DECIMAL DEFAULT 0,
+  
+  competition_win_count INTEGER DEFAULT 0, -- If tracked
+  competition_trend_score DECIMAL DEFAULT 0,
+  
+  -- Combined meta score
+  overall_meta_score DECIMAL DEFAULT 0, -- Weighted average
+  meta_status TEXT DEFAULT 'stable', -- "rising", "hot", "cooling", "stable"
+  
+  -- Library coverage
+  videos_in_library INTEGER DEFAULT 0,
+  highest_quality_video_score DECIMAL,
+  coverage_status TEXT DEFAULT 'unknown', -- "excellent", "good", "adequate", "poor", "none"
+  
+  -- Auto-actions
+  needs_curation BOOLEAN DEFAULT false,
+  curation_priority INTEGER DEFAULT 5, -- 1-10
+  smart_searches_generated INTEGER DEFAULT 0,
+  
+  last_updated TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 1.7 Featured Instructors Table
+
+```sql
+CREATE TABLE IF NOT EXISTS featured_instructors (
+  id SERIAL PRIMARY KEY,
+  instructor_id INTEGER REFERENCES instructor_credibility(id),
+  
+  -- Feature settings
+  feature_level TEXT NOT NULL, -- 'primary', 'secondary', 'spotlight'
+  search_priority_percentage INTEGER NOT NULL, -- 20, 10, 5
+  recommendation_boost_percentage INTEGER NOT NULL, -- 50, 30, 15
+  
+  -- Display settings
+  show_badge BOOLEAN DEFAULT true,
+  show_name_callout BOOLEAN DEFAULT true,
+  custom_callout_text TEXT, -- "Your instructor", "Elite competitor", etc.
+  
+  -- Duration
+  start_date DATE DEFAULT NOW(),
+  end_date DATE, -- NULL = permanent
+  is_active BOOLEAN DEFAULT true,
+  
+  -- Partnership details
+  partnership_type TEXT, -- 'co_founder', 'promotional', 'standard'
+  partnership_agreement TEXT,
+  
+  -- Their commitment
+  social_post_completed BOOLEAN DEFAULT false,
+  social_post_date DATE,
+  link_in_bio_until DATE,
+  
+  -- Tracking
+  total_recommendations INTEGER DEFAULT 0,
+  total_video_views INTEGER DEFAULT 0,
+  monthly_recommendation_count INTEGER DEFAULT 0,
+  
+  -- Notes
+  partnership_notes TEXT,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 1.8 Curation Settings Table
+
+```sql
+CREATE TABLE IF NOT EXISTS curation_settings (
+  id SERIAL PRIMARY KEY,
+  setting_name TEXT UNIQUE NOT NULL,
+  setting_value TEXT NOT NULL,
+  setting_type TEXT, -- "number", "boolean", "json", "text"
+  description TEXT,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 1.9 Update ai_video_knowledge table
+
+```sql
+-- Add new columns to existing table
+ALTER TABLE ai_video_knowledge 
+ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'tier_2',
+ADD COLUMN IF NOT EXISTS curation_run_id INTEGER REFERENCES curation_runs(id),
+ADD COLUMN IF NOT EXISTS auto_published BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS featured_instructor_id INTEGER REFERENCES featured_instructors(id);
+```
+
+✓ CHECKPOINT 1: Database schema created. Test by running:
+
+```sql
+SELECT COUNT(*) FROM instructor_credibility;
+SELECT COUNT(*) FROM curation_search_queue;
+SELECT COUNT(*) FROM featured_instructors;
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 2: POPULATE INSTRUCTOR DATABASE (20 min)
+
+Insert 110+ instructors with their tiers and quality thresholds.
+
+### 2.1 Tier 1 Instructors (7.0 quality threshold)
+
+```sql
+INSERT INTO instructor_credibility (name, tier, quality_threshold, competition_record, specialties, notes, is_user_instructor) VALUES
+
+-- IBJJF Legends
+('JT Torres', 1, 7.0, '2x Pan Am Champion, IBJJF Black Belt Competitor', ARRAY['guard passing', 'pressure game', 'spider guard', 'competition strategy'], 'User''s instructor - Primary featured', true),
+('Roger Gracie', 1, 7.0, 'Greatest gi competitor ever, 10x World Champion', ARRAY['fundamentals', 'mount', 'closed guard', 'basic submissions'], 'Technical perfection', false),
+('Marcelo Garcia', 1, 7.0, '5x ADCC Champion, 4x World Champion', ARRAY['guillotine', 'x-guard', 'butterfly guard', 'back attacks'], 'Technical genius', false),
+('Bernardo Faria', 1, 7.0, '5x World Champion', ARRAY['pressure passing', 'deep half guard', 'over-under pass'], 'Pressure pass king', false),
+('Rafa Mendes', 1, 7.0, '5x World Champion', ARRAY['berimbolo', 'de la riva', 'technical movement'], 'Berimbolo pioneer', false),
+('Gui Mendes', 1, 7.0, '4x World Champion', ARRAY['technical precision', 'fundamentals', 'competition prep'], 'Technical perfectionist', false),
+('Cobrinha', 1, 7.0, '5x World Champion (Rubens Charles)', ARRAY['spider guard', 'pressure', 'fundamentals'], 'Legendary competitor', false),
+('Caio Terra', 1, 7.0, '12x World Champion (all belt levels)', ARRAY['technical details', 'fundamentals', 'small person techniques'], 'Detail-oriented', false),
+('Romulo Barral', 1, 7.0, '4x World Champion', ARRAY['spider guard', 'sweeps', 'back takes'], 'Technical excellence', false),
+('Leandro Lo', 1, 7.0, '8x World Champion', ARRAY['passing', 'modern concepts', 'de la riva passing'], 'Passing specialist', false),
+('Lucas Lepri', 1, 7.0, '9x World Champion', ARRAY['guard', 'pressure', 'competition strategy'], 'Ultra-technical', false),
+('Felipe Pena', 1, 7.0, '4x Absolute World Champion', ARRAY['guard', 'submissions', 'pressure'], 'Absolute champion', false),
+('Rodolfo Vieira', 1, 7.0, '3x Absolute World Champion', ARRAY['pressure', 'passing', 'mount'], 'Absolute dominance', false),
+('Marcus Buchecha', 1, 7.0, '13x World Champion', ARRAY['pressure', 'passing', 'mount', 'submissions'], 'GOAT contender', false),
+
+-- ADCC Champions & No-Gi Legends  
+('Gordon Ryan', 1, 7.0, 'Greatest no-gi grappler ever, 3x ADCC Champion', ARRAY['no-gi', 'leg locks', 'passing', 'back attacks'], 'No-gi GOAT', false),
+('John Danaher', 1, 7.0, 'Legendary coach, systems builder', ARRAY['leg locks', 'systematic instruction', 'back attacks', 'technical theory'], 'Systematic approach', false),
+('Garry Tonon', 1, 7.0, 'ADCC Champion', ARRAY['leg locks', 'no-gi', 'guillotine'], 'Leg lock wizard', false),
+('Craig Jones', 1, 7.0, 'ADCC Silver Medalist', ARRAY['leg locks', 'no-gi', 'entertaining instruction'], 'Technical + entertaining', false),
+('Lachlan Giles', 1, 7.0, 'ADCC Absolute Bronze Medalist', ARRAY['leg locks', 'systematic instruction', 'half guard'], 'Incredible teacher', false),
+('Nicky Ryan', 1, 7.0, 'Prodigy, DDS member', ARRAY['leg locks', 'no-gi', 'systems'], 'Systems approach', false),
+('Oliver Taza', 1, 7.0, 'ADCC medalist, rising star', ARRAY['leg locks', 'no-gi', 'clear instruction'], 'Clear instruction', false),
+('Ethan Crelinsten', 1, 7.0, 'ADCC medalist', ARRAY['pressure', 'no-gi', 'control'], 'Pressure specialist', false),
+
+-- Legendary Instructors
+('Ryan Hall', 1, 7.0, '50/50 guard innovator', ARRAY['inverted guard', '50/50', 'theory', 'concepts'], 'Brilliant theorist', false),
+('Keenan Cornelius', 1, 7.0, 'Lapel guard systems creator', ARRAY['lapel guards', 'worm guard', 'gi specialist'], 'Lapel guard innovator', false),
+('Jon Thomas', 1, 7.0, 'Clear fundamental instruction', ARRAY['fundamentals', 'clear teaching', 'systematic'], 'Fundamental focus', false),
+('Priit Mihkelson', 1, 7.0, 'Structural BJJ creator', ARRAY['structural approach', 'defense', 'fundamentals'], 'Defensive genius', false),
+('Henry Akins', 1, 7.0, 'Hidden jiu-jitsu system', ARRAY['fundamentals', 'invisible details', 'Rickson lineage'], 'Hidden techniques', false),
+('Rob Biernacki', 1, 7.0, 'Biomechanics expert', ARRAY['technical precision', 'biomechanics', 'teaching'], 'Biomechanics focus', false),
+('Kit Dale', 1, 7.0, 'Movement-based approach', ARRAY['movement', 'concepts', 'creativity'], 'Movement approach', false),
+('Giancarlo Bodoni', 1, 7.0, 'Technical details specialist', ARRAY['technical details', 'clear teaching'], 'Detail-oriented', false),
+
+-- Modern Competitors
+('Mikey Musumeci', 1, 7.0, 'Multiple World Champion, technical innovator', ARRAY['berimbolo', 'technical innovation', 'gi mastery'], 'Technical innovator', false),
+('Tye Ruotolo', 1, 7.0, 'Modern no-gi phenom', ARRAY['modern no-gi', 'explosive style', 'creativity'], 'Modern explosiveness', false),
+('Kade Ruotolo', 1, 7.0, 'Modern no-gi phenom', ARRAY['modern no-gi', 'technical creativity', 'submissions'], 'Technical creativity', false),
+('Nicholas Meregali', 1, 7.0, 'Top game specialist', ARRAY['top game', 'pressure', 'mount'], 'Top control specialist', false),
+('Mica Galvao', 1, 7.0, 'Young phenom', ARRAY['all-around game', 'modern techniques', 'competition'], 'Young talent', false),
+
+-- Women's Elite
+('Ffion Davies', 1, 7.0, 'Multiple ADCC/IBJJF Champion', ARRAY['no-gi', 'leg locks', 'technical excellence'], 'Women''s elite', false),
+('Beatriz Mesquita', 1, 7.0, '8x World Champion', ARRAY['guard', 'sweeps', 'technical skill'], 'Women''s champion', false),
+('Mackenzie Dern', 1, 7.0, 'World Champion, ADCC medalist', ARRAY['submissions', 'guard', 'technical skill'], 'Submission specialist', false),
+('Bianca Basilio', 1, 7.0, 'Absolute World Champion', ARRAY['pressure', 'mount', 'submissions'], 'Absolute dominance', false),
+('Gabrieli Pessanha', 1, 7.0, 'Multiple World Champion', ARRAY['guard', 'sweeps', 'technical precision'], 'Technical excellence', false),
+
+-- Portuguese Legends
+('Rickson Gracie', 1, 7.0, 'Legend, undefeated', ARRAY['fundamentals', 'invisible jiu-jitsu', 'pressure'], 'Legendary fundamentals', false),
+('Carlos Gracie Jr', 1, 7.0, 'Gracie Barra founder', ARRAY['fundamentals', 'teaching methodology'], 'GB founder', false),
+('Royler Gracie', 1, 7.0, 'Multiple World Champion', ARRAY['fundamentals', 'technical precision'], 'Technical legend', false),
+('Saulo Ribeiro', 1, 7.0, 'Jiu-Jitsu University author, 6x World Champion', ARRAY['fundamentals', 'systematic teaching'], 'Systematic approach', false),
+('Xande Ribeiro', 1, 7.0, '8x World Champion', ARRAY['fundamentals', 'technical precision', 'competition'], 'Technical mastery', false),
+('Andre Galvao', 1, 7.0, 'ADCC legend, multiple champion', ARRAY['no-gi', 'wrestling', 'competition'], 'Competitor & teacher', false),
+('Leonardo Vieira', 1, 7.0, 'Checkmat founder', ARRAY['fundamentals', 'competition', 'teaching'], 'Checkmat system', false),
+('Lucas Leite', 1, 7.0, 'Half guard specialist', ARRAY['half guard', 'coyote half', 'sweeps'], 'Half guard master', false),
+('Murilo Santana', 1, 7.0, 'Technical innovator', ARRAY['innovation', 'technical details'], 'Innovative approach', false),
+('Langhi Brothers', 1, 7.0, 'Lapel guard specialists', ARRAY['lapel guards', 'technical precision'], 'Lapel specialists', false),
+
+-- Judo Crossover
+('Travis Stevens', 1, 7.0, 'Olympics silver, BJJ black belt', ARRAY['judo', 'takedowns', 'throws'], 'Judo for BJJ', false),
+('Jimmy Pedro', 1, 7.0, 'Olympics bronze', ARRAY['judo', 'takedowns', 'gripping'], 'Judo fundamentals', false),
+('Neil Adams', 1, 7.0, 'Olympics gold', ARRAY['judo', 'throws', 'gripping'], 'Judo mastery', false),
+('Shintaro Higashi', 1, 7.0, 'Clear judo instruction', ARRAY['judo', 'takedowns', 'clear teaching'], 'Clear judo teaching', false)
+
+ON CONFLICT (name) DO NOTHING;
+```
+
+### 2.2 Tier 2 Instructors (7.5 quality threshold)
+
+```sql
+INSERT INTO instructor_credibility (name, tier, quality_threshold, specialties, notes) VALUES
+
+-- YouTube Instructors
+('Chewy', 2, 7.5, ARRAY['fundamentals', 'approachable instruction'], 'Chewjitsu - 500K+ subscribers'),
+('Stephan Kesting', 2, 7.5, ARRAY['fundamentals', 'clear teaching'], 'Grapplearts - veteran instructor'),
+('Matt Arroyo', 2, 7.5, ARRAY['technical detail', 'budo videos'], 'Technical instructor'),
+('Knight Jiu Jitsu', 2, 7.5, ARRAY['fundamentals', 'clear explanations'], 'Fundamentals-focused'),
+('Invisible Jiu Jitsu', 2, 7.5, ARRAY['body mechanics', 'unique approach'], 'Unique perspective'),
+('Submissions 101', 2, 7.5, ARRAY['tutorials', 'good production'], 'Clear tutorials'),
+('ZombieProofBJJ', 2, 7.5, ARRAY['self-defense', 'practical'], 'Self-defense focused'),
+
+-- Competitor-Instructors
+('Adam Wardzinski', 2, 7.5, ARRAY['butterfly guard', 'specialist'], 'Butterfly specialist'),
+('Neil Melanson', 2, 7.5, ARRAY['catch wrestling', 'submissions'], 'Catch wrestling for BJJ'),
+('Tom DeBlass', 2, 7.5, ARRAY['pressure', 'mental game'], 'Pressure + mindset'),
+('Bernardo Pitel', 2, 7.5, ARRAY['clear instruction', 'fundamentals'], 'Clear teaching'),
+('Josh Hinger', 2, 7.5, ARRAY['systematic', 'competition'], 'Systematic approach'),
+('Edwin Najmi', 2, 7.5, ARRAY['competition', 'mindset'], 'Competition mindset'),
+('Tanquinho', 2, 7.5, ARRAY['fundamentals', 'caio terra academy'], 'Fundamentals focused'),
+
+-- Academy Channels
+('Atos Jiu Jitsu', 2, 7.5, ARRAY['mendes bros content', 'high level'], 'Mendes Bros academy'),
+('Renzo Gracie Academy', 2, 7.5, ARRAY['fundamentals', 'renzo lineage'], 'Fundamental techniques'),
+('Tristar Gym', 2, 7.5, ARRAY['firas zahabi', 'mma approach'], 'MMA-focused BJJ'),
+('Alliance Jiu Jitsu', 2, 7.5, ARRAY['competition', 'high level'], 'Competition-tested'),
+('Gracie Barra', 2, 7.5, ARRAY['structured curriculum'], 'Structured content'),
+
+-- Specialized Instructors
+('Lenny Lovato Jr', 2, 7.5, ARRAY['mount specialist'], 'Mount mastery'),
+('Tarik Hopstock', 2, 7.5, ARRAY['leg locks', 'details'], 'Leg lock details'),
+('Miha Perhoc', 2, 7.5, ARRAY['systematic'], 'Systematic instruction'),
+('Ze Radiola', 2, 7.5, ARRAY['spider guard', 'technical'], 'Spider guard specialist'),
+('Robson Moura', 2, 7.5, ARRAY['fundamentals', 'teaching'], 'Fundamental teaching'),
+('Braulio Estima', 2, 7.5, ARRAY['technical', 'competition'], 'Technical excellence'),
+('Victor Estima', 2, 7.5, ARRAY['technical', 'details'], 'Detail-oriented'),
+
+-- Scientific/Academic
+('BJJ Mental Models', 2, 7.5, ARRAY['conceptual frameworks'], 'Conceptual approach'),
+('Chris Paines', 2, 7.5, ARRAY['systems thinking'], 'Systems approach'),
+('Steve Maxwell', 2, 7.5, ARRAY['conditioning', 'fundamentals'], 'Conditioning for BJJ')
+
+ON CONFLICT (name) DO NOTHING;
+```
+
+✓ CHECKPOINT 2: Instructors populated. Test by running:
+
+```sql
+SELECT name, tier, quality_threshold, is_user_instructor FROM instructor_credibility WHERE name = 'JT Torres';
+SELECT COUNT(*) as tier1_count FROM instructor_credibility WHERE tier = 1;
+SELECT COUNT(*) as tier2_count FROM instructor_credibility WHERE tier = 2;
+```
+
+Should show JT Torres marked as user’s instructor, ~70 Tier 1, ~30 Tier 2.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 3: POPULATE WEEK 1 SEARCH QUERIES (15 min)
+
+Insert 175 pre-written search queries for Week 1 (Day 1-7, 25 searches per day).
+
+### 3.1 Day 1: JT Torres Showcase + Current Meta (25 searches)
+
+```sql
+INSERT INTO curation_search_queue (search_query, category, priority, search_type, generated_reason, instructor_focus, belt_level_target, week_number, day_number) VALUES
+
+-- JT Torres Focus (8 searches)
+('JT Torres guard passing fundamentals', 'passing', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 1),
+('JT Torres pressure passing concepts', 'passing', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 1),
+('JT Torres spider guard control', 'guards', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 1),
+('JT Torres competition strategy', 'competition', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 1),
+('JT Torres mount control details', 'positions', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'all', 1, 1),
+('JT Torres side control transitions', 'positions', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 1),
+('JT Torres back attack system', 'submissions', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 1),
+('JT Torres closed guard attacks', 'guards', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'all', 1, 1),
+
+-- Current Meta (17 searches)
+('bodylock passing system Gordon Ryan', 'passing', 9, 'pre_written', 'week_1_plan', 'Gordon Ryan', 'purple+', 1, 1),
+('defending bodylock pass Lachlan Giles', 'passing', 9, 'pre_written', 'week_1_plan', 'Lachlan Giles', 'purple+', 1, 1),
+('bodylock passing fundamentals', 'passing', 9, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('saddle position entries', 'leg locks', 9, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('inside sankaku leg locks', 'leg locks', 9, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('false reap position details', 'leg locks', 9, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('50/50 guard modern concepts', 'guards', 9, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('k-guard system fundamentals', 'guards', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('reverse de la riva passing', 'passing', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('modern guard retention concepts', 'guards', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('headquarters position passing', 'passing', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('leg drag passing details', 'passing', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('single leg X guard sweeps', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('x-guard to single leg X transition', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('deep half guard modern system', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('quarter guard bottom concepts', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1),
+('octopus guard fundamentals', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 1)
+
+ON CONFLICT DO NOTHING;
+```
+
+### 3.2 Day 2: Advanced Submissions (25 searches)
+
+```sql
+INSERT INTO curation_search_queue (search_query, category, priority, search_type, generated_reason, instructor_focus, belt_level_target, week_number, day_number) VALUES
+
+-- JT Torres (4 searches)
+('JT Torres submission chains', 'submissions', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 2),
+('JT Torres armbar details', 'submissions', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 2),
+('JT Torres triangle setup', 'submissions', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 2),
+('JT Torres choke variations', 'submissions', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 2),
+
+-- Elite Submissions (21 searches)
+('Danaher triangle system', 'submissions', 9, 'pre_written', 'week_1_plan', 'John Danaher', 'purple+', 1, 2),
+('Danaher rear naked choke details', 'submissions', 9, 'pre_written', 'week_1_plan', 'John Danaher', 'purple+', 1, 2),
+('Gordon Ryan armbar from mount', 'submissions', 9, 'pre_written', 'week_1_plan', 'Gordon Ryan', 'purple+', 1, 2),
+('Gordon Ryan triangle variations', 'submissions', 9, 'pre_written', 'week_1_plan', 'Gordon Ryan', 'purple+', 1, 2),
+('Lachlan Giles submission chains', 'submissions', 9, 'pre_written', 'week_1_plan', 'Lachlan Giles', 'purple+', 1, 2),
+('Marcelo Garcia guillotine system', 'submissions', 9, 'pre_written', 'week_1_plan', 'Marcelo Garcia', 'purple+', 1, 2),
+('Marcelo Garcia arm-in guillotine', 'submissions', 9, 'pre_written', 'week_1_plan', 'Marcelo Garcia', 'purple+', 1, 2),
+('Roger Gracie cross collar choke', 'submissions', 9, 'pre_written', 'week_1_plan', 'Roger Gracie', 'purple+', 1, 2),
+('triangle choke common mistakes', 'submissions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('armbar from guard details', 'submissions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('kimura from closed guard', 'submissions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('omoplata finish details', 'submissions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('bow and arrow choke details', 'submissions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('darce choke fundamentals', 'submissions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('anaconda choke setup', 'submissions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('ezekiel choke from mount', 'submissions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('baseball choke variations', 'submissions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('loop choke from standing', 'submissions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('wrist lock fundamentals', 'submissions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('brabo choke details', 'submissions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2),
+('mounted triangle details', 'submissions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 2)
+
+ON CONFLICT DO NOTHING;
+```
+
+### 3.3 Day 3: Guard Systems Advanced (25 searches)
+
+```sql
+INSERT INTO curation_search_queue (search_query, category, priority, search_type, generated_reason, instructor_focus, belt_level_target, week_number, day_number) VALUES
+
+-- JT Torres (4 searches)
+('JT Torres spider guard system', 'guards', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 3),
+('JT Torres de la riva guard', 'guards', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 3),
+('JT Torres guard retention', 'guards', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 3),
+('JT Torres half guard concepts', 'guards', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 3),
+
+-- Modern Guards (21 searches)
+('Rafa Mendes berimbolo system', 'guards', 9, 'pre_written', 'week_1_plan', 'Rafa Mendes', 'purple+', 1, 3),
+('Rafa Mendes de la riva guard', 'guards', 9, 'pre_written', 'week_1_plan', 'Rafa Mendes', 'purple+', 1, 3),
+('Gui Mendes spider guard details', 'guards', 9, 'pre_written', 'week_1_plan', 'Gui Mendes', 'purple+', 1, 3),
+('Keenan Cornelius worm guard', 'guards', 9, 'pre_written', 'week_1_plan', 'Keenan Cornelius', 'purple+', 1, 3),
+('Keenan Cornelius lapel guard system', 'guards', 9, 'pre_written', 'week_1_plan', 'Keenan Cornelius', 'purple+', 1, 3),
+('Mikey Musumeci berimbolo details', 'guards', 9, 'pre_written', 'week_1_plan', 'Mikey Musumeci', 'purple+', 1, 3),
+('Lachlan Giles half guard retention', 'guards', 9, 'pre_written', 'week_1_plan', 'Lachlan Giles', 'purple+', 1, 3),
+('Lucas Leite coyote half guard', 'guards', 9, 'pre_written', 'week_1_plan', 'Lucas Leite', 'purple+', 1, 3),
+('50/50 guard sweeps', 'guards', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 3),
+('reverse de la riva guard fundamentals', 'guards', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 3),
+('x-guard Marcelo Garcia', 'guards', 8, 'pre_written', 'week_1_plan', 'Marcelo Garcia', 'purple+', 1, 3),
+('butterfly guard Marcelo Garcia', 'guards', 8, 'pre_written', 'week_1_plan', 'Marcelo Garcia', 'purple+', 1, 3),
+('single leg X guard system', 'guards', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 3),
+('deep half guard sweeps', 'guards', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 3),
+('spider guard fundamentals', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 3),
+('lasso guard attacks', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 3),
+('collar sleeve guard system', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 3),
+('shin to shin guard', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 3),
+('quarter guard recovery', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 3),
+('z-guard concepts', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 3),
+('lockdown half guard', 'guards', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 3)
+
+ON CONFLICT DO NOTHING;
+```
+
+### 3.4 Day 4: Passing Systems Elite (25 searches)
+
+```sql
+INSERT INTO curation_search_queue (search_query, category, priority, search_type, generated_reason, instructor_focus, belt_level_target, week_number, day_number) VALUES
+
+-- JT Torres (4 searches)
+('JT Torres pressure passing system', 'passing', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 4),
+('JT Torres toreando pass', 'passing', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 4),
+('JT Torres knee slice details', 'passing', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 4),
+('JT Torres stack passing', 'passing', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 4),
+
+-- Elite Passing (21 searches)
+('Bernardo Faria pressure passing', 'passing', 9, 'pre_written', 'week_1_plan', 'Bernardo Faria', 'purple+', 1, 4),
+('Bernardo Faria over under pass', 'passing', 9, 'pre_written', 'week_1_plan', 'Bernardo Faria', 'purple+', 1, 4),
+('Leandro Lo passing system', 'passing', 9, 'pre_written', 'week_1_plan', 'Leandro Lo', 'purple+', 1, 4),
+('Leandro Lo de la riva pass', 'passing', 9, 'pre_written', 'week_1_plan', 'Leandro Lo', 'purple+', 1, 4),
+('Lucas Lepri guard passing', 'passing', 9, 'pre_written', 'week_1_plan', 'Lucas Lepri', 'purple+', 1, 4),
+('Buchecha pressure passing', 'passing', 9, 'pre_written', 'week_1_plan', 'Marcus Buchecha', 'purple+', 1, 4),
+('Rodolfo Vieira passing concepts', 'passing', 9, 'pre_written', 'week_1_plan', 'Rodolfo Vieira', 'purple+', 1, 4),
+('Roger Gracie passing fundamentals', 'passing', 9, 'pre_written', 'week_1_plan', 'Roger Gracie', 'purple+', 1, 4),
+('toreando pass fundamentals', 'passing', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('knee slice pass details', 'passing', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('x-pass guard passing', 'passing', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('leg drag passing system', 'passing', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('long step passing', 'passing', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('stack passing fundamentals', 'passing', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('smash passing concepts', 'passing', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('headquarters passing', 'passing', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('backstep passing de la riva', 'passing', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('cartwheel pass spider guard', 'passing', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('leg weave passing', 'passing', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('over under pass variations', 'passing', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4),
+('double under pass details', 'passing', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 4)
+
+ON CONFLICT DO NOTHING;
+```
+
+### 3.5 Day 5: No-Gi & Leg Locks (25 searches)
+
+```sql
+INSERT INTO curation_search_queue (search_query, category, priority, search_type, generated_reason, instructor_focus, belt_level_target, week_number, day_number) VALUES
+
+-- JT Torres (3 searches)
+('JT Torres no-gi concepts', 'no-gi', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 5),
+('JT Torres wrestling for BJJ', 'takedowns', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 5),
+('JT Torres no-gi passing', 'passing', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 5),
+
+-- No-Gi & Leg Locks (22 searches)
+('Gordon Ryan no-gi passing system', 'passing', 9, 'pre_written', 'week_1_plan', 'Gordon Ryan', 'purple+', 1, 5),
+('Gordon Ryan leg lock entries', 'leg locks', 9, 'pre_written', 'week_1_plan', 'Gordon Ryan', 'purple+', 1, 5),
+('Gordon Ryan saddle position', 'leg locks', 9, 'pre_written', 'week_1_plan', 'Gordon Ryan', 'purple+', 1, 5),
+('Craig Jones leg lock system', 'leg locks', 9, 'pre_written', 'week_1_plan', 'Craig Jones', 'purple+', 1, 5),
+('Craig Jones z-lock details', 'leg locks', 9, 'pre_written', 'week_1_plan', 'Craig Jones', 'purple+', 1, 5),
+('Lachlan Giles heel hook defense', 'leg locks', 9, 'pre_written', 'week_1_plan', 'Lachlan Giles', 'purple+', 1, 5),
+('Lachlan Giles leg lock system', 'leg locks', 9, 'pre_written', 'week_1_plan', 'Lachlan Giles', 'purple+', 1, 5),
+('Garry Tonon heel hook fundamentals', 'leg locks', 9, 'pre_written', 'week_1_plan', 'Garry Tonon', 'purple+', 1, 5),
+('Danaher leg lock system', 'leg locks', 9, 'pre_written', 'week_1_plan', 'John Danaher', 'purple+', 1, 5),
+('Danaher ashi garami fundamentals', 'leg locks', 9, 'pre_written', 'week_1_plan', 'John Danaher', 'purple+', 1, 5),
+('saddle position entries fundamentals', 'leg locks', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5),
+('straight ankle lock details', 'leg locks', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5),
+('toe hold fundamentals', 'leg locks', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5),
+('kneebar from top', 'leg locks', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5),
+('50/50 leg lock attacks', 'leg locks', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5),
+('front headlock system', 'no-gi', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5),
+('no-gi guard retention', 'no-gi', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5),
+('wrestling for BJJ fundamentals', 'takedowns', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5),
+('single leg takedown BJJ', 'takedowns', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5),
+('double leg takedown details', 'takedowns', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5),
+('ankle pick fundamentals', 'takedowns', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5),
+('arm drag to back take', 'takedowns', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 5)
+
+ON CONFLICT DO NOTHING;
+```
+
+### 3.6 Day 6: Back Attacks & Top Control (25 searches)
+
+```sql
+INSERT INTO curation_search_queue (search_query, category, priority, search_type, generated_reason, instructor_focus, belt_level_target, week_number, day_number) VALUES
+
+-- JT Torres (4 searches)
+('JT Torres back control maintenance', 'positions', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 6),
+('JT Torres mount attacks', 'positions', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 6),
+('JT Torres back take opportunities', 'positions', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 6),
+('JT Torres top control concepts', 'positions', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 6),
+
+-- Back & Top Control (21 searches)
+('Marcelo Garcia back control', 'positions', 9, 'pre_written', 'week_1_plan', 'Marcelo Garcia', 'purple+', 1, 6),
+('Marcelo Garcia back take system', 'positions', 9, 'pre_written', 'week_1_plan', 'Marcelo Garcia', 'purple+', 1, 6),
+('Danaher back attack system', 'positions', 9, 'pre_written', 'week_1_plan', 'John Danaher', 'purple+', 1, 6),
+('Danaher rear naked choke details', 'submissions', 9, 'pre_written', 'week_1_plan', 'John Danaher', 'purple+', 1, 6),
+('Roger Gracie mount mastery', 'positions', 9, 'pre_written', 'week_1_plan', 'Roger Gracie', 'purple+', 1, 6),
+('Roger Gracie mount maintenance', 'positions', 9, 'pre_written', 'week_1_plan', 'Roger Gracie', 'purple+', 1, 6),
+('Gordon Ryan back control no-gi', 'positions', 9, 'pre_written', 'week_1_plan', 'Gordon Ryan', 'purple+', 1, 6),
+('back control fundamentals', 'positions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('back take from turtle', 'positions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('rear naked choke details', 'submissions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('mount escapes prevention', 'positions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('mount attacks systematic', 'positions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('technical mount details', 'positions', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('s-mount position attacks', 'positions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('high mount control', 'positions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('back control hand fighting', 'positions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('seat belt grip details', 'positions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('body triangle back control', 'positions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('hooks back control maintenance', 'positions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('short choke variations', 'submissions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6),
+('bow and arrow from back', 'submissions', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 6)
+
+ON CONFLICT DO NOTHING;
+```
+
+### 3.7 Day 7: Competition + Portuguese (25 searches)
+
+```sql
+INSERT INTO curation_search_queue (search_query, category, priority, search_type, generated_reason, instructor_focus, belt_level_target, week_number, day_number) VALUES
+
+-- JT Torres (3 searches)
+('JT Torres competition preparation', 'competition', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 7),
+('JT Torres tournament strategy', 'competition', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 7),
+('JT Torres mental game', 'competition', 10, 'pre_written', 'week_1_plan', 'JT Torres', 'purple+', 1, 7),
+
+-- Competition Strategy (12 searches)
+('competition gameplan strategy', 'competition', 9, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+('IBJJF rules strategy', 'competition', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+('tournament preparation checklist', 'competition', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+('competition mindset mental game', 'competition', 8, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+('first tournament preparation', 'competition', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+('weight cutting for BJJ', 'competition', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+('competition warm up routine', 'competition', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+('dealing with competition nerves', 'competition', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+('post competition analysis', 'competition', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+('points vs submission strategy', 'competition', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+('stalling prevention competition', 'competition', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+('advantages IBJJF rules', 'competition', 7, 'pre_written', 'week_1_plan', NULL, 'purple+', 1, 7),
+
+-- Portuguese Content (10 searches)
+('Buchecha pressure game', 'positions', 8, 'pre_written', 'week_1_plan', 'Marcus Buchecha', 'purple+', 1, 7),
+('Langhi brothers lapel guard', 'guards', 8, 'pre_written', 'week_1_plan', 'Langhi Brothers', 'purple+', 1, 7),
+('Andre Galvao competition strategy', 'competition', 8, 'pre_written', 'week_1_plan', 'Andre Galvao', 'purple+', 1, 7),
+('Rafa Mendes movimento', 'guards', 8, 'pre_written', 'week_1_plan', 'Rafa Mendes', 'purple+', 1, 7),
+('Lucas Leite meia guarda', 'guards', 8, 'pre_written', 'week_1_plan', 'Lucas Leite', 'purple+', 1, 7),
+('Rodolfo Vieira finalização', 'submissions', 7, 'pre_written', 'week_1_plan', 'Rodolfo Vieira', 'purple+', 1, 7),
+('Murilo Santana técnicas', 'fundamentals', 7, 'pre_written', 'week_1_plan', 'Murilo Santana', 'purple+', 1, 7),
+('Saulo Ribeiro fundamentos', 'fundamentals', 7, 'pre_written', 'week_1_plan', 'Saulo Ribeiro', 'purple+', 1, 7),
+('Xande Ribeiro jiu jitsu', 'fundamentals', 7, 'pre_written', 'week_1_plan', 'Xande Ribeiro', 'purple+', 1, 7),
+('Leonardo Vieira checkmat', 'fundamentals', 7, 'pre_written', 'week_1_plan', 'Leonardo Vieira', 'purple+', 1, 7)
+
+ON CONFLICT DO NOTHING;
+```
+
+✓ CHECKPOINT 3: Search queries populated. Test by running:
+
+```sql
+SELECT COUNT(*) as total_searches FROM curation_search_queue WHERE week_number = 1;
+SELECT day_number, COUNT(*) as searches_per_day FROM curation_search_queue WHERE week_number = 1 GROUP BY day_number ORDER BY day_number;
+SELECT COUNT(*) as jt_torres_searches FROM curation_search_queue WHERE instructor_focus = 'JT Torres' AND week_number = 1;
+```
+
+Should show 175 total searches, 25 per day, ~30 JT Torres searches.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 4: FEATURED INSTRUCTORS SETUP (10 min)
+
+Set up default featured instructors: JT Torres (Primary), Gordon Ryan + Lachlan Giles (Secondary for testing).
+
+```sql
+-- Get instructor IDs first
+WITH instructor_ids AS (
+  SELECT id, name FROM instructor_credibility 
+  WHERE name IN ('JT Torres', 'Gordon Ryan', 'Lachlan Giles')
+)
+
+INSERT INTO featured_instructors (
+  instructor_id,
+  feature_level,
+  search_priority_percentage,
+  recommendation_boost_percentage,
+  show_badge,
+  show_name_callout,
+  custom_callout_text,
+  start_date,
+  end_date,
+  is_active,
+  partnership_type,
+  partnership_agreement,
+  partnership_notes
+)
+SELECT 
+  id,
+  CASE 
+    WHEN name = 'JT Torres' THEN 'primary'
+    ELSE 'secondary'
+  END,
+  CASE 
+    WHEN name = 'JT Torres' THEN 20
+    ELSE 10
+  END,
+  CASE 
+    WHEN name = 'JT Torres' THEN 50
+    ELSE 30
+  END,
+  true,
+  true,
+  CASE 
+    WHEN name = 'JT Torres' THEN 'Your instructor'
+    WHEN name = 'Gordon Ryan' THEN 'Elite no-gi competitor'
+    WHEN name = 'Lachlan Giles' THEN 'Systematic instruction specialist'
+  END,
+  CURRENT_DATE,
+  CASE 
+    WHEN name = 'JT Torres' THEN NULL  -- Permanent
+    ELSE CURRENT_DATE + INTERVAL '30 days'  -- 30-day test
+  END,
+  true,
+  CASE 
+    WHEN name = 'JT Torres' THEN 'co_founder'
+    ELSE 'promotional'
+  END,
+  CASE 
+    WHEN name = 'JT Torres' THEN 'Permanent featured status - user''s instructor'
+    ELSE '30-day promotional test - platform exposure for social mention'
+  END,
+  CASE 
+    WHEN name = 'JT Torres' THEN 'Primary partner - built into app foundation'
+    WHEN name = 'Gordon Ryan' THEN 'Testing featured system - best no-gi content'
+    WHEN name = 'Lachlan Giles' THEN 'Testing featured system - systematic teaching'
+  END
+FROM instructor_ids
+ON CONFLICT DO NOTHING;
+```
+
+✓ CHECKPOINT 4: Featured instructors set up. Test by running:
+
+```sql
+SELECT 
+  ic.name,
+  fi.feature_level,
+  fi.recommendation_boost_percentage,
+  fi.is_active,
+  fi.end_date
+FROM featured_instructors fi
+JOIN instructor_credibility ic ON fi.instructor_id = ic.id;
+```
+
+Should show JT Torres (primary, 50% boost, permanent), Gordon + Lachlan (secondary, 30% boost, 30 days).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 5: CURATION SETTINGS DEFAULTS (10 min)
+
+Populate default curation settings.
+
+```sql
+INSERT INTO curation_settings (setting_name, setting_value, setting_type, description) VALUES
+
+-- Curation speed settings
+('curation_mode', 'ultra_aggressive', 'text', 'Current curation mode: week_1, ultra_aggressive, aggressive, moderate, light, custom'),
+('runs_per_day', '4', 'number', 'Number​​​​​​​​​​​​​​​​
+```

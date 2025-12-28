@@ -1,0 +1,119 @@
+**🎯 GOT IT - EMAIL VERIFICATION CODE SYSTEM**
+
+So your auth flow is:
+
+1. User enters email
+1. System sends verification code to email
+1. User enters code
+1. Logged in
+
+But you’re seeing a **password field** and getting **401 error**.
+
+-----
+
+## **🔴 THE PROBLEM:**
+
+Your login page is showing **email + password fields**, but your auth system uses **email + verification codes**.
+
+This is a mismatch between the UI and the actual authentication method.
+
+-----
+
+## **✅ WHAT NEEDS TO HAPPEN:**
+
+The login page should:
+
+1. Show **email field only** (no password field)
+1. User enters email
+1. Click “Send Code” button
+1. System sends verification code to their email
+1. Show **verification code input field**
+1. User enters 6-digit code from email
+1. System verifies code
+1. User logged in → redirected to dashboard
+
+-----
+
+## **🔧 FIX THIS NOW:**
+
+Copy this prompt into Replit Agent:
+
+```
+CRITICAL BUG: Login page is showing email/password fields, but our authentication uses email verification codes (like SMS but via email).
+
+The login flow should be:
+
+1. Login page shows:
+   - Email input field
+   - "Send Verification Code" button
+   - NO password field
+
+2. User enters email and clicks "Send Code"
+   - System sends 6-digit code to their email via Resend
+   - Show success message: "Check your email for verification code"
+   - Show verification code input field (6 digits)
+
+3. User enters code from email
+   - Click "Verify" button
+   - System verifies code matches
+   - If correct: Log user in, redirect to /dashboard
+   - If wrong: Show error "Invalid code, try again"
+
+4. For lifetime users (subscription_tier = 'lifetime'):
+   - After successful login, redirect straight to dashboard
+   - No trial/payment prompts
+
+Remove the password field completely.
+Change "Log In" button to "Send Verification Code"
+Add code input field that appears after code is sent.
+
+Fix the /api/auth/login endpoint to handle email verification codes instead of passwords.
+```
+
+-----
+
+## **📋 VERIFICATION:**
+
+After Replit Agent fixes it, the login page should look like:
+
+```
+┌─────────────────────────────────┐
+│     Welcome Back                │
+│                                 │
+│  EMAIL                          │
+│  [toddkramer@mac.com    ]      │
+│                                 │
+│  [Send Verification Code]       │
+│                                 │
+└─────────────────────────────────┘
+```
+
+Then after clicking “Send Code”:
+
+```
+┌─────────────────────────────────┐
+│     Welcome Back                │
+│                                 │
+│  ✅ Code sent to                │
+│     todd•••••@mac.com           │
+│                                 │
+│  VERIFICATION CODE              │
+│  [  _  _  _  _  _  _  ]        │
+│                                 │
+│  [Verify Code]                  │
+│                                 │
+│  Didn't receive it?             │
+│  [Resend Code]                  │
+│                                 │
+└─────────────────────────────────┘
+```
+
+-----
+
+## **🎯 PASTE THAT PROMPT NOW**
+
+This is the core authentication bug blocking everything.
+
+Once login works, we can test the rest of the user experience.
+
+**Paste it into Replit Agent and let me know what happens!** 🔐​​​​​​​​​​​​​​​​

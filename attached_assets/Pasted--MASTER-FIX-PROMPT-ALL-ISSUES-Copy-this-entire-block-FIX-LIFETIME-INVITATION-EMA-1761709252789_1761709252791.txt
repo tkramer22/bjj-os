@@ -1,0 +1,658 @@
+# 🎯 MASTER FIX PROMPT - ALL ISSUES
+
+Copy this entire block:
+
+-----
+
+```
+FIX LIFETIME INVITATION EMAIL AND SIGNUP FLOW - COMPREHENSIVE UPDATE
+
+Multiple critical issues to fix:
+1. Email template has wrong content and missing button
+2. Signup asks for "Full Name" instead of "First Name"
+3. Username validation only shows after clicking (should be real-time)
+4. Onboarding question uses free text instead of multiple choice
+5. Error 403 "Device access revoked" on signup completion
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 1: EMAIL TEMPLATE - CORRECT CONTENT AND VISIBLE BUTTON
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND sendLifetimeInvitation function and REPLACE entire email HTML with:
+
+```javascript
+async function sendLifetimeInvitation(email, inviteToken, personalMessage) {
+  const magicLink = `https://bjjos.app/lifetime-signup?token=${inviteToken}`;
+  
+  const emailHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background: #f9f9f9;
+    }
+    .container {
+      max-width: 600px;
+      margin: 20px auto;
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      border: 1px solid #e0e0e0;
+    }
+    .logo h1 {
+      color: #000;
+      margin: 0 0 30px 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .cta-button {
+      display: inline-block;
+      background: #000 !important;
+      color: #ffffff !important;
+      text-decoration: none !important;
+      padding: 16px 32px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 24px 0;
+      text-align: center;
+    }
+    .button-container {
+      text-align: center;
+      margin: 30px 0;
+    }
+    .section {
+      margin: 24px 0;
+    }
+    .highlight {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 6px;
+      border-left: 4px solid #000;
+      margin: 24px 0;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+    }
+    a {
+      color: #000;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <h1>BJJ OS</h1>
+    </div>
+    
+    <p style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">
+      You have lifetime access to BJJ OS. Forever. No charge.
+    </p>
+    
+    <p>I'm genuinely grateful you're here early.</p>
+    
+    <p>Takes 45 seconds to create your account:</p>
+    
+    <div class="button-container">
+      <a href="${magicLink}" class="cta-button" style="background: #000 !important; color: #ffffff !important; text-decoration: none !important;">
+        Create your account
+      </a>
+    </div>
+    
+    <div class="section">
+      <p style="font-weight: 600; margin-bottom: 12px;">What BJJ OS does:</p>
+      
+      <p>Prof. OS is your training partner that never forgets. After each session, tell it what you worked on - it remembers everything, spots patterns in your game, and tells you what to work on next.</p>
+      
+      <p><strong>The more you use it, the smarter it gets about YOUR game.</strong></p>
+      
+      <p>It also scans YouTube daily for new instructionals from elite grapplers, curates a video library, and recommends techniques specific to what you're struggling with.</p>
+      
+      <p>This is your second brain for jiu-jitsu.</p>
+    </div>
+    
+    <div class="highlight">
+      <p style="font-weight: 600; margin-bottom: 12px;">Here's what I need from you:</p>
+      
+      <p style="margin-bottom: 12px;">Tell me what breaks. Tell me what's confusing. Tell me what's missing.</p>
+      
+      <p style="margin-bottom: 12px;">Your criticism is my best asset. I need to know the bad and what can be better so I can make this great for everyone else.</p>
+      
+      <p style="margin: 0;">Use it after every training session for the next few weeks. The feedback you give me now shapes what this becomes.</p>
+    </div>
+    
+    <p style="margin-top: 24px;">Thanks for using this and helping me build. It means the world.</p>
+    
+    <p style="margin-top: 24px; font-weight: 600; font-size: 16px;">Oss!</p>
+    
+    <div class="footer">
+      <p style="color: #000; font-weight: 600; margin-bottom: 12px; font-size: 15px;">
+        -Todd
+      </p>
+      <p style="margin-bottom: 12px; color: #333; line-height: 1.8;">
+        <a href="mailto:todd@bjjos.app" style="color: #000; text-decoration: none; font-weight: 500;">Todd@bjjos.app</a><br>
+        <a href="tel:+19148373750" style="color: #000; text-decoration: none; font-weight: 500;">914.837.3750</a><br>
+        <span style="font-weight: 600;">Text me anytime with ANY input</span>
+      </p>
+      <p style="margin: 0; color: #666; font-size: 13px;">
+        Questions or feedback? Just reply to this email or text me directly.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const { Resend } = require('resend');
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  
+  const result = await resend.emails.send({
+    from: 'BJJ OS <noreply@bjjos.app>',
+    to: email,
+    subject: 'Your BJJ OS lifetime access',
+    html: emailHTML
+  });
+  
+  console.log('[EMAIL] ✅ Sent to:', email);
+  return { success: true, id: result.id };
+}
+```
+
+KEY CHANGES:
+
+- Button has inline styles with !important to force visibility
+- Proper spacing and centering for button
+- Correct text content (no “1,000 videos” nonsense)
+- All proper sections included
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 2: SIGNUP FORM - CHANGE “FULL NAME” TO “FIRST NAME”
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND the lifetime signup form (likely in client/lifetime-signup.html or similar).
+
+CHANGE FROM:
+
+```html
+<label for="full-name">Full Name *</label>
+<input 
+  type="text" 
+  id="full-name" 
+  name="fullName"
+  placeholder="Enter your full name"
+  required
+>
+```
+
+TO:
+
+```html
+<label for="first-name">First Name *</label>
+<input 
+  type="text" 
+  id="first-name" 
+  name="firstName"
+  placeholder="Enter your first name"
+  required
+>
+```
+
+UPDATE backend signup endpoint to use firstName instead of fullName:
+
+```javascript
+const { firstName, username, password, token } = req.body;
+
+// Create user with firstName
+await db.query(
+  `INSERT INTO users (email, first_name, username, password_hash, lifetime_access, is_founding_member)
+   VALUES ($1, $2, $3, $4, true, true)`,
+  [email, firstName, username, hashedPassword]
+);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 3: EMAIL FIELD - MAKE READ-ONLY (PRE-FILLED FROM TOKEN)
+═══════════════════════════════════════════════════════════════════════════════
+
+CHANGE email input to be read-only:
+
+```html
+<div class="form-group">
+  <label for="email">Email Address</label>
+  <input 
+    type="email" 
+    id="email" 
+    name="email"
+    value="" 
+    readonly
+    style="background: #f5f5f5; cursor: not-allowed;"
+  >
+  <small style="color: #666; font-size: 13px;">This email is from your invitation</small>
+</div>
+```
+
+Pre-fill email from token validation:
+
+```javascript
+// When page loads, fetch and validate token
+async function loadInvitationData() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get('token');
+  
+  const response = await fetch(`/api/auth/validate-lifetime-invite?token=${token}`);
+  const data = await response.json();
+  
+  if (data.success) {
+    document.getElementById('email').value = data.email; // Pre-fill and lock
+  }
+}
+
+loadInvitationData();
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 4: REAL-TIME USERNAME VALIDATION (GREEN/RED AS YOU TYPE)
+═══════════════════════════════════════════════════════════════════════════════
+
+ADD real-time validation to username field:
+
+HTML:
+
+```html
+<div class="form-group">
+  <label for="username">Username *</label>
+  <div style="position: relative;">
+    <input 
+      type="text" 
+      id="username" 
+      name="username"
+      placeholder="Choose a username"
+      required
+      style="padding-right: 40px;"
+    >
+    <span id="username-indicator" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 20px;"></span>
+  </div>
+  <small id="username-error" style="color: #dc2626; display: none; margin-top: 4px;"></small>
+  <small style="color: #666; font-size: 13px;">Letters, numbers, and underscores only</small>
+</div>
+```
+
+JavaScript:
+
+```javascript
+const usernameInput = document.getElementById('username');
+const usernameIndicator = document.getElementById('username-indicator');
+const usernameError = document.getElementById('username-error');
+
+let usernameCheckTimeout;
+
+usernameInput.addEventListener('input', async (e) => {
+  const username = e.target.value.trim();
+  
+  // Clear previous timeout
+  clearTimeout(usernameCheckTimeout);
+  
+  // Reset indicator
+  usernameIndicator.textContent = '';
+  usernameError.style.display = 'none';
+  
+  // Must be at least 3 characters
+  if (username.length < 3) {
+    return;
+  }
+  
+  // Check format (letters, numbers, underscores only)
+  const validFormat = /^[a-zA-Z0-9_]+$/.test(username);
+  if (!validFormat) {
+    usernameIndicator.textContent = '❌';
+    usernameIndicator.style.color = '#dc2626';
+    usernameError.textContent = 'Username can only contain letters, numbers, and underscores';
+    usernameError.style.display = 'block';
+    return;
+  }
+  
+  // Wait 500ms after user stops typing, then check availability
+  usernameCheckTimeout = setTimeout(async () => {
+    try {
+      const response = await fetch(`/api/auth/check-username?username=${username}`);
+      const data = await response.json();
+      
+      if (data.available) {
+        usernameIndicator.textContent = '✅';
+        usernameIndicator.style.color = '#16a34a';
+        usernameError.style.display = 'none';
+      } else {
+        usernameIndicator.textContent = '❌';
+        usernameIndicator.style.color = '#dc2626';
+        usernameError.textContent = 'Username already taken';
+        usernameError.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('Error checking username:', error);
+    }
+  }, 500);
+});
+```
+
+ADD backend endpoint to check username:
+
+```javascript
+app.get('/api/auth/check-username', async (req, res) => {
+  const { username } = req.query;
+  
+  if (!username || username.length < 3) {
+    return res.json({ available: false });
+  }
+  
+  // Check format
+  const validFormat = /^[a-zA-Z0-9_]+$/.test(username);
+  if (!validFormat) {
+    return res.json({ available: false });
+  }
+  
+  // Check if taken
+  const result = await db.query(
+    'SELECT id FROM users WHERE LOWER(username) = LOWER($1)',
+    [username]
+  );
+  
+  res.json({ available: result.rows.length === 0 });
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 5: STRUGGLE AREAS - MULTIPLE CHOICE BUTTONS (NOT FREE TEXT)
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND the onboarding question about struggles.
+
+CHANGE FROM (free text input):
+
+```html
+<input 
+  type="text" 
+  placeholder="e.g., triangle choke, guard passing, escapes..."
+>
+```
+
+TO (multiple choice buttons):
+
+```html
+<div class="onboarding-question">
+  <h3>What technique do you struggle with most?</h3>
+  <p style="color: #666; margin-bottom: 20px;">This helps Professor OS give you personalized guidance</p>
+  
+  <div class="choice-buttons">
+    <button type="button" class="choice-btn" data-value="guard_passing">
+      Guard Passing
+    </button>
+    <button type="button" class="choice-btn" data-value="guard_retention">
+      Guard Retention
+    </button>
+    <button type="button" class="choice-btn" data-value="takedowns">
+      Takedowns
+    </button>
+    <button type="button" class="choice-btn" data-value="submissions">
+      Submissions
+    </button>
+    <button type="button" class="choice-btn" data-value="escapes">
+      Escapes
+    </button>
+    <button type="button" class="choice-btn" data-value="transitions">
+      Transitions
+    </button>
+    <button type="button" class="choice-btn" data-value="other">
+      Other
+    </button>
+  </div>
+</div>
+
+<style>
+.choice-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.choice-btn {
+  padding: 16px;
+  background: #1a1a1a;
+  color: white;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.choice-btn:hover {
+  background: #2a2a2a;
+}
+
+.choice-btn.selected {
+  border-color: #8b5cf6;
+  background: #2a2a2a;
+}
+</style>
+
+<script>
+document.querySelectorAll('.choice-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    // Remove selected from all buttons
+    document.querySelectorAll('.choice-btn').forEach(b => {
+      b.classList.remove('selected');
+    });
+    
+    // Add selected to clicked button
+    btn.classList.add('selected');
+    
+    // Store value for submission
+    document.getElementById('struggle-area-input').value = btn.dataset.value;
+  });
+});
+</script>
+
+<input type="hidden" id="struggle-area-input" name="struggleArea" required>
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 6: ERROR 403 “DEVICE ACCESS REVOKED” ON SIGNUP COMPLETION
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: User completes signup but gets 403 error when trying to finish.
+
+ROOT CAUSE: Session/auth token issue after signup.
+
+FIX:
+
+Update signup completion endpoint:
+
+```javascript
+app.post('/api/auth/signup-with-lifetime-invite', async (req, res) => {
+  const { token, firstName, username, password, struggleArea, trainingFocus } = req.body;
+  
+  try {
+    // Validate invitation token
+    const invite = await db.query(
+      `SELECT * FROM lifetime_invitations 
+       WHERE invite_token = $1 AND status = 'pending' AND expires_at > NOW()`,
+      [token]
+    );
+    
+    if (invite.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired invitation' });
+    }
+    
+    const invitation = invite.rows[0];
+    
+    // Check username availability
+    const existingUser = await db.query(
+      'SELECT id FROM users WHERE LOWER(username) = LOWER($1)',
+      [username]
+    );
+    
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ error: 'Username already taken' });
+    }
+    
+    // Hash password
+    const bcrypt = require('bcrypt');
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Create user
+    const newUser = await db.query(
+      `INSERT INTO users 
+       (email, first_name, username, password_hash, lifetime_access, 
+        is_founding_member, struggle_area, training_focus, created_at)
+       VALUES ($1, $2, $3, $4, true, true, $5, $6, NOW())
+       RETURNING id, email, username, first_name, lifetime_access`,
+      [invitation.email, firstName, username, hashedPassword, struggleArea, trainingFocus]
+    );
+    
+    const user = newUser.rows[0];
+    
+    // Mark invitation as completed
+    await db.query(
+      `UPDATE lifetime_invitations 
+       SET status = 'completed', used_at = NOW(), completed_by_user_id = $1
+       WHERE id = $2`,
+      [user.id, invitation.id]
+    );
+    
+    // Generate JWT token for automatic login
+    const jwt = require('jsonwebtoken');
+    const authToken = jwt.sign(
+      { 
+        userId: user.id,
+        email: user.email,
+        username: user.username,
+        lifetimeAccess: true
+      },
+      process.env.JWT_SECRET || 'bjjos-secret-key',
+      { expiresIn: '30d' }
+    );
+    
+    // Set auth cookie
+    res.cookie('auth_token', authToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      sameSite: 'strict'
+    });
+    
+    res.json({
+      success: true,
+      message: 'Account created successfully',
+      token: authToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.first_name,
+        lifetimeAccess: true
+      }
+    });
+    
+  } catch (error) {
+    console.error('[SIGNUP ERROR]:', error);
+    res.status(500).json({ error: 'Signup failed: ' + error.message });
+  }
+});
+```
+
+UPDATE frontend to redirect after successful signup:
+
+```javascript
+const response = await fetch('/api/auth/signup-with-lifetime-invite', {
+  method: 'POST',
+  credentials: 'include', // Important: sends cookies
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    token,
+    firstName,
+    username,
+    password,
+    struggleArea,
+    trainingFocus
+  })
+});
+
+const data = await response.json();
+
+if (data.success) {
+  // Store token in localStorage as backup
+  localStorage.setItem('auth_token', data.token);
+  
+  // Redirect to main app
+  window.location.href = '/';
+} else {
+  showError(data.error);
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation:
+
+EMAIL:
+✅ Send test invitation to yourself
+✅ Email has correct text (not “1,000 videos”)
+✅ “Create your account” button is visible and clickable
+✅ “I’m genuinely grateful you’re here early” present
+✅ “Oss! -Todd” signature present
+✅ Contact info present
+
+SIGNUP FLOW:
+✅ Click email link → goes to signup page
+✅ Email pre-filled and read-only (grayed out)
+✅ Asks for “First Name” (not “Full Name”)
+✅ Username field shows ✅ green when available
+✅ Username field shows ❌ red when taken
+✅ Validation happens as you type (not after clicking away)
+✅ “What do you struggle with?” shows buttons to click (not text input)
+✅ Can select struggle area by clicking button
+✅ “What do you primarily train?” shows Gi/No-Gi/Both buttons
+✅ Click “Complete Setup” → NO 403 error
+✅ Successfully logs in and goes to app
+
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Email has correct content and visible button
+✅ Signup asks for First Name only
+✅ Email field is read-only and pre-filled
+✅ Username validation is real-time with green/red indicators
+✅ Struggle areas are multiple choice buttons
+✅ Training focus is multiple choice buttons
+✅ No 403 error on completion
+✅ User successfully creates account and logs in
+✅ Entire flow works smoothly from email to app
+
+IMPLEMENT ALL FIXES NOW.
+
+```
+---
+
+**This is the complete fix for everything you showed me. Copy and paste into Replit Agent!** 🚀
+
+After it's done, test the entire flow:
+1. Send invitation to yourself
+2. Check email looks right
+3. Click button
+4. Complete signup
+5. Verify no errors
+
+Let me know what happens! 💪​​​​​​​​​​​​​​​​
+```

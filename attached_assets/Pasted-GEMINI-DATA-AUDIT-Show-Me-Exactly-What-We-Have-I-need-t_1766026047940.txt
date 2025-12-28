@@ -1,0 +1,57 @@
+GEMINI DATA AUDIT - Show Me Exactly What We Have
+
+I need to verify Professor OS is using ALL the Gemini-extracted knowledge correctly.
+
+PLEASE SHOW ME:
+
+═══════════════════════════════════════════════════════════════════════════════
+1. EXACT video_knowledge TABLE STRUCTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me the complete schema with ALL columns:
+- SELECT column_name, data_type FROM information_schema.columns 
+  WHERE table_name = 'video_knowledge';
+
+═══════════════════════════════════════════════════════════════════════════════
+2. SAMPLE extracted_knowledge JSON
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me 2 complete examples of the extracted_knowledge JSONB field:
+- SELECT id, title, instructor, extracted_knowledge 
+  FROM video_knowledge 
+  WHERE extracted_knowledge IS NOT NULL 
+  LIMIT 2;
+
+═══════════════════════════════════════════════════════════════════════════════
+3. knowledge-retrieval-service.ts - FULL CODE
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me the complete file that retrieves video knowledge based on user questions.
+I need to see:
+- How it detects intent from user message
+- What fields it queries from video_knowledge
+- What it returns to inject into the prompt
+
+═══════════════════════════════════════════════════════════════════════════════
+4. buildSystemPrompt INJECTION POINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me the exact code where extracted video knowledge gets injected into Claude's system prompt.
+- What variables are passed?
+- What format is the knowledge in when Claude receives it?
+
+═══════════════════════════════════════════════════════════════════════════════
+5. END-TO-END TRACE
+═══════════════════════════════════════════════════════════════════════════════
+
+Trace this query through the entire system:
+User asks: "How do I escape side control?"
+
+Show me:
+A) What search query is generated
+B) What videos are returned from video_knowledge
+C) What extracted knowledge is pulled
+D) What text is injected into Claude's prompt
+E) What Claude sees before generating response
+
+This will confirm whether we're using ALL the Gemini data or just basic metadata.

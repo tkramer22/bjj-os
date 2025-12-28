@@ -1,0 +1,63 @@
+This is actually helpful information. The repetition bug is **NOT an iOS issue** - it’s a **backend/Professor OS issue**.
+
+**Send this to Replit immediately:**
+
+```
+CRITICAL: REPETITION BUG IS ON WEB APP TOO - NOT iOS SPECIFIC
+
+I just confirmed Professor OS is repeating itself on the REGULAR WEB APP beta test, not just iOS.
+
+This means:
+1. The Professor OS prompt fix is NOT working
+2. This is a BACKEND issue, not iOS bundling
+3. We can debug this on web without worrying about iOS
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFY THE PROMPT FIX IS ACTUALLY LIVE
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Show me server logs from my last message to Professor OS
+2. Is [PROMPT VERSION] logging "TRIMMED v2.0"?
+3. What is the actual token count being sent?
+4. Show me the FIRST 30 lines of buildSystemPrompt.ts - does it have CRITICAL RULES?
+
+═══════════════════════════════════════════════════════════════════════════════
+THE REPETITION PROBLEM
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS responds like this:
+"Here's a technique for escaping mount... [good info]... 
+To summarize, here's how to escape mount... [repeats same info]...
+In conclusion, the key points for mount escape are... [repeats again]"
+
+This is NOT a prompt issue alone - this is how Claude responds when:
+1. System prompt is too long/confusing
+2. Temperature is too high
+3. No explicit instruction to be concise
+4. Response is being streamed/chunked incorrectly
+
+═══════════════════════════════════════════════════════════════════════════════
+CHECK THESE NOW
+═══════════════════════════════════════════════════════════════════════════════
+
+1. What model is being used? (claude-3-sonnet, claude-3-opus, etc.)
+2. What temperature setting?
+3. What max_tokens setting?
+4. Is streaming enabled?
+5. Show me the actual API call to Claude
+
+═══════════════════════════════════════════════════════════════════════════════
+POSSIBLE FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+A) Add to system prompt at the VERY END (right before sending):
+   "CRITICAL: Be concise. Never repeat yourself. One explanation only."
+
+B) Lower temperature to 0.3 or 0.5
+
+C) Add stop sequences if repeating patterns detected
+
+D) Post-process response to remove duplicate paragraphs
+
+SHOW ME THE ACTUAL CLAUDE API CALL CODE AND CURRENT SETTINGS.
+```

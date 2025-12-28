@@ -1,0 +1,69 @@
+PROFESSOR OS 6.0 - OUTPUT QUALITY AUDIT
+
+The pipeline is connected. Now I need to verify the AI is USING the data correctly in responses.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: SHOW ME WHAT CLAUDE ACTUALLY SEES
+═══════════════════════════════════════════════════════════════════════════════
+
+For a real user question like "How do I escape side control?", show me:
+
+1. The EXACT text that gets injected into Claude's system prompt from video_knowledge
+2. The EXACT format - is it structured JSON? Plain text? Bullet points?
+3. How many tokens of video knowledge context does Claude receive?
+
+I need to see the raw prompt injection, not a summary.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: DOES THE PROMPT INSTRUCT CLAUDE HOW TO USE EACH FIELD?
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me the section of the system prompt that tells Claude:
+- When to use instructor_quotes (verbatim in response?)
+- When to use body_type_notes (only if user profile has body type?)
+- When to use technique_chains (suggest next technique?)
+- When to use problem_solved (match to user's stated problem?)
+- When to use timestamps (always include? only on video recs?)
+
+If these instructions DON'T exist, Claude might be ignoring valuable fields.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: LIVE TEST - TRACE A REAL RESPONSE
+═══════════════════════════════════════════════════════════════════════════════
+
+Run this test and show me the full trace:
+
+User: "I'm a bigger guy and I keep getting my guard passed. What should I work on?"
+
+Show me:
+A) What video_knowledge records matched this query
+B) What fields were pulled (body_type_notes? instructor_quotes?)
+C) The exact context injected into Claude
+D) Claude's full response
+E) HIGHLIGHT which parts of the response came from Gemini data vs Claude's general knowledge
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: IDENTIFY UNUSED OR UNDERUSED FIELDS
+═══════════════════════════════════════════════════════════════════════════════
+
+Of the 33 fields in video_knowledge, which ones are:
+- ALWAYS used in responses
+- SOMETIMES used (when relevant)
+- RARELY/NEVER used (wasted data)
+
+If we have rich fields that Claude never references, we need to either:
+A) Update the prompt to instruct Claude to use them
+B) Format them differently so Claude notices them
+C) Accept they're not valuable and stop extracting them
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: OPTIMIZATION RECOMMENDATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Based on this audit, tell me:
+1. What fields are being underutilized?
+2. What prompt changes would improve output quality?
+3. Is the knowledge injection formatted optimally for Claude?
+4. Any quick wins to make responses noticeably better?
+
+Goal: Professor OS responses should feel like they're coming from someone who WATCHED the videos - not just read metadata.

@@ -1,0 +1,1352 @@
+**🎯 TWO PROMPTS READY TO GO:**
+
+-----
+
+## **PROMPT #1: LIFETIME ACCESS INVITATION SYSTEM**
+
+Copy this to Replit Agent:
+
+```
+═══════════════════════════════════════════════════════════════════
+BUILD COMPLETE LIFETIME ACCESS INVITATION SYSTEM
+═══════════════════════════════════════════════════════════════════
+
+MISSION: Create a fully functional system for admins to invite users to lifetime access via email, with proper onboarding flow.
+
+═══════════════════════════════════════════════════════════════════
+PART 1: DATABASE SETUP
+═══════════════════════════════════════════════════════════════════
+
+CREATE NEW TABLE: lifetime_invitations
+
+CREATE TABLE IF NOT EXISTS lifetime_invitations (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  invite_token VARCHAR(255) UNIQUE NOT NULL,
+  personal_message TEXT,
+  invited_by_admin_id INTEGER,
+  invited_at TIMESTAMP DEFAULT NOW(),
+  status VARCHAR(50) DEFAULT 'pending',
+  completed_at TIMESTAMP,
+  user_id INTEGER REFERENCES users(id),
+  expires_at TIMESTAMP DEFAULT (NOW() + INTERVAL '30 days'),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_invite_token ON lifetime_invitations(invite_token);
+CREATE INDEX idx_invite_email ON lifetime_invitations(email);
+CREATE INDEX idx_invite_status ON lifetime_invitations(status);
+
+Status values:
+- 'pending': Invited but not signed up yet
+- 'completed': User signed up and completed onboarding
+- 'expired': Invitation expired (30 days passed)
+
+ALSO UPDATE USERS TABLE:
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS invited_by INTEGER REFERENCES lifetime_invitations(id);
+
+This tracks which invitation led to this user account.
+
+═══════════════════════════════════════════════════════════════════
+PART 2: ADMIN PAGE UI (/admin/lifetime-access)
+═══════════════════════════════════════════════════════════════════
+
+CREATE OR UPDATE: /admin/lifetime-access page
+
+PAGE LAYOUT:
+
+┌────────────────────────────────────────────────────────────────┐
+│  BJJ OS Admin - Lifetime Access Management                     │
+├────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  Invite New User to Lifetime Access                      │ │
+│  ├──────────────────────────────────────────────────────────┤ │
+│  │                                                          │ │
+│  │  Email Address *                                         │ │
+│  │  [_____________________________________________]         │ │
+│  │                                                          │ │
+│  │  Personal Message (Optional)                             │ │
+│  │  ┌────────────────────────────────────────────────────┐ │ │
+│  │  │                                                    │ │ │
+│  │  │                                                    │ │ │
+│  │  └────────────────────────────────────────────────────┘ │ │
+│  │                                                          │ │
+│  │  [Send Invitation]                                       │ │
+│  │                                                          │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│                                                                 │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│                                                                 │
+│  Lifetime Access Users                                          │
+│                                                                 │
+│  [Filter: All ▾] [Search: ___________]        Total: 12        │
+│                                                                 │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │ Email              Status    Invited      Completed    │   │
+│  ├────────────────────────────────────────────────────────┤   │
+│  │ todd@bjjos.app     Active    Oct 28      Oct 28   [⋮] │   │
+│  │ jt@example.com     Pending   Oct 28      -         [⋮] │   │
+│  │ friend@aoj.com     Active    Oct 27      Oct 28   [⋮] │   │
+│  │ old@test.com       Expired   Sep 15      -         [⋮] │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  [← Previous]  Page 1 of 2  [Next →]                           │
+│                                                                 │
+└────────────────────────────────────────────────────────────────┘
+
+STATUS BADGES:
+- Active (green): ✓ Completed signup, using app
+- Pending (yellow): ⏳ Invited, waiting for signup
+- Expired (red): ✗ Invitation expired after 30 days
+
+ACTIONS MENU [⋮]:
+- View Details
+- Resend Invitation (if pending)
+- Copy Invite Link (if pending)
+- Revoke Access (if active - shows warning)
+- Delete Invitation (if pending/expired)
+
+FEATURES:
+- Filter dropdown: All, Active, Pending, Expired
+- Search by email
+- Pagination (20 per page)
+- Click row to see full details
+- Real-time status updates
+- Success/error toast notifications
+
+UI COMPONENTS:
+
+Form validation:
+- Email required, valid format
+- Show error if email invalid
+- Disable button while sending
+- Show loading spinner during send
+
+Success feedback:
+- Green toast: "Invitation sent to [email]!"
+- Show invite link to copy
+- Clear form after success
+- Refresh table automatically
+
+Error feedback:
+- Red toast with specific error message
+- "User already has an account"
+- "Invitation already sent"
+- "Invalid email format"
+- "Failed to send email"
+
+═══════════════════════════════════════════════════════════════════
+PART 3: BACKEND - SEND INVITATION ENDPOINT
+═══════════════════════════════════════════════════════════════════
+
+POST /api/admin/lifetime/invite
+
+Authentication: Requires admin login
+
+Request Body:
+{
+  "email": "user@example.com",
+  "personal_message": "Optional personal note from admin"
+}
+
+Response Success:
+{
+  "success": true,
+  "message": "Invitation sent to user@example.com",
+  "invite": {
+    "id": 123,
+    "email": "user@example.com",
+    "invite_token": "abc123...",
+    "status": "pending",
+    "invited_at": "2025-10-28T10:00:00Z",
+    "invite_link": "https://bjjos.app/signup?invite=abc123..."
+  }
+}
+
+Response Error:
+{
+  "success": false,
+  "error": "User already has an account" 
+}
+
+SERVER LOGIC:
+
+async function handleLifetimeInvitation(req, res) {
+  try {
+    // 1. Verify admin authentication
+    const adminUser = req.user;
+    if (!adminUser || !adminUser.is_admin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+
+    // 2. Validate input
+    const { email, personal_message } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required'
+      });
+    }
+    
+    const emailLower = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!emailRegex.test(emailLower)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email format'
+      });
+    }
+
+    // 3. Check if user already exists
+    const existingUser = await db.query(
+      'SELECT id, email, subscription_tier FROM users WHERE LOWER(email) = $1',
+      [emailLower]
+    );
+    
+    if (existingUser.rows.length > 0) {
+      const user = existingUser.rows[0];
+      if (user.subscription_tier === 'lifetime') {
+        return res.status(400).json({
+          success: false,
+          error: 'User already has lifetime access'
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        error: 'User already has an account'
+      });
+    }
+
+    // 4. Check if pending invitation exists
+    const existingInvite = await db.query(
+      'SELECT id, email, status FROM lifetime_invitations WHERE LOWER(email) = $1 AND status = $2',
+      [emailLower, 'pending']
+    );
+    
+    if (existingInvite.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invitation already sent. Use "Resend" to send again.'
+      });
+    }
+
+    // 5. Generate secure invite token
+    const crypto = require('crypto');
+    const inviteToken = crypto.randomBytes(32).toString('hex');
+
+    // 6. Insert invitation record
+    const result = await db.query(
+      `INSERT INTO lifetime_invitations 
+       (email, invite_token, personal_message, invited_by_admin_id, status, expires_at)
+       VALUES ($1, $2, $3, $4, 'pending', NOW() + INTERVAL '30 days')
+       RETURNING *`,
+      [emailLower, inviteToken, personal_message || null, adminUser.id]
+    );
+    
+    const invitation = result.rows[0];
+    const inviteLink = `https://bjjos.app/signup?invite=${inviteToken}`;
+
+    // 7. Send invitation email
+    await sendLifetimeInvitationEmail(emailLower, inviteToken, personal_message);
+
+    // 8. Log action
+    console.log(`Lifetime invitation sent by admin ${adminUser.id} to ${emailLower}`);
+
+    // 9. Return success
+    return res.status(200).json({
+      success: true,
+      message: `Invitation sent to ${emailLower}`,
+      invite: {
+        id: invitation.id,
+        email: invitation.email,
+        invite_token: invitation.invite_token,
+        status: invitation.status,
+        invited_at: invitation.invited_at,
+        invite_link: inviteLink
+      }
+    });
+
+  } catch (error) {
+    console.error('Error sending lifetime invitation:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to send invitation. Please try again.'
+    });
+  }
+}
+
+═══════════════════════════════════════════════════════════════════
+PART 4: INVITATION EMAIL (RESEND API)
+═══════════════════════════════════════════════════════════════════
+
+USE: Resend API (same service as verification codes)
+
+EMAIL CONFIGURATION:
+- From: BJJ OS <noreply@bjjos.app>
+- Reply-To: todd@bjjos.app (optional - replies go to Todd)
+- Subject: You're invited to BJJ OS - Lifetime Access 🥋
+
+SEND EMAIL FUNCTION:
+
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+async function sendLifetimeInvitationEmail(email, inviteToken, personalMessage) {
+  try {
+    const inviteLink = `https://bjjos.app/signup?invite=${inviteToken}`;
+    
+    const { data, error } = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: [email],
+      subject: "You're invited to BJJ OS - Lifetime Access 🥋",
+      html: generateInvitationEmailHTML(inviteToken, personalMessage, inviteLink),
+      reply_to: 'todd@bjjos.app'
+    });
+    
+    if (error) {
+      console.error('Failed to send invitation email:', error);
+      throw new Error('Failed to send invitation email');
+    }
+    
+    console.log('Invitation email sent successfully:', data);
+    return data;
+    
+  } catch (error) {
+    console.error('Error in sendLifetimeInvitationEmail:', error);
+    throw error;
+  }
+}
+
+function generateInvitationEmailHTML(inviteToken, personalMessage, inviteLink) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { 
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; 
+          line-height: 1.6; 
+          color: #333; 
+          margin: 0;
+          padding: 0;
+          background-color: #f3f4f6;
+        }
+        .container { 
+          max-width: 600px; 
+          margin: 40px auto; 
+          background-color: #ffffff;
+          border-radius: 8px;
+          overflow: hidden;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header { 
+          background: linear-gradient(135deg, #2563EB 0%, #7C3AED 100%); 
+          color: white; 
+          padding: 40px 30px; 
+          text-align: center; 
+        }
+        .header h1 {
+          margin: 0 0 10px 0;
+          font-size: 32px;
+          font-weight: 700;
+        }
+        .header p {
+          margin: 0;
+          font-size: 18px;
+          opacity: 0.95;
+        }
+        .content { 
+          padding: 40px 30px; 
+        }
+        .content p {
+          margin: 0 0 16px 0;
+        }
+        .button { 
+          display: inline-block; 
+          background: linear-gradient(135deg, #2563EB 0%, #7C3AED 100%); 
+          color: white !important; 
+          padding: 16px 40px; 
+          text-decoration: none; 
+          border-radius: 8px; 
+          font-weight: 600; 
+          font-size: 16px;
+          margin: 20px 0;
+          text-align: center;
+        }
+        .button:hover {
+          opacity: 0.9;
+        }
+        .features { 
+          background: #f9fafb; 
+          padding: 24px; 
+          border-radius: 8px; 
+          margin: 24px 0; 
+        }
+        .feature { 
+          margin: 12px 0; 
+          font-size: 15px;
+        }
+        .personal-message { 
+          background: #eff6ff; 
+          border-left: 4px solid #3b82f6; 
+          padding: 16px 20px; 
+          margin: 24px 0; 
+          font-style: italic;
+          color: #1e40af;
+        }
+        .footer { 
+          text-align: center; 
+          color: #6b7280; 
+          font-size: 14px; 
+          padding: 30px;
+          background-color: #f9fafb;
+        }
+        .footer p {
+          margin: 8px 0;
+        }
+        .center {
+          text-align: center;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>BJJ OS</h1>
+          <p>You're Invited - Lifetime Access</p>
+        </div>
+        
+        <div class="content">
+          <p>Hi there!</p>
+          
+          <p>You've been personally invited to <strong>BJJ OS</strong> with <strong>lifetime access</strong> - completely free, forever.</p>
+          
+          ${personalMessage ? `
+          <div class="personal-message">
+            "${personalMessage}"
+          </div>
+          ` : ''}
+          
+          <h3 style="margin-top: 30px; margin-bottom: 16px;">What is BJJ OS?</h3>
+          <p>Your personal AI BJJ coach that learns your game and helps you improve faster.</p>
+          
+          <div class="features">
+            <div class="feature">✅ <strong>Professor OS</strong> - AI coaching that remembers your training</div>
+            <div class="feature">✅ <strong>300+ Curated Videos</strong> - From elite instructors like Gordon Ryan, Lachlan Giles, Mikey Musumeci</div>
+            <div class="feature">✅ <strong>Personalized Recommendations</strong> - Techniques matched to YOUR game</div>
+            <div class="feature">✅ <strong>Progress Tracking</strong> - See your improvement over time</div>
+            <div class="feature">✅ <strong>Lifetime Access</strong> - Never pay, never expires</div>
+          </div>
+          
+          <div class="center">
+            <a href="${inviteLink}" class="button">
+              Get Started with BJJ OS
+            </a>
+          </div>
+          
+          <p style="font-size: 14px; color: #6b7280; margin-top: 24px;">
+            This invitation is exclusive and expires in 30 days. Click the button above to create your account and complete a quick 2-minute setup.
+          </p>
+          
+          <p style="margin-top: 30px;">See you on the mats! 🥋</p>
+          
+          <p>
+            - Todd<br>
+            BJJ OS
+          </p>
+        </div>
+        
+        <div class="footer">
+          <p><strong>BJJ OS</strong> - Your AI BJJ Coach</p>
+          <p>If you didn't expect this invitation, you can safely ignore this email.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+═══════════════════════════════════════════════════════════════════
+PART 5: SIGNUP FLOW WITH INVITE TOKEN
+═══════════════════════════════════════════════════════════════════
+
+ROUTE: /signup?invite=[token]
+
+When user clicks invite link, they land on signup page with invite token.
+
+1. VALIDATE INVITE TOKEN ON PAGE LOAD:
+
+GET /api/auth/validate-invite?token=[token]
+
+Response if valid:
+{
+  "valid": true,
+  "email": "user@example.com",
+  "invite_id": 123
+}
+
+Response if invalid:
+{
+  "valid": false,
+  "error": "Invalid or expired invitation"
+}
+
+Server validation logic:
+
+async function validateInviteToken(req, res) {
+  try {
+    const { token } = req.query;
+    
+    if (!token) {
+      return res.status(400).json({
+        valid: false,
+        error: 'Invite token required'
+      });
+    }
+    
+    const result = await db.query(
+      `SELECT id, email, status, expires_at 
+       FROM lifetime_invitations 
+       WHERE invite_token = $1`,
+      [token]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        valid: false,
+        error: 'Invalid invitation'
+      });
+    }
+    
+    const invite = result.rows[0];
+    
+    if (invite.status === 'completed') {
+      return res.status(400).json({
+        valid: false,
+        error: 'Invitation already used'
+      });
+    }
+    
+    if (new Date(invite.expires_at) < new Date()) {
+      await db.query(
+        `UPDATE lifetime_invitations SET status = 'expired' WHERE id = $1`,
+        [invite.id]
+      );
+      
+      return res.status(400).json({
+        valid: false,
+        error: 'Invitation expired'
+      });
+    }
+    
+    return res.status(200).json({
+      valid: true,
+      email: invite.email,
+      invite_id: invite.id
+    });
+    
+  } catch (error) {
+    console.error('Error validating invite token:', error);
+    return res.status(500).json({
+      valid: false,
+      error: 'Server error'
+    });
+  }
+}
+
+2. SIGNUP PAGE UI WITH INVITE:
+
+If valid invite token exists, show special signup page:
+
+┌────────────────────────────────────────────────────────┐
+│  ⭐ You're Invited - Lifetime Access                   │
+│                                                        │
+│  Complete your setup to get started                    │
+├────────────────────────────────────────────────────────┤
+│                                                        │
+│  Email                                                 │
+│  [user@example.com              ] (pre-filled, locked) │
+│                                                        │
+│  Create Username                                       │
+│  [______________________________]                      │
+│  3-20 characters, letters, numbers, underscores        │
+│                                                        │
+│  [Send Verification Code]                              │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+
+3. VERIFICATION CODE FLOW:
+
+Same as normal signup:
+- User clicks "Send Verification Code"
+- System sends 6-digit code to email
+- User enters code
+- Code verified
+
+4. CREATE USER ACCOUNT:
+
+POST /api/auth/signup-with-invite
+
+Request:
+{
+  "email": "user@example.com",
+  "username": "bjj_ninja",
+  "verification_code": "123456",
+  "invite_token": "abc123..."
+}
+
+Server creates user with lifetime access:
+
+async function signupWithInvite(req, res) {
+  try {
+    const { email, username, verification_code, invite_token } = req.body;
+    
+    // 1. Verify code
+    const codeValid = await verifyCode(email, verification_code);
+    if (!codeValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid verification code'
+      });
+    }
+    
+    // 2. Validate invite token
+    const invite = await db.query(
+      `SELECT id, email FROM lifetime_invitations 
+       WHERE invite_token = $1 AND status = 'pending'`,
+      [invite_token]
+    );
+    
+    if (invite.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid invitation'
+      });
+    }
+    
+    // 3. Create user with lifetime access
+    const newUser = await db.query(
+      `INSERT INTO users 
+       (email, username, subscription_tier, subscription_status, invited_by, email_verified, created_at)
+       VALUES ($1, $2, 'lifetime', 'active', $3, true, NOW())
+       RETURNING *`,
+      [email, username, invite.rows[0].id]
+    );
+    
+    // 4. Mark invitation as completed
+    await db.query(
+      `UPDATE lifetime_invitations 
+       SET status = 'completed', completed_at = NOW(), user_id = $1
+       WHERE id = $2`,
+      [newUser.rows[0].id, invite.rows[0].id]
+    );
+    
+    // 5. Create session
+    req.session.userId = newUser.rows[0].id;
+    
+    // 6. Return success
+    return res.status(200).json({
+      success: true,
+      user: {
+        id: newUser.rows[0].id,
+        email: newUser.rows[0].email,
+        username: newUser.rows[0].username,
+        subscription_tier: 'lifetime'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error in signupWithInvite:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to create account'
+    });
+  }
+}
+
+5. ONBOARDING FLOW:
+
+After account creation, user goes through normal 4-step onboarding:
+- Step 1: First name
+- Step 2: Belt level
+- Step 3: Technique you struggle with
+- Step 4: Gi / No-Gi / Both
+
+6. SKIP PAYMENT PAGE:
+
+After onboarding, check subscription_tier:
+
+if (user.subscription_tier === 'lifetime') {
+  redirect('/dashboard');
+} else {
+  redirect('/payment');
+}
+
+7. USER LANDS IN DASHBOARD:
+
+Lifetime user has full access immediately:
+- Professor OS chat works
+- Video library accessible
+- Can save videos
+- Settings shows "⭐ Lifetime Access"
+
+═══════════════════════════════════════════════════════════════════
+PART 6: GET LIFETIME USERS LIST ENDPOINT
+═══════════════════════════════════════════════════════════════════
+
+GET /api/admin/lifetime/users
+
+Query parameters:
+- status: 'all', 'active', 'pending', 'expired'
+- search: email search
+- page: page number
+- limit: results per page
+
+═══════════════════════════════════════════════════════════════════
+PART 7: RESEND INVITATION ENDPOINT
+═══════════════════════════════════════════════════════════════════
+
+POST /api/admin/lifetime/resend
+
+Request:
+{
+  "invite_id": 123
+}
+
+═══════════════════════════════════════════════════════════════════
+PART 8: SETTINGS PAGE - LIFETIME DISPLAY
+═══════════════════════════════════════════════════════════════════
+
+For lifetime users show:
+
+┌─────────────────────────────────────────────────────────┐
+│  SUBSCRIPTION                                            │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│                                                          │
+│  ┌────────────────────────────────────────────────┐    │
+│  │  ⭐ Lifetime Access                            │    │
+│  │                                                 │    │
+│  │  You have unlimited access to BJJ OS forever.  │    │
+│  │  No subscription, no recurring charges.        │    │
+│  │                                                 │    │
+│  │  Member since: October 28, 2025                │    │
+│  └────────────────────────────────────────────────┘    │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+
+NO billing info, NO cancel button, NO payment details.
+
+═══════════════════════════════════════════════════════════════════
+BUILD THIS COMPLETE LIFETIME INVITATION SYSTEM NOW
+═══════════════════════════════════════════════════════════════════
+
+This creates a professional system for inviting beta testers to lifetime access.
+
+IMPORTANT: Lifetime users should have the EXACT same experience as paying users, just without billing/payment pages.
+```
+
+-----
+
+## **PROMPT #2: AGGRESSIVE VIDEO CURATION - MAX API USAGE**
+
+Copy this to Replit Agent:
+
+```
+═══════════════════════════════════════════════════════════════════
+AGGRESSIVE VIDEO CURATION SYSTEM - MAX API USAGE DAILY
+═══════════════════════════════════════════════════════════════════
+
+MISSION: Build an aggressive video curation system that maximizes YouTube API usage to find as many high-quality BJJ videos as possible, every single day.
+
+REQUIREMENTS:
+
+1. RUN IMMEDIATELY upon deployment
+2. RUN DAILY at optimal time (6:00 AM UTC)
+3. MAXIMIZE API usage (use full 10,000 quota daily)
+4. CONTINUE until we manually disable it
+5. COMPREHENSIVE logging and monitoring
+
+═══════════════════════════════════════════════════════════════════
+PART 1: YOUTUBE API QUOTA STRATEGY
+═══════════════════════════════════════════════════════════════════
+
+YOUTUBE API QUOTA LIMITS:
+- Daily quota: 10,000 units
+- Search query cost: 100 units
+- Video details cost: 1 unit per video
+
+OPTIMAL STRATEGY:
+- 80 search queries per day (8,000 units)
+- 2,000 video detail requests (2,000 units)
+- Total: 10,000 units used daily
+
+TARGET OUTPUT:
+- Find 100-200 videos per day
+- Approve 30-50 high-quality videos per day
+- Build library to 2,000+ videos in 30-60 days
+
+═══════════════════════════════════════════════════════════════════
+PART 2: COMPREHENSIVE SEARCH QUERIES
+═══════════════════════════════════════════════════════════════════
+
+SEARCH QUERY CATEGORIES:
+
+1. FUNDAMENTAL TECHNIQUES (20 queries):
+- "bjj closed guard fundamentals"
+- "bjj side control escape tutorial"
+- "bjj mount escape step by step"
+- "bjj back control defense"
+- "bjj guard retention basics"
+- "bjj passing guard tutorial"
+- "bjj takedown fundamentals"
+- "bjj sweep techniques"
+- "bjj submission defense"
+- "bjj positional hierarchy"
+- "bjj frames and structure"
+- "bjj hip escape shrimp"
+- "bjj bridge and shrimp"
+- "bjj base and posture"
+- "bjj grips and control"
+- "bjj leg positioning"
+- "bjj arm positioning"
+- "bjj weight distribution"
+- "bjj pressure concepts"
+- "bjj movement fundamentals"
+
+2. SPECIFIC SUBMISSIONS (20 queries):
+- "triangle choke tutorial bjj"
+- "armbar from guard bjj"
+- "rear naked choke bjj"
+- "kimura tutorial bjj"
+- "guillotine choke bjj"
+- "omoplata tutorial bjj"
+- "loop choke bjj"
+- "ezekiel choke bjj"
+- "bow and arrow choke"
+- "darce choke tutorial"
+- "anaconda choke bjj"
+- "north south choke"
+- "arm triangle tutorial"
+- "baseball choke bjj"
+- "collar choke bjj"
+- "cross collar choke"
+- "clock choke tutorial"
+- "brabo choke bjj"
+- "peruvian necktie"
+- "katagatame tutorial"
+
+3. GUARD TYPES (15 queries):
+- "butterfly guard tutorial"
+- "half guard techniques"
+- "spider guard bjj"
+- "de la riva guard"
+- "x guard tutorial"
+- "single leg x guard"
+- "reverse de la riva"
+- "lasso guard bjj"
+- "worm guard tutorial"
+- "z guard tutorial"
+- "deep half guard"
+- "lockdown half guard"
+- "knee shield half guard"
+- "rubber guard bjj"
+- "50/50 guard tutorial"
+
+4. PASSING TECHNIQUES (10 queries):
+- "toreando pass tutorial"
+- "knee slice pass bjj"
+- "stack pass tutorial"
+- "long step pass bjj"
+- "headquarters pass"
+- "leg drag pass tutorial"
+- "x pass bjj tutorial"
+- "over under pass"
+- "double under pass"
+- "pressure passing bjj"
+
+5. LEG LOCKS (8 queries):
+- "straight ankle lock tutorial"
+- "heel hook defense bjj"
+- "heel hook tutorial bjj"
+- "toe hold tutorial"
+- "knee bar bjj tutorial"
+- "saddle position leg locks"
+- "leg lock defense fundamentals"
+- "ashi garami tutorial"
+
+6. NOGI SPECIFIC (7 queries):
+- "nogi guard retention"
+- "nogi passing tutorial"
+- "nogi takedowns bjj"
+- "nogi wrestling bjj"
+- "nogi submission setups"
+- "nogi back control"
+- "nogi guard strategies"
+
+ROTATE THROUGH ALL 80 QUERIES DAILY
+
+═══════════════════════════════════════════════════════════════════
+PART 3: TRUSTED INSTRUCTOR DATABASE (ENHANCED)
+═══════════════════════════════════════════════════════════════════
+
+TIER 1 - ELITE COMPETITORS (Quality threshold: 6.5+):
+- Gordon Ryan
+- Lachlan Giles
+- John Danaher
+- Craig Jones
+- Mikey Musumeci
+- Garry Tonon
+- Nicholas Meregali
+- Felipe Pena
+- Marcus Almeida (Buchecha)
+- Roger Gracie
+- Marcelo Garcia
+- Bernardo Faria
+- Keenan Cornelius
+- Jon Thomas
+- Andrew Wiltse
+
+TIER 2 - EXPERT INSTRUCTORS (Quality threshold: 7.0+):
+- Stephan Kesting
+- Chewjitsu
+- BJJ Fanatics
+- Grapplearts
+- BJJ Scout
+- Jon Thomas
+- Knight Jiu Jitsu
+- Evolve University
+- Gracie University
+- Gracie Barra
+- Atos Jiu Jitsu
+
+TIER 3 - REPUTABLE CHANNELS (Quality threshold: 7.5+):
+- BJJ Globetrotters
+- BJJ Mental Models
+- Submeta
+- How to Grapple
+- The Jiu Jitsu Brotherhood
+- BJJ After 40
+- Yoga for BJJ
+- BJJ Concepts
+
+AUTO-APPROVE THRESHOLD:
+- Videos from Tier 1 instructors with 7.0+ AI score → Auto-approve
+- Videos from Tier 2 instructors with 7.5+ AI score → Auto-approve
+- Videos from Tier 3 instructors with 8.0+ AI score → Auto-approve
+
+═══════════════════════════════════════════════════════════════════
+PART 4: AI QUALITY SCORING SYSTEM (GPT-4o)
+═══════════════════════════════════════════════════════════════════
+
+SCORING CRITERIA (0-10 scale):
+
+1. INSTRUCTIONAL CLARITY (30% weight):
+   - Step-by-step breakdown
+   - Clear demonstrations
+   - Multiple angles shown
+   - Repetition of key points
+
+2. TECHNICAL ACCURACY (25% weight):
+   - Proper technique execution
+   - Common mistakes addressed
+   - Variations explained
+   - Applicable to real situations
+
+3. PRODUCTION QUALITY (15% weight):
+   - Clear audio
+   - Good lighting
+   - Stable camera work
+   - Professional editing
+
+4. PEDAGOGICAL VALUE (20% weight):
+   - Appropriate pacing
+   - Builds on fundamentals
+   - Provides context
+   - Explains "why" not just "how"
+
+5. APPLICABILITY (10% weight):
+   - Belt level appropriate
+   - Gi/NoGi specified
+   - Competition vs training
+   - Body type considerations
+
+GPT-4o SCORING PROMPT:
+```
+
+You are a BJJ instructional video quality analyzer. Evaluate this video based on:
+
+Video Title: {title}
+Instructor: {instructor}
+Video Description: {description}
+Transcript (first 2000 chars): {transcript}
+
+Rate the video on a 0-10 scale based on:
+
+1. Instructional Clarity (30%)
+1. Technical Accuracy (25%)
+1. Production Quality (15%)
+1. Pedagogical Value (20%)
+1. Applicability (10%)
+
+Respond with JSON ONLY:
+{
+“overall_score”: 7.8,
+“clarity_score”: 8,
+“technical_score”: 8,
+“production_score”: 7,
+“pedagogical_score”: 8,
+“applicability_score”: 7,
+“reasoning”: “Clear step-by-step breakdown with good demonstrations…”,
+“recommended_for”: [“white_belt”, “blue_belt”],
+“gi_or_nogi”: “both”,
+“technique_category”: “guard_retention”,
+“auto_approve”: true
+}
+
+```
+═══════════════════════════════════════════════════════════════════
+PART 5: CURATION WORKFLOW (AUTOMATED)
+═══════════════════════════════════════════════════════════════════
+
+WORKFLOW STEPS:
+
+1. SEARCH PHASE (80 searches):
+   For each search query:
+   - Call YouTube search API
+   - Get top 20 results
+   - Filter by: duration (5-30 mins), upload date (last 5 years)
+   - Total: ~1,600 candidate videos
+
+2. DEDUPLICATION PHASE:
+   - Check against existing videos in database
+   - Remove already processed videos
+   - Remove duplicates from current batch
+   - Remaining: ~200-400 new videos
+
+3. PRE-FILTERING PHASE (GPT-4o Mini - fast):
+   For each video:
+   - Quick analysis of title + description
+   - Binary decision: "Likely instructional?" (Yes/No)
+   - Cost: 200-400 API calls (cheap with Mini)
+   - Remaining: ~100-200 instructional videos
+
+4. DEEP SCORING PHASE (GPT-4o):
+   For each pre-filtered video:
+   - Full quality analysis with transcript
+   - Generate detailed scores
+   - Cost: 100-200 API calls
+   - Output: Videos with quality scores
+
+5. AUTO-APPROVAL PHASE:
+   Apply auto-approve rules:
+   - Tier 1 instructor + 7.0+ score → APPROVE
+   - Tier 2 instructor + 7.5+ score → APPROVE
+   - Tier 3 instructor + 8.0+ score → APPROVE
+   - Unknown instructor + 8.5+ score → APPROVE
+   - All others → MANUAL REVIEW QUEUE
+
+6. DATABASE INSERT:
+   - Insert approved videos to ai_video_knowledge
+   - Mark with auto_approved = true
+   - Track curation_batch_id for monitoring
+   - Update quota usage stats
+
+═══════════════════════════════════════════════════════════════════
+PART 6: CRON JOB CONFIGURATION
+═══════════════════════════════════════════════════════════════════
+
+IMMEDIATE EXECUTION:
+- Run curation job IMMEDIATELY when app starts
+- Don't wait for scheduled time
+
+DAILY SCHEDULE:
+- Run every day at 6:00 AM UTC (11:00 PM PT / 2:00 AM ET)
+- Low traffic time for optimal performance
+- Consistent timing for quota reset tracking
+
+CRON EXPRESSION:
+```javascript
+const cron = require('node-cron');
+
+// RUN IMMEDIATELY on startup
+runVideoCuration('immediate_startup').then(() => {
+  console.log('✅ Initial video curation complete');
+});
+
+// RUN DAILY at 6:00 AM UTC
+cron.schedule('0 6 * * *', async () => {
+  console.log('🎬 Starting daily video curation...');
+  await runVideoCuration('scheduled_daily');
+}, {
+  timezone: "UTC"
+});
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 7: COMPREHENSIVE LOGGING & MONITORING
+═══════════════════════════════════════════════════════════════════
+
+LOG EVERYTHING:
+
+1. CURATION RUN START:
+
+```javascript
+{
+  run_id: "curation_2025_10_28_06_00",
+  started_at: "2025-10-28T06:00:00Z",
+  trigger: "scheduled_daily" | "immediate_startup" | "manual",
+  quota_available: 10000
+}
+```
+
+1. SEARCH PHASE RESULTS:
+
+```javascript
+{
+  queries_executed: 80,
+  total_videos_found: 1847,
+  quota_used: 8000,
+  avg_results_per_query: 23,
+  duration_seconds: 45
+}
+```
+
+1. FILTERING RESULTS:
+
+```javascript
+{
+  pre_filter_candidates: 1847,
+  after_deduplication: 342,
+  after_pre_filtering: 156,
+  rejected_reasons: {
+    "not_instructional": 98,
+    "too_short": 45,
+    "competition_footage": 43
+  }
+}
+```
+
+1. SCORING RESULTS:
+
+```javascript
+{
+  videos_scored: 156,
+  gpt4o_calls: 156,
+  quota_used: 1800,
+  score_distribution: {
+    "9.0-10.0": 12,
+    "8.0-8.9": 34,
+    "7.0-7.9": 67,
+    "6.0-6.9": 28,
+    "< 6.0": 15
+  }
+}
+```
+
+1. APPROVAL RESULTS:
+
+```javascript
+{
+  auto_approved: 43,
+  manual_review_queue: 31,
+  rejected: 82,
+  approval_breakdown: {
+    "tier_1_instructor": 18,
+    "tier_2_instructor": 15,
+    "tier_3_instructor": 7,
+    "high_score_unknown": 3
+  }
+}
+```
+
+1. FINAL SUMMARY:
+
+```javascript
+{
+  run_id: "curation_2025_10_28_06_00",
+  completed_at: "2025-10-28T06:12:34Z",
+  duration_minutes: 12.6,
+  total_quota_used: 9856,
+  videos_added: 43,
+  videos_pending_review: 31,
+  videos_rejected: 82,
+  success: true
+}
+```
+
+DATABASE LOGGING:
+Create table: video_curation_runs
+
+```sql
+CREATE TABLE video_curation_runs (
+  id SERIAL PRIMARY KEY,
+  run_id VARCHAR(100) UNIQUE NOT NULL,
+  started_at TIMESTAMP NOT NULL,
+  completed_at TIMESTAMP,
+  trigger_type VARCHAR(50),
+  quota_used INTEGER,
+  videos_found INTEGER,
+  videos_added INTEGER,
+  videos_pending INTEGER,
+  videos_rejected INTEGER,
+  success BOOLEAN DEFAULT true,
+  error_message TEXT,
+  detailed_stats JSONB,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 8: ADMIN DASHBOARD DISPLAY
+═══════════════════════════════════════════════════════════════════
+
+Add to /admin page:
+
+┌──────────────────────────────────────────────────────────┐
+│  VIDEO CURATION STATUS                                    │
+├──────────────────────────────────────────────────────────┤
+│                                                           │
+│  Last Run: Oct 28, 2025 at 6:00 AM UTC                  │
+│  Status: ✅ Success                                       │
+│  Videos Added: 43                                         │
+│  Quota Used: 9,856 / 10,000 (98.6%)                     │
+│  Duration: 12.6 minutes                                   │
+│                                                           │
+│  Next Run: Oct 29, 2025 at 6:00 AM UTC (in 21h 47m)    │
+│                                                           │
+│  [View Full History] [Run Manual Curation Now]          │
+│                                                           │
+└──────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────┐
+│  CURATION HISTORY (Last 7 Days)                          │
+├──────────────────────────────────────────────────────────┤
+│  Date        Videos Added   Quota Used   Duration        │
+│  Oct 28      43             9,856        12.6 min        │
+│  Oct 27      38             9,724        11.8 min        │
+│  Oct 26      51             9,912        13.2 min        │
+│  Oct 25      45             9,834        12.4 min        │
+│  Oct 24      39             9,687        11.9 min        │
+│  Oct 23      47             9,891        13.1 min        │
+│  Oct 22      42             9,756        12.3 min        │
+└──────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+PART 9: ERROR HANDLING & RECOVERY
+═══════════════════════════════════════════════════════════════════
+
+HANDLE FAILURES GRACEFULLY:
+
+1. QUOTA EXHAUSTED:
+
+- Log warning
+- Stop processing
+- Schedule retry for next day
+- Send admin notification
+
+1. YOUTUBE API ERROR:
+
+- Retry failed requests (3 attempts)
+- Exponential backoff
+- Continue with remaining queries
+- Log errors for review
+
+1. GPT API ERROR:
+
+- Skip affected video
+- Continue processing
+- Log error with video details
+- Manual review queue
+
+1. DATABASE ERROR:
+
+- Rollback batch insert
+- Retry transaction
+- Log error details
+- Admin notification
+
+═══════════════════════════════════════════════════════════════════
+PART 10: MANUAL CONTROLS
+═══════════════════════════════════════════════════════════════════
+
+ADMIN CONTROLS:
+
+1. PAUSE CURATION:
+
+- Set flag: curation_enabled = false
+- Skip scheduled runs
+- Can still run manually
+
+1. RESUME CURATION:
+
+- Set flag: curation_enabled = true
+- Resume scheduled runs
+
+1. MANUAL TRIGGER:
+
+- Button in admin panel
+- “Run Curation Now”
+- Bypasses schedule
+- Uses same workflow
+
+1. ADJUST SETTINGS:
+
+- Quality threshold (default: 7.0)
+- Max videos per run
+- Search query list
+- Auto-approve rules
+
+═══════════════════════════════════════════════════════════════════
+BUILD THIS AGGRESSIVE VIDEO CURATION SYSTEM NOW
+═══════════════════════════════════════════════════════════════════
+
+CRITICAL REQUIREMENTS:
+
+1. ✅ Run IMMEDIATELY on deployment
+1. ✅ Run DAILY at 6:00 AM UTC automatically
+1. ✅ Use full 10,000 YouTube API quota
+1. ✅ Add 30-50 videos per day minimum
+1. ✅ Comprehensive logging
+1. ✅ Admin dashboard monitoring
+1. ✅ Error handling & recovery
+1. ✅ Manual controls for admin
+
+This system will build your video library to 2,000+ videos in 30-60 days while maintaining high quality standards.
+
+START BUILDING NOW!
+
+```
+---
+
+**🎯 WHAT THESE DO:**
+
+**Prompt #1 (Lifetime Access):**
+- Complete invitation system
+- Admin can invite users via email
+- Users get lifetime access for free
+- Full onboarding flow
+- Settings shows "⭐ Lifetime Access"
+
+**Prompt #2 (Aggressive Video Curation):**
+- Runs IMMEDIATELY when deployed
+- Runs DAILY at 6:00 AM UTC
+- Uses FULL 10,000 YouTube API quota
+- Adds 30-50 videos per day
+- Comprehensive logging
+- Admin dashboard monitoring
+- Continues until you disable it
+
+---
+
+**PASTE BOTH PROMPTS TO REPLIT AGENT NOW!** 🚀​​​​​​​​​​​​​​​​
+```

@@ -1,0 +1,142 @@
+**EXCELLENT point - you’re absolutely right!**
+
+```
+CRITICAL UPDATE TO AI AGENT - ADD USER INTENT OVERRIDE:
+
+The prerequisite system should be a GUIDE, not a GATE. Let users get what they want.
+
+=== REVISE PREREQUISITE LOGIC ===
+
+**Remove hard blocks on advanced techniques.**
+
+Instead of:
+❌ "Don't send berimbolo without de la riva fundamentals"
+
+Do this:
+✅ "User wants leg locks → send best leg lock content available"
+✅ "White belt asks for advanced guard → send it, but include note in SMS"
+
+**SMS Format for advanced content to beginners:**
+
+"🥋 Berimbolo - Lachlan Giles
+
+Key Detail: [specific detail]
+
+Note: This is an advanced technique. If you'd prefer more fundamental content, reply FUNDAMENTALS.
+
+Watch: bjjos.app/v/abc123"
+
+=== USER INTENT IS KING ===
+
+**Priority order for technique selection:**
+
+1. **User's explicit focus areas** (highest priority)
+   - If they said "leg locks" → send leg locks regardless of belt
+   - If they said "guard" → prioritize guard content
+   - If they said "fundamentals" → prioritize basics
+
+2. **User engagement patterns** (learn from behavior)
+   - If white belt consistently clicks advanced content → send more advanced
+   - If purple belt skips complex techniques → send simpler options
+   - Adapt to what they actually engage with, not what "should" work
+
+3. **Belt level appropriateness** (guidance only, not restriction)
+   - Suggest appropriate level
+   - But don't block access to advanced content if user wants it
+
+=== ONBOARDING QUESTION ADDITION ===
+
+When asking about focus areas, also ask:
+
+"What level of content do you prefer?
+Reply: FUNDAMENTALS, MIXED, or ADVANCED"
+
+Store as: user_content_preference
+
+Then respect that preference over belt level.
+
+=== FEEDBACK COMMAND ADDITION ===
+
+Add new SMS command:
+- Reply "SIMPLER" → adjust to more fundamental content
+- Reply "ADVANCED" → adjust to more complex content
+- Reply "FUNDAMENTALS" → reset to basics for 30 days
+
+Update user_content_preference automatically.
+
+=== REVISED SELECTION LOGIC ===
+
+```javascript
+function selectTechnique(user, candidates) {
+  // Priority 1: User's explicit preference
+  if (user.content_preference === 'ADVANCED') {
+    candidates = candidates.filter(v => v.complexity !== 'beginner');
+  } else if (user.content_preference === 'FUNDAMENTALS') {
+    candidates = candidates.filter(v => v.complexity === 'beginner' || v.is_fundamental);
+  }
+  
+  // Priority 2: User's focus areas (always respect)
+  candidates = filterByFocusAreas(candidates, user.focus_areas);
+  
+  // Priority 3: Belt level as SUGGESTION only
+  if (user.belt === 'white' && !user.content_preference) {
+    // Boost fundamentals by 10 points, but don't block advanced
+    candidates.forEach(v => {
+      if (v.is_fundamental) v.score += 10;
+    });
+  }
+  
+  // Priority 4: Engagement history (what do they actually click?)
+  adjustByEngagement(candidates, user.history);
+  
+  return highestScoringTechnique(candidates);
+}
+```
+
+=== REMOVE HARD PREREQUISITE BLOCKS ===
+
+Delete any code that prevents sending techniques based on prerequisites.
+
+Keep prerequisite_map for building RECOMMENDED learning paths, but never block access.
+
+=== ADD “LEARNING PATH” FEATURE (OPTIONAL) ===
+
+Instead of forcing prerequisites, offer suggested paths:
+
+If user is white belt getting advanced content, occasionally send:
+“💡 Learning Path Tip: Mastering [fundamental technique] will make today’s technique even more effective. Want to see it? Reply YES.”
+
+This educates without restricting.
+
+=== KEY PRINCIPLE ===
+
+**“Guide, don’t gate.”**
+
+The AI should:
+✅ Suggest appropriate progressions
+✅ Warn when content is very advanced
+✅ Offer simpler alternatives
+✅ Learn from user behavior
+
+The AI should NOT:
+❌ Block access to content users want
+❌ Force “prerequisites” on motivated learners
+❌ Assume everyone learns the same way
+❌ Ignore user engagement patterns
+
+=== IMPLEMENTATION ===
+
+1. Remove all hard blocks on technique complexity
+1. Add user_content_preference field to onboarding
+1. Add SIMPLER/ADVANCED/FUNDAMENTALS SMS commands
+1. Adjust scoring to boost (not require) appropriate level content
+1. Add optional learning path suggestions
+1. Respect user intent above all else
+
+This keeps quality high while giving users freedom to learn what excites them.
+
+Implement these changes to the AI selection system immediately.
+
+```
+Great catch - engagement beats "optimal learning theory" every time.​​​​​​​​​​​​​​​​
+```

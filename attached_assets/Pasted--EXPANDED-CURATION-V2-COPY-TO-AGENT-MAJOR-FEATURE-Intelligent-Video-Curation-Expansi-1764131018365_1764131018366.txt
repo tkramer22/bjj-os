@@ -1,0 +1,767 @@
+# 📋 **EXPANDED CURATION V2 - COPY TO AGENT**
+
+```
+MAJOR FEATURE: Intelligent Video Curation Expansion V2
+
+Todd has approved a comprehensive expansion to make this the smartest video curation system ever built.
+
+═══════════════════════════════════════════════════════════════
+OVERVIEW
+═══════════════════════════════════════════════════════════════
+
+Goal: Discover ALL quality BJJ content, leave no stone unturned, find diamonds in the rough.
+
+Key principles:
+- Multiple videos of same technique from different instructors = VALUABLE
+- System should run autonomously with zero manual intervention
+- Capture everything, miss nothing
+
+═══════════════════════════════════════════════════════════════
+1. DYNAMIC INSTRUCTOR LIST
+═══════════════════════════════════════════════════════════════
+
+DO NOT hardcode instructor list.
+
+Instead, pull instructors dynamically from the library:
+
+```javascript
+async function getInstructorPool() {
+  const result = await db.query(`
+    SELECT DISTINCT instructor 
+    FROM videos 
+    WHERE quality_score >= 7.0
+  `);
+  return result.rows.map(r => r.instructor);
+}
+```
+
+When a NEW instructor is discovered (video approved, instructor not in pool):
+
+- Add them to the instructor pool automatically
+- Queue searches for “[new instructor] + core techniques”
+
+THRESHOLD FOR AUTO-EXPAND: 50+ credibility score
+
+- 50+ credibility = auto-expand searches for their content
+- 40-49 credibility = video accepted, but don’t auto-expand searches
+
+═══════════════════════════════════════════════════════════════
+2. HYBRID TECHNIQUE LIST
+═══════════════════════════════════════════════════════════════
+
+START with hardcoded core techniques:
+
+```javascript
+const CORE_TECHNIQUES = [
+  // Submissions
+  'armbar', 'triangle', 'kimura', 'americana', 'guillotine',
+  'rear naked choke', 'arm triangle', 'darce choke', 'anaconda choke',
+  'heel hook', 'knee bar', 'toe hold', 'ezekiel choke', 'bow and arrow',
+  'baseball bat choke', 'loop choke', 'omoplata', 'gogoplata',
+  'peruvian necktie', 'japanese necktie', 'calf slicer', 'bicep slicer',
+  
+  // Positions
+  'closed guard', 'half guard', 'mount', 'back control', 'side control',
+  'butterfly guard', 'x guard', 'de la riva', 'reverse de la riva',
+  'single leg x', 'spider guard', 'lasso guard', 'worm guard',
+  'rubber guard', '50 50', 'deep half', 'z guard', 'knee shield',
+  'turtle', 'north south', 'knee on belly', 'crucifix',
+  
+  // Actions
+  'guard pass', 'sweep', 'takedown', 'escape', 'back take',
+  'guard retention', 'submission defense', 'grip fighting'
+];
+```
+
+EXPAND dynamically when AI tags a video with a technique not in the list:
+
+- New technique discovered → Add to technique pool
+- Future searches include this technique
+
+```javascript
+async function expandTechniquePool(newTechnique) {
+  const exists = await db.query(
+    'SELECT 1 FROM technique_pool WHERE name = $1',
+    [newTechnique]
+  );
+  
+  if (!exists.rows.length) {
+    await db.query(
+      'INSERT INTO technique_pool (name, discovered_at) VALUES ($1, NOW())',
+      [newTechnique]
+    );
+    console.log(`New technique discovered: ${newTechnique}`);
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════
+3. DUPLICATE HANDLING - ALLOW MULTIPLE INSTRUCTORS
+═══════════════════════════════════════════════════════════════
+
+REMOVE duplicate penalty for different instructors teaching same technique.
+
+OLD LOGIC (too restrictive):
+
+```javascript
+if (similarVideosInLibrary > 3) {
+  scores.unique = 5; // Penalized
+}
+```
+
+NEW LOGIC:
+
+```javascript
+async function calculateUniqueScore(video, technique, instructor) {
+  // Check if THIS instructor already has videos on THIS technique
+  const sameInstructorSameTechnique = await db.query(`
+    SELECT COUNT(*) FROM videos 
+    WHERE instructor = $1 
+    AND $2 = ANY(techniques)
+  `, [instructor, technique]);
+  
+  const count = parseInt(sameInstructorSameTechnique.rows[0].count);
+  
+  if (count >= 3) {
+    // Same instructor, 3+ videos on same technique = lower priority
+    return 5;
+  } else if (count >= 1) {
+    // Same instructor, 1-2 videos on same technique = slight reduction
+    return 7;
+  } else {
+    // Different instructor OR first video on this technique = full value
+    return 9;
+  }
+}
+```
+
+RESULT:
+
+- 10 different instructors teaching armbar = ALL get added ✅
+- Same instructor with 4 armbar videos = 4th gets lower priority ⚠️
+
+═══════════════════════════════════════════════════════════════
+4. QUERY GENERATION - 800+ QUERIES
+═══════════════════════════════════════════════════════════════
+
+Generate queries from multiple sources:
+
+```javascript
+async function generateAllQueries() {
+  const instructors = await getInstructorPool();
+  const techniques = await getTechniquePool();
+  
+  const queries = [];
+  
+  // 1. Instructor × Technique combinations
+  instructors.forEach(instructor => {
+    techniques.slice(0, 30).forEach(technique => { // Top 30 techniques
+      queries.push({
+        query: `${instructor} ${technique}`,
+        type: 'instructor_technique',
+        priority: 3
+      });
+    });
+  });
+  
+  // 2. Core technique searches
+  techniques.forEach(technique => {
+    queries.push({
+      query: `${technique} bjj tutorial`,
+      type: 'technique',
+      priority: 4
+    });
+    queries.push({
+      query: `${technique} instructional`,
+      type: 'technique',
+      priority: 4
+    });
+    queries.push({
+      query: `how to ${technique}`,
+      type: 'technique',
+      priority: 5
+    });
+  });
+  
+  // 3. Variation queries
+  const variations = ['setup', 'finish', 'defense', 'escape', 'details', 'mistakes'];
+  techniques.slice(0, 20).forEach(technique => {
+    variations.forEach(variation => {
+      queries.push({
+        query: `${technique} ${variation}`,
+        type: 'variation',
+        priority: 5
+      });
+    });
+  });
+  
+  // 4. Concept queries
+  const concepts = [
+    'bjj concepts', 'jiu jitsu principles', 'pressure passing',
+    'guard retention', 'weight distribution bjj', 'framing bjj',
+    'hip movement bjj', 'timing jiu jitsu', 'grip fighting'
+  ];
+  concepts.forEach(concept => {
+    queries.push({
+      query: concept,
+      type: 'concept',
+      priority: 6
+    });
+  });
+  
+  return queries;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+5. QUERY ROTATION SYSTEM
+═══════════════════════════════════════════════════════════════
+
+15 queries per run, rotating through entire pool:
+
+```javascript
+async function getQueriesForRun() {
+  const QUERIES_PER_RUN = 15;
+  
+  // Get current rotation position
+  const state = await db.query(
+    'SELECT last_query_index FROM curation_state WHERE id = 1'
+  );
+  let startIndex = state.rows[0]?.last_query_index || 0;
+  
+  // Get all queries sorted by priority
+  const allQueries = await generateAllQueries();
+  allQueries.sort((a, b) => a.priority - b.priority);
+  
+  // Check for priority overrides
+  const priorityQueries = await getPriorityQueries(); // New instructors, gaps
+  
+  // Build this run's query list
+  const runQueries = [];
+  
+  // Add priority queries first (new instructor expansions, gaps)
+  priorityQueries.slice(0, 5).forEach(q => runQueries.push(q));
+  
+  // Fill remaining with rotation
+  const remaining = QUERIES_PER_RUN - runQueries.length;
+  for (let i = 0; i < remaining; i++) {
+    const index = (startIndex + i) % allQueries.length;
+    runQueries.push(allQueries[index]);
+  }
+  
+  // Update rotation position
+  const newIndex = (startIndex + remaining) % allQueries.length;
+  await db.query(
+    'UPDATE curation_state SET last_query_index = $1 WHERE id = 1',
+    [newIndex]
+  );
+  
+  return runQueries;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+6. DEEP DISCOVERY - 100 VIDEOS PER QUERY
+═══════════════════════════════════════════════════════════════
+
+Track page offset per query to dig deep:
+
+```javascript
+async function getPageOffset(queryHash) {
+  const result = await db.query(
+    'SELECT page_offset FROM query_progress WHERE query_hash = $1',
+    [queryHash]
+  );
+  return result.rows[0]?.page_offset || 0;
+}
+
+async function updatePageOffset(queryHash, newOffset) {
+  // Reset to 0 after reaching 100 (cycle back for fresh content)
+  const offset = newOffset >= 100 ? 0 : newOffset;
+  
+  await db.query(`
+    INSERT INTO query_progress (query_hash, page_offset, last_run)
+    VALUES ($1, $2, NOW())
+    ON CONFLICT (query_hash) 
+    DO UPDATE SET page_offset = $2, last_run = NOW()
+  `, [queryHash, offset]);
+}
+
+async function searchYouTube(query) {
+  const queryHash = hashQuery(query);
+  const pageOffset = await getPageOffset(queryHash);
+  
+  const results = await youtube.search.list({
+    q: query,
+    maxResults: 15,
+    type: 'video',
+    pageToken: getPageToken(pageOffset), // Converts offset to YouTube page token
+    order: getSortOrder(query) // Intent-based sorting
+  });
+  
+  // Update offset for next run
+  await updatePageOffset(queryHash, pageOffset + 15);
+  
+  return results;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+7. INTENT-BASED SORTING
+═══════════════════════════════════════════════════════════════
+
+Match YouTube sort method to query type and library coverage:
+
+```javascript
+async function getSortOrder(query, queryType) {
+  // Instructor-specific queries always use relevance
+  if (queryType === 'instructor_technique') {
+    return 'relevance';
+  }
+  
+  // Check library coverage for this technique
+  const technique = extractTechnique(query);
+  const coverage = await db.query(
+    'SELECT COUNT(*) FROM videos WHERE $1 = ANY(techniques)',
+    [technique]
+  );
+  const count = parseInt(coverage.rows[0].count);
+  
+  if (count < 5) {
+    // Low coverage - cast wide net
+    return 'viewCount'; // Find proven popular content
+  } else if (count < 15) {
+    // Medium coverage - balanced approach
+    return 'relevance';
+  } else {
+    // High coverage - look for fresh takes
+    return 'date'; // Find newest content
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════
+8. PRIORITY QUEUE SYSTEM
+═══════════════════════════════════════════════════════════════
+
+Weighted priority for query selection:
+
+```javascript
+async function getPriorityQueries() {
+  const priorityQueries = [];
+  
+  // PRIORITY 1: New instructor expansions
+  const newInstructors = await db.query(`
+    SELECT instructor FROM instructor_expansion_queue
+    WHERE processed = false
+    ORDER BY discovered_at DESC
+    LIMIT 3
+  `);
+  
+  newInstructors.rows.forEach(row => {
+    CORE_TECHNIQUES.slice(0, 10).forEach(technique => {
+      priorityQueries.push({
+        query: `${row.instructor} ${technique}`,
+        type: 'instructor_expansion',
+        priority: 1
+      });
+    });
+  });
+  
+  // PRIORITY 2: Low coverage techniques (gaps)
+  const gaps = await db.query(`
+    SELECT name FROM technique_pool tp
+    WHERE (
+      SELECT COUNT(*) FROM videos 
+      WHERE tp.name = ANY(techniques)
+    ) < 5
+    ORDER BY RANDOM()
+    LIMIT 5
+  `);
+  
+  gaps.rows.forEach(row => {
+    priorityQueries.push({
+      query: `${row.name} bjj tutorial`,
+      type: 'gap_fill',
+      priority: 2
+    });
+  });
+  
+  return priorityQueries;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+9. AUTO-EXPAND ON NEW INSTRUCTOR DISCOVERY
+═══════════════════════════════════════════════════════════════
+
+When a quality video is approved from a new instructor:
+
+```javascript
+async function onVideoApproved(video) {
+  const { instructor, credibility } = video;
+  
+  // Check if instructor is new
+  const existing = await db.query(
+    'SELECT 1 FROM videos WHERE instructor = $1 AND id != $2',
+    [instructor, video.id]
+  );
+  
+  if (!existing.rows.length && credibility >= 50) {
+    // NEW instructor with 50+ credibility - queue expansion
+    await db.query(`
+      INSERT INTO instructor_expansion_queue (instructor, credibility, discovered_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (instructor) DO NOTHING
+    `, [instructor, credibility]);
+    
+    console.log(`New instructor discovered: ${instructor} (${credibility}) - queued for expansion`);
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════
+10. CURATION SCHEDULE - EVERY 4 HOURS
+═══════════════════════════════════════════════════════════════
+
+Set up automatic curation:
+
+```javascript
+const cron = require('node-cron');
+
+// Run every 4 hours: 12am, 4am, 8am, 12pm, 4pm, 8pm
+cron.schedule('0 */4 * * *', async () => {
+  console.log('Starting scheduled curation run...');
+  await runCuration();
+});
+```
+
+Also add to package.json:
+
+```json
+{
+  "scripts": {
+    "curation:auto": "node curation-scheduler.js"
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════
+11. QUOTA MANAGEMENT - AUTO RESET
+═══════════════════════════════════════════════════════════════
+
+Track and auto-reset quota:
+
+```javascript
+async function checkQuota() {
+  const state = await db.query(
+    'SELECT quota_used, quota_reset_at FROM curation_state WHERE id = 1'
+  );
+  
+  const { quota_used, quota_reset_at } = state.rows[0];
+  
+  // YouTube quota resets at midnight Pacific
+  const now = new Date();
+  const resetTime = new Date(quota_reset_at);
+  
+  if (now > resetTime) {
+    // Reset quota
+    const nextReset = new Date();
+    nextReset.setUTCHours(8, 0, 0, 0); // Midnight Pacific = 8am UTC
+    if (nextReset < now) nextReset.setDate(nextReset.getDate() + 1);
+    
+    await db.query(`
+      UPDATE curation_state 
+      SET quota_used = 0, quota_reset_at = $1 
+      WHERE id = 1
+    `, [nextReset]);
+    
+    return { quotaAvailable: 10000, quotaUsed: 0 };
+  }
+  
+  return { quotaAvailable: 10000 - quota_used, quotaUsed: quota_used };
+}
+
+async function useQuota(units) {
+  await db.query(
+    'UPDATE curation_state SET quota_used = quota_used + $1 WHERE id = 1',
+    [units]
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════
+12. TRANSCRIPT OPTIONAL - ANALYZE ALL VIDEOS
+═══════════════════════════════════════════════════════════════
+
+Remove transcript requirement:
+
+```javascript
+async function analyzeVideo(video) {
+  // Try to get transcript
+  let transcript = null;
+  try {
+    transcript = await fetchYouTubeTranscript(video.id);
+  } catch (e) {
+    // No transcript available - that's fine
+  }
+  
+  // Build analysis prompt
+  const prompt = `
+Analyze this BJJ instructional video:
+
+Title: ${video.title}
+Channel: ${video.channelName}
+Duration: ${video.duration} seconds
+Description: ${video.description}
+${transcript ? `Transcript: ${transcript.substring(0, 3000)}` : 'Note: No transcript available - analyze based on title, description, and channel.'}
+
+Evaluate on scale 0-10:
+1. Instructor Credibility
+2. Technical Accuracy
+3. Teaching Clarity
+4. Production Quality
+5. Instructional Depth
+6. Practical Applicability
+7. Unique Value
+
+Also extract:
+- Instructor name
+- Techniques taught (array)
+- Gi or No-Gi (or "both" or "unknown")
+
+Respond in JSON format.
+  `;
+  
+  const analysis = await callClaudeAI(prompt);
+  return analysis;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+13. SIMPLE METADATA - CAPTURE ESSENTIALS
+═══════════════════════════════════════════════════════════════
+
+Store these fields for every video:
+
+```sql
+CREATE TABLE IF NOT EXISTS videos (
+  id SERIAL PRIMARY KEY,
+  youtube_id VARCHAR(20) UNIQUE NOT NULL,
+  title VARCHAR(500) NOT NULL,
+  instructor VARCHAR(200) NOT NULL,
+  thumbnail VARCHAR(500),
+  duration INTEGER,
+  quality_score DECIMAL(3,1),
+  techniques TEXT[], -- Array of technique tags
+  transcript TEXT, -- Store if available
+  gi_nogi VARCHAR(20), -- 'gi', 'nogi', 'both', 'unknown'
+  upload_date TIMESTAMP, -- From YouTube API (free)
+  view_count INTEGER, -- From YouTube API (free)
+  credibility_score INTEGER, -- Instructor credibility
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_videos_instructor ON videos(instructor);
+CREATE INDEX idx_videos_techniques ON videos USING GIN(techniques);
+CREATE INDEX idx_videos_quality ON videos(quality_score DESC);
+```
+
+═══════════════════════════════════════════════════════════════
+14. DATABASE TABLES NEEDED
+═══════════════════════════════════════════════════════════════
+
+```sql
+-- Curation state tracking
+CREATE TABLE IF NOT EXISTS curation_state (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  last_query_index INTEGER DEFAULT 0,
+  quota_used INTEGER DEFAULT 0,
+  quota_reset_at TIMESTAMP,
+  last_run_at TIMESTAMP
+);
+
+INSERT INTO curation_state (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+-- Query progress tracking (for deep discovery)
+CREATE TABLE IF NOT EXISTS query_progress (
+  query_hash VARCHAR(64) PRIMARY KEY,
+  page_offset INTEGER DEFAULT 0,
+  last_run TIMESTAMP,
+  videos_found INTEGER DEFAULT 0,
+  videos_approved INTEGER DEFAULT 0
+);
+
+-- Dynamic technique pool
+CREATE TABLE IF NOT EXISTS technique_pool (
+  name VARCHAR(100) PRIMARY KEY,
+  discovered_at TIMESTAMP DEFAULT NOW(),
+  video_count INTEGER DEFAULT 0
+);
+
+-- Instructor expansion queue
+CREATE TABLE IF NOT EXISTS instructor_expansion_queue (
+  instructor VARCHAR(200) PRIMARY KEY,
+  credibility INTEGER,
+  discovered_at TIMESTAMP DEFAULT NOW(),
+  processed BOOLEAN DEFAULT FALSE,
+  processed_at TIMESTAMP
+);
+```
+
+═══════════════════════════════════════════════════════════════
+15. LIBRARY HEALTH DASHBOARD (OPTIONAL VISIBILITY)
+═══════════════════════════════════════════════════════════════
+
+Add to admin dashboard - visible but not alerting:
+
+```jsx
+function LibraryHealth() {
+  const [health, setHealth] = useState(null);
+  
+  useEffect(() => {
+    fetch('/api/admin/library-health')
+      .then(r => r.json())
+      .then(setHealth);
+  }, []);
+  
+  if (!health) return null;
+  
+  return (
+    <div className="library-health">
+      <h3>📊 Library Health</h3>
+      <div className="stats">
+        <div className="stat">
+          <span className="value">{health.totalVideos}</span>
+          <span className="label">Total Videos</span>
+        </div>
+        <div className="stat">
+          <span className="value">{health.totalInstructors}</span>
+          <span className="label">Instructors</span>
+        </div>
+        <div className="stat">
+          <span className="value">{health.totalTechniques}</span>
+          <span className="label">Techniques</span>
+        </div>
+        <div className="stat">
+          <span className="value">{health.coveragePercent}%</span>
+          <span className="label">Core Coverage</span>
+        </div>
+      </div>
+      
+      {health.gaps.length > 0 && (
+        <div className="gaps">
+          <h4>Low Coverage Areas</h4>
+          <ul>
+            {health.gaps.map(gap => (
+              <li key={gap.technique}>
+                {gap.technique}: {gap.count} videos
+              </li>
+            ))}
+          </ul>
+          <p className="note">System auto-prioritizing these.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+Backend endpoint:
+
+```javascript
+router.get('/api/admin/library-health', adminAuth, async (req, res) => {
+  const totalVideos = await db.query('SELECT COUNT(*) FROM videos');
+  const totalInstructors = await db.query('SELECT COUNT(DISTINCT instructor) FROM videos');
+  const totalTechniques = await db.query('SELECT COUNT(*) FROM technique_pool');
+  
+  // Check coverage of core techniques
+  const coreCoverage = await db.query(`
+    SELECT 
+      t.name,
+      COALESCE(v.count, 0) as video_count
+    FROM (SELECT unnest($1::text[]) as name) t
+    LEFT JOIN (
+      SELECT unnest(techniques) as tech, COUNT(*) as count
+      FROM videos
+      GROUP BY tech
+    ) v ON t.name = v.tech
+    ORDER BY video_count ASC
+  `, [CORE_TECHNIQUES]);
+  
+  const gaps = coreCoverage.rows
+    .filter(r => r.video_count < 5)
+    .slice(0, 10);
+  
+  const covered = coreCoverage.rows.filter(r => r.video_count >= 5).length;
+  const coveragePercent = Math.round((covered / CORE_TECHNIQUES.length) * 100);
+  
+  res.json({
+    totalVideos: parseInt(totalVideos.rows[0].count),
+    totalInstructors: parseInt(totalInstructors.rows[0].count),
+    totalTechniques: parseInt(totalTechniques.rows[0].count),
+    coveragePercent,
+    gaps
+  });
+});
+```
+
+═══════════════════════════════════════════════════════════════
+SUMMARY OF CHANGES
+═══════════════════════════════════════════════════════════════
+
+1. ✅ Dynamic instructor list (pulls from library, auto-expands)
+1. ✅ Hybrid technique list (core + discovered)
+1. ✅ Allow duplicates from different instructors
+1. ✅ 800+ rotating queries
+1. ✅ 15 queries per run (within quota)
+1. ✅ 100 videos deep per query over time
+1. ✅ Intent-based sorting (match sort to query type + coverage)
+1. ✅ Priority queue (new instructors → gaps → standard)
+1. ✅ Auto-expand at 50+ credibility
+1. ✅ Every 4 hours automatic runs
+1. ✅ Auto quota reset at YouTube refresh
+1. ✅ Transcript optional
+1. ✅ Simple metadata (core + free API data)
+1. ✅ Required database tables
+1. ✅ Optional library health dashboard
+
+═══════════════════════════════════════════════════════════════
+EXPECTED RESULTS
+═══════════════════════════════════════════════════════════════
+
+- 15 queries per run × 15 videos = 225 videos analyzed
+- After filtering: 15-25 videos added per run
+- 6 runs per day = 90-150 videos/day
+- Weekly: 630-1,050 new videos
+- Target: 2,000+ videos within 2-3 weeks
+- Multiple instructors per technique
+- Comprehensive coverage
+- Zero manual intervention required
+
+IMPLEMENT NOW.
+
+```
+---
+
+## **✅ READY TO SEND**
+
+This covers everything we discussed:
+
+1. Dynamic instructor pool
+2. Hybrid technique list
+3. Smart duplicate handling
+4. 800+ query rotation
+5. Deep discovery (100 videos)
+6. Intent-based sorting
+7. Priority queue system
+8. Auto-expand on discovery
+9. Every 4 hours
+10. Auto quota reset
+11. Transcript optional
+12. Simple metadata
+13. Silent operation with optional visibility
+
+**Copy and paste to Replit Agent.** 🚀​​​​​​​​​​​​​​​​
+```

@@ -1,0 +1,223 @@
+**GOOD CATCH - EMAIL INCONSISTENCY** 🚨
+
+This is a critical bug. Let me diagnose:
+
+-----
+
+## **THE PATTERN:**
+
+✅ **Working:** Lifetime invite emails
+❌ **Broken:** Login passcode emails
+
+**This tells us:**
+
+- Email service IS configured (lifetime emails prove it)
+- But TWO DIFFERENT code paths exist
+- The passcode path is broken
+
+-----
+
+## **LIKELY CAUSES:**
+
+### **1. Different Email Functions**
+
+```javascript
+// Lifetime invites (WORKING):
+sendLifetimeInviteEmail(email) {
+  // Uses working email config
+}
+
+// Login passcodes (BROKEN):
+sendPasscodeEmail(email) {
+  // Missing something or using wrong config
+}
+```
+
+### **2. Missing Email Template**
+
+```javascript
+// Passcode email might be trying to use template that doesn't exist
+templates: {
+  'lifetime-invite': '...',  // ✅ Exists
+  'login-passcode': undefined  // ❌ Missing
+}
+```
+
+### **3. Wrong Sender Address**
+
+```javascript
+// Lifetime emails:
+from: 'noreply@bjjos.app'  // ✅ Works
+
+// Passcode emails:
+from: 'admin@bjjos.app'  // ❌ Not configured?
+```
+
+### **4. Silent Error**
+
+```javascript
+try {
+  await sendPasscodeEmail(email);
+  res.json({ success: true });  // ← Says success even if failed
+} catch (error) {
+  console.error(error);  // ← Error hidden
+  res.json({ success: true });  // ← Still says success!
+}
+```
+
+-----
+
+# **📋 DEBUG & FIX PASSCODE EMAILS - SEND TO REPLIT:**
+
+```
+CRITICAL BUG: Login passcode emails not sending
+
+User reports:
+✅ Lifetime invite emails work
+❌ Login passcode emails never arrive
+- UI says "email sent" but nothing arrives
+- Tested with admin@bjjos.app
+
+Need to debug and fix the passcode email path.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: FIND THE PASSCODE EMAIL CODE
+═══════════════════════════════════════════════════════════════════════════════
+
+Search for where passcode emails are sent. Look for:
+- "sendPasscode"
+- "send verification"
+- "send code"
+- "resend passcode"
+
+Find the function that sends login codes.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: ADD DETAILED LOGGING
+═══════════════════════════════════════════════════════════════════════════════
+
+In the passcode email function, add comprehensive logging:
+
+async function sendPasscodeEmail(email, code) {
+  console.log('\n═══════════════════════════════════════════');
+  console.log('📧 ATTEMPTING TO SEND PASSCODE EMAIL');
+  console.log('═══════════════════════════════════════════');
+  console.log(`To: ${email}`);
+  console.log(`Code: ${code}`);
+  console.log(`Timestamp: ${new Date().toISOString()}`);
+  
+  try {
+    // Log email service being used
+    console.log(`Email service: ${process.env.EMAIL_SERVICE || 'NOT SET'}`);
+    console.log(`From address: ${process.env.EMAIL_FROM || 'NOT SET'}`);
+    
+    // Attempt to send
+    console.log('Calling email send function...');
+    
+    const result = await emailService.send({
+      to: email,
+      from: process.env.EMAIL_FROM,
+      subject: 'Your BJJ OS Login Code',
+      text: `Your login code is: ${code}`,
+      html: `<p>Your login code is: <strong>${code}</strong></p>`
+    });
+    
+    console.log('✅ Email send function completed');
+    console.log('Result:', JSON.stringify(result, null, 2));
+    console.log('═══════════════════════════════════════════\n');
+    
+    return { success: true };
+    
+  } catch (error) {
+    console.error('❌ ERROR SENDING PASSCODE EMAIL');
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('═══════════════════════════════════════════\n');
+    
+    // IMPORTANT: Don't swallow the error
+    throw error;
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: COMPARE WITH WORKING LIFETIME EMAIL CODE
+═══════════════════════════════════════════════════════════════════════════════
+
+Find the lifetime invite email function and show me both side by side:
+
+console.log('\n📊 EMAIL FUNCTION COMPARISON:');
+console.log('\nLifetime invite email config:');
+console.log('  Function: sendLifetimeInviteEmail');
+console.log('  From:', /* show from address */);
+console.log('  Service:', /* show email service */);
+console.log('  Template:', /* show if using template */);
+
+console.log('\nPasscode email config:');
+console.log('  Function: sendPasscodeEmail');
+console.log('  From:', /* show from address */);
+console.log('  Service:', /* show email service */);
+console.log('  Template:', /* show if using template */);
+
+Show me what's different between the two.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: CHECK EMAIL SERVICE CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Log all email-related environment variables (mask sensitive values):
+
+console.log('\n🔧 EMAIL CONFIGURATION:');
+console.log('EMAIL_SERVICE:', process.env.EMAIL_SERVICE || 'NOT SET');
+console.log('EMAIL_FROM:', process.env.EMAIL_FROM || 'NOT SET');
+console.log('EMAIL_API_KEY:', process.env.EMAIL_API_KEY ? '***SET***' : 'NOT SET');
+console.log('SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? '***SET***' : 'NOT SET');
+console.log('SMTP_HOST:', process.env.SMTP_HOST || 'NOT SET');
+console.log('SMTP_PORT:', process.env.SMTP_PORT || 'NOT SET');
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: TEST PASSCODE EMAIL
+═══════════════════════════════════════════════════════════════════════════════
+
+Trigger a passcode email send and show me the complete console output:
+
+1. Go to login page
+2. Enter email: admin@bjjos.app
+3. Click "Send Code"
+4. Copy ALL console logs and show me
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 6: FIX BASED ON FINDINGS
+═══════════════════════════════════════════════════════════════════════════════
+
+Common fixes:
+
+If using different email services:
+→ Use same service for both (SendGrid, Resend, etc.)
+
+If missing template:
+→ Create simple text email template for passcodes
+
+If wrong sender:
+→ Use same from address as lifetime emails
+
+If error being swallowed:
+→ Properly handle and log errors
+→ Return actual error status to frontend
+
+If rate limited:
+→ Check email service dashboard for blocks
+→ Implement proper retry logic
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these diagnostics and show me what you find. Then we can fix it.
+```
+
+-----
+
+**SEND THIS TO REPLIT AGENT**
+
+This will reveal exactly why passcodes aren’t sending while lifetime emails work fine.
+
+**My bet:** They’re using different email services or the passcode function has a silent error that’s being ignored. 🎯​​​​​​​​​​​​​​​​

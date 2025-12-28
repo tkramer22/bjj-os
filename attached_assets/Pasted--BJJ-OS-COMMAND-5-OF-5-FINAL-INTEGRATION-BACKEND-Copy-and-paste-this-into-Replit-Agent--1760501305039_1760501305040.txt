@@ -1,0 +1,1054 @@
+# BJJ OS - COMMAND 5 OF 5: FINAL INTEGRATION & BACKEND
+
+Copy and paste this into Replit Agent:
+
+-----
+
+```
+REBUILD BJJ OS WEBSITE - COMMAND 5 OF 5: FINAL INTEGRATION & BACKEND
+
+CRITICAL REQUIREMENTS:
+✅ Connect all frontend components to backend APIs
+✅ Create missing backend endpoints for:
+   - Subscription management (Stripe)
+   - Referral code validation & tracking
+   - Lifetime membership grants
+   - Admin authentication
+   - User analytics
+✅ Update database schema with new tables
+✅ Integrate payment flows (7-day trial, monthly/yearly)
+✅ SMS opt-in/opt-out for Full AI users
+✅ Update all "BJJ Coach" references to "Prof. OS" in backend
+✅ Test complete user journey end-to-end
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: DATABASE SCHEMA UPDATES
+═══════════════════════════════════════════════════════════════════════════════
+
+Add these tables to your PostgreSQL database:
+
+-- Referral codes table
+CREATE TABLE IF NOT EXISTS referral_codes (
+  id SERIAL PRIMARY KEY,
+  code VARCHAR(50) UNIQUE NOT NULL,
+  owner_name VARCHAR(255) NOT NULL,
+  owner_email VARCHAR(255) NOT NULL,
+  commission_rate DECIMAL(5,2) DEFAULT 20.00,
+  status VARCHAR(50) DEFAULT 'active',
+  uses INTEGER DEFAULT 0,
+  revenue_generated DECIMAL(10,2) DEFAULT 0,
+  commission_owed DECIMAL(10,2) DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  created_by VARCHAR(255)
+);
+
+-- Referral usage tracking
+CREATE TABLE IF NOT EXISTS referral_usage (
+  id SERIAL PRIMARY KEY,
+  referral_code_id INTEGER REFERENCES referral_codes(id),
+  user_id INTEGER REFERENCES users(id),
+  subscription_id VARCHAR(255),
+  discount_amount DECIMAL(10,2),
+  commission_amount DECIMAL(10,2),
+  status VARCHAR(50) DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Lifetime memberships table
+CREATE TABLE IF NOT EXISTS lifetime_memberships (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) UNIQUE,
+  reason VARCHAR(100) NOT NULL,
+  notes TEXT,
+  granted_date TIMESTAMP DEFAULT NOW(),
+  granted_by VARCHAR(255) NOT NULL
+);
+
+-- Subscription details table (enhanced)
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) UNIQUE,
+  stripe_customer_id VARCHAR(255),
+  stripe_subscription_id VARCHAR(255),
+  plan_type VARCHAR(50) NOT NULL,
+  billing_period VARCHAR(50) NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  trial_end TIMESTAMP,
+  current_period_end TIMESTAMP,
+  cancel_at_period_end BOOLEAN DEFAULT false,
+  sms_enabled BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Admin users table
+CREATE TABLE IF NOT EXISTS admin_users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  name VARCHAR(255),
+  role VARCHAR(50) DEFAULT 'admin',
+  last_login TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Admin activity log
+CREATE TABLE IF NOT EXISTS admin_activity_log (
+  id SERIAL PRIMARY KEY,
+  admin_id INTEGER REFERENCES admin_users(id),
+  action VARCHAR(255) NOT NULL,
+  details JSONB,
+  ip_address VARCHAR(50),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Update users table with additional fields
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code_used VARCHAR(50);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_referral_codes_code ON referral_codes(code);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe ON subscriptions(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_lifetime_user ON lifetime_memberships(user_id);
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: BACKEND API ROUTES - SUBSCRIPTION & PAYMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /server/routes/subscription_routes.js:
+
+const express = require('express');
+const router = express.Router();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const bcrypt = require('bcrypt');
+const pool = require('../db');
+
+// Validate referral code
+router.post('/validate-referral', async (req, res) => {
+  try {
+    const { code } = req.body;
+    
+    const result = await pool.query(`
+      SELECT id, code, commission_rate, status
+      FROM referral_codes
+      WHERE code = $1 AND status = 'active'
+    `, [code.toUpperCase()]);
+    
+    if (result.rows.length > 0) {
+      res.json({ valid: true, commission: result.rows[0].commission_rate });
+    } else {
+      res.json({ valid: false });
+    }
+  } catch (error) {
+    console.error('Referral validation error:', error);
+    res.status(500).json({ error: 'Failed to validate referral code' });
+  }
+});
+
+// Create subscription (signup flow)
+router.post('/create-subscription', async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      password,
+      belt,
+      plan,
+      paymentMethodId,
+      referralCode
+    } = req.body;
+    
+    // Validate required fields
+    if (!name || !email || !phone || !password || !belt || !plan || !paymentMethodId) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Check if user exists
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE email = $1 OR phone = $2',
+      [email, phone]
+    );
+    
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+    
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    // Determine plan details
+    let stripePriceId, billingPeriod, amount;
+    
+    if (plan === 'sms-only') {
+      stripePriceId = process.env.STRIPE_PRICE_SMS_ONLY;
+      billingPeriod = 'monthly';
+      amount = 499; // $4.99
+    } else if (plan === 'full-ai-monthly') {
+      stripePriceId = process.env.STRIPE_PRICE_FULL_MONTHLY;
+      billingPeriod = 'monthly';
+      amount = 1499; // $14.99
+    } else if (plan === 'full-ai-yearly') {
+      stripePriceId = process.env.STRIPE_PRICE_FULL_YEARLY;
+      billingPeriod = 'yearly';
+      amount = 14900; // $149
+    } else {
+      return res.status(400).json({ error: 'Invalid plan' });
+    }
+    
+    // Check referral code
+    let referralCodeId = null;
+    let discountCouponId = null;
+    
+    if (referralCode) {
+      const refResult = await pool.query(`
+        SELECT id, commission_rate
+        FROM referral_codes
+        WHERE code = $1 AND status = 'active'
+      `, [referralCode.toUpperCase()]);
+      
+      if (refResult.rows.length > 0) {
+        referralCodeId = refResult.rows[0].id;
+        
+        // Create Stripe coupon for 20% off
+        const coupon = await stripe.coupons.create({
+          percent_off: refResult.rows[0].commission_rate,
+          duration: 'forever',
+          name: `Referral: ${referralCode}`
+        });
+        
+        discountCouponId = coupon.id;
+      }
+    }
+    
+    // Create Stripe customer
+    const customer = await stripe.customers.create({
+      email: email,
+      name: name,
+      phone: phone,
+      payment_method: paymentMethodId,
+      invoice_settings: {
+        default_payment_method: paymentMethodId
+      },
+      metadata: {
+        belt: belt,
+        referral_code: referralCode || 'none'
+      }
+    });
+    
+    // Create subscription with 7-day trial
+    const subscriptionData = {
+      customer: customer.id,
+      items: [{ price: stripePriceId }],
+      trial_period_days: 7,
+      payment_behavior: 'default_incomplete',
+      payment_settings: {
+        save_default_payment_method: 'on_subscription'
+      },
+      expand: ['latest_invoice.payment_intent']
+    };
+    
+    if (discountCouponId) {
+      subscriptionData.coupon = discountCouponId;
+    }
+    
+    const subscription = await stripe.subscriptions.create(subscriptionData);
+    
+    // Create user in database
+    const userResult = await pool.query(`
+      INSERT INTO users (
+        name, email, phone, password_hash, belt_level,
+        stripe_customer_id, referral_code_used, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      RETURNING id
+    `, [name, email, phone, passwordHash, belt, customer.id, referralCode]);
+    
+    const userId = userResult.rows[0].id;
+    
+    // Create subscription record
+    await pool.query(`
+      INSERT INTO subscriptions (
+        user_id, stripe_customer_id, stripe_subscription_id,
+        plan_type, billing_period, status, trial_end,
+        current_period_end, sms_enabled
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      userId,
+      customer.id,
+      subscription.id,
+      plan,
+      billingPeriod,
+      'trialing',
+      new Date(subscription.trial_end * 1000),
+      new Date(subscription.current_period_end * 1000),
+      true
+    ]);
+    
+    // Track referral usage
+    if (referralCodeId) {
+      const discountAmount = amount * (refResult.rows[0].commission_rate / 100);
+      const commissionAmount = discountAmount;
+      
+      await pool.query(`
+        INSERT INTO referral_usage (
+          referral_code_id, user_id, subscription_id,
+          discount_amount, commission_amount, status
+        ) VALUES ($1, $2, $3, $4, $5, 'active')
+      `, [referralCodeId, userId, subscription.id, discountAmount / 100, commissionAmount / 100]);
+      
+      // Update referral code stats
+      await pool.query(`
+        UPDATE referral_codes
+        SET uses = uses + 1,
+            revenue_generated = revenue_generated + $1,
+            commission_owed = commission_owed + $2
+        WHERE id = $3
+      `, [amount / 100, commissionAmount / 100, referralCodeId]);
+    }
+    
+    // Create initial user context for AI
+    await pool.query(`
+      INSERT INTO ai_user_context (
+        user_id, belt_level, primary_goal, injuries,
+        training_frequency, last_updated
+      ) VALUES ($1, $2, $3, $4, $5, NOW())
+    `, [userId, belt, 'Improve overall skills', '[]', 'weekly']);
+    
+    res.json({
+      success: true,
+      userId: userId,
+      requiresAction: subscription.latest_invoice.payment_intent.status === 'requires_action',
+      clientSecret: subscription.latest_invoice.payment_intent.client_secret
+    });
+    
+  } catch (error) {
+    console.error('Subscription creation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to create subscription' });
+  }
+});
+
+// Cancel subscription
+router.post('/cancel-subscription', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    // Get subscription
+    const subResult = await pool.query(`
+      SELECT stripe_subscription_id
+      FROM subscriptions
+      WHERE user_id = $1
+    `, [userId]);
+    
+    if (subResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Subscription not found' });
+    }
+    
+    const stripeSubId = subResult.rows[0].stripe_subscription_id;
+    
+    // Cancel at period end
+    await stripe.subscriptions.update(stripeSubId, {
+      cancel_at_period_end: true
+    });
+    
+    // Update database
+    await pool.query(`
+      UPDATE subscriptions
+      SET cancel_at_period_end = true,
+          updated_at = NOW()
+      WHERE user_id = $1
+    `, [userId]);
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('Subscription cancellation error:', error);
+    res.status(500).json({ error: 'Failed to cancel subscription' });
+  }
+});
+
+// Toggle SMS
+router.post('/toggle-sms', async (req, res) => {
+  try {
+    const { userId, enabled } = req.body;
+    
+    await pool.query(`
+      UPDATE subscriptions
+      SET sms_enabled = $1,
+          updated_at = NOW()
+      WHERE user_id = $2
+    `, [enabled, userId]);
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('SMS toggle error:', error);
+    res.status(500).json({ error: 'Failed to toggle SMS' });
+  }
+});
+
+// Stripe webhook
+router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+  
+  // Handle event
+  switch (event.type) {
+    case 'customer.subscription.updated':
+      const subscription = event.data.object;
+      await pool.query(`
+        UPDATE subscriptions
+        SET status = $1,
+            current_period_end = $2,
+            updated_at = NOW()
+        WHERE stripe_subscription_id = $3
+      `, [subscription.status, new Date(subscription.current_period_end * 1000), subscription.id]);
+      break;
+      
+    case 'customer.subscription.deleted':
+      await pool.query(`
+        UPDATE subscriptions
+        SET status = 'cancelled',
+            updated_at = NOW()
+        WHERE stripe_subscription_id = $1
+      `, [event.data.object.id]);
+      break;
+      
+    case 'invoice.payment_succeeded':
+      // Track successful payment for referral commission
+      const invoice = event.data.object;
+      // Update revenue tracking...
+      break;
+  }
+  
+  res.json({ received: true });
+});
+
+module.exports = router;
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: ADMIN API ROUTES
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /server/routes/admin_routes.js:
+
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcrypt');
+const pool = require('../db');
+
+// Admin authentication middleware
+async function authenticateAdmin(req, res, next) {
+  const adminId = req.headers['x-admin-id'];
+  
+  if (!adminId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  const result = await pool.query('SELECT id, email, role FROM admin_users WHERE id = $1', [adminId]);
+  
+  if (result.rows.length === 0) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  req.admin = result.rows[0];
+  next();
+}
+
+// Admin login
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    const result = await pool.query(
+      'SELECT id, email, password_hash, name, role FROM admin_users WHERE email = $1',
+      [email]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    const admin = result.rows[0];
+    const validPassword = await bcrypt.compare(password, admin.password_hash);
+    
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    // Update last login
+    await pool.query('UPDATE admin_users SET last_login = NOW() WHERE id = $1', [admin.id]);
+    
+    // Log activity
+    await pool.query(
+      'INSERT INTO admin_activity_log (admin_id, action, ip_address) VALUES ($1, $2, $3)',
+      [admin.id, 'login', req.ip]
+    );
+    
+    res.json({
+      success: true,
+      adminId: admin.id,
+      email: admin.email,
+      name: admin.name
+    });
+    
+  } catch (error) {
+    console.error('Admin login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Get overview stats
+router.get('/overview', authenticateAdmin, async (req, res) => {
+  try {
+    // Total users
+    const totalUsers = await pool.query('SELECT COUNT(*) FROM users');
+    
+    // MRR calculation
+    const mrr = await pool.query(`
+      SELECT SUM(
+        CASE 
+          WHEN plan_type = 'sms-only' THEN 4.99
+          WHEN plan_type = 'full-ai-monthly' THEN 14.99
+          WHEN plan_type = 'full-ai-yearly' THEN 12.42
+          ELSE 0
+        END
+      ) as mrr
+      FROM subscriptions
+      WHERE status IN ('active', 'trialing')
+    `);
+    
+    // Active referrals
+    const activeReferrals = await pool.query(`
+      SELECT COUNT(*) FROM referral_codes WHERE status = 'active'
+    `);
+    
+    // Lifetime members
+    const lifetimeMembers = await pool.query('SELECT COUNT(*) FROM lifetime_memberships');
+    
+    // Recent activity
+    const recentActivity = await pool.query(`
+      SELECT action, details, created_at
+      FROM admin_activity_log
+      ORDER BY created_at DESC
+      LIMIT 10
+    `);
+    
+    res.json({
+      totalUsers: parseInt(totalUsers.rows[0].count),
+      mrr: parseFloat(mrr.rows[0].mrr || 0).toFixed(2),
+      activeReferrals: parseInt(activeReferrals.rows[0].count),
+      lifetimeMembers: parseInt(lifetimeMembers.rows[0].count),
+      recentActivity: recentActivity.rows.map(a => ({
+        icon: getActivityIcon(a.action),
+        text: formatActivityText(a.action, a.details),
+        timestamp: a.created_at
+      }))
+    });
+    
+  } catch (error) {
+    console.error('Overview error:', error);
+    res.status(500).json({ error: 'Failed to load overview' });
+  }
+});
+
+// Get all users
+router.get('/users', authenticateAdmin, async (req, res) => {
+  try {
+    const users = await pool.query(`
+      SELECT 
+        u.id,
+        u.name,
+        u.email,
+        u.phone,
+        u.belt_level,
+        u.created_at,
+        s.plan_type,
+        s.status,
+        CASE WHEN l.user_id IS NOT NULL THEN 'lifetime' ELSE s.status END as display_status
+      FROM users u
+      LEFT JOIN subscriptions s ON u.id = s.user_id
+      LEFT JOIN lifetime_memberships l ON u.id = l.user_id
+      ORDER BY u.created_at DESC
+    `);
+    
+    res.json({
+      users: users.rows.map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        belt: u.belt_level,
+        plan: u.plan_type || 'none',
+        status: u.display_status || 'inactive',
+        created_at: u.created_at
+      }))
+    });
+    
+  } catch (error) {
+    console.error('Users fetch error:', error);
+    res.status(500).json({ error: 'Failed to load users' });
+  }
+});
+
+// Get referral codes
+router.get('/referrals', authenticateAdmin, async (req, res) => {
+  try {
+    const referrals = await pool.query(`
+      SELECT * FROM referral_codes ORDER BY created_at DESC
+    `);
+    
+    res.json({ referrals: referrals.rows });
+    
+  } catch (error) {
+    console.error('Referrals fetch error:', error);
+    res.status(500).json({ error: 'Failed to load referrals' });
+  }
+});
+
+// Create referral code
+router.post('/referrals/create', authenticateAdmin, async (req, res) => {
+  try {
+    const { code, owner_name, owner_email, commission_rate, notes } = req.body;
+    
+    const result = await pool.query(`
+      INSERT INTO referral_codes (
+        code, owner_name, owner_email, commission_rate, notes, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id
+    `, [code.toUpperCase(), owner_name, owner_email, commission_rate, notes, req.admin.email]);
+    
+    // Log activity
+    await pool.query(
+      'INSERT INTO admin_activity_log (admin_id, action, details) VALUES ($1, $2, $3)',
+      [req.admin.id, 'create_referral_code', JSON.stringify({ code: code.toUpperCase() })]
+    );
+    
+    res.json({ success: true, id: result.rows[0].id });
+    
+  } catch (error) {
+    console.error('Referral creation error:', error);
+    res.status(500).json({ error: 'Failed to create referral code' });
+  }
+});
+
+// Get lifetime members
+router.get('/lifetime', authenticateAdmin, async (req, res) => {
+  try {
+    const lifetime = await pool.query(`
+      SELECT 
+        u.id,
+        u.name,
+        u.email,
+        u.belt_level,
+        l.reason,
+        l.notes,
+        l.granted_date,
+        l.granted_by
+      FROM lifetime_memberships l
+      JOIN users u ON l.user_id = u.id
+      ORDER BY l.granted_date DESC
+    `);
+    
+    res.json({
+      users: lifetime.rows.map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        belt: u.belt_level,
+        reason: u.reason,
+        notes: u.notes,
+        lifetime_granted_date: u.granted_date,
+        granted_by: u.granted_by
+      }))
+    });
+    
+  } catch (error) {
+    console.error('Lifetime fetch error:', error);
+    res.status(500).json({ error: 'Failed to load lifetime members' });
+  }
+});
+
+// Grant lifetime access
+router.post('/lifetime/grant', authenticateAdmin, async (req, res) => {
+  try {
+    const { email, reason, notes, granted_by } = req.body;
+    
+    // Find user
+    const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const userId = userResult.rows[0].id;
+    
+    // Grant lifetime access
+    await pool.query(`
+      INSERT INTO lifetime_memberships (user_id, reason, notes, granted_by)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (user_id) DO NOTHING
+    `, [userId, reason, notes, granted_by]);
+    
+    // Cancel any existing subscription
+    await pool.query(`
+      UPDATE subscriptions
+      SET status = 'lifetime',
+          cancel_at_period_end = false,
+          updated_at = NOW()
+      WHERE user_id = $1
+    `, [userId]);
+    
+    // Log activity
+    await pool.query(
+      'INSERT INTO admin_activity_log (admin_id, action, details) VALUES ($1, $2, $3)',
+      [req.admin.id, 'grant_lifetime', JSON.stringify({ user_email: email, reason })]
+    );
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('Lifetime grant error:', error);
+    res.status(500).json({ error: 'Failed to grant lifetime access' });
+  }
+});
+
+// Helper functions
+function getActivityIcon(action) {
+  const icons = {
+    'login': '🔐',
+    'create_referral_code': '🎁',
+    'grant_lifetime': '⭐',
+    'user_signup': '👤',
+    'subscription_created': '💳'
+  };
+  return icons[action] || '📝';
+}
+
+function formatActivityText(action, details) {
+  const texts = {
+    'login': 'Admin logged in',
+    'create_referral_code': `Created referral code: ${details?.code || 'N/A'}`,
+    'grant_lifetime': `Granted lifetime access to ${details?.user_email || 'user'}`,
+    'user_signup': 'New user signed up',
+    'subscription_created': 'New subscription created'
+  };
+  return texts[action] || action;
+}
+
+module.exports = router;
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: UPDATE AI INTELLIGENCE (PROF. OS BRANDING)
+═══════════════════════════════════════════════════════════════════════════════
+
+Update /server/ai_intelligence.js - Change system prompt:
+
+// Find the buildSystemPrompt function and update:
+
+function buildSystemPrompt(userContext) {
+  return `You are Prof. OS, an expert Brazilian Jiu-Jitsu coach with deep knowledge of techniques, strategy, and training methodology.
+
+USER PROFILE:
+${userContext ? JSON.stringify(userContext, null, 2) : 'No context available yet'}
+
+YOUR ROLE:
+- You are Prof. OS, a knowledgeable and supportive BJJ coach
+- Provide clear, actionable advice tailored to the user's level
+- Remember their preferences, injuries, and goals
+- Be encouraging and motivational
+- Keep responses conversational and concise (2-3 paragraphs unless asked for more detail)
+
+RESPONSE FORMAT:
+- When recommending videos, use this exact format: [VIDEO: Title by Instructor]
+- Example: [VIDEO: Triangle Choke Setup by John Danaher]
+- Be specific about which videos match their skill level
+- Always consider their injuries when recommending techniques
+
+Remember: You are Prof. OS, their personal BJJ coach who knows their journey and helps them improve.`;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: INTEGRATE ALL ROUTES IN SERVER
+═══════════════════════════════════════════════════════════════════════════════
+
+Update /server/index.js to include new routes:
+
+const express = require('express');
+const app = express();
+const subscriptionRoutes = require('./routes/subscription_routes');
+const adminRoutes = require('./routes/admin_routes');
+const aiRoutes = require('./routes/ai_routes');
+
+// Middleware
+app.use(express.json());
+
+// API Routes
+app.use('/api', subscriptionRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/ai', aiRoutes);
+
+// Serve static files
+app.use(express.static('public'));
+
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`BJJ OS server running on port ${PORT}`);
+});
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: ENVIRONMENT VARIABLES SETUP
+═══════════════════════════════════════════════════════════════════════════════
+
+Create/update .env file with:
+
+# Database
+DATABASE_URL=your_postgres_connection_string
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_your_key
+STRIPE_PUBLISHABLE_KEY=pk_test_your_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Stripe Price IDs (create these in Stripe dashboard)
+STRIPE_PRICE_SMS_ONLY=price_xxx  # $4.99/month
+STRIPE_PRICE_FULL_MONTHLY=price_xxx  # $14.99/month
+STRIPE_PRICE_FULL_YEARLY=price_xxx  # $149/year
+
+# Anthropic AI
+ANTHROPIC_API_KEY=your_anthropic_key
+
+# Twilio (existing)
+TWILIO_ACCOUNT_SID=your_sid
+TWILIO_AUTH_TOKEN=your_token
+TWILIO_PHONE_NUMBER=your_number
+
+# Admin
+ADMIN_EMAIL=admin@bjjos.app
+ADMIN_PASSWORD_HASH=bcrypt_hash_here
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 7: CREATE FIRST ADMIN USER
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /server/scripts/create_admin.js:
+
+const bcrypt = require('bcrypt');
+const pool = require('../db');
+
+async function createAdmin() {
+  const email = 'admin@bjjos.app';
+  const password = 'ChangeThisPassword123!'; // CHANGE THIS!
+  const name = 'Admin';
+  
+  const passwordHash = await bcrypt.hash(password, 10);
+  
+  try {
+    await pool.query(`
+      INSERT INTO admin_users (email, password_hash, name, role)
+      VALUES ($1, $2, $3, 'admin')
+      ON CONFLICT (email) DO UPDATE
+      SET password_hash = $2
+    `, [email, passwordHash, name]);
+    
+    console.log('✅ Admin user created!');
+    console.log('Email:', email);
+    console.log('Password:', password);
+    console.log('⚠️  CHANGE PASSWORD AFTER FIRST LOGIN!');
+    
+  } catch (error) {
+    console.error('Failed to create admin:', error);
+  }
+  
+  process.exit();
+}
+
+createAdmin();
+
+Run: node server/scripts/create_admin.js
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 8: UPDATE LOGIN.JS TO USE REAL API
+═══════════════════════════════════════════════════════════════════════════════
+
+Update /public/scripts/login.js:
+
+document.getElementById('login-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const identifier = document.getElementById('login-identifier').value;
+  const password = document.getElementById('login-password').value;
+  
+  try {
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      localStorage.setItem('userId', data.userId);
+      localStorage.setItem('userName', data.name);
+      localStorage.setItem('userBelt', data.belt);
+      
+      // Check subscription type
+      if (data.plan === 'sms-only') {
+        window.location.href = '/dashboard';
+      } else {
+        window.location.href = '/chat';
+      }
+    } else {
+      alert('Login failed: ' + data.error);
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    alert('Login failed. Please try again.');
+  }
+});
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 9: UPDATE ADMIN LOGIN
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /public/scripts/admin-login.js:
+
+document.getElementById('admin-login-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const email = document.getElementById('admin-email').value;
+  const password = document.getElementById('admin-password').value;
+  
+  try {
+    const response = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      localStorage.setItem('adminId', data.adminId);
+      localStorage.setItem('adminEmail', data.email);
+      window.location.href = '/admin/dashboard';
+    } else {
+      alert('Invalid admin credentials');
+    }
+  } catch (error) {
+    console.error('Admin login error:', error);
+    alert('Login failed. Please try again.');
+  }
+});
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION & TESTING
+═══════════════════════════════════════════════════════════════════════════════
+
+Complete End-to-End Testing:
+
+1. LANDING PAGE
+   ✓ Visit bjjos.app
+   ✓ See two product options (SMS Only & Full AI)
+   ✓ Monthly/Yearly toggle works
+   ✓ Click "Start Free Trial"
+
+2. SIGNUP FLOW
+   ✓ Select Full AI Package (Monthly)
+   ✓ Enter referral code (should apply 20% discount)
+   ✓ Create account with name, email, phone, password, belt
+   ✓ Enter test card (4242 4242 4242 4242)
+   ✓ Submit → 7-day trial starts
+   ✓ Redirect to /chat
+
+3. WEB CHAT
+   ✓ See "Prof. OS" as AI name
+   ✓ Send message → Get AI response
+   ✓ AI recommends videos
+   ✓ Save video → Appears in Saved tab
+   ✓ Voice input works
+   ✓ Send button has belt color + stripes
+
+4. MOBILE APP
+   ✓ Visit on phone
+   ✓ Install PWA (Add to Home Screen)
+   ✓ Same chat interface
+   ✓ Bottom nav works
+   ✓ Send button shows correct belt color
+
+5. ADMIN DASHBOARD
+   ✓ Login at /admin/login.html
+   ✓ See overview with stats
+   ✓ View all users
+   ✓ Create referral code (INFLUENCER2025, 20%)
+   ✓ Grant lifetime access to beta user
+   ✓ View subscription details
+   ✓ See analytics
+
+6. REFERRAL SYSTEM
+   ✓ New user uses code INFLUENCER2025
+   ✓ Gets 20% off ($11.99 instead of $14.99)
+   ✓ Admin sees commission owed
+   ✓ Referral usage tracked
+
+7. LIFETIME ACCESS
+   ✓ Admin grants lifetime to beta@test.com
+   ✓ User has full access forever
+   ✓ No charges appear in Stripe
+
+8. 7-DAY TRIAL
+   ✓ User signs up
+   ✓ Gets 7 days free
+   ✓ Card charged on day 8
+   ✓ Can cancel within 7 days for full refund
+
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Complete dual product system (SMS Only + Full AI)
+✅ Stripe integration working (monthly/yearly, 7-day trial)
+✅ Referral system (20% recurring commission)
+✅ Lifetime membership grants
+✅ Admin dashboard fully functional
+✅ Prof. OS branding throughout (AI agent name)
+✅ BJJ OS brand maintained (company name)
+✅ Web chat + Mobile PWA both working
+✅ Belt-colored send buttons with stripes
+✅ All 29 AI features accessible
+✅ SMS opt-in/opt-out for Full AI users
+✅ Complete user journey tested
+
+🎉 BJJ OS IS NOW COMPLETE AND PRODUCTION-READY! 🎉
+```
+
+-----
+
+**📋 PASTE COMMAND 5 INTO REPLIT AGENT NOW**
+
+This is the final integration! Once complete, your entire BJJ OS platform will be live with:
+
+- ✅ Dual products (SMS Only $4.99 + Full AI $14.99/mo or $149/yr)
+- ✅ 7-day free trials
+- ✅ Referral system (20% recurring)
+- ✅ Lifetime memberships for beta users
+- ✅ Admin dashboard
+- ✅ Web + Mobile PWA
+- ✅ Prof. OS AI coach
+- ✅ Complete payment system
+
+Let me know when it’s done! 🚀​​​​​​​​​​​​​​​​

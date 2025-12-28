@@ -1,0 +1,400 @@
+Exactly right. The logic should be:
+
+**Has verified data in database → Use it**
+**No verified data → Say nothing about credentials**
+
+Never guess. Never invent.
+
+Here’s the prompt to fix this properly:
+
+```
+TASK: Build Verified Instructor Credentials System
+
+PROBLEM:
+Professor OS is inventing competition results (said "JT Torres won 2022 ADCC" which is FALSE).
+We need a verified credentials database that Professor OS checks BEFORE making any claims.
+
+RULE: If credentials exist in database → use them. If not → don't mention credentials at all.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: CREATE THE REFERENCE DATABASE TABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+Create these tables if they don't exist:
+
+-- ADCC Results (Historical)
+CREATE TABLE IF NOT EXISTS adcc_results (
+  id SERIAL PRIMARY KEY,
+  year INTEGER NOT NULL,
+  weight_class TEXT NOT NULL,
+  gender TEXT DEFAULT 'male',
+  place INTEGER NOT NULL, -- 1 = gold, 2 = silver, 3 = bronze
+  athlete_name TEXT NOT NULL,
+  athlete_name_normalized TEXT NOT NULL, -- lowercase, no accents for matching
+  submission_wins INTEGER DEFAULT 0,
+  total_matches INTEGER DEFAULT 0,
+  notable_wins TEXT[], -- array of notable opponents defeated
+  created_at TIMESTAMP DEFAULT NOW(),
+  verified BOOLEAN DEFAULT true,
+  source TEXT DEFAULT 'manual_entry'
+);
+
+CREATE INDEX idx_adcc_athlete ON adcc_results(athlete_name_normalized);
+CREATE INDEX idx_adcc_year ON adcc_results(year);
+
+-- IBJJF World Championship Results
+CREATE TABLE IF NOT EXISTS ibjjf_worlds_results (
+  id SERIAL PRIMARY KEY,
+  year INTEGER NOT NULL,
+  weight_class TEXT NOT NULL,
+  belt TEXT NOT NULL, -- 'black', 'brown', 'purple', 'blue', 'white'
+  gender TEXT DEFAULT 'male',
+  gi_or_nogi TEXT DEFAULT 'gi',
+  place INTEGER NOT NULL,
+  athlete_name TEXT NOT NULL,
+  athlete_name_normalized TEXT NOT NULL,
+  team TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  verified BOOLEAN DEFAULT true,
+  source TEXT DEFAULT 'manual_entry'
+);
+
+CREATE INDEX idx_ibjjf_athlete ON ibjjf_worlds_results(athlete_name_normalized);
+CREATE INDEX idx_ibjjf_year ON ibjjf_worlds_results(year);
+
+-- IBJJF Pans Results
+CREATE TABLE IF NOT EXISTS ibjjf_pans_results (
+  id SERIAL PRIMARY KEY,
+  year INTEGER NOT NULL,
+  weight_class TEXT NOT NULL,
+  belt TEXT NOT NULL,
+  gender TEXT DEFAULT 'male',
+  gi_or_nogi TEXT DEFAULT 'gi',
+  place INTEGER NOT NULL,
+  athlete_name TEXT NOT NULL,
+  athlete_name_normalized TEXT NOT NULL,
+  team TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  verified BOOLEAN DEFAULT true,
+  source TEXT DEFAULT 'manual_entry'
+);
+
+CREATE INDEX idx_pans_athlete ON ibjjf_pans_results(athlete_name_normalized);
+
+-- Instructor Credentials Summary (aggregated view for quick lookup)
+CREATE TABLE IF NOT EXISTS instructor_verified_credentials (
+  id SERIAL PRIMARY KEY,
+  instructor_name TEXT NOT NULL,
+  instructor_name_normalized TEXT NOT NULL UNIQUE,
+  
+  -- ADCC achievements
+  adcc_gold INTEGER DEFAULT 0,
+  adcc_silver INTEGER DEFAULT 0,
+  adcc_bronze INTEGER DEFAULT 0,
+  adcc_years_won TEXT[], -- ['2019', '2022']
+  
+  -- IBJJF Worlds achievements
+  ibjjf_worlds_gold INTEGER DEFAULT 0,
+  ibjjf_worlds_silver INTEGER DEFAULT 0,
+  ibjjf_worlds_bronze INTEGER DEFAULT 0,
+  
+  -- IBJJF Pans achievements
+  ibjjf_pans_gold INTEGER DEFAULT 0,
+  ibjjf_pans_silver INTEGER DEFAULT 0,
+  ibjjf_pans_bronze INTEGER DEFAULT 0,
+  
+  -- Other verified info
+  belt_rank TEXT, -- 'black', 'coral', 'red'
+  team TEXT,
+  known_for TEXT[], -- ['pressure passing', 'leg locks']
+  teaching_style TEXT,
+  
+  -- Metadata
+  last_updated TIMESTAMP DEFAULT NOW(),
+  verified BOOLEAN DEFAULT true,
+  
+  UNIQUE(instructor_name_normalized)
+);
+
+CREATE INDEX idx_credentials_name ON instructor_verified_credentials(instructor_name_normalized);
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: POPULATE WITH VERIFIED ADCC DATA
+═══════════════════════════════════════════════════════════════════════════════
+
+Insert verified ADCC results. Here's a starter set (ADD MORE):
+
+-- ADCC 2024
+INSERT INTO adcc_results (year, weight_class, gender, place, athlete_name, athlete_name_normalized) VALUES
+(2024, '77kg', 'male', 1, 'Mica Galvao', 'mica galvao'),
+(2024, '88kg', 'male', 1, 'Giancarlo Bodoni', 'giancarlo bodoni'),
+(2024, '99kg', 'male', 1, 'Yuri Simoes', 'yuri simoes'),
+(2024, '+99kg', 'male', 1, 'Gordon Ryan', 'gordon ryan'),
+(2024, 'Absolute', 'male', 1, 'Gordon Ryan', 'gordon ryan'),
+(2024, '66kg', 'male', 1, 'Diogo Reis', 'diogo reis');
+
+-- ADCC 2022
+INSERT INTO adcc_results (year, weight_class, gender, place, athlete_name, athlete_name_normalized) VALUES
+(2022, '77kg', 'male', 1, 'Mica Galvao', 'mica galvao'),
+(2022, '88kg', 'male', 1, 'Giancarlo Bodoni', 'giancarlo bodoni'),
+(2022, '99kg', 'male', 1, 'Gordon Ryan', 'gordon ryan'),
+(2022, '+99kg', 'male', 1, 'Gordon Ryan', 'gordon ryan'),
+(2022, 'Absolute', 'male', 1, 'Gordon Ryan', 'gordon ryan'),
+(2022, '66kg', 'male', 1, 'Diogo Reis', 'diogo reis');
+
+-- ADCC 2019
+INSERT INTO adcc_results (year, weight_class, gender, place, athlete_name, athlete_name_normalized) VALUES
+(2019, '77kg', 'male', 1, 'JT Torres', 'jt torres'),
+(2019, '88kg', 'male', 1, 'Craig Jones', 'craig jones'),
+(2019, '99kg', 'male', 1, 'Gordon Ryan', 'gordon ryan'),
+(2019, '+99kg', 'male', 1, 'Kaynan Duarte', 'kaynan duarte'),
+(2019, 'Absolute', 'male', 1, 'Gordon Ryan', 'gordon ryan'),
+(2019, '66kg', 'male', 1, 'Paulo Miyao', 'paulo miyao');
+
+-- ADCC 2017
+INSERT INTO adcc_results (year, weight_class, gender, place, athlete_name, athlete_name_normalized) VALUES
+(2017, '77kg', 'male', 1, 'JT Torres', 'jt torres'),
+(2017, '88kg', 'male', 1, 'Matheus Diniz', 'matheus diniz'),
+(2017, '99kg', 'male', 1, 'Keenan Cornelius', 'keenan cornelius'),
+(2017, '+99kg', 'male', 1, 'Felipe Pena', 'felipe pena'),
+(2017, 'Absolute', 'male', 1, 'Felipe Pena', 'felipe pena'),
+(2017, '66kg', 'male', 1, 'Augusto Mendes', 'augusto mendes');
+
+-- JT Torres complete ADCC record (he won 2017 and 2019, NOT 2022)
+-- Add silver/bronze placements too for completeness
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: BUILD INSTRUCTOR CREDENTIALS SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+Create a function to aggregate credentials from results tables:
+
+CREATE OR REPLACE FUNCTION update_instructor_credentials(instructor TEXT)
+RETURNS VOID AS $$
+DECLARE
+  normalized_name TEXT;
+  adcc_golds INTEGER;
+  adcc_silvers INTEGER;
+  adcc_bronzes INTEGER;
+  adcc_win_years TEXT[];
+BEGIN
+  normalized_name := LOWER(TRIM(instructor));
+  
+  -- Count ADCC medals
+  SELECT 
+    COUNT(*) FILTER (WHERE place = 1),
+    COUNT(*) FILTER (WHERE place = 2),
+    COUNT(*) FILTER (WHERE place = 3),
+    ARRAY_AGG(DISTINCT year::TEXT) FILTER (WHERE place = 1)
+  INTO adcc_golds, adcc_silvers, adcc_bronzes, adcc_win_years
+  FROM adcc_results
+  WHERE athlete_name_normalized = normalized_name;
+  
+  -- Upsert credentials
+  INSERT INTO instructor_verified_credentials (
+    instructor_name, 
+    instructor_name_normalized,
+    adcc_gold, 
+    adcc_silver, 
+    adcc_bronze,
+    adcc_years_won,
+    last_updated
+  ) VALUES (
+    instructor,
+    normalized_name,
+    COALESCE(adcc_golds, 0),
+    COALESCE(adcc_silvers, 0),
+    COALESCE(adcc_bronzes, 0),
+    adcc_win_years,
+    NOW()
+  )
+  ON CONFLICT (instructor_name_normalized) 
+  DO UPDATE SET
+    adcc_gold = COALESCE(adcc_golds, 0),
+    adcc_silver = COALESCE(adcc_silvers, 0),
+    adcc_bronze = COALESCE(adcc_bronzes, 0),
+    adcc_years_won = adcc_win_years,
+    last_updated = NOW();
+END;
+$$ LANGUAGE plpgsql;
+
+-- Run for key instructors
+SELECT update_instructor_credentials('JT Torres');
+SELECT update_instructor_credentials('Gordon Ryan');
+SELECT update_instructor_credentials('Craig Jones');
+SELECT update_instructor_credentials('Mica Galvao');
+SELECT update_instructor_credentials('Giancarlo Bodoni');
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: CREATE CREDENTIAL LOOKUP FUNCTION FOR PROFESSOR OS
+═══════════════════════════════════════════════════════════════════════════════
+
+async function getVerifiedCredentials(instructorName: string): Promise<{
+  hasCredentials: boolean;
+  credentials: string | null;
+  adccWins: number;
+  ibjjfWorldsWins: number;
+  adccYears: string[];
+}> {
+  const normalized = instructorName.toLowerCase().trim();
+  
+  try {
+    const result = await db.select()
+      .from(instructorVerifiedCredentials)
+      .where(
+        or(
+          eq(instructorVerifiedCredentials.instructorNameNormalized, normalized),
+          sql`${instructorVerifiedCredentials.instructorNameNormalized} LIKE ${'%' + normalized + '%'}`
+        )
+      )
+      .limit(1);
+    
+    if (result.length === 0) {
+      return {
+        hasCredentials: false,
+        credentials: null,
+        adccWins: 0,
+        ibjjfWorldsWins: 0,
+        adccYears: []
+      };
+    }
+    
+    const cred = result[0];
+    
+    // Build human-readable credentials string
+    let credentialParts: string[] = [];
+    
+    if (cred.adccGold > 0) {
+      credentialParts.push(`${cred.adccGold}x ADCC champion (${cred.adccYearsWon?.join(', ')})`);
+    }
+    if (cred.ibjjfWorldsGold > 0) {
+      credentialParts.push(`${cred.ibjjfWorldsGold}x IBJJF World champion`);
+    }
+    if (cred.ibjjfPansGold > 0) {
+      credentialParts.push(`${cred.ibjjfPansGold}x Pan American champion`);
+    }
+    
+    return {
+      hasCredentials: credentialParts.length > 0,
+      credentials: credentialParts.length > 0 ? credentialParts.join(', ') : null,
+      adccWins: cred.adccGold || 0,
+      ibjjfWorldsWins: cred.ibjjfWorldsGold || 0,
+      adccYears: cred.adccYearsWon || []
+    };
+    
+  } catch (error) {
+    console.error('Error fetching credentials:', error);
+    return {
+      hasCredentials: false,
+      credentials: null,
+      adccWins: 0,
+      ibjjfWorldsWins: 0,
+      adccYears: []
+    };
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: UPDATE PROFESSOR OS SYSTEM PROMPT
+═══════════════════════════════════════════════════════════════════════════════
+
+Add this section to the system prompt (in buildSystemPrompt function):
+
+// When building the prompt, fetch credentials for mentioned instructors
+const mentionedInstructors = extractInstructorNames(message); // from message analysis
+const credentialsData: Record<string, string> = {};
+
+for (const instructor of mentionedInstructors) {
+  const creds = await getVerifiedCredentials(instructor);
+  if (creds.hasCredentials) {
+    credentialsData[instructor] = creds.credentials!;
+  }
+}
+
+// Add to system prompt:
+const credentialsSection = Object.keys(credentialsData).length > 0 ? `
+═══════════════════════════════════════════════════════════════════════════════
+VERIFIED INSTRUCTOR CREDENTIALS
+═══════════════════════════════════════════════════════════════════════════════
+
+These credentials are VERIFIED from official competition records:
+
+${Object.entries(credentialsData).map(([name, creds]) => 
+  `• ${name}: ${creds}`
+).join('\n')}
+
+CRITICAL RULE: You may ONLY mention competition results that appear in this verified list.
+If an instructor is NOT listed here, do NOT mention any competition achievements for them.
+Say nothing about credentials rather than guess.
+═══════════════════════════════════════════════════════════════════════════════
+` : `
+═══════════════════════════════════════════════════════════════════════════════
+INSTRUCTOR CREDENTIALS RULE
+═══════════════════════════════════════════════════════════════════════════════
+
+No verified credentials were found for instructors in this conversation.
+DO NOT mention any competition results, titles, or achievements.
+Focus only on their teaching style and available videos.
+═══════════════════════════════════════════════════════════════════════════════
+`;
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 6: UPDATE RULE #8 IN SYSTEM PROMPT
+═══════════════════════════════════════════════════════════════════════════════
+
+Replace the existing RULE #8 with:
+
+RULE #8: CREDENTIAL VERIFICATION REQUIRED
+You may ONLY cite competition results that appear in the VERIFIED INSTRUCTOR CREDENTIALS section of this prompt.
+
+If credentials ARE provided:
+✅ "JT Torres is a 2x ADCC champion (2017, 2019)" - if this appears in verified data
+
+If credentials are NOT provided:
+✅ "JT Torres is known for his pressure passing style"
+✅ "Here's what I have from JT Torres..."
+❌ "JT Torres won ADCC in 2022" - NEVER invent results
+❌ "He's a multiple-time world champion" - NEVER guess
+
+When in doubt, focus on:
+- Their teaching style
+- What techniques they're known for
+- The videos you have available
+
+NEVER invent, guess, or assume competition results.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION TESTS
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing, test:
+
+TEST 1: "Tell me about JT Torres"
+EXPECTED: "JT Torres is a 2x ADCC champion (2017, 2019), known for his pressure passing..."
+SHOULD NOT SAY: "2022 ADCC champion" (wrong)
+
+TEST 2: "Who won ADCC 2022?"
+EXPECTED: Lists actual 2022 winners from database (Gordon Ryan, Mica Galvao, etc.)
+
+TEST 3: "Tell me about [instructor not in database]"
+EXPECTED: Talks about teaching style, videos - NO competition claims
+
+TEST 4: "Any JT Torres videos?" 
+EXPECTED: Shows videos AND mentions correct credentials (2017, 2019 ADCC)
+
+Check console logs for:
+[CREDENTIALS] Found verified credentials for: JT Torres
+[CREDENTIALS] Injecting: "2x ADCC champion (2017, 2019)"
+
+═══════════════════════════════════════════════════════════════════════════════
+SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Created reference database tables for ADCC, IBJJF results
+2. Populated with verified historical data
+3. Built credential lookup function
+4. Professor OS only cites credentials that exist in database
+5. If no credentials found → mentions nothing about achievements
+
+This ensures Professor OS NEVER lies about competition results.
+```

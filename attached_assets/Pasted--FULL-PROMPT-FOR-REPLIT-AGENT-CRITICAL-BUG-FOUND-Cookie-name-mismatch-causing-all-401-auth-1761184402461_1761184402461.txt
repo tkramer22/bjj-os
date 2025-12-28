@@ -1,0 +1,296 @@
+**FULL PROMPT FOR REPLIT AGENT:**
+
+```
+CRITICAL BUG FOUND: Cookie name mismatch causing all 401 authentication errors
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ROOT CAUSE IDENTIFIED:
+
+The authentication cookie IS being set correctly, but the backend is looking for the wrong cookie name!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EVIDENCE FROM BROWSER DEVTOOLS:
+
+Application → Cookies → https://bjjos.app shows:
+
+Cookie exists with these properties:
+- Name: "token" ✓
+- Value: eyJhb6ciOIU... (valid JWT token) ✓
+- Domain: bjjos.app ✓
+- Path: / ✓
+- Expires: 2... (30 days from now) ✓
+- HttpOnly: ✓ (checkmark present)
+- Secure: ✓ (checkmark present)
+- SameSite: ✓ (configured)
+
+THE COOKIE IS BEING SET PERFECTLY!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THE PROBLEM:
+
+Frontend/Backend mismatch in cookie names:
+
+FRONTEND sets cookie named: "token"
+BACKEND looks for cookie named: "sessionToken"
+
+This is why console logs show:
+```
+
+[DEBUG] document.cookie:
+[DEBUG] All cookies available: NONE
+[DEBUG] This means the sessionToken cookie was not sent or is invalid
+
+```
+The debug code is checking for "sessionToken" but the actual cookie is named "token"!
+
+The backend authentication middleware is doing:
+```javascript
+const sessionToken = req.cookies.sessionToken  // ❌ LOOKING FOR WRONG NAME
+if (!sessionToken) {
+  return res.status(401).json({ error: 'Authentication required' })
+}
+```
+
+But the cookie is actually:
+
+```javascript
+req.cookies.token  // ✓ THIS IS WHAT EXISTS
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THE FIX:
+
+OPTION A: Change backend to read “token” (RECOMMENDED)
+
+Why: The cookie is already being set correctly with name “token”. Just need backend to read the correct name.
+
+Where to fix:
+
+1. Middleware file (middleware/requireAuth.js or similar)
+1. Any route that checks authentication
+1. Debug logging code
+
+Changes needed:
+
+```javascript
+// BEFORE (WRONG):
+const sessionToken = req.cookies.sessionToken
+if (!sessionToken) {
+  console.log('[AUTH] No sessionToken cookie found')
+  return res.status(401).json({ error: 'Authentication required' })
+}
+
+// AFTER (CORRECT):
+const token = req.cookies.token
+if (!token) {
+  console.log('[AUTH] No token cookie found')
+  return res.status(401).json({ error: 'Authentication required' })
+}
+
+try {
+  const decoded = jwt.verify(token, SECRET_KEY)  // Use 'token' not 'sessionToken'
+  req.userId = decoded.userId
+  next()
+} catch (error) {
+  return res.status(401).json({ error: 'Authentication required' })
+}
+```
+
+OPTION B: Change frontend to set cookie named “sessionToken”
+
+Why not recommended: Would require changing cookie-setting code and redeploying. More work for same result.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+IMPLEMENTATION STEPS:
+
+1. SEARCH CODEBASE:
+
+Find all instances of:
+
+- req.cookies.sessionToken
+- ‘sessionToken’
+- “sessionToken”
+
+In files likely to contain auth code:
+
+- server/middleware/requireAuth.js
+- server/routes/auth.js
+- server/routes/auth.ts
+- Any file with authentication logic
+
+1. REPLACE WITH:
+
+- req.cookies.token
+- ‘token’
+- “token”
+
+1. UPDATE DEBUG LOGS:
+
+Change:
+
+```javascript
+console.log('[AUTH] No sessionToken cookie found')
+console.log('[DEBUG] All cookies available:', Object.keys(req.cookies))
+```
+
+To:
+
+```javascript
+console.log('[AUTH] No token cookie found')
+console.log('[DEBUG] Available cookies:', Object.keys(req.cookies))
+console.log('[DEBUG] Token cookie value:', req.cookies.token ? 'EXISTS' : 'MISSING')
+```
+
+1. VERIFY COOKIE-SETTING CODE:
+
+Make sure the code that SETS the cookie uses name “token”:
+
+```javascript
+response.cookie('token', jwtToken, {  // Should say 'token' not 'sessionToken'
+  httpOnly: true,
+  secure: true,
+  sameSite: 'lax',
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+  path: '/',
+  domain: '.bjjos.app'
+})
+```
+
+1. TEST LOCALLY:
+
+After changes, verify:
+
+- Cookie named “token” exists in browser
+- Backend successfully reads req.cookies.token
+- Authentication succeeds
+- No 401 errors
+
+1. DEPLOY TO PRODUCTION:
+
+Once working locally, deploy to bjjos.app
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILES TO CHECK:
+
+Priority 1 (MUST FIX):
+□ middleware/requireAuth.js (or similar auth middleware)
+□ server/routes/auth.js or server/routes/auth.ts
+□ Any file that does: req.cookies.sessionToken
+
+Priority 2 (SHOULD FIX):
+□ Debug logging code (change “sessionToken” to “token” in logs)
+□ Frontend debug code (if it logs cookie names)
+
+Priority 3 (VERIFY):
+□ Cookie-setting code (verify it uses name “token”)
+□ Any comments or documentation mentioning cookie names
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EXPECTED RESULT AFTER FIX:
+
+User goes through signup flow:
+
+1. Enters phone number
+1. Completes verification
+1. Goes through 5 onboarding steps
+1. Clicks “Complete Setup”
+1. ✅ SUCCESS - No 401 error
+1. ✅ Profile created
+1. ✅ Redirects to chat interface
+
+Console logs should show:
+
+```
+[ONBOARDING] Complete Setup clicked
+[ONBOARDING] Form validation passed!
+[ONBOARDING] Starting submission with data
+[DEBUG] document.cookie: token=eyJhb6ciOIU...
+[DEBUG] Available cookies: token
+[DEBUG] Token cookie value: EXISTS
+[ONBOARDING] Sending payload
+[DEBUG] Making PATCH request to /api/auth/profile with credentials: include
+✅ SUCCESS - Profile updated
+```
+
+Server logs should show:
+
+```
+[AUTH] Request to PATCH /api/auth/profile
+[AUTH] Token cookie found: eyJhb6ciOIU...
+[AUTH] Token verified successfully
+[AUTH] User authenticated: user_id_123
+[PROFILE] Updating profile for user: user_id_123
+✅ PATCH /api/auth/profile 200 in 45ms
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TIMELINE:
+
+This is a simple find-and-replace fix.
+
+Estimated time: 5-10 minutes
+
+- 2 min: Find all instances of “sessionToken”
+- 3 min: Replace with “token”
+- 2 min: Verify and test
+- 3 min: Deploy
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CRITICAL PRIORITY:
+
+This is THE bug blocking all user signups.
+
+The authentication system is working perfectly.
+The cookie is being set perfectly.
+It’s just a variable name mismatch.
+
+Fix this and authentication will work immediately.
+
+No other changes needed.
+No environment variables missing.
+No complex debugging required.
+
+Just: sessionToken → token
+
+Do it now.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+VERIFICATION CHECKLIST:
+
+After implementing fix and deploying:
+
+□ Clear browser cookies
+□ Go to bjjos.app
+□ Sign up with phone number
+□ Complete all 5 onboarding steps
+□ Click “Complete Setup”
+□ Verify: No 401 error appears
+□ Verify: Redirects to chat interface
+□ Verify: User profile created in database
+□ Check DevTools → Application → Cookies → “token” exists
+□ Check server logs → [AUTH] Token verified successfully
+□ Test with multiple signups to confirm it’s stable
+
+If all checkboxes pass: Bug is fixed. Authentication is working.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This is it. This is the bug. Fix the cookie name and we’re done.
+
+```
+---
+
+**COPY AND PASTE THAT ENTIRE THING INTO REPLIT AGENT CHAT.** 
+
+**This is THE bug. We found it. Now they just need to fix it.** 🎯🔥​​​​​​​​​​​​​​​​
+```

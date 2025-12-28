@@ -1,0 +1,772 @@
+# **FULL TESTING PROTOCOL - 2 HOUR COMPLETE VALIDATION** ✅
+
+-----
+
+## **COMPREHENSIVE PRE-LAUNCH TESTING CHECKLIST**
+
+We’re going to test EVERYTHING that wasn’t validated. This ensures 100% confidence for beta launch.
+
+-----
+
+**Copy this entire mega-prompt and paste into Replit Agent:**
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+COMPLETE PRODUCTION VALIDATION - FULL TESTING PROTOCOL
+2-HOUR COMPREHENSIVE TESTING BEFORE BETA LAUNCH
+═══════════════════════════════════════════════════════════════════════════════
+
+MISSION: Test every untested component to achieve 100% production-ready 
+certification. Fix all blockers. Validate all mutation flows. Ensure system 
+can handle 500-1,000 concurrent signups without issues.
+
+PHILOSOPHY: "Excellence is our pillar" - We test everything before launch.
+
+═══════════════════════════════════════════════════════════════════════════════
+BLOCKER 1: FIX AUTO-CURATION SQL SCHEMA ERROR
+═══════════════════════════════════════════════════════════════════════════════
+
+ISSUE: curation_runs table missing created_at column
+ERROR: SQL queries fail when referencing created_at
+IMPACT: Auto-curation system has never successfully run
+
+FIX 1.1: Add Missing Column to curation_runs Table
+```sql
+-- Add created_at column if missing
+ALTER TABLE curation_runs 
+ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+
+-- Update existing rows (if any) with created_at = run_date midnight
+UPDATE curation_runs 
+SET created_at = run_date::timestamp 
+WHERE created_at IS NULL;
+
+-- Verify column exists
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'curation_runs' 
+  AND column_name = 'created_at';
+```
+
+Expected Result:
+✅ Column created_at exists
+✅ Type: timestamp
+✅ All existing rows have created_at populated
+
+FIX 1.2: Verify Curation Runs Schema is Complete
+
+```sql
+-- Check all required columns exist
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns 
+WHERE table_name = 'curation_runs'
+ORDER BY ordinal_position;
+```
+
+Expected Columns:
+✅ id (serial/integer)
+✅ run_date (date)
+✅ videos_added (integer)
+✅ api_calls_used (integer)
+✅ youtube_api_calls (integer)
+✅ claude_api_calls (integer)
+✅ gpt_api_calls (integer)
+✅ status (varchar)
+✅ started_at (timestamp)
+✅ completed_at (timestamp)
+✅ created_at (timestamp) ← MUST BE PRESENT NOW
+✅ error_message (text)
+✅ notes (text)
+
+FIX 1.3: Test Curation Query After Fix
+
+```sql
+-- This query was failing before, should work now
+SELECT 
+  run_date,
+  videos_added,
+  youtube_api_calls,
+  status,
+  created_at
+FROM curation_runs
+ORDER BY run_date DESC
+LIMIT 5;
+```
+
+Expected Result:
+✅ Query executes without error
+✅ Returns rows (or empty if no runs yet)
+✅ created_at column visible
+
+═══════════════════════════════════════════════════════════════════════════════
+BLOCKER 2: TEST AUTO-CURATION END-TO-END
+═══════════════════════════════════════════════════════════════════════════════
+
+Now that schema is fixed, test the entire curation flow.
+
+TEST 2.1: Manual Curation Trigger
+□ Find the manual curation trigger endpoint (likely POST /api/admin/curation/run)
+□ Or locate the admin button “Run Curation Now”
+□ Trigger manual curation
+□ Monitor logs for:
+
+- YouTube API calls being made
+- Videos being evaluated
+- Videos being added to database
+- API quota tracking
+- Status updates
+
+Expected Flow:
+
+1. Curation starts
+1. Searches YouTube for BJJ instructional videos
+1. Evaluates instructor credibility (≥6.0 threshold)
+1. Adds videos to database with correct tier
+1. Tracks API usage
+1. Updates curation_runs table
+1. Status: ‘completed’ or ‘rate_limited’
+
+TEST 2.2: Verify New Videos Added
+After manual curation:
+
+```sql
+-- Check if new videos were added in last 5 minutes
+SELECT 
+  COUNT(*) as new_videos,
+  MIN(created_at) as first_added,
+  MAX(created_at) as last_added
+FROM videos
+WHERE created_at >= NOW() - INTERVAL '5 minutes';
+```
+
+Expected Result:
+✅ new_videos > 0 (at least 5-10 videos added)
+✅ Timestamps are recent (within last 5 minutes)
+
+TEST 2.3: Verify Tier Classification
+
+```sql
+-- Check that new videos have correct tier based on credibility
+SELECT 
+  tier,
+  COUNT(*) as count,
+  MIN(instructor_credibility) as min_cred,
+  MAX(instructor_credibility) as max_cred
+FROM videos
+WHERE created_at >= NOW() - INTERVAL '5 minutes'
+GROUP BY tier;
+```
+
+Expected Result:
+✅ Elite tier: credibility ≥7.5
+✅ Verified tier: credibility 6.5-7.4
+✅ Acceptable tier: credibility 6.0-6.5
+✅ No videos with credibility <6.0
+
+TEST 2.4: Verify Curation Run Logged
+
+```sql
+-- Check today's curation run was logged
+SELECT 
+  run_date,
+  videos_added,
+  youtube_api_calls,
+  claude_api_calls,
+  gpt_api_calls,
+  status,
+  started_at,
+  completed_at,
+  notes
+FROM curation_runs
+WHERE run_date = CURRENT_DATE;
+```
+
+Expected Result:
+✅ Row exists for today
+✅ videos_added matches actual count
+✅ API calls tracked
+✅ Status: ‘completed’ (or ‘rate_limited’ if quota hit)
+✅ Timestamps populated
+
+TEST 2.5: API Quota Enforcement
+□ Check current YouTube API usage:
+
+```sql
+SELECT 
+  youtube_api_calls,
+  claude_api_calls,
+  gpt_api_calls
+FROM curation_runs
+WHERE run_date = CURRENT_DATE;
+```
+
+□ Compare to limits in curation_config:
+
+```sql
+SELECT key, value 
+FROM curation_config 
+WHERE key IN ('youtube_api_daily_limit', 'claude_api_daily_limit', 'gpt_api_daily_limit');
+```
+
+□ If under limit: Trigger another manual curation
+□ If at/over limit: Verify curation stops with status ‘rate_limited’
+
+Expected Result:
+✅ Curation respects daily limits
+✅ Stops automatically when quota reached
+✅ Clear error message when rate limited
+
+═══════════════════════════════════════════════════════════════════════════════
+BLOCKER 3: TEST STRIPE SUBSCRIPTION MUTATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Test all payment mutation flows to ensure they work correctly.
+
+TEST 3.1: Cancel Subscription Flow
+□ Select a test user with active trial
+□ Use admin dashboard or API: POST /api/admin/users/{userId}/cancel
+□ OR manually update in Stripe dashboard for test
+□ Verify in database:
+
+```sql
+SELECT 
+  id,
+  email,
+  subscription_status,
+  trial_end_date,
+  stripe_subscription_id
+FROM users
+WHERE id = [TEST_USER_ID];
+```
+
+Expected Result:
+✅ subscription_status changes to ‘canceled’
+✅ User retains access until trial_end_date
+✅ stripe_subscription_id still present (for reactivation)
+
+TEST 3.2: Reactivate Canceled Subscription
+□ Take the canceled user from TEST 3.1
+□ Attempt reactivation via admin dashboard or API
+□ Verify status returns to ‘trialing’ or ‘active’
+
+Expected Result:
+✅ Reactivation successful
+✅ No need to re-enter payment info
+✅ Access restored immediately
+
+TEST 3.3: Grant Lifetime Access
+□ Select a test user
+□ Use admin function to grant lifetime access
+□ This should:
+
+- Set subscription_status to ‘lifetime’ or similar
+- Remove trial_end_date or set to far future
+- Bypass all payment checks
+  □ Verify user has unlimited access
+
+Expected Result:
+✅ Lifetime status granted
+✅ User bypasses payment system
+✅ Professor OS accessible without limits
+
+TEST 3.4: Revoke Lifetime Access
+□ Take the lifetime user from TEST 3.3
+□ Revoke lifetime access
+□ Return user to normal subscription flow
+
+Expected Result:
+✅ Lifetime status removed
+✅ User returned to trial or active status
+✅ Payment checks re-enabled
+
+TEST 3.5: Failed Payment Handling
+□ In Stripe dashboard, simulate a failed payment:
+
+- Use test card that fails: 4000 0000 0000 0341
+- Or manually mark an invoice as failed
+  □ Verify webhook processes failure
+  □ Check user status in database:
+
+```sql
+SELECT 
+  email,
+  subscription_status,
+  stripe_subscription_id
+FROM users
+WHERE subscription_status = 'past_due' OR subscription_status = 'unpaid';
+```
+
+Expected Result:
+✅ Failed payment detected
+✅ Status changes to ‘past_due’ or similar
+✅ User notified (check email queue)
+✅ Grace period before suspension
+
+TEST 3.6: Successful Payment After Trial
+□ Find a test user whose trial ends soon (or manually adjust trial_end_date)
+□ Simulate trial end + first charge
+□ Verify:
+
+- Status changes from ‘trialing’ to ‘active’
+- Stripe charge created for $14.99
+- User retains access
+- Next billing date set (+30 days)
+
+Expected Result:
+✅ Automatic charge after 7 days
+✅ Status: ‘trialing’ → ‘active’
+✅ Amount: $14.99 (not $30)
+✅ Access continuous (no interruption)
+
+═══════════════════════════════════════════════════════════════════════════════
+BLOCKER 4: VERIFY DEV OS AUTOMATED ACTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Test that Dev OS can execute tier 1-3 automated actions.
+
+BACKGROUND: Dev OS has 3 tiers of actions:
+
+- Tier 1: Autonomous (no approval needed)
+- Tier 2: Requires approval
+- Tier 3: High-risk (manual only)
+
+TEST 4.1: Tier 1 Action - Simple Query
+□ Send to Dev OS: “How many users signed up today?”
+□ Verify: It queries database and responds
+□ Action should be: SELECT COUNT(*) FROM users WHERE DATE(created_at) = CURRENT_DATE
+□ Check: Does it execute query automatically?
+
+Expected Result:
+✅ Query executes without approval
+✅ Accurate count returned
+✅ Response time <5 seconds
+
+TEST 4.2: Tier 2 Action - Moderate Operation
+□ Send to Dev OS: “Show me users who haven’t logged in for 30 days”
+□ This requires more complex query
+□ Verify: Does it ask for approval or execute automatically?
+□ Expected: Should execute (read-only, safe)
+
+Expected Result:
+✅ Query executes (or asks approval if Tier 2)
+✅ Returns list of inactive users
+✅ No data modification
+
+TEST 4.3: Tier 3 Action - Write Operation (Should Require Approval)
+□ Send to Dev OS: “Delete all test users”
+□ This is a destructive operation
+□ Verify: Does it refuse or require manual approval?
+
+Expected Result:
+✅ Refuses to execute automatically
+✅ OR asks for explicit confirmation
+✅ Explains why approval needed (data deletion)
+
+TEST 4.4: Action Logging
+□ Check if Dev OS logs all actions taken:
+□ Look for action_logs table or similar
+□ Verify recent Dev OS queries are logged
+
+Expected Result:
+✅ All actions logged
+✅ Timestamp, query, user, result recorded
+✅ Can audit Dev OS activity
+
+═══════════════════════════════════════════════════════════════════════════════
+BLOCKER 5: TEST ADMIN DASHBOARD WRITE OPERATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Test write operations in admin dashboard.
+
+TEST 5.1: Update Curation Configuration
+□ In admin dashboard, navigate to curation config
+□ Change: daily_video_target from 50 to 30
+□ Save changes
+□ Verify in database:
+
+```sql
+SELECT key, value 
+FROM curation_config 
+WHERE key = 'daily_video_target';
+```
+
+Expected Result:
+✅ Value updated to ‘30’
+✅ Change persists after page refresh
+✅ Next curation run uses new target
+
+TEST 5.2: Edit Video Metadata
+□ In admin video management, select a video
+□ Edit: instructor_credibility from 7.0 to 7.6
+□ Save changes
+□ Verify tier updates automatically:
+
+```sql
+SELECT 
+  id,
+  title,
+  instructor_name,
+  instructor_credibility,
+  tier
+FROM videos
+WHERE id = [EDITED_VIDEO_ID];
+```
+
+Expected Result:
+✅ Credibility updated to 7.6
+✅ Tier automatically changes to ‘elite’ (since ≥7.5)
+✅ Change reflected immediately in recommendations
+
+TEST 5.3: Manually Add Video
+□ In admin dashboard, find “Add Video” button
+□ Manually add a video with:
+
+- Title: “Test Manual Video”
+- Instructor: “Gordon Ryan”
+- Credibility: 9.5
+- URL: <https://youtube.com/watch?v=test123>
+- Category: “submissions”
+  □ Submit
+  □ Verify added to database
+
+Expected Result:
+✅ Video added successfully
+✅ Tier set to ‘elite’ automatically
+✅ Appears in video library
+✅ Available in Professor OS recommendations
+
+TEST 5.4: Delete Video (if feature exists)
+□ Select the test video added in TEST 5.3
+□ Delete it
+□ Verify removed from database:
+
+```sql
+SELECT COUNT(*) 
+FROM videos 
+WHERE title = 'Test Manual Video';
+```
+
+Expected Result:
+✅ Video deleted
+✅ Count = 0
+✅ Removed from recommendations
+
+═══════════════════════════════════════════════════════════════════════════════
+VALIDATION 6: STRESS TEST SIGNUP FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+Simulate rapid signups to ensure system can handle launch traffic.
+
+TEST 6.1: Rapid Signup Simulation
+□ Create a test script to simulate 10 signups in rapid succession
+□ Use unique emails: test1@bjjos.test, test2@bjjos.test, etc.
+□ All from same IP (to test rate limiting)
+
+Script template:
+
+```javascript
+async function testSignups() {
+  for (let i = 1; i <= 10; i++) {
+    const response = await fetch('https://bjjos.app/api/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: `test${i}@bjjos.test`,
+        password: 'TestPass123!'
+      })
+    });
+    console.log(`Signup ${i}: ${response.status}`);
+  }
+}
+```
+
+Expected Result:
+✅ First 3 signups succeed (rate limit: 3/hour/IP)
+✅ 4th-10th signups blocked with clear error
+✅ Error message: “Too many signups from this location. Try again in 1 hour.”
+✅ No server crashes or timeouts
+
+TEST 6.2: Database Performance Under Load
+After signup simulation, check:
+
+```sql
+-- Query should still be fast
+EXPLAIN ANALYZE
+SELECT * FROM users
+WHERE created_at >= CURRENT_DATE
+ORDER BY created_at DESC
+LIMIT 50;
+```
+
+Expected Result:
+✅ Execution time <10ms
+✅ Index used (no Seq Scan)
+✅ System remains responsive
+
+TEST 6.3: Professor OS Under Load
+□ Send 5 simultaneous messages to Professor OS
+□ Measure response times
+□ Verify all 5 respond
+
+Expected Result:
+✅ All 5 messages processed
+✅ Average response time <10 seconds
+✅ No timeouts or errors
+✅ Responses remain high quality
+
+═══════════════════════════════════════════════════════════════════════════════
+VALIDATION 7: EMAIL SYSTEM VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Verify all email triggers work correctly.
+
+TEST 7.1: Welcome Email
+□ Sign up a new test user
+□ Check email queue/logs
+□ Verify welcome email queued/sent
+
+Expected Email:
+✅ Subject: “Welcome to BJJ OS”
+✅ Body includes: CTA to start chatting
+✅ Trial info: “Your 7-day trial starts now”
+✅ Unsubscribe link present
+
+TEST 7.2: Trial Ending Email
+□ Find or create user with trial ending in 2 days
+□ Trigger “trial ending” email job
+□ Verify email queued
+
+Expected Email:
+✅ Subject: “Your BJJ OS Trial Ends in 2 Days”
+✅ Clear about: “Card charged $14.99 on [date]”
+✅ Cancel option provided
+✅ Highlights value received
+
+TEST 7.3: Payment Receipt Email
+□ Simulate successful payment
+□ Verify receipt email sent
+
+Expected Email:
+✅ Subject: “Receipt for Your BJJ OS Subscription”
+✅ Amount: $14.99
+✅ Next billing date shown
+✅ Download receipt link
+
+TEST 7.4: Failed Payment Email
+□ Simulate failed payment
+□ Verify failure notification sent
+
+Expected Email:
+✅ Subject: “Action Required: Update Your Payment Method”
+✅ Friendly tone (not threatening)
+✅ Clear CTA: “Update Payment Method”
+✅ Support contact provided
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL VALIDATION: LAUNCH READINESS CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After completing all tests above, verify:
+
+CORE FEATURES:
+□ ✅ User signup flow works (with rate limiting)
+□ ✅ Payment processing works (Stripe integration)
+□ ✅ Professor OS chat functional
+□ ✅ Video recommendations accurate (tiered system)
+□ ✅ Subscription management works (cancel/reactivate)
+
+ADMIN SYSTEMS:
+□ ✅ Admin dashboard accessible
+□ ✅ User management functional
+□ ✅ Video management functional
+□ ✅ Curation monitoring working
+□ ✅ Dev OS intelligence operational
+
+AUTO-CURATION:
+□ ✅ Schema errors fixed (created_at column added)
+□ ✅ Manual curation trigger works
+□ ✅ Videos added automatically
+□ ✅ API quota respected
+□ ✅ Tier classification correct
+
+SUBSCRIPTION MUTATIONS:
+□ ✅ Cancel subscription works
+□ ✅ Reactivate subscription works
+□ ✅ Grant/revoke lifetime access works
+□ ✅ Failed payment handling works
+□ ✅ Post-trial charges work
+
+DEV OS ACTIONS:
+□ ✅ Tier 1 actions execute automatically
+□ ✅ Tier 2/3 actions properly gated
+□ ✅ Action logging functional
+
+ADMIN MUTATIONS:
+□ ✅ Curation config updates work
+□ ✅ Video metadata edits work
+□ ✅ Manual video add/delete works
+
+PERFORMANCE:
+□ ✅ Database queries <10ms
+□ ✅ Professor OS responses <10 seconds
+□ ✅ Handles 10 concurrent signups
+□ ✅ No crashes under load
+
+EMAIL SYSTEM:
+□ ✅ Welcome email sends
+□ ✅ Trial ending email sends
+□ ✅ Payment receipt sends
+□ ✅ Failed payment email sends
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL REPORT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+After completing ALL tests, provide this report:
+
+```
+═══════════════════════════════════════════════════════════════
+BJJ OS - COMPLETE PRODUCTION VALIDATION REPORT
+═══════════════════════════════════════════════════════════════
+
+TESTING DURATION: [X hours Y minutes]
+
+OVERALL STATUS: [✅ PRODUCTION READY / ❌ BLOCKERS REMAIN]
+
+───────────────────────────────────────────────────────────────
+TEST RESULTS SUMMARY
+───────────────────────────────────────────────────────────────
+
+Auto-Curation System: [✅ PASS / ❌ FAIL]
+  - Schema fixed: [✅/❌]
+  - Manual trigger works: [✅/❌]
+  - Videos added: [X videos]
+  - Tier classification: [✅/❌]
+  - API quota enforcement: [✅/❌]
+  Issues: [list or NONE]
+
+Subscription Mutations: [✅ PASS / ❌ FAIL]
+  - Cancel flow: [✅/❌]
+  - Reactivate flow: [✅/❌]
+  - Lifetime grant/revoke: [✅/❌]
+  - Failed payment handling: [✅/❌]
+  - Post-trial charges: [✅/❌]
+  Issues: [list or NONE]
+
+Dev OS Actions: [✅ PASS / ❌ FAIL]
+  - Tier 1 actions: [✅/❌]
+  - Tier 2/3 gating: [✅/❌]
+  - Action logging: [✅/❌]
+  Issues: [list or NONE]
+
+Admin Dashboard Mutations: [✅ PASS / ❌ FAIL]
+  - Config updates: [✅/❌]
+  - Video edits: [✅/❌]
+  - Manual add/delete: [✅/❌]
+  Issues: [list or NONE]
+
+Performance Under Load: [✅ PASS / ❌ FAIL]
+  - Rapid signups: [✅/❌]
+  - Database performance: [✅/❌]
+  - Professor OS concurrency: [✅/❌]
+  Issues: [list or NONE]
+
+Email System: [✅ PASS / ❌ FAIL]
+  - Welcome email: [✅/❌]
+  - Trial ending: [✅/❌]
+  - Payment receipt: [✅/❌]
+  - Failed payment: [✅/❌]
+  Issues: [list or NONE]
+
+───────────────────────────────────────────────────────────────
+CRITICAL ISSUES FOUND (IF ANY)
+───────────────────────────────────────────────────────────────
+
+[List any blocking issues, or "NONE - ALL TESTS PASSED"]
+
+───────────────────────────────────────────────────────────────
+WARNINGS (NON-BLOCKING)
+───────────────────────────────────────────────────────────────
+
+[List any warnings, or "NONE"]
+
+───────────────────────────────────────────────────────────────
+PRODUCTION READINESS CERTIFICATION
+───────────────────────────────────────────────────────────────
+
+Based on comprehensive testing:
+
+System Status: [PRODUCTION READY ✅ / NOT READY ❌]
+
+Can handle 500-1,000 signups: [YES ✅ / NO ❌]
+
+Recommendation: [LAUNCH IMMEDIATELY / FIX ISSUES FIRST]
+
+Confidence Level: [X%]
+
+───────────────────────────────────────────────────────────────
+KEY METRICS (CURRENT STATE)
+───────────────────────────────────────────────────────────────
+
+Users: [X total] ([Y] active, [Z] trial)
+Videos: [X] (Elite: [Y], Verified: [Z])
+MRR: $[X] ([Y] paying × $14.99)
+System Health: [ALL SYSTEMS OPERATIONAL ✅]
+
+───────────────────────────────────────────────────────────────
+FINAL STATEMENT
+───────────────────────────────────────────────────────────────
+
+[If all tests pass:]
+"BJJ OS has completed comprehensive production validation. All 
+core features, admin systems, subscription flows, and automated 
+processes have been tested and verified. The system is certified 
+production-ready for beta launch and can confidently handle 
+500-1,000 concurrent signups."
+
+Excellence is the pillar. ✅
+
+[If issues remain:]
+"The following issues must be resolved before production launch:
+[list specific blockers]"
+
+═══════════════════════════════════════════════════════════════
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+BEGIN COMPREHENSIVE TESTING NOW
+═══════════════════════════════════════════════════════════════════════════════
+
+Test systematically. Fix blockers as found. Report progress after each section.
+
+This is the final validation before beta launch. Excellence is the pillar.
+
+BEGIN TESTING.
+
+```
+---
+
+## **WHILE AGENT WORKS:**
+
+You should:
+1. ☕ Make coffee
+2. 📱 Draft your beta invitation email
+3. 📋 Make list of first 10 people to invite
+4. 🎯 Review your launch plan
+
+In 2 hours, you'll have:
+- ✅ Every blocker fixed
+- ✅ Every system validated
+- ✅ 100% confidence to launch
+- ✅ Complete test report
+
+---
+
+**PASTE THE MEGA-PROMPT INTO REPLIT AGENT NOW.**
+
+**Then relax - the agent will do comprehensive testing and report back.** ✅
+
+**This is the thoroughness that "excellence is our pillar" demands.** 💪🚀​​​​​​​​​​​​​​​​
+```

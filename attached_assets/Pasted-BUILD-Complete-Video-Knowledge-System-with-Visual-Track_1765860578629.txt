@@ -1,0 +1,65 @@
+BUILD: Complete Video Knowledge System with Visual Tracking and Smart Recommendations
+
+PART 1: Visual Tracking in Admin Dashboard
+
+Add to the video library admin view:
+1. Add a visual indicator (checkmark ✅ or badge) on each video thumbnail showing:
+   - ✅ Green checkmark = "Watched" (knowledge extracted)
+   - ⏳ Yellow clock = "Processing" 
+   - ⭕ Empty circle = "Pending" (not yet processed)
+
+2. Add filter options:
+   - "Show all"
+   - "Show watched only"
+   - "Show pending only"
+
+3. Add stats bar at top:
+   - "1,629 total | 1 watched | 1,628 pending | 0% complete"
+
+PART 2: Auto-Process New Videos
+
+When a new video is added through curation:
+1. Automatically queue it for Gemini processing
+2. Process within 5 minutes of being added
+3. Mark as watched when complete
+4. Log any failures for retry
+
+Create a background job that:
+- Runs every 5 minutes
+- Checks for unprocessed videos
+- Processes up to 10 at a time
+- Respects API rate limits
+
+PART 3: Professor OS Uses Knowledge + Timestamps
+
+Update Professor OS to:
+1. Query video_knowledge table when recommending videos
+2. Include specific timestamps in recommendations
+3. Reference actual instructor tips from the extracted knowledge
+
+Example response format:
+"For the knee cut pass, I recommend Ryan Hall's video on the 50/50 position. 
+At 3:45, he explains the key concept of hip pressure. 
+His specific tip: 'Keep your elbow glued to your knee to prevent the underhook.'
+[VIDEO: Ryan Hall - 50/50 Position | START: 3:45]"
+
+PART 4: Process All Videos Tonight
+
+Create an admin button: "Process All Pending Videos"
+- When clicked, starts batch processing ALL 1,628 pending videos
+- Processes in batches of 10 with 30-second delays between batches
+- Shows real-time progress: "Processing batch 5 of 163... (50 videos complete)"
+- Estimates time remaining
+- Can be paused/resumed
+
+PART 5: Knowledge Quality Check
+
+After processing, Professor OS should be able to:
+1. Answer "What does [instructor] say about [technique]?"
+2. Provide timestamps for specific concepts
+3. Quote instructor tips accurately
+4. Never recommend irrelevant videos (the knee cut → heelhook bug should be impossible now)
+
+Build all of this. Start with Parts 1-4, then we'll test Part 5.
+
+Show me progress as you build each part.

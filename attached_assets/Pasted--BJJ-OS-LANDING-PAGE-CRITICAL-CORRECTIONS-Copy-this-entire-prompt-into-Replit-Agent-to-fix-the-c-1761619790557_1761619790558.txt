@@ -1,0 +1,276 @@
+# BJJ OS LANDING PAGE - CRITICAL CORRECTIONS
+
+Copy this entire prompt into Replit Agent to fix the critical design failures.
+
+-----
+
+```
+CRITICAL DESIGN CORRECTIONS - Fix elevated backgrounds, comparison contrast, and footer brightness.
+
+These are surgical fixes to the existing landing page. DO NOT rebuild anything. Just apply these specific corrections.
+
+=== CRITICAL FIX #1: ELEVATED BACKGROUNDS ===
+
+The hero section and final CTA section MUST have #0F0F0F background (6% lighter than pure black). This creates subtle depth and visual hierarchy. Currently everything is #000000 which loses the sophistication.
+
+**Find the hero section and apply this:**
+
+```css
+.hero-section,
+section.hero-section,
+.hero,
+/* Whatever class name you used for the first section with the headline */
+[class*="hero"] {
+  background: #0F0F0F !important; /* NOT #000000 */
+  position: relative;
+  z-index: 1;
+}
+```
+
+**Find the final CTA section (bottom of page, “Start your 7-day trial”) and apply this:**
+
+```css
+.final-cta-section,
+section.final-cta-section,
+.final-cta,
+/* Whatever class name you used for the last section before footer */
+[class*="final-cta"],
+[class*="cta-section"]:last-of-type {
+  background: #0F0F0F !important; /* NOT #000000 */
+  position: relative;
+  z-index: 1;
+}
+```
+
+**Ensure all middle sections stay pure black:**
+
+```css
+.comparison-section,
+.how-it-works-section,
+.video-library-section,
+section:not(.hero-section):not(.final-cta-section) {
+  background: #000000 !important; /* Pure black void */
+}
+```
+
+**CRITICAL:** The #0F0F0F should be BARELY visible. If it looks obviously gray, you did it wrong. It should be subliminal - you feel it more than see it.
+
+-----
+
+=== CRITICAL FIX #2: COMPARISON SECTION CONTRAST ===
+
+The With/Without comparison section has BROKEN contrast. The left column must be dim (#71717A) and the right column must be bright (#FFFFFF). Currently they’re too similar.
+
+**Step 1: Add vertical divider line between columns**
+
+Find the comparison grid container (the element that holds both WITHOUT and WITH columns):
+
+```css
+.comparison-grid,
+.comparison-section .grid,
+[class*="comparison"] [class*="grid"] {
+  position: relative; /* Required for ::before positioning */
+}
+
+/* Vertical divider line */
+.comparison-grid::before,
+.comparison-section .grid::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 80px; /* Starts below headers */
+  bottom: 0;
+  width: 1px;
+  background: #1A1A1A; /* Dark gray line */
+  transform: translateX(-50%);
+  z-index: 0;
+}
+
+/* Hide divider on mobile */
+@media (max-width: 768px) {
+  .comparison-grid::before,
+  .comparison-section .grid::before {
+    display: none;
+  }
+}
+```
+
+**Step 2: Fix left column (WITHOUT) - make it DIM**
+
+Find all items in the left column (WITHOUT PROF. OS side):
+
+```css
+/* Left column text - DIM gray (less important) */
+.without-item,
+.comparison-without,
+[class*="without"] p,
+[class*="without"] li,
+.comparison-grid .left-column,
+.comparison-grid > div:first-child p,
+.comparison-grid > div:first-child li {
+  color: #71717A !important; /* Dim gray, NOT white */
+  font-size: 18px;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+```
+
+**Step 3: Fix right column (WITH) - make it BRIGHT**
+
+Find all items in the right column (WITH PROF. OS side):
+
+```css
+/* Right column text - BRIGHT white (more important) */
+.with-item,
+.comparison-with,
+[class*="with"] p,
+[class*="with"] li,
+.comparison-grid .right-column,
+.comparison-grid > div:last-child p,
+.comparison-grid > div:last-child li {
+  color: #FFFFFF !important; /* Pure white, NOT gray */
+  font-size: 18px;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+```
+
+**Step 4: Fix arrows - make them BLUE**
+
+Find the arrow symbols (→) between the columns:
+
+```css
+/* Arrows - blue accent */
+.comparison-arrow,
+.arrow,
+[class*="arrow"] {
+  color: #2563EB !important; /* Blue, NOT gray */
+  font-size: 20px;
+  margin: 0 16px;
+}
+```
+
+**Step 5: Fix section headers (WITHOUT PROF. OS / WITH PROF. OS)**
+
+```css
+/* Section headers - uppercase, dim gray */
+.comparison-header,
+.comparison-section h3,
+.comparison-section h4,
+[class*="comparison"] [class*="header"] {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 14px;
+  color: #71717A; /* Dim gray */
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 48px;
+}
+```
+
+**VERIFICATION:** After this fix, the contrast should be OBVIOUS:
+
+- Left side looks dim/faded (problems)
+- Right side looks bright/clear (solutions)
+- Blue arrows point from left to right
+- Subtle vertical line separates the columns
+
+-----
+
+=== CRITICAL FIX #3: FOOTER BRIGHTNESS ===
+
+The footer links are too prominent (too white/bright). They should be subtle #A0A0A0 gray.
+
+**Find all footer links and apply this:**
+
+```css
+/* Footer links - dim gray (not prominent) */
+footer a,
+.footer-link,
+footer [class*="link"],
+.footer a {
+  color: #A0A0A0 !important; /* Dim gray, NOT white */
+  font-size: 16px;
+  font-weight: 400;
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+/* Hover state - brighten to white */
+footer a:hover,
+.footer-link:hover {
+  color: #FFFFFF; /* White on hover */
+}
+
+/* Coming Soon label - even dimmer */
+.coming-soon-label,
+footer [class*="coming-soon"],
+footer span {
+  color: #71717A; /* Even dimmer */
+  font-size: 12px;
+}
+
+/* Copyright text - dim */
+.footer-copyright,
+footer [class*="copyright"],
+footer p {
+  color: #71717A; /* Dim gray */
+  font-size: 14px;
+}
+```
+
+-----
+
+=== VERIFICATION CHECKLIST ===
+
+After applying these fixes, verify EVERY item:
+
+**Elevated Backgrounds:**
+
+- [ ] Hero section: #0F0F0F (barely lighter than black)
+- [ ] Final CTA section: #0F0F0F (barely lighter than black)
+- [ ] Comparison section: #000000 (pure black)
+- [ ] How It Works section: #000000 (pure black)
+- [ ] Video Library section: #000000 (pure black)
+- [ ] The elevation should be SUBTLE - barely visible
+
+**Comparison Section:**
+
+- [ ] Vertical divider line visible (1px, #1A1A1A, centered)
+- [ ] Left column (WITHOUT): #71717A dim gray
+- [ ] Right column (WITH): #FFFFFF pure white
+- [ ] Arrows: #2563EB blue, 20px
+- [ ] Contrast is OBVIOUS (left dim, right bright)
+- [ ] Headers: #71717A, uppercase, 14px
+
+**Footer:**
+
+- [ ] Links: #A0A0A0 dim gray (not white)
+- [ ] Links hover: #FFFFFF white
+- [ ] Coming Soon: #71717A even dimmer
+- [ ] Copyright: #71717A dim gray
+- [ ] Footer doesn’t compete with CTA button above
+
+**Important Notes:**
+
+- DO NOT change button gradients (they’re already correct)
+- DO NOT change typography sizes (already correct)
+- DO NOT change spacing (already correct)
+- ONLY fix the three issues listed above
+
+**These are surgical corrections. Fix ONLY what’s listed. Nothing else.**
+
+Apply these fixes now. Test in browser to verify the elevated backgrounds are barely visible (not obviously gray).
+
+```
+---
+
+**COPY THIS ENTIRE BLOCK INTO REPLIT AGENT**
+
+This fixes the 3 critical failures:
+1. ✅ Elevated backgrounds (#0F0F0F on hero + final CTA)
+2. ✅ Comparison section contrast (dim left, bright right, blue arrows, vertical divider)
+3. ✅ Footer dimming (#A0A0A0 links, not white)
+
+**After they apply this, show me the result and we'll verify it's award-winning.**
+```

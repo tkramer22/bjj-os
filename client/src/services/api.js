@@ -1,0 +1,151 @@
+import { getApiUrl } from '@/lib/capacitorAuth';
+
+// Chat with AI Coach
+export async function sendChatMessage(userId, message) {
+  try {
+    const response = await fetch(getApiUrl('/api/ai/chat/message'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ userId, message })
+    });
+    
+    if (!response.ok) throw new Error('Failed to send message');
+    return await response.json();
+  } catch (error) {
+    console.error('Chat API error:', error);
+    throw error;
+  }
+}
+
+// Get chat history
+export async function getChatHistory(userId, limit = 50) {
+  try {
+    const url = getApiUrl(`/api/ai/chat/history/${userId}?limit=${limit}`);
+    console.log('[API] getChatHistory URL:', url);
+    const response = await fetch(url, {
+      credentials: 'include'
+    });
+    if (!response.ok) throw new Error('Failed to get history');
+    return await response.json();
+  } catch (error) {
+    console.error('History API error:', error);
+    return { messages: [] };
+  }
+}
+
+// Get user context/profile
+export async function getUserProfile(userId) {
+  try {
+    const response = await fetch(getApiUrl(`/api/ai/user/${userId}/context`), {
+      credentials: 'include'
+    });
+    if (!response.ok) throw new Error('Failed to get profile');
+    return await response.json();
+  } catch (error) {
+    console.error('Profile API error:', error);
+    return null;
+  }
+}
+
+// Update user profile
+export async function updateUserProfile(userId, updates) {
+  try {
+    const response = await fetch(getApiUrl(`/api/ai/user/${userId}/profile`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(updates)
+    });
+    
+    if (!response.ok) throw new Error('Failed to update profile');
+    return await response.json();
+  } catch (error) {
+    console.error('Update profile API error:', error);
+    throw error;
+  }
+}
+
+// Get saved videos
+export async function getSavedVideos(userId) {
+  try {
+    const response = await fetch(getApiUrl(`/api/ai/saved-videos/${userId}`), {
+      credentials: 'include'
+    });
+    if (!response.ok) throw new Error('Failed to get saved videos');
+    return await response.json();
+  } catch (error) {
+    console.error('Saved videos API error:', error);
+    return { videos: [] };
+  }
+}
+
+// Save a video
+export async function saveVideo(userId, videoId, note = '') {
+  try {
+    const response = await fetch(getApiUrl('/api/ai/saved-videos'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ userId, videoId, note })
+    });
+    
+    if (!response.ok) throw new Error('Failed to save video');
+    return await response.json();
+  } catch (error) {
+    console.error('Save video API error:', error);
+    throw error;
+  }
+}
+
+// Unsave a video
+export async function unsaveVideo(userId, videoId) {
+  try {
+    const response = await fetch(getApiUrl(`/api/ai/saved-videos/${videoId}`), {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ userId })
+    });
+    
+    if (!response.ok) throw new Error('Failed to unsave video');
+    return await response.json();
+  } catch (error) {
+    console.error('Unsave video API error:', error);
+    throw error;
+  }
+}
+
+// Record user feedback signal
+export async function recordFeedback(userId, videoId, signalType, signalValue) {
+  try {
+    const response = await fetch(getApiUrl('/api/ai/feedback'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ userId, videoId, signalType, signalValue })
+    });
+    
+    if (!response.ok) throw new Error('Failed to record feedback');
+    return await response.json();
+  } catch (error) {
+    console.error('Feedback API error:', error);
+    return null;
+  }
+}
+
+// Get enhanced recommendation
+export async function getRecommendation(userId) {
+  try {
+    const response = await fetch(getApiUrl(`/api/ai/recommend/${userId}`), {
+      method: 'POST',
+      credentials: 'include'
+    });
+    
+    if (!response.ok) throw new Error('Failed to get recommendation');
+    return await response.json();
+  } catch (error) {
+    console.error('Recommendation API error:', error);
+    return null;
+  }
+}

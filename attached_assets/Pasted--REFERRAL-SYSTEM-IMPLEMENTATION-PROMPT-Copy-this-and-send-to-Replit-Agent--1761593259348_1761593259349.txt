@@ -1,0 +1,1424 @@
+# 🚀 REFERRAL SYSTEM IMPLEMENTATION PROMPT
+
+Copy this and send to Replit Agent:
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════
+REFERRAL SYSTEM - ADMIN-ASSIGNED CODES WITH RECURRING COMMISSIONS
+═══════════════════════════════════════════════════════════════
+
+MISSION: 
+Implement a complete referral code system where:
+1. Only admin can assign referral codes to specific users
+2. Admin sets commission % per code (recurring, lifetime earnings)
+3. Anyone using the code gets 1 month free
+4. Code owner earns commission on every payment (net 60 terms)
+5. Weekly performance emails sent to code owners (Monday 8 AM EST)
+6. Automated payouts via Stripe
+7. Comprehensive admin tracking
+
+CORE REQUIREMENTS:
+• Admin manually assigns codes to users with custom commission %
+• Referral codes auto-apply from URL (?ref=CODE)
+• Real-time validation of codes during signup
+• User can edit/remove pre-filled code
+• Commission is recurring (code owner earns % on every payment forever)
+• Net 60 payment terms (commission paid 60 days after earned)
+• Weekly email digest (Monday 8 AM EST) - no instant notifications
+• Include milestone celebrations in weekly email
+• No leaderboard
+• Automated Stripe payouts
+• Full admin dashboard for tracking all referrals
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: DATABASE SCHEMA
+═══════════════════════════════════════════════════════════════
+
+Execute these SQL commands:
+
+-- Enhanced referral_codes table
+ALTER TABLE referral_codes ADD COLUMN IF NOT EXISTS commission_percent INTEGER DEFAULT 20;
+ALTER TABLE referral_codes ADD COLUMN IF NOT EXISTS assigned_to_user_id INTEGER REFERENCES users(id);
+ALTER TABLE referral_codes ADD COLUMN IF NOT EXISTS payout_method VARCHAR(50) DEFAULT 'stripe';
+ALTER TABLE referral_codes ADD COLUMN IF NOT EXISTS stripe_account_id VARCHAR(255);
+ALTER TABLE referral_codes ADD COLUMN IF NOT EXISTS minimum_payout DECIMAL(10,2) DEFAULT 10.00;
+ALTER TABLE referral_codes ADD COLUMN IF NOT EXISTS created_by_admin VARCHAR(255);
+
+-- Track every commission earned
+CREATE TABLE IF NOT EXISTS referral_commissions (
+  id SERIAL PRIMARY KEY,
+  referral_code_id INTEGER REFERENCES referral_codes(id) ON DELETE CASCADE,
+  code_owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  referred_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  payment_amount DECIMAL(10,2) NOT NULL,
+  commission_amount DECIMAL(10,2) NOT NULL,
+  commission_percent INTEGER NOT NULL,
+  payment_date TIMESTAMP NOT NULL,
+  payout_eligible_date TIMESTAMP NOT NULL,
+  stripe_payment_id VARCHAR(255),
+  stripe_charge_id VARCHAR(255),
+  subscription_id VARCHAR(255),
+  status VARCHAR(50) DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Track payouts
+CREATE TABLE IF NOT EXISTS referral_payouts (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  referral_code_id INTEGER REFERENCES referral_codes(id),
+  amount DECIMAL(10,2) NOT NULL,
+  commission_ids INTEGER[] NOT NULL,
+  payment_method VARCHAR(50),
+  stripe_payout_id VARCHAR(255),
+  stripe_transfer_id VARCHAR(255),
+  requested_at TIMESTAMP,
+  paid_at TIMESTAMP,
+  status VARCHAR(50) DEFAULT 'pending',
+  admin_notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Milestones tracking
+CREATE TABLE IF NOT EXISTS referral_milestones (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  referral_code_id INTEGER REFERENCES referral_codes(id) ON DELETE CASCADE,
+  milestone_type VARCHAR(100) NOT NULL,
+  milestone_value INTEGER NOT NULL,
+  achieved_at TIMESTAMP DEFAULT NOW(),
+  notified BOOLEAN DEFAULT FALSE
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_commissions_code_owner ON referral_commissions(code_owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_commissions_status ON referral_commissions(status);
+CREATE INDEX IF NOT EXISTS idx_commissions_payout_eligible ON referral_commissions(payout_eligible_date, status);
+CREATE INDEX IF NOT EXISTS idx_commissions_payment_date ON referral_commissions(payment_date);
+CREATE INDEX IF NOT EXISTS idx_payouts_user ON referral_payouts(user_id);
+CREATE INDEX IF NOT EXISTS idx_payouts_status ON referral_payouts(status);
+CREATE INDEX IF NOT EXISTS idx_milestones_user ON referral_milestones(user_id);
+
+-- Comments for clarity
+COMMENT ON COLUMN referral_commissions.status IS 'pending = not yet eligible for payout, eligible = ready to pay, paid = already paid, cancelled = refunded/cancelled';
+COMMENT ON COLUMN referral_commissions.payout_eligible_date IS 'Payment date + 60 days (net 60 terms)';
+COMMENT ON COLUMN referral_payouts.status IS 'pending = waiting to process, processing = in progress, paid = completed, failed = error occurred';
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: BACKEND - REFERRAL VALIDATION API
+═══════════════════════════════════════════════════════════════
+
+CREATE OR UPDATE FILE: /server/referrals.js
+
+const express = require('express');
+const router = express.Router();
+const { db } = require('./db');
+
+// Validate referral code (public endpoint)
+router.post('/validate', async (req, res) => {
+  try {
+    const { code } = req.body;
+    
+    if (!code) {
+      return res.json({ valid: false });
+    }
+    
+    const result = await db.query(
+      `SELECT rc.*, u.email as owner_email, u.username as owner_username
+       FROM referral_codes rc
+       LEFT JOIN users u ON rc.assigned_to_user_id = u.id
+       WHERE rc.code = $1 AND rc.is_active = true`,
+      [code.toUpperCase()]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.json({ valid: false });
+    }
+    
+    const referralCode = result.rows[0];
+    
+    // Check if expired
+    if (referralCode.expires_at && new Date(referralCode.expires_at) < new Date()) {
+      return res.json({ 
+        valid: false, 
+        expired: true,
+        expiredDate: referralCode.expires_at
+      });
+    }
+    
+    // Check if usage limit reached
+    if (referralCode.max_uses > 0 && referralCode.times_used >= referralCode.max_uses) {
+      return res.json({ 
+        valid: false,
+        reason: 'Code has reached maximum uses'
+      });
+    }
+    
+    // Valid code - always returns "1 month free" for new user
+    return res.json({ 
+      valid: true,
+      reward: '30 days free',
+      rewardType: 'free_month',
+      rewardDays: 30,
+      codeOwner: referralCode.owner_username || referralCode.owner_email
+    });
+    
+  } catch (error) {
+    console.error('Referral validation error:', error);
+    return res.status(500).json({ valid: false, error: 'Validation failed' });
+  }
+});
+
+module.exports = router;
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: UPDATE AUTH TO HANDLE REFERRAL CODES
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/auth.js
+
+Add this to the verify-code endpoint (in the section where new users are created):
+
+// After creating new user, BEFORE sending welcome email:
+
+// Process referral code if provided
+let freeUntil = null;
+let referralCodeId = null;
+let codeOwnerUserId = null;
+
+if (referralCode) {
+  const referralResult = await db.query(
+    `SELECT * FROM referral_codes 
+     WHERE code = $1 AND is_active = true 
+     AND (expires_at IS NULL OR expires_at > NOW())
+     AND (max_uses = 0 OR times_used < max_uses)`,
+    [referralCode.toUpperCase()]
+  );
+  
+  if (referralResult.rows.length > 0) {
+    const referral = referralResult.rows[0];
+    referralCodeId = referral.id;
+    codeOwnerUserId = referral.assigned_to_user_id;
+    
+    // New user always gets 30 days free
+    freeUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    
+    // Increment usage count
+    await db.query(
+      `UPDATE referral_codes SET times_used = times_used + 1 WHERE id = $1`,
+      [referral.id]
+    );
+    
+    // Record redemption
+    await db.query(
+      `INSERT INTO referral_redemptions (code_id, redeemed_by_user_id, reward_applied)
+       VALUES ($1, $2, $3)`,
+      [referral.id, user.id, '30 days free']
+    );
+  }
+}
+
+// Update the user creation query to include:
+free_until, referral_code_used, referred_by_user_id
+
+VALUES ($1, $2, true, 'free', $3, $4, $5, NOW(), NOW())
+[normalizedEmail, normalizedUsername, freeUntil, referralCode || null, codeOwnerUserId]
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: COMMISSION TRACKING ON STRIPE PAYMENTS
+═══════════════════════════════════════════════════════════════
+
+CREATE OR UPDATE FILE: /server/stripe-webhooks.js
+
+Add this webhook handler for successful payments:
+
+router.post('/webhook', async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle successful payment
+  if (event.type === 'invoice.payment_succeeded') {
+    const invoice = event.data.object;
+    const customerId = invoice.customer;
+    const amountPaid = invoice.amount_paid / 100; // Convert cents to dollars
+    
+    // Find user by Stripe customer ID
+    const userResult = await db.query(
+      `SELECT * FROM users WHERE stripe_customer_id = $1`,
+      [customerId]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.json({ received: true });
+    }
+    
+    const user = userResult.rows[0];
+    
+    // Check if this user was referred
+    if (user.referred_by_user_id && user.referral_code_used) {
+      const referralCodeResult = await db.query(
+        `SELECT * FROM referral_codes WHERE code = $1`,
+        [user.referral_code_used]
+      );
+      
+      if (referralCodeResult.rows.length > 0) {
+        const referralCode = referralCodeResult.rows[0];
+        const commissionPercent = referralCode.commission_percent;
+        const commissionAmount = (amountPaid * commissionPercent) / 100;
+        
+        // Calculate payout eligible date (payment date + 60 days)
+        const paymentDate = new Date();
+        const payoutEligibleDate = new Date(paymentDate);
+        payoutEligibleDate.setDate(payoutEligibleDate.getDate() + 60);
+        
+        // Record commission
+        await db.query(
+          `INSERT INTO referral_commissions (
+            referral_code_id,
+            code_owner_user_id,
+            referred_user_id,
+            payment_amount,
+            commission_amount,
+            commission_percent,
+            payment_date,
+            payout_eligible_date,
+            stripe_payment_id,
+            stripe_charge_id,
+            subscription_id,
+            status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending')`,
+          [
+            referralCode.id,
+            referralCode.assigned_to_user_id,
+            user.id,
+            amountPaid,
+            commissionAmount,
+            commissionPercent,
+            paymentDate,
+            payoutEligibleDate,
+            invoice.payment_intent,
+            invoice.charge,
+            invoice.subscription
+          ]
+        );
+        
+        console.log(`✅ Commission tracked: $${commissionAmount} for user ${referralCode.assigned_to_user_id}`);
+        
+        // Check for milestones
+        await checkAndRecordMilestones(referralCode.assigned_to_user_id, referralCode.id);
+      }
+    }
+  }
+  
+  // Handle refunds/cancellations
+  if (event.type === 'charge.refunded') {
+    const charge = event.data.object;
+    
+    // Mark corresponding commission as cancelled
+    await db.query(
+      `UPDATE referral_commissions 
+       SET status = 'cancelled'
+       WHERE stripe_charge_id = $1`,
+      [charge.id]
+    );
+  }
+
+  res.json({ received: true });
+});
+
+// Milestone checker function
+async function checkAndRecordMilestones(userId, referralCodeId) {
+  // Get current stats
+  const stats = await db.query(
+    `SELECT 
+      COUNT(DISTINCT rr.redeemed_by_user_id) as total_signups,
+      COUNT(DISTINCT CASE WHEN u.subscription_type != 'free' THEN u.id END) as paid_subscribers,
+      COALESCE(SUM(rc.commission_amount), 0) as total_earned
+     FROM referral_codes rcodes
+     LEFT JOIN referral_redemptions rr ON rcodes.id = rr.code_id
+     LEFT JOIN users u ON rr.redeemed_by_user_id = u.id
+     LEFT JOIN referral_commissions rc ON rcodes.id = rc.referral_code_id AND rc.status != 'cancelled'
+     WHERE rcodes.id = $1
+     GROUP BY rcodes.id`,
+    [referralCodeId]
+  );
+  
+  if (stats.rows.length === 0) return;
+  
+  const { total_signups, paid_subscribers, total_earned } = stats.rows[0];
+  
+  const milestones = [
+    { type: 'signups', values: [5, 10, 25, 50, 100] },
+    { type: 'paid_subscribers', values: [1, 5, 10, 25] },
+    { type: 'earnings', values: [100, 500, 1000, 5000] }
+  ];
+  
+  for (const milestone of milestones) {
+    const currentValue = milestone.type === 'signups' ? total_signups : 
+                        milestone.type === 'paid_subscribers' ? paid_subscribers :
+                        parseFloat(total_earned);
+    
+    for (const value of milestone.values) {
+      if (currentValue >= value) {
+        // Check if already recorded
+        const existing = await db.query(
+          `SELECT id FROM referral_milestones 
+           WHERE user_id = $1 AND milestone_type = $2 AND milestone_value = $3`,
+          [userId, milestone.type, value]
+        );
+        
+        if (existing.rows.length === 0) {
+          // Record new milestone
+          await db.query(
+            `INSERT INTO referral_milestones (user_id, referral_code_id, milestone_type, milestone_value, notified)
+             VALUES ($1, $2, $3, $4, false)`,
+            [userId, referralCodeId, milestone.type, value]
+          );
+        }
+      }
+    }
+  }
+}
+
+═══════════════════════════════════════════════════════════════
+PHASE 5: ADMIN DASHBOARD - ASSIGN REFERRAL CODES
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/admin.js
+
+Add these endpoints:
+
+// POST: Assign referral code to user
+router.post('/users/:id/assign-referral-code', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      code, 
+      commission_percent, 
+      internal_notes,
+      send_notification = true 
+    } = req.body;
+    
+    if (!code || !commission_percent) {
+      return res.status(400).json({ error: 'Code and commission percent required' });
+    }
+    
+    if (commission_percent < 1 || commission_percent > 100) {
+      return res.status(400).json({ error: 'Commission must be between 1-100%' });
+    }
+    
+    const normalizedCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    if (normalizedCode.length < 3) {
+      return res.status(400).json({ error: 'Code must be at least 3 characters' });
+    }
+    
+    // Get user
+    const user = await db.query(`SELECT * FROM users WHERE id = $1`, [id]);
+    
+    if (user.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const userData = user.rows[0];
+    
+    // Check if code already exists
+    const existingCode = await db.query(
+      `SELECT id FROM referral_codes WHERE code = $1`,
+      [normalizedCode]
+    );
+    
+    if (existingCode.rows.length > 0) {
+      return res.status(400).json({ error: 'Code already exists' });
+    }
+    
+    // Create referral code
+    const newCode = await db.query(
+      `INSERT INTO referral_codes (
+        code,
+        commission_percent,
+        assigned_to_user_id,
+        created_by_admin,
+        internal_notes,
+        reward_type,
+        reward_days,
+        is_active,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, 'free_month', 30, true, NOW())
+      RETURNING *`,
+      [
+        normalizedCode,
+        commission_percent,
+        id,
+        req.admin.email || 'admin',
+        internal_notes || null
+      ]
+    );
+    
+    // Log admin action
+    await db.query(
+      `INSERT INTO admin_actions (admin_email, action_type, target_user_id, details)
+       VALUES ($1, 'assign_referral_code', $2, $3)`,
+      [
+        req.admin.email || 'admin',
+        id,
+        JSON.stringify({ code: normalizedCode, commission_percent })
+      ]
+    );
+    
+    // Send notification email if requested
+    if (send_notification) {
+      // TODO: Send email to user notifying them of their new referral code
+      console.log(`📧 Would send referral code notification to ${userData.email}`);
+    }
+    
+    console.log(`✅ Assigned referral code ${normalizedCode} to ${userData.email}`);
+    
+    res.json({ 
+      success: true, 
+      code: newCode.rows[0] 
+    });
+    
+  } catch (error) {
+    console.error('Error assigning referral code:', error);
+    res.status(500).json({ error: 'Failed to assign referral code' });
+  }
+});
+
+// GET: Referral code performance for a user
+router.get('/users/:id/referral-performance', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get referral code
+    const codeResult = await db.query(
+      `SELECT * FROM referral_codes WHERE assigned_to_user_id = $1`,
+      [id]
+    );
+    
+    if (codeResult.rows.length === 0) {
+      return res.json({ hasCode: false });
+    }
+    
+    const code = codeResult.rows[0];
+    
+    // Get all redemptions
+    const redemptions = await db.query(
+      `SELECT 
+        rr.id,
+        rr.redeemed_at,
+        u.email,
+        u.username,
+        u.subscription_type,
+        u.created_at
+       FROM referral_redemptions rr
+       JOIN users u ON rr.redeemed_by_user_id = u.id
+       WHERE rr.code_id = $1
+       ORDER BY rr.redeemed_at DESC`,
+      [code.id]
+    );
+    
+    // Get commissions
+    const commissions = await db.query(
+      `SELECT 
+        SUM(commission_amount) FILTER (WHERE status = 'pending') as pending_amount,
+        SUM(commission_amount) FILTER (WHERE status = 'paid') as paid_amount,
+        SUM(commission_amount) as total_amount,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
+        COUNT(*) FILTER (WHERE status = 'paid') as paid_count
+       FROM referral_commissions
+       WHERE referral_code_id = $1`,
+      [code.id]
+    );
+    
+    // Get active paying subscribers
+    const activeSubscribers = await db.query(
+      `SELECT COUNT(*) as count
+       FROM users
+       WHERE referred_by_user_id = $1 
+       AND subscription_type != 'free'
+       AND subscription_status = 'active'`,
+      [id]
+    );
+    
+    // Calculate monthly recurring
+    const monthlyRecurring = parseFloat(activeSubscribers.rows[0].count) * 14.99 * (code.commission_percent / 100);
+    
+    res.json({
+      hasCode: true,
+      code: code.code,
+      commissionPercent: code.commission_percent,
+      totalSignups: redemptions.rows.length,
+      activeSubscribers: parseInt(activeSubscribers.rows[0].count),
+      monthlyRecurring: monthlyRecurring.toFixed(2),
+      commissions: {
+        pending: parseFloat(commissions.rows[0].pending_amount || 0).toFixed(2),
+        paid: parseFloat(commissions.rows[0].paid_amount || 0).toFixed(2),
+        total: parseFloat(commissions.rows[0].total_amount || 0).toFixed(2)
+      },
+      redemptions: redemptions.rows
+    });
+    
+  } catch (error) {
+    console.error('Error fetching referral performance:', error);
+    res.status(500).json({ error: 'Failed to fetch performance data' });
+  }
+});
+
+// PATCH: Update referral code commission
+router.patch('/referral-codes/:code/commission', requireAdmin, async (req, res) => {
+  try {
+    const { code } = req.params;
+    const { commission_percent } = req.body;
+    
+    if (!commission_percent || commission_percent < 1 || commission_percent > 100) {
+      return res.status(400).json({ error: 'Commission must be between 1-100%' });
+    }
+    
+    await db.query(
+      `UPDATE referral_codes SET commission_percent = $1 WHERE code = $2`,
+      [commission_percent, code.toUpperCase()]
+    );
+    
+    await db.query(
+      `INSERT INTO admin_actions (admin_email, action_type, details)
+       VALUES ($1, 'update_referral_commission', $2)`,
+      [req.admin.email || 'admin', JSON.stringify({ code, commission_percent })]
+    );
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('Error updating commission:', error);
+    res.status(500).json({ error: 'Failed to update commission' });
+  }
+});
+
+// DELETE: Deactivate referral code
+router.delete('/referral-codes/:code', requireAdmin, async (req, res) => {
+  try {
+    const { code } = req.params;
+    
+    await db.query(
+      `UPDATE referral_codes SET is_active = false WHERE code = $1`,
+      [code.toUpperCase()]
+    );
+    
+    await db.query(
+      `INSERT INTO admin_actions (admin_email, action_type, details)
+       VALUES ($1, 'deactivate_referral_code', $2)`,
+      [req.admin.email || 'admin', JSON.stringify({ code })]
+    );
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('Error deactivating code:', error);
+    res.status(500).json({ error: 'Failed to deactivate code' });
+  }
+});
+
+═══════════════════════════════════════════════════════════════
+PHASE 6: WEEKLY EMAIL SYSTEM
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/referral-emails.js
+
+const { Resend } = require('resend');
+const { db } = require('./db');
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+const sendWeeklyReferralReport = async (userId, referralCodeId) => {
+  try {
+    // Get user and code info
+    const userResult = await db.query(
+      `SELECT u.*, rc.code, rc.commission_percent
+       FROM users u
+       JOIN referral_codes rc ON rc.assigned_to_user_id = u.id
+       WHERE u.id = $1 AND rc.id = $2`,
+      [userId, referralCodeId]
+    );
+    
+    if (userResult.rows.length === 0) return;
+    
+    const user = userResult.rows[0];
+    const code = user.code;
+    const commissionPercent = user.commission_percent;
+    
+    // Get this week's stats (last 7 days)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    
+    const weekStats = await db.query(
+      `SELECT 
+        COUNT(DISTINCT rr.id) as new_signups,
+        COUNT(DISTINCT CASE WHEN u.subscription_type != 'free' THEN u.id END) as new_paid
+       FROM referral_redemptions rr
+       LEFT JOIN users u ON rr.redeemed_by_user_id = u.id
+       WHERE rr.code_id = $1 AND rr.redeemed_at >= $2`,
+      [referralCodeId, weekAgo]
+    );
+    
+    const weekCommissions = await db.query(
+      `SELECT COALESCE(SUM(commission_amount), 0) as amount
+       FROM referral_commissions
+       WHERE referral_code_id = $1 AND payment_date >= $2`,
+      [referralCodeId, weekAgo]
+    );
+    
+    // Get all-time stats
+    const allTimeStats = await db.query(
+      `SELECT 
+        COUNT(DISTINCT rr.id) as total_signups,
+        COUNT(DISTINCT CASE WHEN u.subscription_type != 'free' THEN u.id END) as paid_subscribers,
+        COUNT(DISTINCT CASE WHEN u.subscription_type = 'free' THEN u.id END) as free_trial_users
+       FROM referral_redemptions rr
+       LEFT JOIN users u ON rr.redeemed_by_user_id = u.id
+       WHERE rr.code_id = $1`,
+      [referralCodeId]
+    );
+    
+    const allTimeCommissions = await db.query(
+      `SELECT 
+        COALESCE(SUM(commission_amount) FILTER (WHERE status = 'paid'), 0) as paid,
+        COALESCE(SUM(commission_amount) FILTER (WHERE status = 'pending'), 0) as pending,
+        COALESCE(SUM(commission_amount), 0) as total
+       FROM referral_commissions
+       WHERE referral_code_id = $1`,
+      [referralCodeId]
+    );
+    
+    // Get active subscribers list
+    const activeSubscribers = await db.query(
+      `SELECT u.email, u.username, rr.redeemed_at
+       FROM users u
+       JOIN referral_redemptions rr ON u.id = rr.redeemed_by_user_id
+       WHERE rr.code_id = $1 
+       AND u.subscription_type != 'free'
+       AND u.subscription_status = 'active'
+       ORDER BY rr.redeemed_at DESC`,
+      [referralCodeId]
+    );
+    
+    // Get trial users expiring soon
+    const expiringTrials = await db.query(
+      `SELECT u.email, u.username, u.free_until
+       FROM users u
+       JOIN referral_redemptions rr ON u.id = rr.redeemed_by_user_id
+       WHERE rr.code_id = $1 
+       AND u.subscription_type = 'free'
+       AND u.free_until > NOW()
+       AND u.free_until <= NOW() + INTERVAL '7 days'
+       ORDER BY u.free_until ASC`,
+      [referralCodeId]
+    );
+    
+    // Get new milestones this week
+    const newMilestones = await db.query(
+      `SELECT milestone_type, milestone_value
+       FROM referral_milestones
+       WHERE user_id = $1 
+       AND achieved_at >= $2
+       AND notified = false
+       ORDER BY achieved_at DESC`,
+      [userId, weekAgo]
+    );
+    
+    // Mark milestones as notified
+    if (newMilestones.rows.length > 0) {
+      await db.query(
+        `UPDATE referral_milestones 
+         SET notified = true 
+         WHERE user_id = $1 AND achieved_at >= $2`,
+        [userId, weekAgo]
+      );
+    }
+    
+    // Calculate monthly recurring
+    const monthlyRecurring = activeSubscribers.rows.length * 14.99 * (commissionPercent / 100);
+    
+    // Generate email HTML
+    const html = generateWeeklyEmailHTML({
+      username: user.username || user.email.split('@')[0],
+      code,
+      commissionPercent,
+      weekStats: {
+        newSignups: parseInt(weekStats.rows[0].new_signups),
+        newPaid: parseInt(weekStats.rows[0].new_paid),
+        commissionsEarned: parseFloat(weekCommissions.rows[0].amount)
+      },
+      allTimeStats: {
+        totalSignups: parseInt(allTimeStats.rows[0].total_signups),
+        paidSubscribers: parseInt(allTimeStats.rows[0].paid_subscribers),
+        freeTrialUsers: parseInt(allTimeStats.rows[0].free_trial_users),
+        conversionRate: allTimeStats.rows[0].total_signups > 0 
+          ? Math.round((parseInt(allTimeStats.rows[0].paid_subscribers) / parseInt(allTimeStats.rows[0].total_signups)) * 100)
+          : 0
+      },
+      commissions: {
+        paid: parseFloat(allTimeCommissions.rows[0].paid),
+        pending: parseFloat(allTimeCommissions.rows[0].pending),
+        total: parseFloat(allTimeCommissions.rows[0].total),
+        monthlyRecurring: monthlyRecurring.toFixed(2)
+      },
+      activeSubscribers: activeSubscribers.rows,
+      expiringTrials: expiringTrials.rows,
+      milestones: newMilestones.rows
+    });
+    
+    // Send email
+    const { data, error } = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: [user.email],
+      subject: `Your BJJ OS Referral Report - Week of ${getWeekRange()}`,
+      html
+    });
+    
+    if (error) {
+      console.error(`Failed to send weekly report to ${user.email}:`, error);
+      return { success: false, error };
+    }
+    
+    console.log(`✅ Weekly referral report sent to ${user.email}`);
+    return { success: true };
+    
+  } catch (error) {
+    console.error('Error sending weekly report:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+function getWeekRange() {
+  const now = new Date();
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  
+  const format = (date) => {
+    const month = date.toLocaleString('en-US', { month: 'short' });
+    const day = date.getDate();
+    return `${month} ${day}`;
+  };
+  
+  return `${format(weekAgo)} - ${format(now)}`;
+}
+
+function generateWeeklyEmailHTML(data) {
+  const milestoneHTML = data.milestones.length > 0 ? `
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 12px; margin: 30px 0; text-align: center;">
+      <h2 style="margin: 0 0 15px 0; font-size: 28px;">🎉 MILESTONE${data.milestones.length > 1 ? 'S' : ''} ACHIEVED!</h2>
+      ${data.milestones.map(m => {
+        let text = '';
+        if (m.milestone_type === 'signups') text = `${m.milestone_value} total referrals!`;
+        if (m.milestone_type === 'paid_subscribers') text = `${m.milestone_value} paid subscribers!`;
+        if (m.milestone_type === 'earnings') text = `$${m.milestone_value} total earned!`;
+        return `<p style="font-size: 20px; margin: 10px 0;">${text}</p>`;
+      }).join('')}
+      <p style="margin: 20px 0 0 0; opacity: 0.9;">Keep crushing it! 🚀</p>
+    </div>
+  ` : '';
+  
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #333; max-width: 700px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+          .container { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .header { text-align: center; border-bottom: 3px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
+          .section { margin: 25px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #000; }
+          .section h2 { margin: 0 0 15px 0; font-size: 18px; text-transform: uppercase; }
+          .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 15px 0; }
+          .stat-box { background: white; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e5e7eb; }
+          .stat-number { font-size: 28px; font-weight: bold; color: #000; }
+          .stat-label { font-size: 11px; color: #666; text-transform: uppercase; margin-top: 5px; }
+          .subscriber { background: white; padding: 12px; margin: 8px 0; border-radius: 6px; border-left: 3px solid #10b981; }
+          .trial { background: white; padding: 12px; margin: 8px 0; border-radius: 6px; border-left: 3px solid #f59e0b; }
+          .share-box { text-align: center; margin: 30px 0; padding: 25px; background: #f0f9ff; border-radius: 8px; }
+          .share-link { display: inline-block; background: #000; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 10px 0; }
+          .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">🥋 BJJ OS REFERRAL REPORT</h1>
+            <p style="margin: 10px 0 0 0; color: #666;">Week of ${getWeekRange()}</p>
+          </div>
+
+          <p style="font-size: 18px; margin-bottom: 30px;">Hey ${data.username}! 👋</p>
+
+          ${milestoneHTML}
+
+          <div class="section">
+            <h2>THIS WEEK</h2>
+            <div class="stat-grid">
+              <div class="stat-box">
+                <div class="stat-number">${data.weekStats.newSignups}</div>
+                <div class="stat-label">New Signups</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-number">${data.weekStats.newPaid}</div>
+                <div class="stat-label">New Paid 💰</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-number">$${data.weekStats.commissionsEarned.toFixed(2)}</div>
+                <div class="stat-label">Earned</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>YOUR EARNINGS</h2>
+            <p style="margin: 0 0 15px 0;"><strong style="font-size: 24px; color: #10b981;">$${data.commissions.monthlyRecurring}/month</strong> recurring commission</p>
+            <p style="margin: 5px 0; font-size: 14px;">From ${data.allTimeStats.paidSubscribers} active subscriber${data.allTimeStats.paidSubscribers !== 1 ? 's' : ''} × $14.99 × ${data.commissionPercent}%</p>
+            
+            <div style="margin-top: 20px; padding: 15px; background: #fff8e1; border-radius: 6px; border-left: 3px solid #f59e0b;">
+              <p style="margin: 0;"><strong>Pending Payout:</strong> $${data.commissions.pending.toFixed(2)}</p>
+              <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">Paid 60 days after earned (net 60 terms)</p>
+            </div>
+            
+            <p style="margin: 15px 0 0 0; font-size: 14px;">
+              <strong>Total Lifetime Earnings:</strong> $${data.commissions.total.toFixed(2)}<br>
+              ├─ Already paid: $${data.commissions.paid.toFixed(2)} ✅<br>
+              └─ Pending: $${data.commissions.pending.toFixed(2)}
+            </p>
+          </div>
+
+          <div class="section">
+            <h2>ALL TIME</h2>
+            <div class="stat-grid">
+              <div class="stat-box">
+                <div class="stat-number">${data.allTimeStats.totalSignups}</div>
+                <div class="stat-label">Total Signups</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-number">${data.allTimeStats.paidSubscribers}</div>
+                <div class="stat-label">Paid Subs 💰</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-number">${data.allTimeStats.freeTrialUsers}</div>
+                <div class="stat-label">Free Trials 🆓</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-number">${data.allTimeStats.conversionRate}%</div>
+                <div class="stat-label">Conversion</div>
+              </div>
+            </div>
+          </div>
+
+          ${data.activeSubscribers.length > 0 ? `
+          <div class="section">
+            <h2>💰 ACTIVE SUBSCRIBERS (${data.activeSubscribers.length})</h2>
+            <p style="margin: 0 0 15px 0; font-size: 14px;">You earn $${(14.99 * (data.commissionPercent / 100)).toFixed(2)}/month from each</p>
+            ${data.activeSubscribers.slice(0, 5).map(s => `
+              <div class="subscriber">
+                <strong>${s.username || s.email}</strong><br>
+                <small style="color: #666;">Joined ${new Date(s.redeemed_at).toLocaleDateString()}</small>
+              </div>
+            `).join('')}
+            ${data.activeSubscribers.length > 5 ? `<p style="text-align: center; margin: 10px 0; color: #666;">...and ${data.activeSubscribers.length - 5} more</p>` : ''}
+          </div>
+          ` : ''}
+
+          ${data.expiringTrials.length > 0 ? `
+          <div class="section" style="border-left-color: #f59e0b; background: #fffbeb;">
+            <h2>⏰ TRIALS EXPIRING THIS WEEK (${data.expiringTrials.length})</h2>
+            <p style="margin: 0 0 15px 0; font-size: 14px;">Reach out to encourage them to upgrade!</p>
+            ${data.expiringTrials.map(t => {
+              const daysLeft = Math.ceil((new Date(t.free_until) - new Date()) / (1000 * 60 * 60 * 24));
+              return `
+                <div class="trial">
+                  <strong>${t.username || t.email}</strong><br>
+                  <small style="color: #f59e0b;">Trial ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}</small>
+                </div>
+              `;
+            }).join('')}
+            <p style="margin: 15px 0 0 0; font-size: 14px; color: #666;">
+              If they all upgrade → +$${(data.expiringTrials.length * 14.99 * (data.commissionPercent / 100)).toFixed(2)}/month for you! 🚀
+            </p>
+          </div>
+          ` : ''}
+
+          <div class="share-box">
+            <h3 style="margin: 0 0 10px 0;">Share Your Code</h3>
+            <p style="margin: 0 0 15px 0; color: #666;">Your referral link:</p>
+            <div style="background: white; padding: 15px; border-radius: 6px; margin: 10px 0; font-family: monospace; word-break: break-all;">
+              bjjos.app/signup?ref=${data.code}
+            </div>
+            <p style="margin: 15px 0 5px 0; font-size: 14px;">
+              They get 30 days free • You earn ${data.commissionPercent}% forever
+            </p>
+          </div>
+
+          <div class="footer">
+            <p><strong>Questions?</strong></p>
+            <p>Reply to this email or reach out: todd@bjjos.app</p>
+            <p style="margin-top: 15px;">Keep it up! 🥋</p>
+            <p><strong>– Todd<br>BJJ OS</strong></p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+// Send weekly reports to all code owners
+const sendAllWeeklyReports = async () => {
+  try {
+    const codes = await db.query(
+      `SELECT id, assigned_to_user_id 
+       FROM referral_codes 
+       WHERE assigned_to_user_id IS NOT NULL 
+       AND is_active = true`
+    );
+    
+    console.log(`📧 Sending weekly reports to ${codes.rows.length} code owners...`);
+    
+    for (const code of codes.rows) {
+      await sendWeeklyReferralReport(code.assigned_to_user_id, code.id);
+      // Small delay to avoid rate limits
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    console.log('✅ All weekly reports sent');
+    
+  } catch (error) {
+    console.error('Error sending weekly reports:', error);
+  }
+};
+
+module.exports = {
+  sendWeeklyReferralReport,
+  sendAllWeeklyReports
+};
+
+═══════════════════════════════════════════════════════════════
+PHASE 7: WEEKLY EMAIL SCHEDULER
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/admin-scheduler.js
+
+Add this cron job:
+
+const { sendAllWeeklyReports } = require('./referral-emails');
+
+// Weekly referral reports: Every Monday at 8 AM EST
+cron.schedule('0 8 * * 1', async () => {
+  console.log('📧 Sending weekly referral reports (Monday 8 AM EST)...');
+  try {
+    await sendAllWeeklyReports();
+  } catch (error) {
+    console.error('Failed to send weekly reports:', error);
+  }
+}, {
+  timezone: "America/New_York"
+});
+
+console.log('✅ Weekly referral email scheduler initialized (Monday 8 AM EST)');
+
+═══════════════════════════════════════════════════════════════
+PHASE 8: FRONTEND - AUTO-APPLY REFERRAL CODE
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /client/src/pages/Login.jsx
+
+Update the signup component to include referral code handling:
+
+import { useState, useEffect } from 'react';
+import { useLocation } from 'wouter';
+import { generateDeviceFingerprint, getDeviceInfo } from '../utils/deviceFingerprint';
+
+export default function Login() {
+  const [step, setStep] = useState('email');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [username, setUsername] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [referralStatus, setReferralStatus] = useState(null);
+  const [referralReward, setReferralReward] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [, setLocation] = useLocation();
+
+  // Check for referral code in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      const normalized = ref.toUpperCase().trim();
+      setReferralCode(normalized);
+      validateReferralCode(normalized);
+    }
+  }, []);
+
+  // Validate referral code with debounce
+  useEffect(() => {
+    if (!referralCode) {
+      setReferralStatus(null);
+      return;
+    }
+
+    setReferralStatus('checking');
+
+    const timer = setTimeout(() => {
+      validateReferralCode(referralCode);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [referralCode]);
+
+  const validateReferralCode = async (code) => {
+    try {
+      const response = await fetch('/api/referrals/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+
+      const data = await response.json();
+
+      if (data.valid) {
+        setReferralStatus('valid');
+        setReferralReward(data.reward);
+      } else if (data.expired) {
+        setReferralStatus('expired');
+      } else {
+        setReferralStatus('invalid');
+      }
+    } catch (error) {
+      console.error('Referral validation error:', error);
+      setReferralStatus('invalid');
+    }
+  };
+
+  // ... rest of login component with referral code field
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-black">
+      <div className="max-w-md w-full p-8 bg-white rounded-lg shadow-2xl">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2">🥋 BJJ OS</h1>
+          <p className="text-gray-600 text-sm">The World's Smartest BJJ Coach</p>
+        </div>
+
+        {step === 'email' && (
+          <>
+            <h2 className="text-2xl font-bold mb-6">Sign In</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Referral Code (optional)
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Enter code"
+                    value={referralCode}
+                    onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  />
+                  {referralCode && (
+                    <button
+                      onClick={() => {
+                        setReferralCode('');
+                        setReferralStatus(null);
+                      }}
+                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {referralStatus === 'checking' && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    🔄 Checking code...
+                  </p>
+                )}
+
+                {referralStatus === 'valid' && (
+                  <p className="text-sm text-green-600 mt-1">
+                    ✅ Valid! {referralReward}
+                  </p>
+                )}
+
+                {referralStatus === 'invalid' && (
+                  <p className="text-sm text-red-600 mt-1">
+                    ❌ Invalid code. You can proceed without one.
+                  </p>
+                )}
+
+                {referralStatus === 'expired' && (
+                  <p className="text-sm text-orange-600 mt-1">
+                    ⚠️ This code has expired.
+                  </p>
+                )}
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <button
+                onClick={sendCode}
+                disabled={loading || !email.includes('@')}
+                className="w-full bg-black text-white p-3 rounded-lg font-bold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'Sending...' : 'Send Verification Code'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ... rest of steps (code entry, username) */}
+      </div>
+    </div>
+  );
+}
+
+═══════════════════════════════════════════════════════════════
+PHASE 9: AUTOMATED PAYOUT SYSTEM
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/referral-payouts.js
+
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { db } = require('./db');
+
+// Daily job to process eligible payouts
+const processEligiblePayouts = async () => {
+  try {
+    console.log('💰 Checking for eligible commission payouts...');
+
+    // Find commissions eligible for payout (60+ days old, pending status, meets minimum)
+    const eligibleCommissions = await db.query(`
+      SELECT 
+        rc.assigned_to_user_id as user_id,
+        rc.id as code_id,
+        rc.stripe_account_id,
+        rc.minimum_payout,
+        u.email,
+        SUM(rcom.commission_amount) as total_amount,
+        ARRAY_AGG(rcom.id) as commission_ids
+      FROM referral_commissions rcom
+      JOIN referral_codes rc ON rcom.referral_code_id = rc.id
+      JOIN users u ON rc.assigned_to_user_id = u.id
+      WHERE rcom.status = 'pending'
+        AND rcom.payout_eligible_date <= NOW()
+      GROUP BY rc.assigned_to_user_id, rc.id, rc.stripe_account_id, rc.minimum_payout, u.email
+      HAVING SUM(rcom.commission_amount) >= rc.minimum_payout
+    `);
+
+    if (eligibleCommissions.rows.length === 0) {
+      console.log('No eligible payouts found');
+      return;
+    }
+
+    console.log(`Found ${eligibleCommissions.rows.length} eligible payout(s)`);
+
+    for (const payout of eligibleCommissions.rows) {
+      try {
+        // Check if user has Stripe account connected
+        if (!payout.stripe_account_id) {
+          console.log(`⚠️ User ${payout.email} has no Stripe account connected, skipping`);
+          continue;
+        }
+
+        // Create Stripe transfer
+        const transfer = await stripe.transfers.create({
+          amount: Math.round(payout.total_amount * 100), // Convert to cents
+          currency: 'usd',
+          destination: payout.stripe_account_id,
+          description: `BJJ OS Referral Commission - ${payout.commission_ids.length} payment(s)`,
+          metadata: {
+            user_id: payout.user_id.toString(),
+            code_id: payout.code_id.toString()
+          }
+        });
+
+        // Record payout in database
+        const payoutRecord = await db.query(`
+          INSERT INTO referral_payouts 
+          (user_id, referral_code_id, amount, commission_ids, payment_method, stripe_transfer_id, paid_at, status)
+          VALUES ($1, $2, $3, $4, 'stripe', $5, NOW(), 'paid')
+          RETURNING id
+        `, [
+          payout.user_id,
+          payout.code_id,
+          payout.total_amount,
+          payout.commission_ids,
+          transfer.id
+        ]);
+
+        // Update commissions status to paid
+        await db.query(`
+          UPDATE referral_commissions 
+          SET status = 'paid' 
+          WHERE id = ANY($1)
+        `, [payout.commission_ids]);
+
+        console.log(`✅ Paid $${payout.total_amount.toFixed(2)} to ${payout.email}`);
+
+        // Send confirmation email
+        // TODO: Implement payout confirmation email
+
+      } catch (error) {
+        console.error(`❌ Payout failed for user ${payout.email}:`, error);
+
+        // Log error to database
+        await db.query(`
+          INSERT INTO system_errors (error_type, error_message, context, severity)
+          VALUES ('referral_payout_failed', $1, $2, 'high')
+        `, [
+          error.message,
+          JSON.stringify({ user_id: payout.user_id, amount: payout.total_amount })
+        ]);
+      }
+    }
+
+    console.log('✅ Payout processing complete');
+
+  } catch (error) {
+    console.error('❌ Error processing payouts:', error);
+  }
+};
+
+module.exports = {
+  processEligiblePayouts
+};
+
+═══════════════════════════════════════════════════════════════
+PHASE 10: ADD PAYOUT SCHEDULER
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/admin-scheduler.js
+
+Add:
+
+const { processEligiblePayouts } = require('./referral-payouts');
+
+// Process referral payouts: Daily at 9 AM EST
+cron.schedule('0 9 * * *', async () => {
+  console.log('💰 Processing referral payouts (9 AM EST)...');
+  try {
+    await processEligiblePayouts();
+  } catch (error) {
+    console.error('Failed to process payouts:', error);
+  }
+}, {
+  timezone: "America/New_York"
+});
+
+console.log('✅ Referral payout scheduler initialized (daily 9 AM EST)');
+
+═══════════════════════════════════════════════════════════════
+PHASE 11: INTEGRATE ROUTES WITH MAIN SERVER
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/index.js
+
+Add these imports and routes:
+
+const referralRoutes = require('./referrals');
+const referralPayouts = require('./referral-payouts');
+
+// Mount routes
+app.use('/api/referrals', referralRoutes);
+
+═══════════════════════════════════════════════════════════════
+PHASE 12: TESTING & VALIDATION
+═══════════════════════════════════════════════════════════════
+
+After implementation, test:
+
+1. ✅ Admin can assign referral code to user
+2. ✅ Referral code auto-applies from URL (?ref=CODE)
+3. ✅ Real-time validation shows valid/invalid
+4. ✅ User can edit/remove pre-filled code
+5. ✅ New user gets 30 days free when using code
+6. ✅ Commission is recorded on first payment
+7. ✅ Commission status updates to "paid" after net 60
+8. ✅ Weekly email sends every Monday 8 AM EST
+9. ✅ Milestones are tracked and included in email
+10. ✅ Admin dashboard shows all referral stats
+11. ✅ Stripe payouts process automatically
+
+═══════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════
+
+✅ Admin can assign referral codes with custom commission %
+✅ Referral codes auto-apply from URL and are editable
+✅ Real-time validation of codes
+✅ New users always get 1 month free
+✅ Code owners earn recurring commission on every payment
+✅ Net 60 payment terms (commission paid 60 days after earned)
+✅ Weekly emails sent Monday 8 AM EST (no instant notifications)
+✅ Milestones celebrated in weekly email
+✅ No leaderboard
+✅ Automated Stripe payouts
+✅ Comprehensive admin tracking
+✅ Commission tracking on every Stripe payment
+✅ Proper handling of refunds/cancellations
+
+═══════════════════════════════════════════════════════════════
+NOTES
+═══════════════════════════════════════════════════════════════
+
+• Do NOT change any existing authentication, Professor OS, or other features
+• Focus ONLY on implementing the referral system as specified
+• All commission calculations assume $14.99/month subscription price
+• Net 60 means payout occurs 60 days after payment is received
+• Weekly emails go out every Monday at 8 AM EST (America/New_York timezone)
+• Stripe Connect must be set up for automated payouts to work
+• Admin email for notifications: todd@bjjos.app
+
+START IMPLEMENTATION NOW.
+```
+
+-----
+
+## ✅ **PROMPT READY!**
+
+**This prompt includes:**
+
+1. ✅ Admin-only code assignment with custom commission %
+1. ✅ Recurring (lifetime) commission structure
+1. ✅ Net 60 payment terms
+1. ✅ Auto-apply referral codes from URL with real-time validation
+1. ✅ Weekly emails (Monday 8 AM EST) with milestones
+1. ✅ No instant notifications, no leaderboard
+1. ✅ Automated Stripe payouts
+1. ✅ Complete admin dashboard
+1. ✅ Commission tracking on every payment
+1. ✅ Milestone tracking system
+
+**Copy the entire prompt above and send it to Replit Agent!** 🚀
+
+**Ready to discuss the User Progress Bar next?** (The 7/10 AI sessions tracker)

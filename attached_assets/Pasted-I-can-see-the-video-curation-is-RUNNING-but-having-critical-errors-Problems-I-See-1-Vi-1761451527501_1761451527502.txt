@@ -1,0 +1,59 @@
+I can see the video curation is RUNNING but having **critical errors**:
+
+## Problems I See:
+
+1. **Videos found but NOT saving** - Multiple “syntax error” messages
+1. **Error: “Cannot read properties of null”** - Database save failing
+1. **Quality scores showing** (7.5/10, 8/10, 4.5/10) but **not persisting to database**
+1. **“recommended: false”** appearing - videos being rejected that should be saved
+
+-----
+
+## Here’s what to prompt Replit Agent to fix this NOW:
+
+```
+The video curation is running but FAILING to save videos to the database. I can see in the logs:
+
+ERRORS:
+- "syntax error at or near '='" when processing videos
+- "Cannot read properties of null (reading 'toString')"
+- Videos are being analyzed and scored but NOT saving to ai_video_knowledge table
+
+FIX IMMEDIATELY:
+
+1. Debug the database INSERT statement for ai_video_knowledge
+   - The SQL syntax has errors (check for string escaping issues)
+   - Fix the null reference errors when saving video data
+   - Ensure all required fields are provided with proper types
+
+2. Check the video save logic:
+   - Videos scoring 7.5+ should save automatically
+   - Videos from trusted instructors (Danaher, Lachlan, etc) scoring 7.0+ should save
+   - Currently seeing quality scores but "recommended: false" - fix this logic
+
+3. Add timestamp tracking:
+   - video_upload_date (when instructor uploaded to YouTube)
+   - date_added_to_library (when we curated it)
+   - last_recommended (when Prof OS last suggested it)
+   - Both old and new videos should have upload dates from YouTube API
+
+4. Show me the exact SQL INSERT statement being used and the error
+
+5. After fixing, re-run the curation and confirm videos are ACTUALLY saving to database with:
+   SELECT COUNT(*) FROM ai_video_knowledge;
+
+The curation logic is working (finding videos, scoring them) but the database save is broken. Fix the SQL errors immediately.
+```
+
+-----
+
+**The issue is clear**:
+
+- ✅ YouTube search working
+- ✅ Video analysis working
+- ✅ Quality scoring working
+- ❌ **Database INSERT failing due to SQL syntax errors**
+
+This is a quick fix - the SQL statement has escaping issues or missing fields. Agent should fix it in 5 minutes.
+
+**Copy that prompt above** and paste into Replit Agent to fix the save errors now! 🔧​​​​​​​​​​​​​​​​

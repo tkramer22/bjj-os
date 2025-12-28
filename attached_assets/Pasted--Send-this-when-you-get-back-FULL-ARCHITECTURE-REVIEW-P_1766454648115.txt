@@ -1,0 +1,131 @@
+**Send this when you get back:**
+
+```
+FULL ARCHITECTURE REVIEW: PROFESSOR OS 6.0
+
+Before any more changes, I need a complete audit of how Professor OS 6.0 works end-to-end.
+
+═══════════════════════════════════════════════════════════════════════════════
+SECTION 1: THE SYSTEM PROMPT
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Where is buildSystemPrompt.ts located? Show me the file path.
+
+2. List ALL 9 rules currently in the prompt with their exact wording:
+   - RULE #1: No third person
+   - RULE #2: Response length matching
+   - RULE #3: Lead with answer
+   - RULE #4: No corporate phrases
+   - RULE #5: No markdown
+   - RULE #6: Confidence without fluff
+   - RULE #7: No repetition
+   - RULE #8: Never invent credentials
+   - RULE #9: Trust video library
+
+3. Show me the personality/tone section - does it say Professor OS is a coach/training partner, not a chatbot?
+
+═══════════════════════════════════════════════════════════════════════════════
+SECTION 2: DATA INJECTION INTO PROFESSOR OS
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS should receive this data in EVERY conversation:
+
+A. USER CONTEXT
+   - User's name, belt level, training style (gi/nogi)
+   - Training frequency, goals, struggles
+   - Show me where this is loaded and injected
+
+B. VIDEO LIBRARY (from Gemini analysis)
+   - How many videos total in ai_video_knowledge table?
+   - How are relevant videos selected for each query?
+   - Show me the intelligent retrieval function
+   - Confirm Gemini-analyzed data (technique breakdowns, timestamps) is included
+
+C. VERIFIED CREDENTIALS (ADCC/IBJJF)
+   - How many records in adcc_results table?
+   - How many instructors in instructor_verified_credentials table?
+   - Show me where credentials are looked up and injected
+   - Confirm: If instructor has NO credentials in database, nothing is mentioned
+
+D. COMBAT SPORTS NEWS
+   - Is this still being injected?
+   - How many days of news included?
+   - What sources are being scraped?
+
+E. CONVERSATION HISTORY
+   - How many previous messages are included for context?
+   - Is this loading correctly on iOS app startup?
+
+═══════════════════════════════════════════════════════════════════════════════
+SECTION 3: THE COMPLETE FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+Trace the EXACT path when a user sends a message on iOS:
+
+1. ios-chat.tsx receives user message
+2. → calls which API endpoint?
+3. → which server file handles it?
+4. → does it call analyzeMessageForVideoQuery()?
+5. → does it call fetchRelevantVideos()?
+6. → does it call getVerifiedCredentials()?
+7. → does it call buildSystemPrompt()?
+8. → which AI model is called (Claude/GPT-4o)?
+9. → response returns to ios-chat.tsx
+
+Show me each step with file names and line numbers.
+
+═══════════════════════════════════════════════════════════════════════════════
+SECTION 4: VERIFICATION QUERIES
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these database queries and show me results:
+
+1. Total videos:
+   SELECT COUNT(*) FROM ai_video_knowledge;
+
+2. Videos with Gemini analysis:
+   SELECT COUNT(*) FROM ai_video_knowledge WHERE quality_score IS NOT NULL;
+
+3. JT Torres videos specifically:
+   SELECT COUNT(*) FROM ai_video_knowledge WHERE LOWER(instructor_name) LIKE '%torres%';
+
+4. ADCC results count:
+   SELECT COUNT(*) FROM adcc_results;
+
+5. Verified instructors count:
+   SELECT COUNT(*) FROM instructor_verified_credentials;
+
+6. JT Torres credentials:
+   SELECT * FROM instructor_verified_credentials WHERE instructor_name_normalized LIKE '%torres%';
+
+7. Recent combat sports news:
+   SELECT COUNT(*) FROM combat_sports_news WHERE created_at > NOW() - INTERVAL '7 days';
+
+═══════════════════════════════════════════════════════════════════════════════
+SECTION 5: WHAT COULD BE BROKEN
+═══════════════════════════════════════════════════════════════════════════════
+
+Check for these common issues:
+
+1. Is there more than ONE version of the system prompt? (should be only ONE source of truth)
+2. Are there any hardcoded instructor lists that should be dynamic?
+3. Is the video retrieval using the NEW intelligent function or OLD generic top-30?
+4. Are credentials being fetched BEFORE buildSystemPrompt runs?
+5. Is conversation history loading BEFORE the chat component renders?
+
+═══════════════════════════════════════════════════════════════════════════════
+SECTION 6: SUMMARY REPORT
+═══════════════════════════════════════════════════════════════════════════════
+
+After reviewing everything, give me:
+
+1. WORKING CORRECTLY: List everything that's properly connected
+2. BROKEN OR MISSING: List anything that's not working
+3. RECOMMENDATIONS: Any improvements needed
+
+This audit must be thorough. Professor OS is the core product - it must work flawlessly.
+```
+
+-----
+
+This will give you a complete picture of whether 6.0 is actually wired up correctly. Take your break - this prompt will keep Replit busy doing a real audit.​​​​​​​​​​​​​​​​

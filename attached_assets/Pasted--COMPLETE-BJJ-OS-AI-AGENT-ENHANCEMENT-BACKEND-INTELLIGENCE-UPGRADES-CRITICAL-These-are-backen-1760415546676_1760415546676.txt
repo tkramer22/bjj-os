@@ -1,0 +1,859 @@
+```
+COMPLETE BJJ OS AI AGENT ENHANCEMENT - BACKEND INTELLIGENCE UPGRADES
+
+CRITICAL: These are backend improvements to the AI selection engine. DO NOT modify existing daily SMS delivery system. User experience stays exactly the same - the AI just gets smarter at selecting techniques.
+
+=== IMPLEMENTATION SAFETY ===
+
+✅ Add new database tables and fields
+✅ Enhance video analysis with new metadata
+✅ Improve scoring algorithm with new factors
+✅ Add new Claude analysis prompts
+❌ DO NOT change daily SMS delivery mechanism
+❌ DO NOT change user-facing SMS format
+❌ DO NOT change existing commands (PAUSE, SKIP, BAD, CANCEL)
+
+=== DATABASE SCHEMA ENHANCEMENTS ===
+
+**Add new tables:**
+
+```sql
+-- Emerging instructor discovery
+CREATE TABLE emerging_instructors (
+  id SERIAL PRIMARY KEY,
+  instructor_name TEXT,
+  channel_id TEXT,
+  credibility_score INTEGER,
+  specialty TEXT,
+  teaching_style JSONB,
+  discovery_date TIMESTAMP,
+  approval_status TEXT,
+  videos_analyzed INTEGER,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Technique relationships (knowledge graph)
+CREATE TABLE technique_relationships (
+  id SERIAL PRIMARY KEY,
+  technique_a_id INTEGER,
+  technique_b_id INTEGER,
+  relationship_type TEXT,
+  confidence TEXT,
+  explanation TEXT,
+  direction TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Competition meta tracking
+CREATE TABLE competition_meta (
+  id SERIAL PRIMARY KEY,
+  analysis_date DATE,
+  hot_techniques JSONB,
+  cold_techniques JSONB,
+  meta_summary TEXT,
+  source_videos_analyzed TEXT[],
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Quality decay reviews
+CREATE TABLE technique_quality_reviews (
+  id SERIAL PRIMARY KEY,
+  video_id INTEGER,
+  review_date DATE,
+  original_score INTEGER,
+  adjusted_score INTEGER,
+  still_relevant BOOLEAN,
+  action_taken TEXT,
+  replacement_video_id INTEGER,
+  reason TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+**Enhance existing videos table - ADD these columns:**
+
+```sql
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS primary_problem TEXT;
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS secondary_problems JSONB;
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS problem_keywords JSONB;
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS user_query_matches JSONB;
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS teaching_style_profile JSONB;
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS competition_meta_score INTEGER DEFAULT 0;
+```
+
+**Enhance user_learning_profile table - ADD these columns:**
+
+```sql
+ALTER TABLE user_learning_profile ADD COLUMN IF NOT EXISTS preferred_teaching_style JSONB;
+ALTER TABLE user_learning_profile ADD COLUMN IF NOT EXISTS preferred_instructors JSONB;
+ALTER TABLE user_learning_profile ADD COLUMN IF NOT EXISTS disliked_instructors JSONB;
+ALTER TABLE user_learning_profile ADD COLUMN IF NOT EXISTS training_goals JSONB;
+ALTER TABLE user_learning_profile ADD COLUMN IF NOT EXISTS injuries JSONB;
+ALTER TABLE user_learning_profile ADD COLUMN IF NOT EXISTS compete BOOLEAN DEFAULT false;
+```
+
+=== ENHANCEMENT 1: AUTO-DISCOVERY OF NEW INSTRUCTORS ===
+
+**Create weekly cron job for instructor discovery:**
+
+```javascript
+// Run every Sunday at 2 AM
+async function discoverNewInstructors() {
+  // 1. Search YouTube for new channels
+  const searchQueries = [
+    "BJJ technique 2025",
+    "jiu jitsu instructional",
+    "grappling details",
+    "brazilian jiu jitsu breakdown"
+  ];
+  
+  const candidateChannels = [];
+  
+  for (const query of searchQueries) {
+    const results = await searchYouTube(query, {
+      uploadDate: "last_90_days",
+      minViews: 10000,
+      maxResults: 20
+    });
+    candidateChannels.push(...results);
+  }
+  
+  // 2. Analyze each new channel with Claude
+  for (const channel of candidateChannels) {
+    // Get 3-5 recent videos from channel
+    const sampleVideos = await getChannelVideos(channel.channelId, 5);
+    
+    const analysis = await analyzeInstructor(channel, sampleVideos);
+    
+    if (analysis.should_monitor && analysis.credibility_score >= 18) {
+      // Save to database
+      await db.query(`
+        INSERT INTO emerging_instructors 
+        (instructor_name, channel_id, credibility_score, specialty, teaching_style, approval_status, videos_analyzed)
+        VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+      `, [
+        channel.name,
+        channel.channelId,
+        analysis.credibility_score,
+        analysis.specialty,
+        JSON.stringify(analysis.teaching_style),
+        sampleVideos.length
+      ]);
+    }
+  }
+}
+```
+
+**Claude prompt for instructor evaluation:**
+
+```javascript
+async function analyzeInstructor(channel, sampleVideos) {
+  const prompt = `Evaluate this BJJ instructor for inclusion in our elite database:
+
+Channel name: ${channel.name}
+Sample videos: ${sampleVideos.map(v => v.title).join(', ')}
+Sample transcripts: ${sampleVideos.map(v => v.transcript.substring(0, 500)).join('\n\n---\n\n')}
+
+Assessment criteria:
+1. Technical knowledge - Are details specific and accurate?
+2. Teaching clarity - Can students understand and apply?
+3. Credibility indicators - Competition record, lineage, student success?
+4. Content consistency - Multiple quality videos?
+5. Legitimacy - Real instruction vs clickbait?
+
+RED FLAGS (auto-reject):
+❌ Generic advice only ("stay tight", "be heavy")
+❌ Dangerous techniques without safety emphasis
+❌ Clickbait titles with no substance
+❌ Promotes products over teaching
+❌ Inconsistent quality across videos
+
+Return ONLY valid JSON:
+{
+  "is_quality_instructor": true/false,
+  "credibility_score": 0-30,
+  "specialty": "guard/passing/submissions/leglocks/fundamentals",
+  "teaching_style": {
+    "verbosity": "verbose/medium/concise",
+    "approach": "theoretical/balanced/practical"
+  },
+  "should_monitor": true/false,
+  "reasoning": "2-3 sentence explanation"
+}
+
+Minimum for inclusion: credibility_score >= 18, is_quality_instructor = true`;
+
+  const response = await callClaude(prompt);
+  return JSON.parse(response);
+}
+```
+
+=== ENHANCEMENT 2: TECHNIQUE RELATIONSHIP MAPPING ===
+
+**Function to build relationship graph:**
+
+```javascript
+async function buildTechniqueRelationships() {
+  // Get all techniques from database
+  const techniques = await db.query('SELECT id, technique_name, key_detail, category FROM videos WHERE quality_score >= 70');
+  
+  // Compare each pair of techniques
+  for (let i = 0; i < techniques.rows.length; i++) {
+    for (let j = i + 1; j < techniques.rows.length; j++) {
+      const techA = techniques.rows[i];
+      const techB = techniques.rows[j];
+      
+      // Skip if already analyzed
+      const existing = await db.query(
+        'SELECT id FROM technique_relationships WHERE (technique_a_id = $1 AND technique_b_id = $2) OR (technique_a_id = $2 AND technique_b_id = $1)',
+        [techA.id, techB.id]
+      );
+      
+      if (existing.rows.length > 0) continue;
+      
+      // Analyze relationship
+      const relationship = await analyzeRelationship(techA, techB);
+      
+      if (relationship.relationship_type !== 'NONE' && relationship.confidence !== 'low') {
+        await db.query(`
+          INSERT INTO technique_relationships 
+          (technique_a_id, technique_b_id, relationship_type, confidence, explanation, direction)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [
+          techA.id, techB.id,
+          relationship.relationship_type,
+          relationship.confidence,
+          relationship.explanation,
+          relationship.direction
+        ]);
+      }
+    }
+  }
+}
+```
+
+**Claude prompt for relationship analysis:**
+
+```javascript
+async function analyzeRelationship(techA, techB) {
+  const prompt = `Analyze the relationship between these two BJJ techniques:
+
+Technique A:
+- Name: ${techA.technique_name}
+- Key detail: ${techA.key_detail}
+- Category: ${techA.category}
+
+Technique B:
+- Name: ${techB.technique_name}
+- Key detail: ${techB.key_detail}
+- Category: ${techB.category}
+
+Possible relationship types:
+
+1. VARIATION - Same technique with different detail/angle
+2. PROGRESSION - A naturally leads to B in sequence
+3. COUNTER - B defends/escapes A
+4. PREREQUISITE - Must know A before attempting B
+5. COMBINATION - A and B used together in series
+6. ALTERNATIVE - Different solutions to same problem
+7. FOLLOW_UP - What to do when A fails
+8. NONE - Techniques are unrelated
+
+Return ONLY valid JSON:
+{
+  "relationship_type": "one type from above",
+  "confidence": "high/medium/low",
+  "explanation": "1 sentence why these are related",
+  "direction": "A_to_B or B_to_A or bidirectional"
+}
+
+Only return a relationship if confidence is medium or high.`;
+
+  const response = await callClaude(prompt);
+  return JSON.parse(response);
+}
+```
+
+=== ENHANCEMENT 3: PROBLEM-SOLUTION MAPPING ===
+
+**Function to extract problem-solving metadata from videos:**
+
+```javascript
+async function extractProblemSolving(video) {
+  const prompt = `What specific problems does this BJJ technique solve?
+
+Video title: ${video.title}
+Instructor: ${video.instructor}
+Key detail: ${video.key_detail}
+Transcript excerpt: ${video.transcript.substring(0, 1000)}
+
+Common BJJ problems:
+- Getting swept from position
+- Can't pass specific guard type
+- Opponent defends submission
+- Can't maintain dominant position
+- Getting submitted from position
+- Can't escape bad position
+- No effective takedowns
+- Losing grips/control
+- Getting stacked/postured
+
+Return ONLY valid JSON:
+{
+  "primary_problem": "Main problem this solves",
+  "secondary_problems": ["Additional problems addressed"],
+  "problem_keywords": ["swept", "passing", "escape", "control"],
+  "user_query_matches": [
+    "I keep getting swept from half guard",
+    "how to stop guard passes",
+    "can't finish triangles"
+  ],
+  "situation_description": "When this technique is needed"
+}
+
+Focus on SPECIFIC problems, not general categories.`;
+
+  const response = await callClaude(prompt);
+  const result = JSON.parse(response);
+  
+  // Update video in database
+  await db.query(`
+    UPDATE videos 
+    SET primary_problem = $1,
+        secondary_problems = $2,
+        problem_keywords = $3,
+        user_query_matches = $4
+    WHERE id = $5
+  `, [
+    result.primary_problem,
+    JSON.stringify(result.secondary_problems),
+    JSON.stringify(result.problem_keywords),
+    JSON.stringify(result.user_query_matches),
+    video.id
+  ]);
+  
+  return result;
+}
+
+// Run for all videos in database
+async function enrichAllVideosWithProblems() {
+  const videos = await db.query('SELECT * FROM videos WHERE primary_problem IS NULL AND quality_score >= 70');
+  
+  for (const video of videos.rows) {
+    await extractProblemSolving(video);
+    // Rate limit to avoid API throttling
+    await sleep(1000);
+  }
+}
+```
+
+=== ENHANCEMENT 4: COMPETITION META TRACKING ===
+
+**Monthly cron job for meta analysis:**
+
+```javascript
+async function analyzeCompetitionMeta() {
+  // Search for recent competition content
+  const searches = [
+    "ADCC 2024 highlights",
+    "IBJJF Worlds 2024",
+    "Pan Ams jiu jitsu",
+    "BJJ competition breakdown 2025"
+  ];
+  
+  const competitionVideos = [];
+  
+  for (const query of searches) {
+    const results = await searchYouTube(query, {
+      uploadDate: "last_90_days",
+      maxResults: 10
+    });
+    competitionVideos.push(...results);
+  }
+  
+  const analysis = await analyzeCompetitionTrends(competitionVideos);
+  
+  // Save to database
+  await db.query(`
+    INSERT INTO competition_meta 
+    (analysis_date, hot_techniques, cold_techniques, meta_summary, source_videos_analyzed)
+    VALUES ($1, $2, $3, $4, $5)
+  `, [
+    new Date(),
+    JSON.stringify(analysis.hot_techniques),
+    JSON.stringify(analysis.cold_techniques),
+    analysis.meta_summary,
+    competitionVideos.map(v => v.videoId)
+  ]);
+  
+  // Update video scores based on meta
+  for (const hotTech of analysis.hot_techniques) {
+    await db.query(`
+      UPDATE videos 
+      SET competition_meta_score = 15 
+      WHERE technique_name ILIKE $1 OR category ILIKE $1
+    `, [`%${hotTech.name}%`]);
+  }
+}
+```
+
+**Claude prompt for meta analysis:**
+
+```javascript
+async function analyzeCompetitionTrends(videos) {
+  const prompt = `Analyze current BJJ competition meta trends:
+
+Recent competition videos analyzed: ${videos.length}
+Video titles: ${videos.map(v => v.title).join(', ')}
+
+Time period: Last 90 days
+
+Identify:
+1. HOT TECHNIQUES - What's working NOW in competition?
+   Examples: K-guard, false reap, bodylock passing, front headlock series
+
+2. COLD TECHNIQUES - What's declining in use?
+   Examples: Traditional spider guard, basic X-guard sweeps
+
+3. EMERGING POSITIONS - New or adapted techniques gaining traction
+
+4. NOTABLE TRENDS - Patterns in current high-level competition
+
+Return ONLY valid JSON:
+{
+  "hot_techniques": [
+    {
+      "name": "technique name",
+      "category": "guard/pass/submission",
+      "trend_score": 1-100,
+      "why_effective": "brief explanation"
+    }
+  ],
+  "cold_techniques": ["techniques declining in use"],
+  "meta_summary": "2-3 sentence overview of current competition meta"
+}`;
+
+  const response = await callClaude(prompt);
+  return JSON.parse(response);
+}
+```
+
+=== ENHANCEMENT 5: TEACHING STYLE CLASSIFICATION ===
+
+**Analyze instructor teaching styles:**
+
+```javascript
+async function classifyTeachingStyle(instructor, sampleVideos) {
+  const transcripts = sampleVideos.map(v => v.transcript.substring(0, 500)).join('\n\n');
+  
+  const prompt = `Analyze this instructor's teaching approach:
+
+Instructor: ${instructor.name}
+Sample transcripts: ${transcripts}
+
+Evaluate on these dimensions:
+
+1. Verbosity: Verbose (detailed) vs Concise (brief)
+2. Approach: Theoretical (why it works) vs Practical (just do this)
+3. Structure: Systematic (frameworks) vs Intuitive (feel-based)
+4. Tone: Friendly/Encouraging vs Direct/No-nonsense
+5. Detail level: Micro-details vs Overview/Concepts
+6. Pace: Slow/Thorough vs Fast/Efficient
+
+Examples:
+- Danaher: Verbose, Theoretical, Systematic, Direct, Micro-details, Slow
+- Gordon Ryan: Concise, Practical, Intuitive, Direct, Micro-details, Fast
+- Lachlan Giles: Medium, Systematic, Friendly, Balanced, Medium
+- Bernardo Faria: Concise, Practical, Systematic, Friendly, Overview, Fast
+
+Return ONLY valid JSON:
+{
+  "teaching_style_profile": {
+    "verbosity": "verbose/medium/concise",
+    "approach": "theoretical/balanced/practical",
+    "structure": "systematic/balanced/intuitive",
+    "tone": "friendly/balanced/direct",
+    "detail_level": "micro/balanced/overview",
+    "pace": "slow/medium/fast"
+  },
+  "similar_to": "known instructor name",
+  "best_for": "type of learner"
+}`;
+
+  const response = await callClaude(prompt);
+  const result = JSON.parse(response);
+  
+  // Update videos from this instructor
+  await db.query(`
+    UPDATE videos 
+    SET teaching_style_profile = $1 
+    WHERE instructor_name = $2
+  `, [JSON.stringify(result.teaching_style_profile), instructor.name]);
+  
+  return result;
+}
+```
+
+=== ENHANCEMENT 6: CONTEXT-AWARE RESPONSES ===
+
+**Load full user context before every AI interaction:**
+
+```javascript
+async function getFullUserContext(userId) {
+  const user = await db.query(`
+    SELECT 
+      u.*,
+      ulp.*,
+      ARRAY_AGG(DISTINCT ufh.technique_sent) FILTER (WHERE ufh.timestamp > NOW() - INTERVAL '30 days') as recent_techniques,
+      ARRAY_AGG(DISTINCT sq.query) FILTER (WHERE sq.timestamp > NOW() - INTERVAL '7 days') as recent_searches
+    FROM users u
+    LEFT JOIN user_learning_profile ulp ON u.id = ulp.user_id
+    LEFT JOIN user_feedback_history ufh ON u.id = ufh.user_id
+    LEFT JOIN search_queries sq ON u.id = sq.user_id
+    WHERE u.id = $1
+    GROUP BY u.id, ulp.id
+  `, [userId]);
+  
+  const profile = user.rows[0];
+  
+  return {
+    user_id: profile.id,
+    belt: profile.belt_level,
+    style: profile.style,
+    training_frequency: profile.training_frequency,
+    compete: profile.compete || false,
+    goals: profile.training_goals || [],
+    focus_areas: profile.focus_areas || [],
+    injuries: profile.injuries || [],
+    favorite_instructors: profile.preferred_instructors || [],
+    disliked_instructors: profile.disliked_instructors || [],
+    preferred_teaching_style: profile.preferred_teaching_style || {},
+    learning_velocity: profile.learning_velocity || 'medium',
+    last_30_techniques: profile.recent_techniques || [],
+    recent_searches: profile.recent_searches || [],
+    engagement_pattern: `clicks ${profile.engagement_rate || 70}% of videos`,
+    days_subscribed: Math.floor((Date.now() - new Date(profile.created_at)) / (1000 * 60 * 60 * 24))
+  };
+}
+```
+
+**Include context in every Claude prompt:**
+
+```javascript
+async function enhancedConversationalSearch(userId, query) {
+  const userContext = await getFullUserContext(userId);
+  
+  const prompt = `You are BJJ OS AI assistant with full user context.
+
+USER CONTEXT:
+${JSON.stringify(userContext, null, 2)}
+
+Use this context to personalize your response:
+- Reference their goals and focus areas
+- Avoid techniques that aggravate their injuries
+- Match their preferred teaching style
+- Build on recent techniques they've seen
+- Recommend instructors they like
+- Address stated weaknesses
+
+User question: "${query}"
+
+Search the database and provide personalized recommendations.`;
+
+  // Continue with search logic...
+}
+```
+
+=== ENHANCEMENT 7: QUALITY DECAY DETECTION ===
+
+**Quarterly cron job to review old content:**
+
+```javascript
+async function reviewOldContent() {
+  // Get videos added more than 1 year ago
+  const oldVideos = await db.query(`
+    SELECT * FROM videos 
+    WHERE created_at < NOW() - INTERVAL '1 year' 
+    AND (last_reviewed IS NULL OR last_reviewed < NOW() - INTERVAL '90 days')
+    LIMIT 50
+  `);
+  
+  for (const video of oldVideos.rows) {
+    const review = await reviewTechniqueRelevance(video);
+    
+    await db.query(`
+      INSERT INTO technique_quality_reviews 
+      (video_id, review_date, original_score, adjusted_score, still_relevant, action_taken, reason)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [
+      video.id,
+      new Date(),
+      video.quality_score,
+      review.adjusted_score,
+      review.still_relevant,
+      review.action,
+      review.reason
+    ]);
+    
+    // Take action based on review
+    if (review.action === 'archive') {
+      await db.query('UPDATE videos SET archived = true WHERE id = $1', [video.id]);
+    } else if (review.action === 'replace' && review.suggested_replacement) {
+      // Log for manual review
+      console.log(`Replace video ${video.id} with ${review.suggested_replacement}`);
+    } else if (review.adjusted_score !== video.quality_score) {
+      await db.query('UPDATE videos SET quality_score = $1 WHERE id = $2', [review.adjusted_score, video.id]);
+    }
+    
+    await db.query('UPDATE videos SET last_reviewed = NOW() WHERE id = $1', [video.id]);
+  }
+}
+```
+
+**Claude prompt for relevance check:**
+
+```javascript
+async function reviewTechniqueRelevance(video) {
+  const prompt = `Re-evaluate this BJJ technique for current relevance:
+
+Video details:
+- Technique: ${video.technique_name}
+- Instructor: ${video.instructor_name}
+- Original score: ${video.quality_score}/100
+- Date added: ${video.created_at}
+- Key detail: ${video.key_detail}
+
+Assessment questions:
+1. Has this technique been superseded by better methods?
+2. Any rule changes affecting it? (IBJJF/ADCC)
+3. Is instructor's advice still best practice in 2025?
+4. Better instruction on same topic available now?
+5. Still commonly used in competition/training?
+
+Return ONLY valid JSON:
+{
+  "still_relevant": true/false,
+  "adjusted_score": 0-100,
+  "reason": "why score changed or stayed same",
+  "action": "keep/archive/replace",
+  "suggested_replacement": "video_id if better exists",
+  "notes": "additional context"
+}`;
+
+  const response = await callClaude(prompt);
+  return JSON.parse(response);
+}
+```
+
+=== ENHANCED SCORING ALGORITHM ===
+
+**Update daily technique selection to use all new factors:**
+
+```javascript
+async function selectDailyTechnique(userId) {
+  const userContext = await getFullUserContext(userId);
+  
+  // Get candidate videos
+  const candidates = await db.query(`
+    SELECT v.*, 
+           v.quality_score as base_score,
+           v.competition_meta_score,
+           v.teaching_style_profile,
+           v.primary_problem
+    FROM videos v
+    WHERE v.archived = false
+    AND v.id NOT IN (
+      SELECT technique_id FROM user_technique_history 
+      WHERE user_id = $1 AND sent_date > NOW() - INTERVAL '90 days'
+    )
+    AND (v.belt_level = $2 OR v.belt_level = 'all')
+    AND (v.style = $3 OR v.style = 'both')
+  `, [userId, userContext.belt, userContext.style]);
+  
+  // Score each candidate with enhanced algorithm
+  for (const video of candidates.rows) {
+    let totalScore = video.base_score; // Start with base quality score (70-100)
+    
+    // 1. Teaching style match (+10 if matches user preference)
+    if (userContext.preferred_teaching_style && video.teaching_style_profile) {
+      const styleMatch = compareTeachingStyles(
+        userContext.preferred_teaching_style,
+        video.teaching_style_profile
+      );
+      if (styleMatch > 0.7) totalScore += 10;
+    }
+    
+    // 2. Instructor preference (+10 if favorite, -15 if disliked)
+    if (userContext.favorite_instructors.includes(video.instructor_name)) {
+      totalScore += 10;
+    }
+    if (userContext.disliked_instructors.includes(video.instructor_name)) {
+      totalScore -= 15;
+    }
+    
+    // 3. Competition meta (+15 if hot technique and user competes)
+    if (userContext.compete && video.competition_meta_score > 0) {
+      totalScore += video.competition_meta_score;
+    }
+    
+    // 4. Problem-solution match (+20 if solves stated weakness)
+    if (userContext.focus_areas && video.primary_problem) {
+      for (const focusArea of userContext.focus_areas) {
+        if (video.primary_problem.toLowerCase().includes(focusArea.toLowerCase())) {
+          totalScore += 20;
+          break;
+        }
+      }
+    }
+    
+    // 5. Technique relationship bonus (+15 if builds on recent technique)
+    const recentTechIds = await getRecentTechniqueIds(userId, 7); // Last 7 days
+    if (recentTechIds.length > 0) {
+      const hasRelationship = await db.query(`
+        SELECT id FROM technique_relationships 
+        WHERE (technique_a_id = $1 AND technique_b_id = ANY($2))
+           OR (technique_b_id = $1 AND technique_a_id = ANY($2))
+        AND relationship_type IN ('PROGRESSION', 'FOLLOW_UP', 'COMBINATION')
+      `, [video.id, recentTechIds]);
+      
+      if (hasRelationship.rows.length > 0) {
+        totalScore += 15;
+      }
+    }
+    
+    // 6. Diversity penalty (avoid same category 3 days in row)
+    const recentCategories = await getRecentCategories(userId, 2);
+    if (recentCategories.every(cat => cat === video.category)) {
+      totalScore -= 10; // Encourage variety
+    }
+    
+    video.final_score = totalScore;
+  }
+  
+  // Sort by final score and select highest
+  candidates.rows.sort((a, b) => b.final_score - a.final_score);
+  
+  return candidates.rows[0];
+}
+```
+
+=== CRON JOBS TO SCHEDULE ===
+
+**Set up automated jobs:**
+
+```javascript
+// Weekly - Sunday 2 AM
+scheduleJob('0 2 * * 0', discoverNewInstructors);
+
+// Monthly - 1st of month 3 AM
+scheduleJob('0 3 1 * *', analyzeCompetitionMeta);
+
+// Quarterly - 1st day of quarter 4 AM
+scheduleJob('0 4 1 */3 *', reviewOldContent);
+
+// Daily - Process problem-solving for new videos
+scheduleJob('0 1 * * *', enrichNewVideosWithProblems);
+```
+
+=== HELPER FUNCTIONS ===
+
+```javascript
+function compareTeachingStyles(userPreference, instructorStyle) {
+  // Compare JSON objects and return similarity score 0-1
+  let matches = 0;
+  let total = 0;
+  
+  for (const key in userPreference) {
+    total++;
+    if (userPreference[key] === instructorStyle[key]) {
+      matches++;
+    }
+  }
+  
+  return total > 0 ? matches / total : 0;
+}
+
+async function getRecentTechniqueIds(userId, days) {
+  const result = await db.query(`
+    SELECT technique_id FROM user_technique_history 
+    WHERE user_id = $1 AND sent_date > NOW() - INTERVAL '${days} days'
+    ORDER BY sent_date DESC
+  `, [userId]);
+  
+  return result.rows.map(r => r.technique_id);
+}
+
+async function getRecentCategories(userId, days) {
+  const result = await db.query(`
+    SELECT v.category FROM user_technique_history uth
+    JOIN videos v ON uth.technique_id = v.id
+    WHERE uth.user_id = $1 AND uth.sent_date > NOW() - INTERVAL '${days} days'
+    ORDER BY uth.sent_date DESC
+  `, [userId]);
+  
+  return result.rows.map(r => r.category);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function callClaude(prompt) {
+  // Use your existing Claude API integration
+  // Return the response text
+}
+```
+
+=== TESTING CHECKLIST ===
+
+After implementation, verify:
+
+✅ Daily SMS still sends at 8 AM (unchanged)
+✅ SMS format unchanged for users
+✅ Commands (PAUSE, SKIP, etc) still work
+✅ New database tables created successfully
+✅ Video metadata enriched with new fields
+✅ Enhanced scoring algorithm running
+✅ Cron jobs scheduled correctly
+✅ No errors in logs
+
+=== ROLLOUT PLAN ===
+
+Day 1-2:
+
+- Create new database tables and columns
+- No user-facing changes yet
+
+Day 3-5:
+
+- Enrich existing videos with problem-solving metadata
+- Classify teaching styles for known instructors
+- Build initial technique relationships (top 100 videos)
+
+Day 6-7:
+
+- Enable enhanced scoring algorithm
+- Users start receiving SMARTER technique selections
+- Monitor for any issues
+
+Week 2+:
+
+- Continue enriching all videos in background
+- Cron jobs start running
+- System continuously improves
+
+=== CRITICAL REMINDERS ===
+
+- This is a BACKEND upgrade - users see no UI changes
+- Daily SMS delivery mechanism stays exactly the same
+- All enhancements are additive to existing system
+- Enhanced AI makes better selections behind the scenes
+- Test thoroughly before enabling in production
+- Monitor logs for any errors
+- These changes make BJJ OS’s AI unbeatable
+
+Implement all 7 AI enhancements as backend intelligence upgrades. Daily SMS functionality remains unchanged - the AI just gets dramatically smarter at selecting the perfect technique for each user.
+
+```
+
+```

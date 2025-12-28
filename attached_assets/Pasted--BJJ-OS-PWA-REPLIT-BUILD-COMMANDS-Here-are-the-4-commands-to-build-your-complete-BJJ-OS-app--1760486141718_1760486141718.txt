@@ -1,0 +1,725 @@
+# BJJ OS PWA - REPLIT BUILD COMMANDS
+
+Here are the **4 commands** to build your complete BJJ OS app. Copy and paste each one into Replit Agent **one at a time**, waiting for each to complete before moving to the next.
+
+-----
+
+## 🎯 COMMAND 1 OF 4: PROJECT SETUP + DESIGN SYSTEM
+
+Copy and paste this entire block into Replit Agent:
+
+-----
+
+```
+BUILD BJJ OS PWA - COMMAND 1 OF 4: PROJECT SETUP & DESIGN SYSTEM
+
+CRITICAL RULES:
+✅ Create NEW separate React PWA app (do NOT touch existing backend)
+✅ Use exact design system provided below
+✅ Build in /client folder (separate from /server)
+✅ Connect to existing backend APIs at /api/*
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: PROJECT STRUCTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+Create this folder structure:
+
+/client
+├── /public
+│   ├── manifest.json
+│   ├── service-worker.js
+│   ├── /icons
+│   │   ├── icon-192.png (generate placeholder)
+│   │   ├── icon-512.png (generate placeholder)
+│   │   └── icon-180.png (generate placeholder)
+│   └── index.html
+│
+├── /src
+│   ├── /components
+│   │   ├── Chat.jsx
+│   │   ├── MessageBubble.jsx
+│   │   ├── VideoCard.jsx
+│   │   ├── VoiceRecorder.jsx
+│   │   ├── TypingIndicator.jsx
+│   │   └── BottomNav.jsx
+│   │
+│   ├── /pages
+│   │   ├── CoachPage.jsx
+│   │   ├── SavedPage.jsx
+│   │   ├── SettingsPage.jsx
+│   │   └── OnboardingPage.jsx
+│   │
+│   ├── /services
+│   │   ├── api.js
+│   │   ├── auth.js
+│   │   └── storage.js
+│   │
+│   ├── /styles
+│   │   ├── globals.css
+│   │   └── variables.css
+│   │
+│   ├── App.jsx
+│   ├── index.js
+│   └── routes.js
+│
+└── package.json
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: PACKAGE.JSON
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /client/package.json:
+
+{
+  "name": "bjj-os-pwa",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "react-scripts": "5.0.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: PWA MANIFEST
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /client/public/manifest.json:
+
+{
+  "name": "BJJ OS - Your Personal BJJ Coach",
+  "short_name": "BJJ OS",
+  "description": "AI-powered BJJ coaching in your pocket. Ask questions, get video recommendations, and improve your jiu jitsu.",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#667eea",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: SERVICE WORKER
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /client/public/service-worker.js:
+
+const CACHE_NAME = 'bjj-os-v1';
+const urlsToCache = [
+  '/',
+  '/app',
+  '/static/css/main.css',
+  '/static/js/main.js'
+];
+
+// Install service worker
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(urlsToCache))
+  );
+});
+
+// Fetch from cache first, then network
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => response || fetch(event.request))
+  );
+});
+
+// Update service worker
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+});
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: DESIGN SYSTEM (CSS VARIABLES)
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /client/src/styles/variables.css:
+
+:root {
+  /* Colors */
+  --black: #000000;
+  --dark-gray: #0a0a0a;
+  --medium-gray: #1a1a1a;
+  --border-gray: #333333;
+  --text-gray: #888888;
+  --text-light-gray: #555555;
+  
+  /* Primary Colors */
+  --primary-purple: #667eea;
+  --primary-purple-dark: #764ba2;
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  
+  /* Status Colors */
+  --success-green: #4ade80;
+  --error-red: #f87171;
+  --warning-yellow: #fbbf24;
+  
+  /* Text Colors */
+  --text-primary: #ffffff;
+  --text-secondary: #888888;
+  --text-tertiary: #555555;
+  
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+  --shadow-glow: 0 0 20px rgba(102, 126, 234, 0.3);
+  
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+  
+  /* Font Weights */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  
+  /* Z-index */
+  --z-base: 1;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal: 400;
+  --z-popover: 500;
+  --z-tooltip: 600;
+  
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.3s ease;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: GLOBAL STYLES
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /client/src/styles/globals.css:
+
+@import './variables.css';
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--black);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Disable pull-to-refresh on mobile */
+body {
+  overscroll-behavior-y: none;
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--dark-gray);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-gray);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-gray);
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: var(--font-semibold);
+  line-height: 1.2;
+}
+
+p {
+  line-height: 1.6;
+}
+
+a {
+  color: var(--primary-purple);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Buttons */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: var(--transition-base);
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Inputs */
+input, textarea {
+  font-family: inherit;
+  border: none;
+  outline: none;
+  background: transparent;
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Container */
+.container {
+  max-width: 428px;
+  margin: 0 auto;
+  height: 100%;
+}
+
+/* Utility Classes */
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+
+.bg-black { background: var(--black); }
+.bg-dark { background: var(--dark-gray); }
+.bg-medium { background: var(--medium-gray); }
+
+.gradient-primary { background: var(--primary-gradient); }
+
+.rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+.rounded-xl { border-radius: var(--radius-xl); }
+.rounded-full { border-radius: var(--radius-full); }
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-slide-in { animation: slideIn 0.3s ease-out; }
+.animate-fade-in { animation: fadeIn 0.3s ease-out; }
+.animate-pulse { animation: pulse 1.4s ease-in-out infinite; }
+.animate-spin { animation: spin 1s linear infinite; }
+
+/* Safe area for mobile notches */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Prevent text selection on UI elements */
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Hide on mobile */
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
+}
+
+/* Hide on desktop */
+@media (min-width: 769px) {
+  .hide-desktop { display: none !important; }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 7: INDEX.HTML
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /client/public/index.html:
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="BJJ OS - Your personal BJJ coach powered by AI. Ask questions, get video recommendations, and improve your jiu jitsu." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="BJJ OS" />
+  
+  <link rel="icon" href="%PUBLIC_URL%/icons/icon-180.png" />
+  <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/icon-180.png" />
+  <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+  
+  <title>BJJ OS - Your Personal BJJ Coach</title>
+</head>
+<body>
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  <div id="root"></div>
+  
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(registration => console.log('SW registered:', registration))
+          .catch(error => console.log('SW registration failed:', error));
+      });
+    }
+  </script>
+</body>
+</html>
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 8: MAIN APP FILES
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /client/src/index.js:
+
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './styles/globals.css';
+import App from './App';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+---
+
+Create /client/src/App.jsx:
+
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import CoachPage from './pages/CoachPage';
+import SavedPage from './pages/SavedPage';
+import SettingsPage from './pages/SettingsPage';
+import OnboardingPage from './pages/OnboardingPage';
+
+function App() {
+  // Check if user is authenticated (simplified for now)
+  const isAuthenticated = localStorage.getItem('userId') !== null;
+
+  return (
+    <BrowserRouter>
+      <div className="container">
+        <Routes>
+          <Route 
+            path="/app" 
+            element={isAuthenticated ? <CoachPage /> : <Navigate to="/onboarding" />} 
+          />
+          <Route 
+            path="/app/saved" 
+            element={isAuthenticated ? <SavedPage /> : <Navigate to="/onboarding" />} 
+          />
+          <Route 
+            path="/app/settings" 
+            element={isAuthenticated ? <SettingsPage /> : <Navigate to="/onboarding" />} 
+          />
+          <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="*" element={<Navigate to="/app" />} />
+        </Routes>
+      </div>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 9: PLACEHOLDER PAGES (Will build in next commands)
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /client/src/pages/CoachPage.jsx:
+
+import React from 'react';
+
+function CoachPage() {
+  return (
+    <div style={{ 
+      height: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      flexDirection: 'column',
+      gap: '1rem'
+    }}>
+      <h1>🥋 BJJ OS Coach</h1>
+      <p style={{ color: 'var(--text-secondary)' }}>
+        Command 2 will build the chat interface
+      </p>
+    </div>
+  );
+}
+
+export default CoachPage;
+
+---
+
+Create /client/src/pages/SavedPage.jsx:
+
+import React from 'react';
+
+function SavedPage() {
+  return (
+    <div style={{ 
+      height: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      flexDirection: 'column',
+      gap: '1rem'
+    }}>
+      <h1>⭐ Saved Videos</h1>
+      <p style={{ color: 'var(--text-secondary)' }}>
+        Command 3 will build saved videos
+      </p>
+    </div>
+  );
+}
+
+export default SavedPage;
+
+---
+
+Create /client/src/pages/SettingsPage.jsx:
+
+import React from 'react';
+
+function SettingsPage() {
+  return (
+    <div style={{ 
+      height: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      flexDirection: 'column',
+      gap: '1rem'
+    }}>
+      <h1>⚙️ Settings</h1>
+      <p style={{ color: 'var(--text-secondary)' }}>
+        Command 3 will build settings
+      </p>
+    </div>
+  );
+}
+
+export default SettingsPage;
+
+---
+
+Create /client/src/pages/OnboardingPage.jsx:
+
+import React, { useState } from 'react';
+
+function OnboardingPage() {
+  const [step, setStep] = useState(1);
+  
+  const handleComplete = () => {
+    // For now, just set a fake user ID
+    localStorage.setItem('userId', '1');
+    window.location.href = '/app';
+  };
+
+  return (
+    <div style={{ 
+      height: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      flexDirection: 'column',
+      gap: '2rem',
+      padding: '2rem'
+    }}>
+      <h1>🥋 Welcome to BJJ OS</h1>
+      <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
+        Your personal BJJ coach powered by AI
+      </p>
+      
+      <button 
+        onClick={handleComplete}
+        style={{
+          background: 'var(--primary-gradient)',
+          color: 'white',
+          padding: '1rem 2rem',
+          borderRadius: 'var(--radius-lg)',
+          fontSize: '1rem',
+          fontWeight: '600'
+        }}
+      >
+        Get Started
+      </button>
+      
+      <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>
+        Command 2 will build full onboarding
+      </p>
+    </div>
+  );
+}
+
+export default OnboardingPage;
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After creating all files:
+
+1. Run: cd client && npm install
+2. Run: npm start
+3. Visit: http://localhost:3000/app
+4. You should see: Placeholder pages with BJJ OS branding
+5. Design system should be loaded (check CSS variables in dev tools)
+
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ /client folder created with React app
+✅ PWA manifest.json configured
+✅ Service worker ready for offline mode
+✅ Design system (colors, typography, spacing) defined
+✅ Global styles loaded
+✅ App routing working
+✅ Placeholder pages showing
+✅ Ready for Command 2 (build chat interface)
+
+Do NOT proceed to Command 2 until this is complete and verified.
+```
+
+-----
+
+**📋 PASTE COMMAND 1 INTO REPLIT AGENT NOW**
+
+Once Replit confirms Command 1 is complete, come back here and I’ll give you **Command 2 of 4** (the chat interface).
+
+**Let me know when Command 1 is done!** ✅​​​​​​​​​​​​​​​​

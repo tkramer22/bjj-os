@@ -1,0 +1,217 @@
+**DEPLOYMENT FAILED. The app crashed on startup.**
+
+But look - **Production status shows “Todd published about 3 hours ago”** - so there’s a working version live, but this new deployment with recent changes is broken.
+
+-----
+
+## **THE ERROR:**
+
+```
+Promotion failed
+
+• Deployment failed to initialize but build completed successfully, 
+  indicating a runtime startup issue with server/index.ts
+
+• The application likely crashed during initialization when trying 
+  to start schedulers or connect to required services
+
+• Missing or invalid environment variables may be causing database 
+  connections or external API calls to fail on startup
+```
+
+-----
+
+## **WHAT THIS MEANS:**
+
+✅ **Code compiles fine** (build succeeded)  
+❌ **App crashes when starting** (runtime error)
+
+**Most likely causes:**
+
+1. Missing environment variable (database URL, API key)
+1. Scheduler initialization failing
+1. Database connection failing on startup
+1. External service (Twilio, Anthropic) not connecting
+
+-----
+
+## **REPLIT AGENT SUGGESTIONS:**
+
+1. **Wrap scheduler initialization in try-catch** (prevent crash)
+1. **Verify database secrets** (check connection)
+1. **Add startup health check** (log what’s failing)
+1. **Verify API keys** (Anthropic, Twilio, etc.)
+
+-----
+
+## **IMMEDIATE ACTION - SEND THIS TO REPLIT AGENT:**
+
+```
+CRITICAL: Deployment failing on startup - app crashes during initialization
+
+ERROR LOG:
+"Deployment failed to initialize but build completed successfully, indicating a runtime startup issue with server/index.ts"
+
+"The application likely crashed during initialization when trying to start schedulers or connect to required services"
+
+"Missing or invalid environment variables may be causing database connections or external API calls to fail on startup"
+
+DIAGNOSIS NEEDED:
+
+1. CHECK server/index.ts STARTUP SEQUENCE:
+
+Look for code that runs immediately when server starts:
+- Database connections
+- Scheduler initialization
+- External API connections (Anthropic Claude, Twilio, YouTube)
+- Environment variable checks
+
+Find what's CRASHING the app before it can start.
+
+2. ADD TRY-CATCH TO PREVENT STARTUP CRASHES:
+
+```javascript
+// server/index.ts startup
+async function startServer() {
+  try {
+    console.log('[STARTUP] Initializing database connection...')
+    await initializeDatabase()
+    console.log('[STARTUP] Database connected ✓')
+  } catch (error) {
+    console.error('[STARTUP] Database connection failed:', error)
+    // Don't crash - continue without it
+  }
+  
+  try {
+    console.log('[STARTUP] Starting schedulers...')
+    await startSchedulers()
+    console.log('[STARTUP] Schedulers started ✓')
+  } catch (error) {
+    console.error('[STARTUP] Scheduler initialization failed:', error)
+    // Don't crash - continue without schedulers
+  }
+  
+  try {
+    console.log('[STARTUP] Verifying API keys...')
+    await verifyAPIKeys()
+    console.log('[STARTUP] API keys verified ✓')
+  } catch (error) {
+    console.error('[STARTUP] API key verification failed:', error)
+    // Don't crash - continue
+  }
+  
+  console.log('[STARTUP] Server starting on port...')
+  app.listen(PORT)
+}
+```
+
+CRITICAL: Server must START even if some services fail.
+Log errors but DON’T crash.
+
+1. VERIFY ENVIRONMENT VARIABLES:
+
+Check Deployment → Secrets:
+
+Required variables:
+□ DATABASE_URL (Supabase or PostgreSQL connection)
+□ ANTHROPIC_API_KEY (Claude AI)
+□ TWILIO_ACCOUNT_SID
+□ TWILIO_AUTH_TOKEN
+□ TWILIO_PHONE_NUMBER
+□ JWT_SECRET_KEY
+□ YOUTUBE_API_KEY
+
+Missing ANY of these could crash startup.
+
+1. CHECK RECENT CHANGES:
+
+What was added in last 3 hours that could cause startup crash?
+
+- New scheduler code?
+- New database queries on startup?
+- New API connections?
+- New environment variable requirements?
+
+Look at git changes or recent Replit Agent changes.
+
+1. TEMPORARY FIX - DISABLE SCHEDULERS:
+
+If schedulers are crashing startup, temporarily disable them:
+
+```javascript
+// Comment out scheduler initialization
+// await startSchedulers()  // Disabled until debug complete
+```
+
+This allows app to start so we can debug properly.
+
+1. ADD STARTUP LOGGING:
+
+```javascript
+console.log('[STARTUP] Step 1: Loading environment...')
+console.log('[STARTUP] Step 2: Connecting to database...')
+console.log('[STARTUP] Step 3: Initializing routes...')
+console.log('[STARTUP] Step 4: Starting schedulers...')
+console.log('[STARTUP] Step 5: Server ready!')
+```
+
+This shows exactly WHERE it’s crashing.
+
+1. CHECK LOGS:
+
+Go to Replit → Logs tab
+Look for the LAST log message before crash
+That’s where the problem is
+
+PRIORITY: CRITICAL - APP IS DOWN
+
+Current state:
+
+- Old version (3 hours ago) still live in production
+- New deployment failing
+- Users can still access old version (good)
+- But can’t deploy fixes until this is resolved
+
+STEPS:
+
+1. Find what’s crashing startup (check logs)
+1. Wrap in try-catch to prevent crash
+1. Add detailed logging
+1. Verify all environment variables exist
+1. Test deployment again
+
+The build succeeds, so code is fine.
+The RUNTIME is failing, so it’s an environment/connection issue.
+
+Debug this immediately so we can continue deploying updates.
+
+```
+---
+
+## **WHILE REPLIT AGENT FIXES THIS:**
+
+### **Check Your Environment Variables:**
+
+1. Go to **Replit → Deployment → Secrets**
+2. Verify these exist:
+   - `DATABASE_URL`
+   - `ANTHROPIC_API_KEY`
+   - `TWILIO_ACCOUNT_SID`
+   - `TWILIO_AUTH_TOKEN`
+   - `JWT_SECRET_KEY`
+   - `YOUTUBE_API_KEY`
+
+3. **If any are missing** → That's likely the crash cause
+
+---
+
+## **GOOD NEWS:**
+
+**Your production app (3 hours ago) is still live and working!**
+
+So users aren't affected. This is just blocking new deployments.
+
+---
+
+**Send that prompt to Replit Agent. They'll fix the startup crash and get deployments working again.** 🔧​​​​​​​​​​​​​​​​
+```

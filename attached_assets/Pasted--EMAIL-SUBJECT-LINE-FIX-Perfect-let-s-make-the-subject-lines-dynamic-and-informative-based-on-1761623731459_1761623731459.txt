@@ -1,0 +1,247 @@
+# 📧 EMAIL SUBJECT LINE FIX
+
+Perfect - let’s make the subject lines dynamic and informative based on the email time!
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════
+FIX EMAIL SUBJECT LINES - DESCRIPTIVE & TIME-SPECIFIC
+═══════════════════════════════════════════════════════════════
+
+MISSION:
+Update email subject lines to be descriptive and indicate which report it is
+
+CURRENT PROBLEM:
+All emails have generic subject: "BJJ OS Report - Monday, October 27"
+
+SOLUTION:
+Make subject lines indicate the time/purpose of each email:
+- 6:45 AM  → "BJJ OS Morning Report - [Date]"
+- 11:00 AM → "BJJ OS Midday Update - [Date]"
+- 2:00 PM  → "BJJ OS Afternoon Report - [Date]"
+- 5:00 PM  → "BJJ OS Evening Update - [Date]"
+- 8:00 PM  → "BJJ OS Night Report - [Date]"
+- 11:30 PM → "BJJ OS Daily Summary - [Date]"
+
+═══════════════════════════════════════════════════════════════
+IMPLEMENTATION
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/admin-email.ts
+
+Change the sendDailyAdminEmail function to accept an optional parameter:
+
+export async function sendDailyAdminEmail(reportType?: string) {
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL || 'todd@bjjos.app';
+    
+    console.log('📊 Gathering stats...');
+    const stats = await getDailyStats();
+    
+    console.log('📧 Building email...');
+    const html = buildCleanEmail(stats);
+    
+    const date = new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    // Determine subject based on report type
+    let subjectPrefix = 'Report';
+    
+    if (reportType === 'morning') {
+      subjectPrefix = 'Morning Report';
+    } else if (reportType === 'midday') {
+      subjectPrefix = 'Midday Update';
+    } else if (reportType === 'afternoon') {
+      subjectPrefix = 'Afternoon Report';
+    } else if (reportType === 'evening') {
+      subjectPrefix = 'Evening Update';
+    } else if (reportType === 'night') {
+      subjectPrefix = 'Night Report';
+    } else if (reportType === 'summary') {
+      subjectPrefix = 'Daily Summary';
+    }
+    
+    const subject = `BJJ OS ${subjectPrefix} - ${date}`;
+    
+    console.log('📤 Sending to:', adminEmail);
+    console.log('📋 Subject:', subject);
+    
+    const result = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: adminEmail,
+      subject: subject,
+      html: html
+    });
+    
+    console.log('✅ Email sent:', result.id);
+    
+    if (stats.systemIssues.length > 0) {
+      console.log('⚠️ Issues:', stats.systemIssues);
+    }
+    
+    return { success: true, id: result.id, stats };
+    
+  } catch (error) {
+    console.error('❌ Email error:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+═══════════════════════════════════════════════════════════════
+UPDATE CRON JOBS
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/index.ts (or wherever cron jobs are)
+
+Update each cron job to pass the report type:
+
+// 6:45 AM EST - Morning Report
+cron.schedule('45 11 * * *', async () => {
+  console.log('⏰ [6:45 AM EST] Morning Report');
+  try {
+    const { sendDailyAdminEmail } = require('./admin-email');
+    await sendDailyAdminEmail('morning');
+  } catch (error) {
+    console.error('❌ Email error:', error);
+  }
+});
+
+// 11:00 AM EST - Midday Update
+cron.schedule('0 16 * * *', async () => {
+  console.log('⏰ [11:00 AM EST] Midday Update');
+  try {
+    const { sendDailyAdminEmail } = require('./admin-email');
+    await sendDailyAdminEmail('midday');
+  } catch (error) {
+    console.error('❌ Email error:', error);
+  }
+});
+
+// 2:00 PM EST - Afternoon Report
+cron.schedule('0 19 * * *', async () => {
+  console.log('⏰ [2:00 PM EST] Afternoon Report');
+  try {
+    const { sendDailyAdminEmail } = require('./admin-email');
+    await sendDailyAdminEmail('afternoon');
+  } catch (error) {
+    console.error('❌ Email error:', error);
+  }
+});
+
+// 5:00 PM EST - Evening Update
+cron.schedule('0 22 * * *', async () => {
+  console.log('⏰ [5:00 PM EST] Evening Update');
+  try {
+    const { sendDailyAdminEmail } = require('./admin-email');
+    await sendDailyAdminEmail('evening');
+  } catch (error) {
+    console.error('❌ Email error:', error);
+  }
+});
+
+// 8:00 PM EST - Night Report
+cron.schedule('0 1 * * *', async () => {
+  console.log('⏰ [8:00 PM EST] Night Report');
+  try {
+    const { sendDailyAdminEmail } = require('./admin-email');
+    await sendDailyAdminEmail('night');
+  } catch (error) {
+    console.error('❌ Email error:', error);
+  }
+});
+
+// 11:30 PM EST - Daily Summary
+cron.schedule('30 4 * * *', async () => {
+  console.log('⏰ [11:30 PM EST] Daily Summary');
+  try {
+    const { sendDailyAdminEmail } = require('./admin-email');
+    await sendDailyAdminEmail('summary');
+  } catch (error) {
+    console.error('❌ Email error:', error);
+  }
+});
+
+console.log('');
+console.log('═══════════════════════════════════════════════');
+console.log('📧 EMAIL SCHEDULE ACTIVE');
+console.log('═══════════════════════════════════════════════');
+console.log('6:45 AM EST  - Morning Report');
+console.log('11:00 AM EST - Midday Update');
+console.log('2:00 PM EST  - Afternoon Report');
+console.log('5:00 PM EST  - Evening Update');
+console.log('8:00 PM EST  - Night Report');
+console.log('11:30 PM EST - Daily Summary');
+console.log('═══════════════════════════════════════════════');
+console.log('');
+
+═══════════════════════════════════════════════════════════════
+UPDATE TEST EMAIL
+═══════════════════════════════════════════════════════════════
+
+When sending test emails, you can specify which type:
+
+// Test with different report types
+setTimeout(async () => {
+  try {
+    console.log('📧 Sending test email...');
+    const { sendDailyAdminEmail } = require('./admin-email');
+    
+    // Send as "morning" report for testing
+    const result = await sendDailyAdminEmail('morning');
+    console.log('✅ Test result:', result);
+  } catch (error) {
+    console.error('❌ Test failed:', error);
+  }
+}, 5000);
+
+═══════════════════════════════════════════════════════════════
+EXPECTED SUBJECT LINES
+═══════════════════════════════════════════════════════════════
+
+You will receive emails with these subjects:
+
+✅ "BJJ OS Morning Report - Monday, October 27, 2025"
+✅ "BJJ OS Midday Update - Monday, October 27, 2025"
+✅ "BJJ OS Afternoon Report - Monday, October 27, 2025"
+✅ "BJJ OS Evening Update - Monday, October 27, 2025"
+✅ "BJJ OS Night Report - Monday, October 27, 2025"
+✅ "BJJ OS Daily Summary - Monday, October 27, 2025"
+
+This makes it easy to:
+- Identify which report in your inbox
+- Filter/search by time of day
+- See at a glance what stage of day the report is from
+
+═══════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════
+
+✅ Each email has descriptive subject line
+✅ Subject indicates time of day (Morning/Midday/Afternoon/Evening/Night/Summary)
+✅ Date is included in subject
+✅ Easy to identify reports in inbox
+✅ All 6 cron jobs pass correct report type
+
+IMPLEMENT NOW.
+```
+
+-----
+
+## ✅ **EMAIL SUBJECT FIX READY!**
+
+**This will give you:**
+
+- ✅ “BJJ OS **Morning Report** - Monday, October 27, 2025” at 6:45 AM
+- ✅ “BJJ OS **Midday Update** - Monday, October 27, 2025” at 11:00 AM
+- ✅ “BJJ OS **Afternoon Report** - Monday, October 27, 2025” at 2:00 PM
+- ✅ “BJJ OS **Evening Update** - Monday, October 27, 2025” at 5:00 PM
+- ✅ “BJJ OS **Night Report** - Monday, October 27, 2025” at 8:00 PM
+- ✅ “BJJ OS **Daily Summary** - Monday, October 27, 2025” at 11:30 PM
+
+**Send this as a separate prompt to Replit Agent!** 📧✨
+
+This makes it super easy to see which report is which in your inbox!​​​​​​​​​​​​​​​​

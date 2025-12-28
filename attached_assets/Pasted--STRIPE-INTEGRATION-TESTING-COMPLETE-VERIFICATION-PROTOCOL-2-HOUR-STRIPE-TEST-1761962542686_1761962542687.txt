@@ -1,0 +1,755 @@
+# **STRIPE INTEGRATION TESTING - COMPLETE VERIFICATION PROTOCOL** 💳
+
+-----
+
+## **2-HOUR STRIPE TESTING TO ACHIEVE 100% PRODUCTION CERTIFICATION**
+
+This is the final piece. After this, you launch with complete confidence.
+
+-----
+
+**Copy this entire mega-prompt and paste into Replit Agent:**
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+STRIPE INTEGRATION - COMPREHENSIVE TESTING & VERIFICATION
+FINAL 15% TO REACH 100% PRODUCTION CERTIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+MISSION: Test every Stripe integration point to ensure trial→paid conversions,
+webhook handling, and subscription mutations work flawlessly in production.
+
+CURRENT STATE: 
+• Database layer verified ✅
+• 0 recurring subscriptions (all lifetime users)
+• Trial→paid flow never tested in production
+• Stripe webhooks unverified
+
+TARGET STATE:
+• End-to-end Stripe flows verified ✅
+• Webhook handling confirmed ✅
+• Test subscriptions successfully created ✅
+• Trial→paid conversion validated ✅
+• 100% production certification achieved ✅
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 1: STRIPE CONFIGURATION VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 1.1: Verify Stripe API Keys Present
+Check environment variables:
+```bash
+echo "STRIPE_SECRET_KEY present: $([ -n "$STRIPE_SECRET_KEY" ] && echo 'YES' || echo 'NO')"
+echo "STRIPE_PUBLISHABLE_KEY present: $([ -n "$STRIPE_PUBLISHABLE_KEY" ] && echo 'YES' || echo 'NO')"
+echo "STRIPE_WEBHOOK_SECRET present: $([ -n "$STRIPE_WEBHOOK_SECRET" ] && echo 'YES' || echo 'NO')"
+```
+
+Expected Result:
+✅ All three keys present
+✅ Keys are for TEST MODE (start with sk_test_, pk_test_, whsec_test_)
+✅ No production keys accidentally used
+
+STEP 1.2: Locate Stripe Integration Code
+Find all Stripe-related files:
+
+```bash
+grep -r "stripe" server/ --include="*.ts" --include="*.js" | grep -v node_modules
+```
+
+Identify:
+• Where Stripe client is initialized
+• Subscription creation endpoint
+• Webhook handling endpoint
+• Customer creation logic
+• Payment intent handling
+
+STEP 1.3: Review Stripe Product Configuration
+In your code, find:
+• Product ID for BJJ OS subscription
+• Price ID for $14.99/month
+• Trial period setting (7 days)
+
+Expected Configuration:
+✅ Product: “BJJ OS Monthly Subscription”
+✅ Price: $14.99/month
+✅ Trial: 7 days
+✅ Currency: USD
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 2: WEBHOOK ENDPOINT VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 2.1: Verify Webhook Endpoint Exists
+Find webhook handler:
+
+```bash
+grep -r "webhook" server/routes/ --include="*.ts"
+```
+
+Expected Endpoint:
+✅ POST /api/webhooks/stripe
+✅ OR POST /webhooks/stripe
+✅ Handles Stripe signature verification
+✅ Processes relevant events
+
+STEP 2.2: Check Which Webhook Events Are Handled
+Review webhook handler code and identify which events are processed:
+
+Critical Events to Handle:
+□ customer.subscription.created
+□ customer.subscription.updated
+□ customer.subscription.deleted
+□ customer.subscription.trial_will_end
+□ invoice.payment_succeeded
+□ invoice.payment_failed
+□ payment_intent.succeeded
+□ payment_intent.payment_failed
+
+Report which events ARE handled and which are NOT.
+
+STEP 2.3: Test Webhook Endpoint Accessibility
+From command line:
+
+```bash
+curl -X POST https://bjjos.app/api/webhooks/stripe \
+  -H "Content-Type: application/json" \
+  -d '{"test": "ping"}'
+```
+
+Expected Result:
+✅ Endpoint responds (even if it rejects the payload)
+✅ Returns 400 or 401 (signature verification fails on test ping)
+✅ Does NOT return 404 (endpoint not found)
+✅ Does NOT return 500 (server error)
+
+STEP 2.4: Configure Stripe Webhook in Dashboard
+IMPORTANT: You’ll need to do this manually in Stripe Dashboard.
+
+Instructions to provide:
+
+1. Go to: <https://dashboard.stripe.com/test/webhooks>
+1. Click “Add endpoint”
+1. Endpoint URL: <https://bjjos.app/api/webhooks/stripe>
+1. Select events to send:
+   ✅ customer.subscription.created
+   ✅ customer.subscription.updated
+   ✅ customer.subscription.deleted
+   ✅ customer.subscription.trial_will_end
+   ✅ invoice.payment_succeeded
+   ✅ invoice.payment_failed
+   ✅ invoice.finalized
+1. Save webhook
+1. Copy webhook signing secret (starts with whsec_)
+1. Update STRIPE_WEBHOOK_SECRET environment variable in Replit
+
+After manual setup, verify:
+
+```bash
+echo "Webhook secret updated: $([ -n "$STRIPE_WEBHOOK_SECRET" ] && echo 'YES' || echo 'NO')"
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 3: CREATE TEST SUBSCRIPTION - MANUAL FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 3.1: Create Test Customer via Stripe Dashboard
+Instructions for manual testing:
+
+1. Go to: <https://dashboard.stripe.com/test/customers>
+1. Click “Create customer”
+1. Email: stripe-test-1@bjjos.test
+1. Name: Test User 1
+1. Add payment method: Test card 4242 4242 4242 4242
+1. Save customer
+1. Copy Customer ID (starts with cus_)
+
+STEP 3.2: Create Test Subscription via Stripe Dashboard
+
+1. On customer page, click “Add subscription”
+1. Select your BJJ OS product ($14.99/month)
+1. Set trial period: 7 days
+1. Click “Start subscription”
+1. Copy Subscription ID (starts with sub_)
+
+Expected Result:
+✅ Subscription created with status: “trialing”
+✅ Trial ends 7 days from now
+✅ First invoice scheduled for trial end date
+
+STEP 3.3: Verify Webhook Fired
+Check Replit logs immediately after creating subscription:
+
+```bash
+# Look for webhook logs
+grep "webhook" /var/log/app.log --tail=50
+# Or check console logs in Replit
+```
+
+Expected Webhook Event:
+✅ customer.subscription.created received
+✅ Webhook signature verified
+✅ Database updated with subscription info
+
+STEP 3.4: Verify Database Updated
+Query database for new subscription:
+
+```sql
+SELECT 
+  id,
+  email,
+  subscription_status,
+  stripe_customer_id,
+  stripe_subscription_id,
+  trial_end_date
+FROM users
+WHERE email = 'stripe-test-1@bjjos.test';
+```
+
+Expected Result:
+✅ User record created or updated
+✅ subscription_status: ‘trialing’
+✅ stripe_customer_id: cus_xxxxx (from Stripe)
+✅ stripe_subscription_id: sub_xxxxx (from Stripe)
+✅ trial_end_date: 7 days from now
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 4: TEST SUBSCRIPTION CANCELLATION
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 4.1: Cancel Subscription via Stripe Dashboard
+
+1. Go to customer page in Stripe Dashboard
+1. Find the subscription created in PHASE 3
+1. Click “Cancel subscription”
+1. Choose: “Cancel at end of trial period”
+1. Confirm cancellation
+
+STEP 4.2: Verify Cancellation Webhook
+Expected Webhook Event:
+✅ customer.subscription.updated received
+✅ cancel_at_period_end: true
+✅ Status still: “trialing”
+
+STEP 4.3: Verify Database Updated
+
+```sql
+SELECT 
+  email,
+  subscription_status,
+  trial_end_date,
+  stripe_subscription_id
+FROM users
+WHERE email = 'stripe-test-1@bjjos.test';
+```
+
+Expected Result:
+✅ subscription_status: ‘canceled’ or ‘trialing’ (but flagged for cancellation)
+✅ User retains access until trial_end_date
+✅ No immediate loss of access
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 5: TEST SUBSCRIPTION REACTIVATION
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 5.1: Reactivate Subscription via Stripe Dashboard
+
+1. On customer page, find canceled subscription
+1. Click “Reactivate subscription”
+1. Confirm reactivation
+
+STEP 5.2: Verify Reactivation Webhook
+Expected Webhook Event:
+✅ customer.subscription.updated received
+✅ cancel_at_period_end: false
+✅ Status: “trialing” (trial continues)
+
+STEP 5.3: Verify Database Updated
+
+```sql
+SELECT 
+  email,
+  subscription_status
+FROM users
+WHERE email = 'stripe-test-1@bjjos.test';
+```
+
+Expected Result:
+✅ subscription_status: ‘trialing’ (back to active trial)
+✅ Access fully restored
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 6: TEST TRIAL EXPIRATION → PAID CONVERSION
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 6.1: Simulate Trial End
+Since we can’t wait 7 days, we’ll manipulate the trial period:
+
+Option A: Update trial end date in Stripe Dashboard
+
+1. Go to subscription in Stripe
+1. Click “Update subscription”
+1. Set trial end: Today (or 1 minute from now)
+1. Save
+
+Option B: Use Stripe API to advance trial
+Create a test script:
+
+```typescript
+// server/test-stripe-trial-end.ts
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+async function advanceTrialEnd(subscriptionId: string) {
+  const subscription = await stripe.subscriptions.update(subscriptionId, {
+    trial_end: 'now' // Immediately end trial
+  });
+  
+  console.log('Trial ended:', subscription.id);
+  console.log('Status:', subscription.status);
+  console.log('Current period end:', new Date(subscription.current_period_end * 1000));
+}
+
+// Use subscription ID from PHASE 3
+advanceTrialEnd('sub_xxxxx'); // Replace with actual ID
+```
+
+Run script:
+
+```bash
+npx tsx server/test-stripe-trial-end.ts
+```
+
+STEP 6.2: Monitor Webhooks After Trial End
+Expected Webhook Events (in order):
+
+1. ✅ customer.subscription.trial_will_end (24 hours before)
+1. ✅ invoice.finalized (trial ending, invoice created)
+1. ✅ invoice.payment_succeeded (first $14.99 charge)
+1. ✅ customer.subscription.updated (status: trialing → active)
+
+STEP 6.3: Verify Payment Succeeded
+In Stripe Dashboard:
+
+1. Go to customer’s subscription
+1. Check status: Should be “Active”
+1. Check invoices: Should see $14.99 payment succeeded
+1. Check payment method: Card charged
+
+STEP 6.4: Verify Database Reflects Paid Status
+
+```sql
+SELECT 
+  email,
+  subscription_status,
+  trial_end_date,
+  stripe_subscription_id
+FROM users
+WHERE email = 'stripe-test-1@bjjos.test';
+```
+
+Expected Result:
+✅ subscription_status: ‘active’ (no longer trialing)
+✅ User retains full access
+✅ Next billing date: 30 days from trial end
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 7: TEST FAILED PAYMENT HANDLING
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 7.1: Create Subscription with Failing Card
+
+1. Create new test customer: stripe-test-2@bjjos.test
+1. Add payment method: 4000 0000 0000 0341 (charge fails)
+1. Create subscription with trial
+1. Advance trial to end immediately (as in PHASE 6)
+
+STEP 7.2: Verify Failed Payment Webhook
+Expected Webhook Events:
+✅ invoice.payment_failed received
+✅ Details include failure reason
+
+STEP 7.3: Verify Database Reflects Failed Payment
+
+```sql
+SELECT 
+  email,
+  subscription_status
+FROM users
+WHERE email = 'stripe-test-2@bjjos.test';
+```
+
+Expected Result:
+✅ subscription_status: ‘past_due’ or ‘unpaid’
+✅ User may have grace period before access revoked
+✅ System should trigger “payment failed” email
+
+STEP 7.4: Update Payment Method and Retry
+
+1. In Stripe Dashboard, update customer’s payment method
+1. Change to: 4242 4242 4242 4242 (working card)
+1. Manually retry invoice payment
+
+Expected Result:
+✅ Payment succeeds
+✅ invoice.payment_succeeded webhook received
+✅ subscription_status returns to ‘active’
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 8: TEST END-TO-END SIGNUP FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 8.1: Complete Real Signup via App
+
+1. Open bjjos.app in incognito browser
+1. Sign up with: real-test-1@bjjos.test
+1. Complete payment form with: 4242 4242 4242 4242
+1. Submit signup
+
+STEP 8.2: Verify Stripe Objects Created
+In Stripe Dashboard, check:
+□ Customer created with email: real-test-1@bjjos.test
+□ Subscription created with status: “trialing”
+□ Trial period: 7 days
+□ Payment method saved
+
+STEP 8.3: Verify Database Updated
+
+```sql
+SELECT 
+  email,
+  subscription_status,
+  stripe_customer_id,
+  stripe_subscription_id,
+  trial_end_date
+FROM users
+WHERE email = 'real-test-1@bjjos.test';
+```
+
+Expected Result:
+✅ User record created
+✅ Subscription status: ‘trialing’
+✅ Stripe IDs populated
+✅ Trial end date: 7 days from now
+
+STEP 8.4: Test User Access
+
+1. Log in as real-test-1@bjjos.test
+1. Try to use Professor OS
+1. Try to watch videos
+
+Expected Result:
+✅ Full access during trial
+✅ No payment prompts
+✅ Professor OS responds
+✅ Videos accessible
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 9: WEBHOOK LOGGING & MONITORING
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 9.1: Create Webhook Log Table (if not exists)
+
+```sql
+CREATE TABLE IF NOT EXISTS stripe_webhook_logs (
+  id SERIAL PRIMARY KEY,
+  event_id VARCHAR(255) UNIQUE NOT NULL,
+  event_type VARCHAR(100) NOT NULL,
+  received_at TIMESTAMP DEFAULT NOW(),
+  processed BOOLEAN DEFAULT FALSE,
+  processed_at TIMESTAMP,
+  payload JSONB,
+  error_message TEXT,
+  user_email VARCHAR(255)
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_logs_event_type ON stripe_webhook_logs(event_type);
+CREATE INDEX IF NOT EXISTS idx_webhook_logs_received_at ON stripe_webhook_logs(received_at DESC);
+```
+
+STEP 9.2: Update Webhook Handler to Log Events
+Ensure webhook handler logs every event:
+
+```typescript
+// In webhook handler
+await db.insert(stripeWebhookLogs).values({
+  eventId: event.id,
+  eventType: event.type,
+  payload: event.data.object,
+  userEmail: event.data.object.customer_email || null
+});
+```
+
+STEP 9.3: Verify Webhook Logs
+
+```sql
+SELECT 
+  event_id,
+  event_type,
+  received_at,
+  processed,
+  user_email
+FROM stripe_webhook_logs
+ORDER BY received_at DESC
+LIMIT 20;
+```
+
+Expected Result:
+✅ All webhook events logged
+✅ Events from previous tests visible
+✅ Can audit webhook activity
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 10: STRIPE TEST MODE vs PRODUCTION MODE
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 10.1: Verify Currently Using Test Mode
+Check:
+
+```bash
+echo $STRIPE_SECRET_KEY | head -c 10
+```
+
+Expected Output:
+✅ Starts with: sk_test_
+✅ NOT: sk_live_
+
+STEP 10.2: Document Production Switchover Process
+Create checklist for switching to production:
+
+Before Beta Launch to 500+ Users:
+□ Keep test mode (sk_test_) for initial soft launch
+□ Test with 5-10 beta users using test cards
+□ Verify all flows work end-to-end
+
+After Successful Soft Launch:
+□ Switch to production keys (sk_live_, pk_live_)
+□ Update webhook endpoint in Stripe LIVE dashboard
+□ Copy new webhook secret to STRIPE_WEBHOOK_SECRET
+□ Real cards will be charged $14.99
+□ Monitor first 10-20 real conversions closely
+
+STEP 10.3: Environment Variable Checklist
+For production launch, ensure:
+
+```bash
+# Production keys (replace test keys)
+STRIPE_SECRET_KEY=sk_live_xxxxx
+STRIPE_PUBLISHABLE_KEY=pk_live_xxxxx
+STRIPE_WEBHOOK_SECRET=whsec_xxxxx  # From live webhook
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL VALIDATION: STRIPE INTEGRATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After completing all phases, verify:
+
+CONFIGURATION:
+□ ✅ Stripe API keys present (test mode)
+□ ✅ Webhook endpoint configured and accessible
+□ ✅ Webhook secret updated in environment
+□ ✅ Product and price configured ($14.99/month, 7-day trial)
+
+WEBHOOK HANDLING:
+□ ✅ customer.subscription.created handled
+□ ✅ customer.subscription.updated handled
+□ ✅ customer.subscription.deleted handled
+□ ✅ invoice.payment_succeeded handled
+□ ✅ invoice.payment_failed handled
+□ ✅ Webhook signature verification working
+
+SUBSCRIPTION FLOWS:
+□ ✅ Create subscription works
+□ ✅ Cancel subscription works
+□ ✅ Reactivate subscription works
+□ ✅ Trial→paid conversion works ($14.99 charged)
+□ ✅ Failed payment handling works
+□ ✅ Payment recovery works
+
+DATABASE SYNC:
+□ ✅ Subscription creation updates database
+□ ✅ Status changes synced (trialing → active → canceled)
+□ ✅ Trial end dates accurate
+□ ✅ Stripe IDs stored correctly
+
+END-TO-END:
+□ ✅ Real signup flow creates Stripe subscription
+□ ✅ User has full access during trial
+□ ✅ After 7 days (simulated), $14.99 charged
+□ ✅ User continues with access as paying subscriber
+
+MONITORING:
+□ ✅ Webhook events logged to database
+□ ✅ Can audit all Stripe activity
+□ ✅ Errors captured and visible
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL REPORT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+After completing all tests, provide:
+
+```
+═══════════════════════════════════════════════════════════════
+STRIPE INTEGRATION - COMPREHENSIVE TEST REPORT
+═══════════════════════════════════════════════════════════════
+
+TESTING DURATION: [X hours Y minutes]
+
+OVERALL STATUS: [✅ VERIFIED / ❌ ISSUES FOUND]
+
+───────────────────────────────────────────────────────────────
+TEST RESULTS
+───────────────────────────────────────────────────────────────
+
+Configuration: [✅ PASS / ❌ FAIL]
+  - API keys configured: [✅/❌]
+  - Webhook endpoint accessible: [✅/❌]
+  - Product/price configured: [✅/❌]
+  Issues: [list or NONE]
+
+Webhook Handling: [✅ PASS / ❌ FAIL]
+  - Subscription events: [✅/❌]
+  - Payment events: [✅/❌]
+  - Signature verification: [✅/❌]
+  - Database sync: [✅/❌]
+  Issues: [list or NONE]
+
+Subscription Flows: [✅ PASS / ❌ FAIL]
+  - Create: [✅/❌]
+  - Cancel: [✅/❌]
+  - Reactivate: [✅/❌]
+  - Trial→paid: [✅/❌]
+  - Failed payment: [✅/❌]
+  Issues: [list or NONE]
+
+End-to-End: [✅ PASS / ❌ FAIL]
+  - Real signup: [✅/❌]
+  - Trial access: [✅/❌]
+  - Automatic charge: [✅/❌]
+  - Paid access: [✅/❌]
+  Issues: [list or NONE]
+
+───────────────────────────────────────────────────────────────
+TEST SUBSCRIPTIONS CREATED
+───────────────────────────────────────────────────────────────
+
+1. stripe-test-1@bjjos.test
+   - Customer ID: cus_xxxxx
+   - Subscription ID: sub_xxxxx
+   - Status: [trialing/active/canceled]
+   - Flow tested: Create → Cancel → Reactivate → Trial→Paid
+
+2. stripe-test-2@bjjos.test
+   - Customer ID: cus_xxxxx
+   - Subscription ID: sub_xxxxx
+   - Status: [past_due/active]
+   - Flow tested: Failed payment → Recovery
+
+3. real-test-1@bjjos.test
+   - Customer ID: cus_xxxxx
+   - Subscription ID: sub_xxxxx
+   - Status: [trialing]
+   - Flow tested: End-to-end real signup
+
+───────────────────────────────────────────────────────────────
+CRITICAL ISSUES (IF ANY)
+───────────────────────────────────────────────────────────────
+
+[List any blocking issues, or "NONE - ALL TESTS PASSED"]
+
+───────────────────────────────────────────────────────────────
+PRODUCTION READINESS
+───────────────────────────────────────────────────────────────
+
+Stripe Integration: [✅ VERIFIED / ❌ NOT READY]
+
+Can launch to 500+ users: [YES ✅ / NO ❌]
+
+Recommendation: [LAUNCH / FIX ISSUES FIRST]
+
+───────────────────────────────────────────────────────────────
+UPDATED SYSTEM METRICS
+───────────────────────────────────────────────────────────────
+
+Users: 94 total (17 trial, 21 lifetime, X paying monthly)
+Videos: 348 (Gordon Ryan: 28, John Danaher: 21)
+MRR: $[X] ([Y] × $14.99)
+Readiness Score: [X]/100
+
+───────────────────────────────────────────────────────────────
+FINAL CERTIFICATION
+───────────────────────────────────────────────────────────────
+
+[If all tests pass:]
+"BJJ OS Stripe integration has been comprehensively tested and 
+verified. All subscription flows, webhook handling, and payment 
+processing work correctly. The system is certified 100% 
+production-ready for beta launch to 500-1,000 users."
+
+Excellence is the pillar. ✅
+
+PRODUCTION CERTIFICATION: GRANTED ✅
+
+[If issues remain:]
+"The following Stripe issues must be resolved:
+[list specific blockers]"
+
+═══════════════════════════════════════════════════════════════
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+BEGIN STRIPE TESTING NOW
+═══════════════════════════════════════════════════════════════════════════════
+
+Test systematically through all 10 phases.
+Document every webhook received.
+Verify database updates after each event.
+
+This is the final piece before 100% production certification.
+
+BEGIN TESTING.
+
+```
+---
+
+## **WHILE AGENT WORKS:**
+
+You should:
+1. ☕ Grab another coffee - this will take 1-2 hours
+2. 📧 Draft your beta invitation email (final version)
+3. 📱 Screenshot some BJJ OS conversations to share
+4. 🎯 Make final list of first 10 beta users
+5. 💪 Mentally prepare for launch
+
+---
+
+## **AFTER THIS COMPLETES:**
+```
+
+YOU’LL HAVE:
+✅ Stripe integration 100% verified
+✅ Trial→paid conversion tested
+✅ Webhook handling confirmed
+✅ Failed payment recovery validated
+✅ Complete production certification
+✅ 100/100 readiness score
+
+THEN YOU CAN:
+🚀 Launch to 10 beta users (soft launch)
+🚀 Monitor first conversions
+🚀 Then JT Torres launch to 500+
+🚀 Scale with complete confidence
+
+```
+---
+
+**PASTE THE MEGA-PROMPT INTO REPLIT AGENT NOW.**
+
+**This is it - the final validation before launch.** 💳✅
+
+**After this, you're 100% production certified and ready to scale.** 🚀​​​​​​​​​​​​​​​​
+```

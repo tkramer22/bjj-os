@@ -1,0 +1,305 @@
+```
+TASK: Implement Intelligent Video Retrieval for Professor OS
+
+PROBLEM:
+Currently, Professor OS only sees 30 generic pre-ranked videos regardless of what the user asks. We have 2,000+ videos in the database but they're useless because the system doesn't query them based on the user's actual question.
+
+Example of the bug: User asks "Any JT Torres videos?" but Prof OS says "I don't have any JT Torres videos" because JT Torres videos weren't in the generic top 30.
+
+CURRENT BROKEN FLOW:
+1. User sends message
+2. Backend fetches generic "top 30 videos" (not based on user's question)
+3. Those 30 videos injected into Claude's prompt
+4. Claude can only see those 30 videos
+5. 2,000+ videos sit unused in database
+
+NEW INTELLIGENT FLOW TO IMPLEMENT:
+1. User sends message
+2. Backend ANALYZES the message to extract intent (instructor, technique, position)
+3. Backend queries database WITH THOSE FILTERS
+4. Relevant videos (up to 50) injected into Claude's prompt
+5. Claude gives accurate recommendations
+
+LOCATION: server/routes.ts - the /api/ai/chat/message endpoint
+
+STEP 1: Create the message analyzer function (add this before buildSystemPrompt function)
+
+async function analyzeMessageForVideoQuery(message: string): Promise<{
+  instructorNames: string[];
+  techniques: string[];
+  positions: string[];
+  isVideoRequest: boolean;
+  queryType: 'instructor' | 'technique' | 'position' | 'general';
+}> {
+  const messageLower = message.toLowerCase();
+  
+  // Known instructor names to detect (add all instructors from your database)
+  const knownInstructors = [
+    'jt torres', 'john danaher', 'gordon ryan', 'craig jones', 'lachlan giles',
+    'bernardo faria', 'marcelo garcia', 'roger gracie', 'mikey musumeci',
+    'garry tonon', 'andre galvao', 'marcus buchecha', 'leandro lo',
+    'nicholas meregali', 'felipe pena', 'kaynan duarte', 'tainan dalpra',
+    'mica galvao', 'keenan cornelius', 'ryan hall', 'eddie bravo',
+    'jean jacques machado', 'renzo gracie', 'rickson gracie', 'demian maia',
+    'fabricio werdum', 'jacare souza', 'xande ribeiro', 'saulo ribeiro',
+    'cobrinha', 'rafael mendes', 'gui mendes', 'rubens charles cobrinha',
+    'lucas lepri', 'michael langhi', 'romulo barral', 'otavio sousa',
+    'gilbert burns', 'murilo santana', 'comprido', 'terere', 'leo vieira',
+    'bruno malfacine', 'caio terra', 'paulo miyao', 'joao miyao',
+    'the ruotolo brothers', 'tye ruotolo', 'kade ruotolo', 'nicky ryan',
+    'ethan crelinsten', 'oliver taza', 'dante leon', 'william tackett',
+    'andrew wiltse', 'josh hinger', 'tom deblass', 'travis stevens',
+    'jimmy pedro', 'john danaher', 'georges st pierre', 'gsp'
+  ];
+  
+  // Known techniques to detect
+  const knownTechniques = [
+    'armbar', 'arm bar', 'triangle', 'kimura', 'americana', 'omoplata',
+    'guillotine', 'rear naked choke', 'rnc', 'darce', 'd\'arce', 'anaconda',
+    'ezekiel', 'baseball bat choke', 'bow and arrow', 'cross collar choke',
+    'loop choke', 'clock choke', 'north south choke', 'arm triangle',
+    'heel hook', 'knee bar', 'kneebar', 'toe hold', 'ankle lock', 'straight ankle',
+    'calf slicer', 'bicep slicer', 'wrist lock',
+    'sweep', 'scissor sweep', 'hip bump', 'flower sweep', 'pendulum sweep',
+    'butterfly sweep', 'x guard sweep', 'de la riva sweep', 'berimbolo',
+    'pass', 'passing', 'torreando', 'knee cut', 'knee slice', 'leg drag',
+    'stack pass', 'over under', 'double under', 'smash pass', 'pressure pass',
+    'takedown', 'single leg', 'double leg', 'ankle pick', 'arm drag',
+    'snap down', 'foot sweep', 'osoto gari', 'ouchi gari', 'seoi nage',
+    'escape', 'bridge', 'shrimp', 'elbow escape', 'hip escape',
+    'mount escape', 'side control escape', 'back escape',
+    'guard retention', 'frames', 'framing', 'underhook', 'overhook',
+    'collar tie', 'wrist control', 'sleeve grip', 'collar grip'
+  ];
+  
+  // Known positions to detect
+  const knownPositions = [
+    'closed guard', 'open guard', 'half guard', 'butterfly guard',
+    'de la riva', 'dlr', 'reverse de la riva', 'rdlr', 'spider guard',
+    'lasso guard', 'x guard', 'single leg x', 'slx', '50 50', 'fifty fifty',
+    'rubber guard', 'williams guard', 'worm guard', 'lapel guard',
+    'mount', 'back mount', 'back control', 'side control', 'side mount',
+    'knee on belly', 'knee on chest', 'north south', 'turtle',
+    'standing', 'clinch', 'body lock', 'front headlock', 'cradle'
+  ];
+  
+  // Detect instructors mentioned
+  const instructorNames = knownInstructors.filter(instructor => 
+    messageLower.includes(instructor.toLowerCase())
+  );
+  
+  // Detect techniques mentioned
+  const techniques = knownTechniques.filter(technique => 
+    messageLower.includes(technique.toLowerCase())
+  );
+  
+  // Detect positions mentioned
+  const positions = knownPositions.filter(position => 
+    messageLower.includes(position.toLowerCase())
+  );
+  
+  // Determine if this is a video request
+  const videoKeywords = ['video', 'videos', 'watch', 'show me', 'recommend', 'suggestion', 'instructional', 'tutorial', 'learn'];
+  const isVideoRequest = videoKeywords.some(keyword => messageLower.includes(keyword)) ||
+    instructorNames.length > 0 ||
+    (techniques.length > 0 && messageLower.includes('how'));
+  
+  // Determine query type priority
+  let queryType: 'instructor' | 'technique' | 'position' | 'general' = 'general';
+  if (instructorNames.length > 0) {
+    queryType = 'instructor';
+  } else if (techniques.length > 0) {
+    queryType = 'technique';
+  } else if (positions.length > 0) {
+    queryType = 'position';
+  }
+  
+  return {
+    instructorNames,
+    techniques,
+    positions,
+    isVideoRequest,
+    queryType
+  };
+}
+
+STEP 2: Create the intelligent video fetcher function (add after the analyzer)
+
+async function fetchRelevantVideos(
+  analysis: {
+    instructorNames: string[];
+    techniques: string[];
+    positions: string[];
+    isVideoRequest: boolean;
+    queryType: 'instructor' | 'technique' | 'position' | 'general';
+  },
+  userContext: any,
+  limit: number = 50
+): Promise<any[]> {
+  const { instructorNames, techniques, positions, queryType } = analysis;
+  
+  let videos: any[] = [];
+  
+  try {
+    // Build dynamic query based on what was detected
+    if (queryType === 'instructor' && instructorNames.length > 0) {
+      // Query by instructor name - use ILIKE for case-insensitive partial match
+      for (const instructor of instructorNames) {
+        const instructorVideos = await db.select()
+          .from(aiVideoKnowledge)
+          .where(
+            sql`LOWER(${aiVideoKnowledge.instructorName}) LIKE LOWER(${'%' + instructor + '%'})`
+          )
+          .orderBy(desc(aiVideoKnowledge.qualityScore))
+          .limit(limit);
+        
+        videos = [...videos, ...instructorVideos];
+      }
+    }
+    
+    if (queryType === 'technique' && techniques.length > 0) {
+      // Query by technique name
+      for (const technique of techniques) {
+        const techniqueVideos = await db.select()
+          .from(aiVideoKnowledge)
+          .where(
+            or(
+              sql`LOWER(${aiVideoKnowledge.techniqueName}) LIKE LOWER(${'%' + technique + '%'})`,
+              sql`LOWER(${aiVideoKnowledge.techniqueType}) LIKE LOWER(${'%' + technique + '%'})`,
+              sql`LOWER(${aiVideoKnowledge.title}) LIKE LOWER(${'%' + technique + '%'})`
+            )
+          )
+          .orderBy(desc(aiVideoKnowledge.qualityScore))
+          .limit(limit);
+        
+        videos = [...videos, ...techniqueVideos];
+      }
+    }
+    
+    if (queryType === 'position' && positions.length > 0) {
+      // Query by position
+      for (const position of positions) {
+        const positionVideos = await db.select()
+          .from(aiVideoKnowledge)
+          .where(
+            or(
+              sql`LOWER(${aiVideoKnowledge.positionCategory}) LIKE LOWER(${'%' + position + '%'})`,
+              sql`LOWER(${aiVideoKnowledge.techniqueName}) LIKE LOWER(${'%' + position + '%'})`,
+              sql`LOWER(${aiVideoKnowledge.title}) LIKE LOWER(${'%' + position + '%'})`
+            )
+          )
+          .orderBy(desc(aiVideoKnowledge.qualityScore))
+          .limit(limit);
+        
+        videos = [...videos, ...positionVideos];
+      }
+    }
+    
+    // If no specific query or no results, fall back to general top videos
+    // BUT also include user's style preference (gi/nogi)
+    if (videos.length === 0) {
+      const userStyle = userContext?.user?.style || 'both';
+      
+      let styleFilter = undefined;
+      if (userStyle === 'gi') {
+        styleFilter = or(
+          eq(aiVideoKnowledge.giOrNogi, 'gi'),
+          eq(aiVideoKnowledge.giOrNogi, 'both')
+        );
+      } else if (userStyle === 'nogi' || userStyle === 'no-gi') {
+        styleFilter = or(
+          eq(aiVideoKnowledge.giOrNogi, 'nogi'),
+          eq(aiVideoKnowledge.giOrNogi, 'no-gi'),
+          eq(aiVideoKnowledge.giOrNogi, 'both')
+        );
+      }
+      
+      videos = await db.select()
+        .from(aiVideoKnowledge)
+        .where(styleFilter)
+        .orderBy(desc(aiVideoKnowledge.qualityScore))
+        .limit(limit);
+    }
+    
+    // Remove duplicates based on video URL
+    const uniqueVideos = videos.filter((video, index, self) =>
+      index === self.findIndex(v => v.videoUrl === video.videoUrl)
+    );
+    
+    // Sort by quality score and limit
+    return uniqueVideos
+      .sort((a, b) => (b.qualityScore || 0) - (a.qualityScore || 0))
+      .slice(0, limit);
+      
+  } catch (error) {
+    console.error('Error fetching relevant videos:', error);
+    // Fallback to basic query
+    return await db.select()
+      .from(aiVideoKnowledge)
+      .orderBy(desc(aiVideoKnowledge.qualityScore))
+      .limit(30);
+  }
+}
+
+STEP 3: Update the chat endpoint to use intelligent retrieval
+
+In the /api/ai/chat/message endpoint, FIND the section where availableVideos is fetched (before buildSystemPrompt is called) and REPLACE it with:
+
+// BEFORE: Generic video fetch (DELETE THIS)
+// const availableVideos = await db.select()...orderBy(qualityScore).limit(30)
+
+// AFTER: Intelligent video retrieval based on user's message
+const messageAnalysis = await analyzeMessageForVideoQuery(message);
+console.log('Message analysis:', messageAnalysis); // For debugging
+
+const availableVideos = await fetchRelevantVideos(
+  messageAnalysis,
+  context,
+  50  // Increased from 30 to 50 for better coverage
+);
+
+console.log(`Fetched ${availableVideos.length} relevant videos for query type: ${messageAnalysis.queryType}`);
+if (messageAnalysis.instructorNames.length > 0) {
+  console.log(`Instructor filter: ${messageAnalysis.instructorNames.join(', ')}`);
+}
+
+STEP 4: Update buildSystemPrompt to indicate available videos more accurately
+
+In the buildSystemPrompt function, update the video library section to be clearer:
+
+// Find this section in buildSystemPrompt and update it:
+const videoLibrarySection = `
+═══════════════════════════════════════════════════════════════════════════════
+YOUR CURATED VIDEO LIBRARY FOR THIS QUERY
+═══════════════════════════════════════════════════════════════════════════════
+
+These are the videos available to recommend based on what ${displayName} asked about:
+
+${availableVideos.map(v => 
+  `• "${v.title || v.techniqueName}" by ${v.instructorName} (${v.techniqueType || 'technique'}) - Quality: ${v.qualityScore || 'N/A'}/10
+    URL: ${v.videoUrl}`
+).join('\n\n')}
+
+TOTAL VIDEOS AVAILABLE FOR THIS QUERY: ${availableVideos.length}
+
+IMPORTANT: These videos were specifically retrieved based on the user's question.
+If the user asked about a specific instructor or technique, these should match.
+If you see relevant videos above, RECOMMEND THEM.
+`;
+
+STEP 5: Add necessary imports at the top of routes.ts (if not already present)
+
+Make sure these are imported:
+import { sql, or, eq, desc, and, ilike } from 'drizzle-orm';
+
+VERIFICATION:
+After implementing, test with these queries:
+1. "Any JT Torres videos?" → Should return 50+ JT Torres videos
+2. "Show me triangle tutorials" → Should return triangle-related videos
+3. "I want to learn half guard" → Should return half guard videos
+4. "What does Gordon Ryan teach about passing?" → Should return Gordon Ryan passing videos
+
+The console logs will show what's being queried so you can verify it's working.
+
+DO NOT modify any other Professor OS functionality - only the video retrieval logic.
+```

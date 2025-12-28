@@ -1,0 +1,80 @@
+TASK: Make instructor detection dynamic - pull from database
+
+PROBLEM:
+The analyzeMessageForVideoQuery function has a HARDCODED list of instructor names.
+If we add new instructors to the database, they won't be detected.
+
+SOLUTION:
+Query the database for all unique instructor names and use that list.
+
+IMPLEMENTATION:
+
+1. Create a cached instructor list that refreshes periodically:
+
+let cachedInstructors: string[] = [];
+let lastInstructorCacheTime = 0;
+const INSTRUCTOR_CACHE_TTL = 3600000; // 1 hour
+
+async function getInstructorList(): Promise<string[]> {
+  const now = Date.now();
+  
+  // Return cached list if fresh
+  if (cachedInstructors.length > 0 && (now - lastInstructorCacheTime) < INSTRUCTOR_CACHE_TTL) {
+    return cachedInstructors;
+  }
+  
+  // Query database for all unique instructors
+  const results = await db.selectDistinct({ name: aiVideoKnowledge.instructorName })
+    .from(aiVideoKnowledge);
+  
+  // Build list with variations (lowercase, without accents, etc.)
+  cachedInstructors = results.map(r => r.name.toLowerCase());
+  lastInstructorCacheTime = now;
+  
+  console.log(`[INSTRUCTOR CACHE] Loaded ${cachedInstructors.length} instructors`);
+  return cachedInstructors;
+}
+
+2. Update analyzeMessageForVideoQuery to use dynamic list:
+
+async function analyzeMessageForVideoQuery(message: string) {
+  const messageLower = message.toLowerCase();
+  
+  // Get instructors from database (cached)
+  const knownInstructors = await getInstructorList();
+  
+  // Detect instructors mentioned
+  const instructorNames = knownInstructors.filter(instructor => 
+    messageLower.includes(instructor.toLowerCase())
+  );
+  
+  // ... rest of function
+}
+
+3. ALSO add fallback database search:
+
+Even if instructor name isn't detected, ALWAYS search the database:
+
+// If no instructor detected but message mentions "videos" or "show me"
+// Do a fuzzy search on the message terms anyway
+if (instructorNames.length === 0 && isVideoRequest) {
+  // Extract potential names (capitalized words)
+  const potentialNames = message.match(/[A-Z][a-z]+ [A-Z][a-z]+/g) || [];
+  
+  for (const name of potentialNames) {
+    const videos = await db.select()
+      .from(aiVideoKnowledge)
+      .where(sql`LOWER(instructor_name) LIKE LOWER(${'%' + name + '%'})`)
+      .limit(5);
+    
+    if (videos.length > 0) {
+      instructorNames.push(name.toLowerCase());
+    }
+  }
+}
+
+RESULT:
+- Add new instructor videos to database
+- Professor OS automatically finds them
+- No code changes needed
+- Cache refreshes every hour for performance

@@ -1,0 +1,106 @@
+```
+MAJOR DISCOVERY: DUPLICATE RENDERING FOUND + 2 OTHER PERSISTENT BUGS
+
+I found proof of the bug. The SAME video card appears TWICE in one response:
+1. FIRST render: Shows BJJ/OS placeholder (gray box with logo)
+2. SECOND render: Shows actual YouTube thumbnail (John Danaher image)
+
+This proves there are TWO renders happening - either:
+A. The API is being called twice
+B. The streaming is duplicating content
+C. The video card component is rendering twice
+D. The message is being added to state twice
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG #1: DUPLICATE VIDEO CARDS / REPEATED CONTENT
+═══════════════════════════════════════════════════════════════════════════════
+
+1. In the VideoCard component, add:
+   console.log('[VIDEO CARD] Rendering video:', videoId, title);
+
+2. In the chat message parser (where video cards are extracted from response), add:
+   console.log('[PARSER] Found video cards:', videoCards.length);
+   console.log('[PARSER] Video IDs:', videoCards.map(v => v.id));
+
+3. In the streaming handler, add:
+   console.log('[STREAM] Message content length:', content.length);
+
+4. Check: Is there a regex or parser that extracts video recommendations?
+   Is it running twice? Is it matching the same video twice?
+
+Add to the chat send function on frontend:
+console.log('[SEND] Sending message at:', new Date().toISOString());
+
+Add to the API route:
+console.log('[API] Request received at:', new Date().toISOString());
+
+If [SEND] logs once but [API] logs twice = frontend bug
+If both log once = streaming/parsing bug
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG #2: SETTINGS TOOLBAR - STILL TEXT ONLY (NO ICONS)
+═══════════════════════════════════════════════════════════════════════════════
+
+This has been "fixed" 8+ times. IT IS NOT FIXED.
+
+Chat page shows: Icons + Labels (Chat, Videos, Saved, Settings)
+Settings page shows: Text only (Chat, Videos, Saved, Settings) - NO ICONS
+
+You said ios-profile.tsx uses IOSBottomNav at line 424.
+But the Settings page STILL shows text-only navigation.
+
+Show me EXACTLY what renders at the bottom of ios-profile.tsx.
+Show me lines 420-450 of that file RIGHT NOW.
+
+Is there conditional rendering? Is there a different wrapper?
+Is ios-profile.tsx even being used for Settings on iOS?
+
+Run: grep -r "Settings" client/src --include="*.tsx" | grep -i "route\|path"
+
+Show me which component is ACTUALLY rendered when I tap Settings.
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG #3: CHAT HISTORY NOT LOADING ON APP OPEN
+═══════════════════════════════════════════════════════════════════════════════
+
+When I open the iOS app, previous chat messages do NOT appear.
+Professor OS remembers my profile, but the actual message history is GONE.
+
+This means:
+- Messages ARE being saved to database (Professor OS has context)
+- Messages are NOT being loaded into the chat UI on app open
+
+Find the useEffect that loads chat history in ios-chat.tsx or mobile-chat.tsx.
+Add these logs:
+
+console.log('[HISTORY] Component mounted');
+console.log('[HISTORY] User ID:', userId);
+console.log('[HISTORY] Fetching history...');
+// after fetch
+console.log('[HISTORY] Loaded messages:', messages.length);
+console.log('[HISTORY] First message:', messages[0]?.content?.substring(0, 50));
+
+Show me this code and the logs.
+
+═══════════════════════════════════════════════════════════════════════════════
+CHECK SERVER LOGS FROM MY TEST
+═══════════════════════════════════════════════════════════════════════════════
+
+I just sent a test message. Check the server logs NOW for:
+- [PROMPT VERSION] - Is it showing TRIMMED v2.0?
+- [CHAT API] - How many times did it log?
+- Any errors?
+
+Show me the raw log output from the last 5 minutes.
+
+═══════════════════════════════════════════════════════════════════════════════
+DO NOT SAY FIXED - SHOW ME PROOF
+═══════════════════════════════════════════════════════════════════════════════
+
+For each bug:
+1. Show me the EXACT code causing the issue
+2. Show me the EXACT fix (before/after)
+3. Show me LOGS proving it works
+
+I will rebuild and verify myself.
+```

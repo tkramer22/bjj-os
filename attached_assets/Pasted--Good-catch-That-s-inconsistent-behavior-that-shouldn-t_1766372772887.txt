@@ -1,0 +1,99 @@
+**Good catch.** That’s inconsistent behavior that shouldn’t happen - same video should always show the same thumbnail.
+
+-----
+
+## 📋 UPDATED MASTER PROMPT - COPY THIS:
+
+```
+iOS APP + PROFESSOR OS - ISSUES TO FIX
+
+Two categories of issues. Fix carefully - ONE AT A TIME. Test after each fix.
+
+═══════════════════════════════════════════════════════════════════════════════
+CATEGORY A: PROFESSOR OS BEHAVIOR (Backend - affects web + iOS)
+═══════════════════════════════════════════════════════════════════════════════
+
+ISSUE A1: PROFESSOR OS REFERS TO USER IN THIRD PERSON
+
+When talking to the user, Professor OS says things like:
+"covering all the fundamentals Todd has been asking about"
+
+This is wrong. Professor OS is talking TO Todd, not ABOUT Todd.
+
+Should say: "covering all the fundamentals YOU'VE been asking about"
+
+Fix the system prompt to instruct Professor OS:
+- Always use "you/your" when addressing the user
+- Never refer to the user by their name in third person
+- The user's name can be used in greetings ("Hey Todd!") but not in 
+  sentences about them ("Todd has been working on..." → "You've been working on...")
+
+ISSUE A2: DUPLICATE VIDEO CARDS IN SINGLE RESPONSE
+
+When asked for ONE video, Professor OS returned the SAME video THREE times
+as separate video cards in the response.
+
+If recommending the same video, it should only show ONE video card, not multiples.
+
+Fix the video parsing/deduplication logic to prevent duplicate video cards.
+
+ISSUE A3: SAME VIDEO SHOWING DIFFERENT THUMBNAILS
+
+The SAME video appeared 3 times in one response:
+- 2 times: Correct YouTube thumbnail
+- 1 time: BJJ/OS fallback placeholder
+
+This is inconsistent. The same video should ALWAYS show the same thumbnail.
+
+Debug why:
+- Is the videoId sometimes missing when parsing the same video?
+- Is there a race condition in thumbnail loading?
+- Is the video token being parsed differently each time?
+
+The thumbnail URL is: https://img.youtube.com/vi/VIDEO_ID/hqdefault.jpg
+
+If the videoId exists in the database, the thumbnail should ALWAYS load.
+Find and fix the root cause of this inconsistency.
+
+═══════════════════════════════════════════════════════════════════════════════
+CATEGORY B: UI/UX ISSUES (Frontend - iOS specific)
+═══════════════════════════════════════════════════════════════════════════════
+
+ISSUE B1: CHAT HISTORY NOT PERSISTENT (CRITICAL)
+
+When navigating away from Chat tab and back, conversation disappears.
+
+This was supposedly fixed earlier but is still broken.
+
+Fix by either:
+- Keeping chat component mounted
+- Persisting state in context
+- Reloading from /api/ai/chat/history when returning to Chat tab
+
+ISSUE B2: SETTINGS PAGE BOTTOM NAV DIFFERENT
+
+Settings page shows text-only nav: "Chat Videos Saved Settings"
+Other pages show icons WITH labels.
+
+Make Settings use the SAME bottom nav component as other pages.
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. B1 - Chat persistence (CRITICAL)
+2. A3 - Inconsistent thumbnails (same video, different results)
+3. A1 - Third person name usage
+4. A2 - Duplicate video cards
+5. B2 - Settings nav consistency
+
+Fix ONE issue at a time. Test after each. Do NOT break the app again.
+
+After each fix:
+npm run build
+npx cap sync ios
+```
+
+-----
+
+**This adds Issue A3 to investigate why the same video shows different thumbnail states. Send this to Replit!**

@@ -1,0 +1,996 @@
+# **🚨 COMPLETE PROFESSOR OS REBUILD - ONE MEGA PROMPT**
+
+Todd, you’re absolutely right. This is broken at a fundamental level. Settings don’t save, chat doesn’t save, videos don’t work. Let me give you ONE comprehensive prompt that fixes EVERYTHING systematically.
+
+-----
+
+## **📋 COPY THIS ENTIRE MEGA PROMPT TO REPLIT:**
+
+```
+═══════════════════════════════════════════════════════════════
+🔥 MISSION: COMPLETE PROFESSOR OS REBUILD
+═══════════════════════════════════════════════════════════════
+
+CRITICAL PROBLEMS TO FIX:
+1. ❌ Settings don't save (height, weight, etc.)
+2. ❌ Chat history doesn't persist
+3. ❌ Profile not auto-populated with user data
+4. ❌ Professor OS doesn't give videos
+5. ❌ Professor OS gives generic Wikipedia advice
+6. ❌ User experience is not engaging
+
+GOAL: Make Professor OS feel like a real coach who knows you,
+remembers everything, and prescribes actual solutions with videos.
+
+THIS IS NOT A PATCH. THIS IS A COMPLETE REBUILD.
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: FIX DATA PERSISTENCE (60 minutes)
+═══════════════════════════════════════════════════════════════
+
+PROBLEM: User saves settings, they don't persist
+ROOT CAUSE: Database updates failing or not committed
+
+─────────────────────────────────────────────────────────────
+
+STEP 1A: Verify database schema for bjj_users table
+
+Run this query:
+```sql
+SELECT column_name, data_type, is_nullable 
+FROM information_schema.columns 
+WHERE table_name = 'bjj_users'
+ORDER BY ordinal_position;
+```
+
+Verify these columns exist:
+
+- height (integer or numeric)
+- weight (integer or numeric)
+- belt_level (varchar)
+- training_frequency (integer)
+- biggest_struggle (text)
+- birth_year (integer)
+
+If ANY missing, we need to add them.
+
+─────────────────────────────────────────────────────────────
+
+STEP 1B: Fix settings save endpoint
+
+File: Find settings update endpoint (likely `server/routes/user.ts` or `server/routes/settings.ts`)
+
+Replace with this BULLETPROOF version:
+
+```typescript
+import { db } from '../db';
+import { bjjUsers } from '../db/schema';
+import { eq } from 'drizzle-orm';
+
+export async function updateUserSettings(req: any, res: any) {
+  const userId = req.user.id;
+  const updates = req.body;
+  
+  console.log('═══════════════════════════════════════');
+  console.log('UPDATING USER SETTINGS');
+  console.log('User ID:', userId);
+  console.log('Updates:', JSON.stringify(updates, null, 2));
+  
+  try {
+    // Validate user exists
+    const user = await db.select()
+      .from(bjjUsers)
+      .where(eq(bjjUsers.id, userId))
+      .limit(1);
+    
+    if (!user[0]) {
+      console.error('❌ User not found:', userId);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    console.log('✅ User found:', user[0].email);
+    
+    // Build update object (only include fields that were sent)
+    const updateData: any = {};
+    
+    if (updates.height !== undefined) updateData.height = parseInt(updates.height);
+    if (updates.weight !== undefined) updateData.weight = parseInt(updates.weight);
+    if (updates.beltLevel !== undefined) updateData.beltLevel = updates.beltLevel;
+    if (updates.trainingFrequency !== undefined) updateData.trainingFrequency = parseInt(updates.trainingFrequency);
+    if (updates.biggestStruggle !== undefined) updateData.biggestStruggle = updates.biggestStruggle;
+    if (updates.birthYear !== undefined) updateData.birthYear = parseInt(updates.birthYear);
+    if (updates.style !== undefined) updateData.style = updates.style;
+    if (updates.goals !== undefined) updateData.goals = updates.goals;
+    
+    console.log('Update data:', JSON.stringify(updateData, null, 2));
+    
+    // Update database
+    await db.update(bjjUsers)
+      .set(updateData)
+      .where(eq(bjjUsers.id, userId));
+    
+    console.log('✅ Database updated successfully');
+    
+    // Verify update worked
+    const updated = await db.select()
+      .from(bjjUsers)
+      .where(eq(bjjUsers.id, userId))
+      .limit(1);
+    
+    console.log('✅ Verified - New values:', {
+      height: updated[0].height,
+      weight: updated[0].weight,
+      beltLevel: updated[0].beltLevel
+    });
+    
+    console.log('═══════════════════════════════════════');
+    
+    res.json({ 
+      success: true,
+      user: updated[0]
+    });
+    
+  } catch (error) {
+    console.error('❌ UPDATE ERROR:', error);
+    console.error('Stack:', error.stack);
+    console.log('═══════════════════════════════════════');
+    res.status(500).json({ 
+      error: 'Failed to update settings',
+      details: error.message 
+    });
+  }
+}
+```
+
+Add route (if not exists):
+
+```typescript
+app.put('/api/user/settings', requireAuth, updateUserSettings);
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 1C: Fix settings page to auto-populate
+
+File: Find settings page component (likely `client/src/pages/settings.tsx`)
+
+Ensure it loads user data on mount:
+
+```typescript
+import { useState, useEffect } from 'react';
+
+export default function Settings() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [profile, setProfile] = useState({
+    name: '',
+    email: '',
+    height: '',
+    weight: '',
+    beltLevel: 'blue',
+    trainingFrequency: 5,
+    biggestStruggle: '',
+    birthYear: 1990,
+    style: 'both'
+  });
+  
+  // Load profile on mount
+  useEffect(() => {
+    loadProfile();
+  }, []);
+  
+  async function loadProfile() {
+    try {
+      const res = await fetch('/api/user/profile');
+      const data = await res.json();
+      
+      console.log('✅ Profile loaded:', data);
+      
+      setProfile({
+        name: data.displayName || data.username || '',
+        email: data.email || '',
+        height: data.height || '',
+        weight: data.weight || '',
+        beltLevel: data.beltLevel || 'blue',
+        trainingFrequency: data.trainingFrequency || 5,
+        biggestStruggle: data.biggestStruggle || '',
+        birthYear: data.birthYear || 1990,
+        style: data.style || 'both'
+      });
+      
+    } catch (error) {
+      console.error('❌ Failed to load profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  async function handleSave() {
+    setSaving(true);
+    
+    try {
+      console.log('💾 Saving settings...', profile);
+      
+      const res = await fetch('/api/user/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profile)
+      });
+      
+      if (!res.ok) {
+        throw new Error('Save failed');
+      }
+      
+      const result = await res.json();
+      console.log('✅ Saved successfully:', result);
+      
+      // Show success message
+      alert('Settings saved successfully!');
+      
+    } catch (error) {
+      console.error('❌ Save failed:', error);
+      alert('Failed to save settings. Check console for details.');
+    } finally {
+      setSaving(false);
+    }
+  }
+  
+  if (loading) {
+    return <div>Loading profile...</div>;
+  }
+  
+  return (
+    <div className="settings-page">
+      <h1>Profile</h1>
+      
+      {/* Name - READ ONLY (from auth) */}
+      <div className="form-field">
+        <label>Name</label>
+        <input 
+          type="text" 
+          value={profile.name}
+          disabled
+          className="readonly"
+        />
+      </div>
+      
+      {/* Email - READ ONLY */}
+      <div className="form-field">
+        <label>Email</label>
+        <input 
+          type="email" 
+          value={profile.email}
+          disabled
+          className="readonly"
+        />
+        <small>Email cannot be changed</small>
+      </div>
+      
+      {/* Belt Level */}
+      <div className="form-field">
+        <label>Belt Level</label>
+        <select 
+          value={profile.beltLevel}
+          onChange={e => setProfile({...profile, beltLevel: e.target.value})}
+        >
+          <option value="white">White</option>
+          <option value="blue">Blue</option>
+          <option value="purple">Purple</option>
+          <option value="brown">Brown</option>
+          <option value="black">Black</option>
+        </select>
+      </div>
+      
+      {/* Training Style */}
+      <div className="form-field">
+        <label>Training Style</label>
+        <select
+          value={profile.style}
+          onChange={e => setProfile({...profile, style: e.target.value})}
+        >
+          <option value="gi">Gi Only</option>
+          <option value="nogi">No-Gi Only</option>
+          <option value="both">Both Gi & No-Gi</option>
+        </select>
+      </div>
+      
+      {/* Biggest Struggle */}
+      <div className="form-field">
+        <label>Biggest Struggle</label>
+        <textarea
+          value={profile.biggestStruggle}
+          onChange={e => setProfile({...profile, biggestStruggle: e.target.value})}
+          placeholder="What technique do you struggle with most?"
+          rows={3}
+        />
+        <small>This helps Professor OS personalize recommendations</small>
+      </div>
+      
+      {/* Physical Stats */}
+      <h2>Physical Stats</h2>
+      <small>This helps Professor OS recommend techniques that match your body type</small>
+      
+      <div className="form-row">
+        <div className="form-field">
+          <label>Height (inches)</label>
+          <input 
+            type="number"
+            value={profile.height}
+            onChange={e => setProfile({...profile, height: e.target.value})}
+            placeholder="e.g. 72 (6 feet)"
+          />
+        </div>
+        
+        <div className="form-field">
+          <label>Weight (pounds)</label>
+          <input 
+            type="number"
+            value={profile.weight}
+            onChange={e => setProfile({...profile, weight: e.target.value})}
+            placeholder="e.g. 180"
+          />
+        </div>
+      </div>
+      
+      {/* Training Frequency */}
+      <div className="form-field">
+        <label>Training Frequency</label>
+        <select
+          value={profile.trainingFrequency}
+          onChange={e => setProfile({...profile, trainingFrequency: parseInt(e.target.value)})}
+        >
+          <option value="1">1x per week</option>
+          <option value="2">2x per week</option>
+          <option value="3">3x per week</option>
+          <option value="4">4x per week</option>
+          <option value="5">5x per week</option>
+          <option value="6">6x per week</option>
+          <option value="7">7x per week</option>
+        </select>
+      </div>
+      
+      {/* Birth Year */}
+      <div className="form-field">
+        <label>Birth Year</label>
+        <input 
+          type="number"
+          value={profile.birthYear}
+          onChange={e => setProfile({...profile, birthYear: parseInt(e.target.value)})}
+          placeholder="e.g. 1990"
+        />
+      </div>
+      
+      {/* Save Button */}
+      <button 
+        onClick={handleSave}
+        disabled={saving}
+        className="save-btn"
+      >
+        {saving ? 'Saving...' : 'Save Changes'}
+      </button>
+    </div>
+  );
+}
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 1D: TEST SETTINGS SAVE
+
+1. Go to /settings
+1. Change height to 72
+1. Change weight to 180
+1. Click Save
+1. Check browser console - should see “✅ Saved successfully”
+1. Refresh page - should still show 72 and 180
+1. Check database:
+
+```sql
+SELECT id, email, height, weight, belt_level 
+FROM bjj_users 
+ORDER BY id DESC 
+LIMIT 1;
+```
+
+Should show your updated values.
+
+If this works, proceed to Phase 2.
+If fails, show me console logs and error messages.
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: FIX CHAT PERSISTENCE (45 minutes)
+═══════════════════════════════════════════════════════════════
+
+PROBLEM: Chat messages disappear when navigating away
+ROOT CAUSE: Messages not being saved to ai_conversation_learning table
+
+─────────────────────────────────────────────────────────────
+
+STEP 2A: Verify chat is being saved to database
+
+After sending a message, run:
+
+```sql
+SELECT 
+  id, user_id, message_text, message_type, conversation_date
+FROM ai_conversation_learning
+WHERE user_id = [YOUR_USER_ID]
+ORDER BY conversation_date DESC
+LIMIT 10;
+```
+
+Replace [YOUR_USER_ID] with your actual user ID.
+
+If NO rows appear → Chat save is broken, proceed to Step 2B
+If rows appear → Loading is broken, proceed to Step 2C
+
+─────────────────────────────────────────────────────────────
+
+STEP 2B: Fix chat message saving
+
+File: `server/routes/ai-chat-claude.ts` (or wherever Claude handler is)
+
+Ensure messages are saved AFTER streaming completes:
+
+```typescript
+// At end of handleClaudeStream function:
+
+console.log('💾 Saving messages to database...');
+
+// Save user message
+await db.insert(aiConversationLearning).values({
+  userId,
+  messageText: message,
+  messageType: 'user_sent',
+  conversationDate: new Date()
+});
+
+// Save AI response
+await db.insert(aiConversationLearning).values({
+  userId,
+  messageText: fullResponse,
+  messageType: 'ai_response',
+  conversationDate: new Date()
+});
+
+console.log('✅ Messages saved successfully');
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 2C: Fix chat loading on page load
+
+File: Chat component (likely `client/src/pages/chat.tsx`)
+
+```typescript
+import { useState, useEffect, useRef } from 'react';
+
+export default function Chat() {
+  const [messages, setMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Load chat history on mount
+  useEffect(() => {
+    loadChatHistory();
+  }, []);
+  
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+  
+  async function loadChatHistory() {
+    try {
+      console.log('📖 Loading chat history...');
+      
+      const res = await fetch('/api/chat/history');
+      const data = await res.json();
+      
+      console.log('✅ Loaded', data.length, 'messages');
+      setMessages(data);
+      
+    } catch (error) {
+      console.error('❌ Failed to load chat history:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  async function sendMessage(text: string) {
+    // Add user message to UI immediately
+    const userMsg = {
+      id: Date.now(),
+      messageType: 'user_sent',
+      messageText: text,
+      conversationDate: new Date()
+    };
+    
+    setMessages(prev => [...prev, userMsg]);
+    
+    // Send to backend
+    try {
+      const res = await fetch('/api/ai/chat/claude/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+      });
+      
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let aiResponse = '';
+      
+      // Add placeholder for AI response
+      const aiMsg = {
+        id: Date.now() + 1,
+        messageType: 'ai_response',
+        messageText: '',
+        conversationDate: new Date()
+      };
+      setMessages(prev => [...prev, aiMsg]);
+      
+      // Stream response
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+            
+            try {
+              const parsed = JSON.parse(data);
+              aiResponse += parsed.text;
+              
+              // Update AI message in real-time
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1].messageText = aiResponse;
+                return updated;
+              });
+            } catch (e) {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+      
+      console.log('✅ Message sent and received');
+      
+    } catch (error) {
+      console.error('❌ Failed to send message:', error);
+    }
+  }
+  
+  if (loading) {
+    return <div className="loading">Loading chat...</div>;
+  }
+  
+  return (
+    <div className="chat-page">
+      <div className="messages">
+        {messages.length === 0 && (
+          <div className="empty-state">
+            <h2>Welcome to Professor OS</h2>
+            <p>Your AI BJJ coach. Ask me anything!</p>
+          </div>
+        )}
+        
+        {messages.map(msg => (
+          <div 
+            key={msg.id} 
+            className={`message ${msg.messageType === 'user_sent' ? 'user' : 'ai'}`}
+          >
+            <div className="message-text">{msg.messageText}</div>
+            <div className="message-time">
+              {new Date(msg.conversationDate).toLocaleTimeString()}
+            </div>
+          </div>
+        ))}
+        
+        <div ref={messagesEndRef} />
+      </div>
+      
+      <div className="input-area">
+        <input 
+          type="text"
+          placeholder="Ask Prof. OS..."
+          onKeyPress={e => {
+            if (e.key === 'Enter' && e.currentTarget.value) {
+              sendMessage(e.currentTarget.value);
+              e.currentTarget.value = '';
+            }
+          }}
+        />
+        <button>Send</button>
+      </div>
+    </div>
+  );
+}
+```
+
+Add backend endpoint for loading history:
+
+```typescript
+// server/routes/chat.ts
+export async function getChatHistory(req: any, res: any) {
+  const userId = req.user.id;
+  
+  try {
+    const messages = await db.select()
+      .from(aiConversationLearning)
+      .where(eq(aiConversationLearning.userId, userId))
+      .orderBy(asc(aiConversationLearning.conversationDate))
+      .limit(50); // Last 50 messages
+    
+    res.json(messages);
+  } catch (error) {
+    console.error('Error loading chat history:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// Add route
+app.get('/api/chat/history', requireAuth, getChatHistory);
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 2D: TEST CHAT PERSISTENCE
+
+1. Send message: “test message 12345”
+1. Navigate away (go to Settings)
+1. Come back to Chat
+1. Should see “test message 12345” still there
+
+If works, proceed to Phase 3.
+If fails, show me console logs.
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: MAKE PROFESSOR OS AMAZING (90 minutes)
+═══════════════════════════════════════════════════════════════
+
+This is the most important phase. We’re going to make Professor OS
+actually USEFUL and ENGAGING.
+
+─────────────────────────────────────────────────────────────
+
+STEP 3A: Add video search to chat flow
+
+File: `server/routes/ai-chat-claude.ts`
+
+Add BEFORE calling Claude:
+
+```typescript
+async function searchVideosForQuery(userMessage: string, userProfile: any): Promise<any[]> {
+  console.log('🔍 Searching videos for:', userMessage);
+  
+  // Extract keywords
+  const keywords = extractKeywords(userMessage);
+  console.log('Keywords:', keywords);
+  
+  if (keywords.length === 0) {
+    return [];
+  }
+  
+  // Build search conditions
+  const searchTerms = keywords.map(k => `%${k.toLowerCase()}%`);
+  
+  try {
+    const videos = await db.execute(sql`
+      SELECT 
+        id, youtube_id, title, instructor_name,
+        technique_name, technique_type, quality_score,
+        duration, thumbnail_url
+      FROM ai_video_knowledge
+      WHERE quality_score >= 7.0
+        AND (
+          ${sql.raw(keywords.map((k, i) => 
+            `LOWER(title) LIKE ${sql.placeholder(`term${i}`)}
+             OR LOWER(technique_name) LIKE ${sql.placeholder(`term${i}`)}
+             OR LOWER(technique_type) LIKE ${sql.placeholder(`term${i}`)}`
+          ).join(' OR '))}
+        )
+      ORDER BY quality_score DESC
+      LIMIT 5
+    `, Object.fromEntries(searchTerms.map((t, i) => [`term${i}`, t])));
+    
+    console.log(`✅ Found ${videos.rows.length} videos`);
+    return videos.rows;
+    
+  } catch (error) {
+    console.error('❌ Video search error:', error);
+    return [];
+  }
+}
+
+function extractKeywords(message: string): string[] {
+  const lower = message.toLowerCase();
+  const keywords: string[] = [];
+  
+  // Guards/Positions
+  if (lower.match(/\b(deep )?half guard\b/)) keywords.push('half guard');
+  if (lower.match(/\bclosed guard\b/)) keywords.push('closed guard');
+  if (lower.match(/\bopen guard\b/)) keywords.push('open guard');
+  if (lower.match(/\bbutterfly\b/)) keywords.push('butterfly');
+  if (lower.match(/\bx guard\b/)) keywords.push('x guard');
+  if (lower.match(/\bde la riva\b/)) keywords.push('de la riva');
+  if (lower.match(/\bmount\b/)) keywords.push('mount');
+  if (lower.match(/\bside control\b/)) keywords.push('side control');
+  if (lower.match(/\bback\b/)) keywords.push('back');
+  
+  // Submissions
+  if (lower.match(/\btriangle\b/)) keywords.push('triangle');
+  if (lower.match(/\barmbar\b/)) keywords.push('armbar');
+  if (lower.match(/\bkimura\b/)) keywords.push('kimura');
+  if (lower.match(/\bguillotine\b/)) keywords.push('guillotine');
+  if (lower.match(/\brear naked choke\b|rnc\b/)) keywords.push('rear naked choke');
+  if (lower.match(/\bcross collar\b/)) keywords.push('cross collar');
+  
+  // Actions
+  if (lower.match(/\bsweep\b/)) keywords.push('sweep');
+  if (lower.match(/\bpass(ing)?\b/)) keywords.push('passing');
+  if (lower.match(/\bescape\b/)) keywords.push('escape');
+  if (lower.match(/\bsubmission\b/)) keywords.push('submission');
+  if (lower.match(/\btakedown\b/)) keywords.push('takedown');
+  
+  return [...new Set(keywords)]; // Remove duplicates
+}
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 3B: Inject videos into Claude context
+
+In handleClaudeStream, BEFORE calling Claude:
+
+```typescript
+// Search for relevant videos
+const relevantVideos = await searchVideosForQuery(message, userProfile[0]);
+
+// Build video context
+let videoContext = '';
+if (relevantVideos.length > 0) {
+  videoContext = `
+
+═══════════════════════════════════════════════════════════════
+🎬 AVAILABLE VIDEOS FOR THIS QUERY
+═══════════════════════════════════════════════════════════════
+
+I found ${relevantVideos.length} highly relevant videos in your library:
+
+${relevantVideos.map((v, i) => `
+${i + 1}. "${v.title}"
+   By: ${v.instructor_name}
+   Quality: ${v.quality_score}/10
+   Category: ${v.technique_type}
+   To recommend this video, use EXACT format:
+   [VIDEO: ${v.title} by ${v.instructor_name} | START: 0:00]
+`).join('\n')}
+
+CRITICAL RULES FOR VIDEO RECOMMENDATIONS:
+1. YOU MUST recommend at least ONE of these videos
+2. Use the EXACT [VIDEO: ...] format shown above
+3. NEVER say "I don't have videos" when I give you videos
+4. Pick THE ONE BEST video for their specific problem
+5. Explain exactly WHY this video solves THEIR issue
+6. Tell them what timestamp to watch (if you know it)
+
+Example of PERFECT response:
+"Let's fix your deep half guard sweeps.
+
+[VIDEO: Deep Half Guard Sweeps by Bernardo Faria | START: 2:15]
+
+Watch from 2:15 - he shows exactly how to control their leg 
+and get underneath before the sweep. That's what you're missing.
+Try it tonight and tell me if the angle feels better."
+`;
+}
+
+// Add to system prompt
+const basePrompt = await buildProfessorOSPrompt(userId, userProfile[0], message);
+const fullPrompt = basePrompt + videoContext;
+
+// Now call Claude with video-enhanced prompt
+const stream = await anthropic.messages.stream({
+  model: 'claude-sonnet-4-20250514',
+  max_tokens: 2048,
+  system: fullPrompt, // Includes videos!
+  messages: conversationHistory
+});
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 3C: Update core Professor OS prompt
+
+File: `server/utils/professorOSPrompt.ts`
+
+Replace buildCoreIdentity() with this ENGAGING version:
+
+```typescript
+function buildCoreIdentity(): string {
+  return `You are Professor OS - ${user.displayName}'s personal BJJ coach.
+
+═══════════════════════════════════════════════════════════════
+WHO YOU ARE
+═══════════════════════════════════════════════════════════════
+
+You're their black belt training partner who:
+- Remembers every conversation and notices patterns they don't see
+- Has perfect memory of their journey (struggles, breakthroughs, goals)
+- Has access to elite BJJ instructional videos from the best coaches
+- Asks diagnostic questions BEFORE prescribing solutions
+- Makes every interaction feel valuable and personalized
+
+You're NOT a search engine or generic advice bot.
+You're their COACH who genuinely cares about their progress.
+
+═══════════════════════════════════════════════════════════════
+HOW YOU COACH
+═══════════════════════════════════════════════════════════════
+
+**ALWAYS DIAGNOSE FIRST:**
+When they mention a problem, ask ONE specific question to understand 
+the root cause before giving advice.
+
+Bad: "Here are 5 triangle choke tips..."
+Good: "Are you losing triangles because they're stacking you, or 
+because you can't break their posture first?"
+
+**PRESCRIBE SPECIFIC SOLUTIONS:**
+Don't give generic advice. Give them THE ONE thing to focus on,
+with a specific video that addresses THEIR exact problem.
+
+Bad: "Focus on posture control and angle"
+Good: "Your problem is the angle. You're staying too flat.
+[VIDEO: Triangle Setup Angles by Marcelo Garcia | START: 1:30]
+Watch 1:30-3:00. He shows exactly how to get the angle BEFORE 
+pulling them down. Try it tonight."
+
+**BE CONVERSATIONAL:**
+- Use contractions (you're, let's, what's)
+- Match their energy (excited? celebrate. frustrated? validate then solve)
+- Keep responses concise unless they ask for depth
+- No bullet points in casual chat (save those for breakdowns)
+
+**NOTICE PATTERNS:**
+If this is the 4th time they've mentioned half guard:
+"Half guard again - that's 4 times this month. Let's systematically 
+fix this instead of band-aiding it."
+
+═══════════════════════════════════════════════════════════════
+VIDEO PRESCRIPTION RULES
+═══════════════════════════════════════════════════════════════
+
+When I give you relevant videos in context:
+1. YOU MUST recommend at least one
+2. Use EXACT format: [VIDEO: Title by Instructor | START: MM:SS]
+3. NEVER say "I don't have videos" if I provided videos
+4. Pick THE ONE video that best solves their specific problem
+5. Explain WHY this video specifically helps THEM
+6. Give them a timestamp if you know the relevant section
+
+Videos are medicine. Prescribe the right one for their symptom.
+
+═══════════════════════════════════════════════════════════════
+BOUNDARIES
+═══════════════════════════════════════════════════════════════
+
+NEVER recommend techniques that risk their injuries.
+ALWAYS check their injury list before suggesting anything.
+If they seem injured, ask about it before continuing.
+
+═══════════════════════════════════════════════════════════════
+
+This is ${user.displayName || 'their'} journey. You're building 
+something together over months and years. Care about their progress.
+Notice patterns. Guide intelligently. Prescribe precisely.`;
+}
+```
+
+─────────────────────────────────────────────────────────────
+
+STEP 3D: TEST PROFESSOR OS
+
+Send these test messages:
+
+TEST 1: “I struggle with triangle chokes”
+EXPECTED: Asks diagnostic question like “Are you losing them
+because they’re stacking you or because you can’t break posture?”
+
+TEST 2: After diagnosis: “I can’t break their posture”
+EXPECTED: Gives specific advice + [VIDEO: …] recommendation
+
+TEST 3: “Show me triangle choke videos”
+EXPECTED: Gives [VIDEO: …] immediately (no diagnostic needed for direct request)
+
+TEST 4: “What’s my height?”
+EXPECTED: Says your actual height from database (e.g., “You’re 6 feet”)
+
+If all 4 tests pass, Professor OS is working correctly.
+If any fail, show me the response and I’ll debug.
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: FINAL TESTING & VERIFICATION (30 minutes)
+═══════════════════════════════════════════════════════════════
+
+Run through this complete user journey:
+
+1. ✅ Go to /settings
+1. ✅ Verify name and email are auto-filled
+1. ✅ Change height to 72, weight to 180
+1. ✅ Change biggest struggle to “half guard retention”
+1. ✅ Click Save
+1. ✅ Refresh page - should still show 72, 180, half guard retention
+1. ✅ Go to /chat
+1. ✅ Say “im back”
+1. ✅ Professor OS should welcome you by name
+1. ✅ Say “I want to learn about deep half guard”
+1. ✅ Professor OS should ask diagnostic question
+1. ✅ Say “any suggestions”
+1. ✅ Professor OS should give [VIDEO: …] recommendation
+1. ✅ Click on video - should play
+1. ✅ Navigate to /settings and back to /chat
+1. ✅ Entire conversation should still be there
+1. ✅ Go to /chat on mobile browser
+1. ✅ Should see same conversation
+
+═══════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════
+
+When complete, show me:
+
+1. ✅ Settings page screenshot showing saved data
+1. ✅ Database query showing your actual saved height/weight
+1. ✅ Chat screenshot showing Professor OS giving [VIDEO: …] recommendation
+1. ✅ Console logs from test conversation
+1. ✅ Confirmation that chat persists after navigation
+
+═══════════════════════════════════════════════════════════════
+CRITICAL SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════
+
+Professor OS must:
+✅ Remember user’s profile (height, struggles, etc.)
+✅ Give specific video recommendations with [VIDEO: …] format
+✅ Ask diagnostic questions before prescribing
+✅ Feel like a real coach, not Wikipedia
+✅ Persist ALL conversations
+✅ Auto-populate settings with user data
+
+If ANY of these fail, THIS IS NOT DONE.
+
+═══════════════════════════════════════════════════════════════
+
+This is not a patch. This is a complete rebuild of the core experience.
+
+Make Professor OS feel like a coach who knows you, remembers everything,
+and actually helps you get better at BJJ.
+
+Start with Phase 1 and report results before proceeding to Phase 2.
+
+```
+---
+
+## **🎯 TODD - THIS IS THE ONE**
+
+This mega prompt:
+1. ✅ Fixes settings save (with verification)
+2. ✅ Fixes chat persistence (loads history on mount)
+3. ✅ Auto-populates profile data
+4. ✅ Connects video library to chat
+5. ✅ Makes Professor OS actually engaging
+6. ✅ Tests everything end-to-end
+
+**Copy the entire prompt above to Replit Agent and let it work through all 4 phases.**
+
+This is not incremental fixes. This is a **complete systematic rebuild** of the core experience.
+
+**Ready to launch?** 🚀​​​​​​​​​​​​​​​​
+```

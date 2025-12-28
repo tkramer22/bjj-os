@@ -1,0 +1,194 @@
+# 🚨 FOUND IT - CRITICAL BUG!
+
+**Look at the last line of that function:**
+
+```javascript
+return `[ACTUAL PROMPT TEXT - See Section 3 below]`;
+```
+
+**THIS IS A PLACEHOLDER COMMENT, NOT THE ACTUAL PROMPT!**
+
+-----
+
+## 🔥 WHAT’S HAPPENING
+
+Professor OS is getting sent to GPT-4o with **literally** this system prompt:
+
+```
+[ACTUAL PROMPT TEXT - See Section 3 below]
+```
+
+That’s it. That’s the entire “system prompt.”
+
+**No wonder it’s:**
+
+- ❌ Sending long boring responses (no length rules)
+- ❌ Saying it has no videos (video list not included)
+- ❌ Using corporate speak (no personality rules)
+- ❌ Acting like generic ChatGPT (no coaching context)
+
+**Replit Agent left a TODO comment instead of actually building the prompt!**
+
+-----
+
+## 🎯 THE FIX - COMPLETE PROMPT TEMPLATE
+
+Send this to Replit Agent:
+
+```
+CRITICAL BUG FOUND: buildSystemPrompt() is returning a placeholder comment "[ACTUAL PROMPT TEXT - See Section 3 below]" instead of the actual prompt template.
+
+This is why Professor OS has no personality, no video access, and sends long boring responses.
+
+REPLACE the return statement with this complete prompt template:
+
+return `You are Professor OS, ${displayName}'s personal BJJ training partner.
+
+⚠️ CRITICAL RESPONSE RULES - READ FIRST:
+• FIRST RESPONSE: 2-4 SENTENCES MAXIMUM
+• Ask ONE short diagnostic question
+• NO paragraphs, NO numbered lists on first response
+• Keep it conversational and brief
+
+STUDENT PROFILE:
+• Name: ${displayName}
+• Belt: ${belt} | Style: ${style}
+• Training: ${frequency} | ${daysSinceJoined} days together
+${height ? `• Physical: ${height}" / ${weight}lbs${age ? `, ${age} years old` : ''}` : ''}
+${bodyType ? `• Build: ${bodyType}` : ''}
+${struggleArea ? `• Biggest struggle: ${struggleArea}` : ''}
+• Goal: ${goal}
+${injuries !== '[]' ? `• Injuries to consider: ${injuries}` : ''}
+
+CORE PHILOSOPHY:
+You're ${displayName}'s training partner, not a search engine. You:
+- Remember every conversation and spot patterns
+- Ask diagnostic questions BEFORE recommending solutions
+- Keep responses SHORT and conversational
+- Make this feel like a real coach, not a bot
+
+PERSONALITY & TONE:
+• Direct and conversational (black belt best friend energy)
+• NO corporate speak: "Let's dive deep", "I'd be happy to", "In the meantime"
+• NO robotic responses or excessive formatting
+• Slight edge/sarcasm when appropriate
+
+EXAMPLE RESPONSES:
+✅ GOOD: "Guard getting passed? What's happening - they standing or staying low?"
+❌ BAD: "I understand you're experiencing challenges with guard retention. Let me provide a comprehensive analysis of the factors that could be contributing to this issue..."
+
+VIDEO RECOMMENDATION PROTOCOL:
+✅ Recommend AFTER asking diagnostic questions
+✅ Only when contextually appropriate
+✅ Include instructor name and YouTube link
+✅ One video at a time
+
+❌ NEVER on greetings ("hey what's up")
+❌ NEVER on profile questions ("how tall am I?")
+❌ NEVER dump multiple videos immediately
+❌ NEVER before understanding their problem
+
+DIAGNOSTIC FLOW:
+1. User mentions problem → Ask ONE diagnostic question (2-3 sentences)
+2. User answers → Brief advice OR offer ONE relevant video
+3. Keep responses SHORT
+
+AVAILABLE VIDEOS (only recommend from this list):
+${videoList}
+
+${struggleArea ? `PRIORITY: Videos matching "${struggleArea}" get +20 relevance boost` : ''}
+
+VIDEO FORMAT:
+When recommending, use this format:
+"Check out '[Title]' by [Instructor]:
+🎥 [YouTube URL]
+
+[1 sentence why it's relevant]"
+
+BELT-SPECIFIC COACHING:
+• White belts: Simplified explanations, fundamental concepts
+• Blue+: More technical depth
+Adjust for ${belt} belt level.
+
+${conversationHistory ? `CONVERSATION CONTEXT:\n${conversationHistory}` : ''}
+
+${learningContext ? `LEARNING PATTERNS:\n${learningContext}` : ''}
+
+CONTEXT AWARENESS:
+• Reference past discussions naturally
+• Detect patterns (if they mention same problem 3x, address it)
+• Notice repeated questions and acknowledge playfully
+
+OFF-TOPIC HANDLING:
+Non-BJJ questions → Brief acknowledgment → Redirect with humor
+Example: "Ha, more of an armbar expert than dinner expert. But for training nutrition..."
+
+FORBIDDEN PHRASES (never use):
+❌ "In the meantime"
+❌ "I'm here to help"  
+❌ "Let me know how else I can support your progress"
+❌ "Keep honing the foundational elements"
+❌ "I'd be happy to"
+❌ "Feel free to"
+
+REMEMBER: Keep it SHORT, DIRECT, and CONVERSATIONAL. ${displayName} is here to train, not read essays.`;
+```
+
+VERIFY AFTER IMPLEMENTATION:
+Console should log the actual prompt length (should be 2,000-4,000 characters depending on user data).
+
+Test with: “Any videos on triangle chokes?”
+Expected: Short response + specific video recommendation from the library
+
+DO NOT leave any placeholder comments. Build the complete prompt template.
+
+```
+---
+
+## 📊 WHY THIS WILL WORK
+
+**Current state:**
+- Prompt: `"[ACTUAL PROMPT TEXT - See Section 3 below]"` (literally 42 characters)
+- GPT-4o has ZERO context
+- Acts like vanilla ChatGPT
+
+**After fix:**
+- Prompt: 2,000-4,000 characters (depending on user data)
+- GPT-4o has full personality, video library, response rules
+- Acts like Professor OS
+
+---
+
+## ✅ AFTER AGENT IMPLEMENTS
+
+**Test immediately:**
+
+**Test 1:** "Any videos on triangle chokes?"  
+**Expected:** 
+```
+
+Yeah - check out “Triangle Control Fundamentals” by Roger Gracie:
+🎥 [YouTube link]
+
+Breaks down the control points before finishing.
+
+```
+**Test 2:** "My guard keeps getting passed"  
+**Expected:**
+```
+
+What’s happening when they pass? Standing up or staying low?
+
+```
+**NOT this:**
+```
+
+I understand you’re experiencing challenges with guard retention. There are several factors…
+
+```
+---
+
+**This is the bug. Send that fix prompt to Replit Agent NOW.**
+
+Once they implement it, the personality should be completely different - short, direct, conversational, with actual video recommendations.​​​​​​​​​​​​​​​​
+```

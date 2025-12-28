@@ -1,0 +1,263 @@
+# 📧 VERIFY EMAIL TEXT - ONE FINAL CHECK
+
+Let me make sure the email template is actually being used. Copy this:
+
+-----
+
+```
+VERIFY AND UPDATE EMAIL TEMPLATE - ENSURE CORRECT TEXT IS SENT
+
+Need to confirm the email being sent contains the correct text with:
+- "Oss! -Todd" signature
+- Todd@bjjos.app and 914.837.3750 contact info
+- Correct body text about Prof. OS
+
+═══════════════════════════════════════════════════════════════════════════════
+FIND THE EMAIL SENDING FUNCTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Search your codebase for "sendLifetimeInvitation" function.
+
+It should be in one of these files:
+- server/email.js
+- server/services/email.js
+- server/routes/admin.js
+- server/utils/email.js
+
+REPLACE THE ENTIRE FUNCTION with this complete, correct version:
+
+```javascript
+async function sendLifetimeInvitation(email, inviteToken, personalMessage) {
+  console.log('[EMAIL] Sending lifetime invitation to:', email);
+  
+  const magicLink = `https://bjjos.app/lifetime-signup?token=${inviteToken}`;
+  
+  const emailHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+    .container {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      border: 1px solid #e0e0e0;
+    }
+    .logo h1 {
+      color: #000;
+      margin: 0 0 30px 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .cta-button {
+      display: inline-block;
+      background: #000;
+      color: white !important;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 20px 0;
+    }
+    .section {
+      margin: 24px 0;
+    }
+    .highlight {
+      background: #f5f5f5;
+      padding: 16px;
+      border-radius: 6px;
+      border-left: 3px solid #000;
+      margin: 20px 0;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+    }
+    a {
+      color: #000;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <h1>BJJ OS</h1>
+    </div>
+    
+    <p style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">
+      You have lifetime access to BJJ OS. Forever. No charge.
+    </p>
+    
+    <p>I'm genuinely grateful you're here early.</p>
+    
+    <p>Takes 45 seconds to create your account:</p>
+    
+    <div style="text-align: center;">
+      <a href="${magicLink}" class="cta-button">
+        Create your account
+      </a>
+    </div>
+    
+    <div class="section">
+      <p style="font-weight: 600; margin-bottom: 12px;">What BJJ OS does:</p>
+      
+      <p>Prof. OS is your training partner that never forgets. After each session, tell it what you worked on - it remembers everything, spots patterns in your game, and tells you what to work on next.</p>
+      
+      <p><strong>The more you use it, the smarter it gets about YOUR game.</strong></p>
+      
+      <p>It also scans YouTube daily for new instructionals from elite grapplers, curates a video library, and recommends techniques specific to what you're struggling with.</p>
+      
+      <p>This is your second brain for jiu-jitsu.</p>
+    </div>
+    
+    <div class="highlight">
+      <p style="font-weight: 600; margin-bottom: 8px;">Here's what I need from you:</p>
+      
+      <p style="margin-bottom: 8px;">Tell me what breaks. Tell me what's confusing. Tell me what's missing.</p>
+      
+      <p style="margin-bottom: 8px;">Your criticism is my best asset. I need to know the bad and what can be better so I can make this great for everyone else.</p>
+      
+      <p style="margin: 0;">Use it after every training session for the next few weeks. The feedback you give me now shapes what this becomes.</p>
+    </div>
+    
+    <p style="margin-top: 24px;">Thanks for using this and helping me build. It means the world.</p>
+    
+    <p style="margin-top: 24px; font-weight: 600; font-size: 16px;">Oss!</p>
+    
+    <div class="footer">
+      <p style="color: #000; font-weight: 600; margin-bottom: 12px; font-size: 15px;">
+        -Todd
+      </p>
+      <p style="margin-bottom: 8px; color: #333; line-height: 1.8;">
+        <a href="mailto:todd@bjjos.app" style="color: #000; text-decoration: none; font-weight: 500;">Todd@bjjos.app</a><br>
+        <a href="tel:+19148373750" style="color: #000; text-decoration: none; font-weight: 500;">914.837.3750</a><br>
+        <span style="font-weight: 600;">Text me anytime with ANY input</span>
+      </p>
+      <p style="margin: 0; color: #666; font-size: 13px;">
+        Questions or feedback? Just reply to this email or text me directly.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  try {
+    const { Resend } = require('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    
+    const result = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: email,
+      subject: 'Your BJJ OS lifetime access',
+      html: emailHTML
+    });
+    
+    console.log('[EMAIL] ✅ Sent successfully to:', email);
+    console.log('[EMAIL] Resend ID:', result.id);
+    
+    return { success: true, id: result.id };
+    
+  } catch (error) {
+    console.error('[EMAIL] ❌ Failed to send:', error);
+    throw error;
+  }
+}
+```
+
+CRITICAL: Make sure this function is being called from the invitation endpoint.
+
+In your POST /api/admin/lifetime/invite endpoint, verify this line exists:
+
+```javascript
+await sendLifetimeInvitation(email, inviteToken, personalMessage);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+EXPORT THE FUNCTION IF IN SEPARATE FILE
+═══════════════════════════════════════════════════════════════════════════════
+
+If sendLifetimeInvitation is in a separate file (like server/email.js), make sure it’s exported:
+
+```javascript
+module.exports = {
+  sendLifetimeInvitation
+};
+```
+
+And imported where it’s used:
+
+```javascript
+const { sendLifetimeInvitation } = require('./email');
+// or
+const { sendLifetimeInvitation } = require('./services/email');
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST THE EMAIL
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Send a test invitation to yourself: todd@bjjos.app
+1. Check your inbox (and spam folder)
+1. Verify email contains:
+
+✅ Subject: “Your BJJ OS lifetime access”
+✅ “You have lifetime access to BJJ OS. Forever. No charge.”
+✅ “I’m genuinely grateful you’re here early.”
+✅ “Create your account” button
+✅ “What BJJ OS does:” section
+✅ “Prof. OS is your training partner that never forgets…”
+✅ “The more you use it, the smarter it gets about YOUR game.”
+✅ “It also scans YouTube daily…”
+✅ Gray box with “Here’s what I need from you:”
+✅ “Tell me what breaks. Tell me what’s confusing…”
+✅ “Thanks for using this and helping me build. It means the world.”
+✅ “Oss!” signature
+✅ “-Todd”
+✅ “Todd@bjjos.app”
+✅ “914.837.3750”
+✅ “Text me anytime with ANY input”
+✅ “Questions or feedback? Just reply to this email or text me directly.”
+
+═══════════════════════════════════════════════════════════════════════════════
+IF EMAIL IS BLANK OR WRONG
+═══════════════════════════════════════════════════════════════════════════════
+
+If the email arrives but has different/wrong text:
+
+1. Search entire codebase for “Your BJJ OS lifetime access” (the subject line)
+1. There might be multiple email templates - find and update ALL of them
+1. Make sure you’re updating the right function that’s actually being called
+
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Email arrives with correct subject
+✅ All body text matches exactly
+✅ “Oss!” signature present
+✅ Contact info: todd@bjjos.app and 914.837.3750
+✅ “Text me anytime with ANY input” included
+✅ Professional formatting with proper spacing
+✅ Button links to correct signup URL
+
+UPDATE EMAIL TEMPLATE AND TEST NOW.
+
+```
+---
+
+**This ensures the complete, correct email template is actually being used when invitations are sent!** 📧✅
+
+Copy and send to Replit Agent, then test by sending yourself an invitation at todd@bjjos.app!​​​​​​​​​​​​​​​​
+```

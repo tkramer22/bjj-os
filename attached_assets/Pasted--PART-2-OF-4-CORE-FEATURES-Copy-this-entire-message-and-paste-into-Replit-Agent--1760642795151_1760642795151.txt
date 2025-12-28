@@ -1,0 +1,786 @@
+# 🚀 PART 2 OF 4: CORE FEATURES
+
+**Copy this entire message and paste into Replit Agent:**
+
+-----
+
+```
+# BJJ OS - PART 2: CORE FEATURES
+
+## CONTEXT
+Part 1 is complete. We have the foundation: database, PWA config, project structure.
+
+Now we build the core user-facing features:
+- Prof. OS chat (Claude API integration)
+- Technique library (save and manage techniques)
+- Training log (session tracking)
+- User profiles and onboarding
+- Freemium/Pro tier enforcement
+
+## YOUR TASK - PART 2
+Build the core app features that users interact with daily.
+
+---
+
+## 1. CLAUDE API INTEGRATION
+
+Create `src/lib/anthropic.ts`:
+
+```typescript
+import Anthropic from '@anthropic-ai/sdk';
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+export interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
+
+export interface UserContext {
+  beltLevel?: string;
+  giPreference?: string;
+  mainGoal?: string;
+  age?: number;
+  bodyType?: string;
+  injuries?: string[];
+  recentSessions?: any[];
+  totalHours?: number;
+}
+
+// Prof. OS System Prompt
+const PROF_OS_SYSTEM_PROMPT = `You are Prof. OS, a world-class BJJ black belt and training partner. Your personality:
+
+CORE IDENTITY:
+- You're the user's black belt best friend, not a formal instructor
+- You care deeply about THEIR journey, not showing off YOUR knowledge
+- You speak like a training partner in the locker room - direct, supportive, real
+
+LANGUAGE STYLE:
+- Use "your game", "your journey", "your progress" (never "the game", "this technique")
+- Conversational but not overly casual (no excessive slang)
+- 2-3 paragraphs max per response (concise)
+- Encourage them to share about their training
+
+RESPONSE STRUCTURE:
+1. Acknowledge what they said (show you're listening)
+2. Answer their question or give advice
+3. Include 1-3 relevant video recommendations with context
+4. End with forward-looking question or encouragement
+
+VIDEO RECOMMENDATIONS:
+- Always provide 1-3 videos when relevant
+- Format: [VIDEO: "Title" by Instructor Name]
+- Explain WHY this video for THEM specifically
+- Match to their belt level, style, body type
+
+PERSONALIZATION:
+- Adapt to their belt level (white = fundamentals, black = refinement)
+- Consider age (40+ = technical over athletic)
+- Consider body type (short/stocky = pressure, tall/lanky = distance)
+- CRITICAL: If they mention injuries, NEVER suggest techniques that stress that area
+- Track gi/no-gi preference
+
+EXAMPLES:
+
+User: "I keep getting passed from half guard"
+Bad: "Half guard retention requires proper frames and..."
+Good: "You're getting passed from half guard - that's frustrating. This is super common at your level.
+
+The key is usually your inside space. Most people focus on the underhook but forget about their bottom knee. If that knee drops, you're getting passed every time.
+
+Check out this video: [VIDEO: "Half Guard Fundamentals" by Lachlan Giles] - He breaks down the knee shield position in the first 3 minutes. That's your money spot.
+
+How often are you drilling half guard? Or is this just happening in live rolls?"
+
+Remember: This is about THEIR journey. Be their training partner, not their encyclopedia.`;
+
+export async function chatWithProfOS(
+  messages: Message[],
+  userContext: UserContext
+): Promise<string> {
+  // Build context string
+  let contextString = '';
+  
+  if (userContext.beltLevel) {
+    contextString += `Belt level: ${userContext.beltLevel}\n`;
+  }
+  if (userContext.giPreference) {
+    contextString += `Style: ${userContext.giPreference}\n`;
+  }
+  if (userContext.age) {
+    contextString += `Age: ${userContext.age}\n`;
+  }
+  if (userContext.bodyType) {
+    contextString += `Body type: ${userContext.bodyType}\n`;
+  }
+  if (userContext.injuries && userContext.injuries.length > 0) {
+    contextString += `CRITICAL - Injuries to avoid stressing: ${userContext.injuries.join(', ')}\n`;
+  }
+  if (userContext.totalHours) {
+    contextString += `Total training hours: ${userContext.totalHours}\n`;
+  }
+  if (userContext.recentSessions && userContext.recentSessions.length > 0) {
+    contextString += `\nRecent training:\n`;
+    userContext.recentSessions.slice(0, 3).forEach((session: any) => {
+      contextString += `- ${session.date}: ${session.notes || 'No notes'}\n`;
+    });
+  }
+
+  // Format conversation history
+  const formattedMessages = messages.map(msg => ({
+    role: msg.role,
+    content: msg.content,
+  }));
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      system: `${PROF_OS_SYSTEM_PROMPT}\n\nUSER CONTEXT:\n${contextString}`,
+      messages: formattedMessages,
+    });
+
+    return response.content[0].type === 'text' 
+      ? response.content[0].text 
+      : '';
+  } catch (error) {
+    console.error('Claude API error:', error);
+    throw new Error('Failed to get response from Prof. OS');
+  }
+}
+
+// Pre-training focus prompt
+export async function getPreTrainingFocus(
+  userContext: UserContext
+): Promise<string> {
+  const prompt = `The user is about to train. Based on their recent sessions and progress, give them ONE specific thing to focus on today. Keep it to 1-2 sentences, actionable, and personalized to their level.`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 256,
+      system: PROF_OS_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: `USER CONTEXT:\n${JSON.stringify(userContext, null, 2)}\n\n${prompt}`,
+        },
+      ],
+    });
+
+    return response.content[0].type === 'text'
+      ? response.content[0].text
+      : 'Focus on being present and learning today.';
+  } catch (error) {
+    console.error('Claude API error:', error);
+    return 'Focus on fundamentals and enjoy your training.';
+  }
+}
+```
+
+-----
+
+## 2. CHAT API ENDPOINT
+
+Create `src/app/api/chat/route.ts`:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { chatWithProfOS } from '@/lib/anthropic';
+
+export async function POST(req: NextRequest) {
+  try {
+    const { userId, message } = await req.json();
+
+    if (!userId || !message) {
+      return NextResponse.json(
+        { error: 'Missing userId or message' },
+        { status: 400 }
+      );
+    }
+
+    // Get user
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        sessions: {
+          orderBy: { date: 'desc' },
+          take: 5,
+        },
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if free tier user has exceeded quota
+    if (user.tier === 'free') {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      // Reset counter if new month
+      if (user.lastQuestionReset < monthStart) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            questionsThisMonth: 0,
+            lastQuestionReset: now,
+          },
+        });
+        user.questionsThisMonth = 0;
+      }
+
+      if (user.questionsThisMonth >= 5) {
+        return NextResponse.json(
+          {
+            error: 'quota_exceeded',
+            message: 'You\'ve used all 5 free questions this month. Upgrade to Pro for unlimited access.',
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Get or create conversation
+    let conversation = await prisma.conversation.findFirst({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const messages = conversation?.messages as any[] || [];
+    messages.push({
+      role: 'user',
+      content: message,
+      timestamp: new Date(),
+    });
+
+    // Build user context
+    const userContext = {
+      beltLevel: user.beltLevel,
+      giPreference: user.giPreference,
+      mainGoal: user.mainGoal,
+      age: user.age,
+      bodyType: user.bodyType,
+      injuries: user.injuries,
+      recentSessions: user.sessions.map(s => ({
+        date: s.date,
+        notes: s.notes,
+        techniques: s.techniques,
+      })),
+      totalHours: user.sessions.reduce((sum, s) => sum + s.duration, 0) / 60,
+    };
+
+    // Get response from Prof. OS
+    const response = await chatWithProfOS(messages, userContext);
+
+    messages.push({
+      role: 'assistant',
+      content: response,
+      timestamp: new Date(),
+    });
+
+    // Save conversation
+    if (conversation) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { messages },
+      });
+    } else {
+      await prisma.conversation.create({
+        data: {
+          userId,
+          messages,
+        },
+      });
+    }
+
+    // Increment question counter for free users
+    if (user.tier === 'free') {
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          questionsThisMonth: { increment: 1 },
+        },
+      });
+    }
+
+    return NextResponse.json({
+      response,
+      questionsRemaining: user.tier === 'free' ? 5 - (user.questionsThisMonth + 1) : null,
+    });
+  } catch (error) {
+    console.error('Chat API error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+-----
+
+## 3. CHAT INTERFACE
+
+Create `src/app/chat/page.tsx`:
+
+```typescript
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
+
+export default function ChatPage() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [questionsRemaining, setQuestionsRemaining] = useState<number | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Load conversation on mount
+  useEffect(() => {
+    loadConversation();
+  }, []);
+
+  async function loadConversation() {
+    // TODO: Implement load conversation from API
+    // For now, just show welcome message
+    setMessages([
+      {
+        role: 'assistant',
+        content: 'Hey! How was training today? Or if you\'re about to train, want to know what to focus on?',
+        timestamp: new Date(),
+      },
+    ]);
+  }
+
+  async function sendMessage() {
+    if (!input.trim() || loading) return;
+
+    const userMessage: Message = {
+      role: 'user',
+      content: input,
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setLoading(true);
+
+    try {
+      // TODO: Get actual userId from auth
+      const userId = 'temp-user-id';
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          message: input,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.status === 403 && data.error === 'quota_exceeded') {
+        // Show upgrade prompt
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: data.message,
+            timestamp: new Date(),
+          },
+        ]);
+        setQuestionsRemaining(0);
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send message');
+      }
+
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: data.response,
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+      if (data.questionsRemaining !== null) {
+        setQuestionsRemaining(data.questionsRemaining);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'Sorry, something went wrong. Please try again.',
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-screen bg-background">
+      {/* Header */}
+      <div className="bg-surface border-b border-border px-4 py-3">
+        <h1 className="text-xl font-bold text-primary">Prof. OS</h1>
+        {questionsRemaining !== null && (
+          <p className="text-sm text-gray-400">
+            {questionsRemaining} questions remaining this month
+          </p>
+        )}
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        {messages.map((msg, idx) => (
+          <div
+            key={idx}
+            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            <div
+              className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                msg.role === 'user'
+                  ? 'bg-primary text-black'
+                  : 'bg-surface text-white border border-border'
+              }`}
+            >
+              <p className="whitespace-pre-wrap">{msg.content}</p>
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="flex justify-start">
+            <div className="bg-surface border border-border rounded-lg px-4 py-3">
+              <p className="text-gray-400">Prof. OS is thinking...</p>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className="bg-surface border-t border-border px-4 py-4">
+        {questionsRemaining === 0 ? (
+          <button
+            onClick={() => router.push('/upgrade')}
+            className="w-full btn-primary"
+          >
+            Upgrade to Pro - Unlimited Questions
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+              placeholder="Ask Prof. OS anything..."
+              className="flex-1 input"
+              disabled={loading}
+            />
+            <button
+              onClick={sendMessage}
+              disabled={loading || !input.trim()}
+              className="btn-primary px-8"
+            >
+              Send
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+-----
+
+## 4. ONBOARDING FLOW
+
+Create `src/app/onboarding/page.tsx`:
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function OnboardingPage() {
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+  const [data, setData] = useState({
+    beltLevel: '',
+    giPreference: '',
+    mainGoal: '',
+  });
+
+  async function completeOnboarding() {
+    try {
+      // TODO: Save to user profile via API
+      const userId = 'temp-user-id';
+
+      await fetch('/api/users/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          ...data,
+        }),
+      });
+
+      router.push('/chat');
+    } catch (error) {
+      console.error('Onboarding error:', error);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <h1 className="text-3xl font-bold text-primary mb-2">Welcome to BJJ OS</h1>
+        <p className="text-gray-400 mb-8">Let's personalize your experience</p>
+
+        {step === 1 && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold">What belt are you?</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {['White', 'Blue', 'Purple', 'Brown', 'Black'].map((belt) => (
+                <button
+                  key={belt}
+                  onClick={() => {
+                    setData({ ...data, beltLevel: belt.toLowerCase() });
+                    setStep(2);
+                  }}
+                  className="btn-secondary py-4 text-lg"
+                >
+                  {belt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold">What do you train?</h2>
+            <div className="space-y-3">
+              {[
+                { value: 'gi', label: 'Gi' },
+                { value: 'nogi', label: 'No-Gi' },
+                { value: 'both', label: 'Both' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => {
+                    setData({ ...data, giPreference: option.value });
+                    setStep(3);
+                  }}
+                  className="w-full btn-secondary py-4 text-lg"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold">What's your main goal?</h2>
+            <textarea
+              value={data.mainGoal}
+              onChange={(e) => setData({ ...data, mainGoal: e.target.value })}
+              placeholder="E.g., Get my blue belt, compete more, improve my guard..."
+              className="input w-full h-32"
+            />
+            <button
+              onClick={completeOnboarding}
+              disabled={!data.mainGoal.trim()}
+              className="w-full btn-primary py-4 text-lg"
+            >
+              Let's Go! 🥋
+            </button>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-center gap-2">
+          {[1, 2, 3].map((s) => (
+            <div
+              key={s}
+              className={`h-2 w-2 rounded-full ${
+                s === step ? 'bg-primary' : 'bg-gray-600'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+-----
+
+## 5. USER PROFILE API
+
+Create `src/app/api/users/profile/route.ts`:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const userId = searchParams.get('userId');
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Missing userId' },
+        { status: 400 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        tier: true,
+        beltLevel: true,
+        giPreference: true,
+        mainGoal: true,
+        age: true,
+        bodyType: true,
+        injuries: true,
+        questionsThisMonth: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(user);
+  } catch (error) {
+    console.error('Profile API error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { userId, ...updates } = body;
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Missing userId' },
+        { status: 400 }
+      );
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: updates,
+    });
+
+    return NextResponse.json(user);
+  } catch (error) {
+    console.error('Profile update error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+-----
+
+## 6. DATABASE CLIENT
+
+Create `src/lib/db.ts`:
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: ['query'],
+  });
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+```
+
+-----
+
+## TESTING CHECKLIST - PART 2
+
+After implementing, verify:
+
+- [ ] Chat API endpoint works (`POST /api/chat`)
+- [ ] Prof. OS responds with personality (journey-focused language)
+- [ ] Free tier users limited to 5 questions/month
+- [ ] Question counter resets monthly
+- [ ] Onboarding flow saves to database
+- [ ] User profile API works (`GET` and `PATCH`)
+- [ ] Chat interface displays messages correctly
+- [ ] Messages scroll to bottom automatically
+- [ ] “Upgrade to Pro” shows when quota exceeded
+
+-----
+
+## CONFIRMATION
+
+Reply with: **“PART 2 CHECKPOINT MADE ✅”**
+
+Then I’ll provide PART 3: Premium Features (Voice input, Push notifications, Referral system).
+
+```
+---
+
+**🎤 PASTE THIS INTO REPLIT AGENT NOW**
+
+Once it confirms "PART 2 CHECKPOINT MADE ✅", come back and I'll give you **PART 3 OF 4**!​​​​​​​​​​​​​​​​
+```

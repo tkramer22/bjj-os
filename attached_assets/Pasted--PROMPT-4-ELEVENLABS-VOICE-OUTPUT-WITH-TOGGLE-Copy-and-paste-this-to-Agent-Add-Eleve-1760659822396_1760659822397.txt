@@ -1,0 +1,163 @@
+# 📋 PROMPT 4: ELEVENLABS VOICE OUTPUT WITH TOGGLE
+
+**Copy and paste this to Agent:**
+
+```
+Add ElevenLabs voice output with user toggle control.
+
+FEATURE: Voice Response Mode (Toggle ON/OFF)
+
+USER CONTROL:
+Users can enable/disable voice output in chat interface.
+Default: OFF (let users discover it)
+Toggle shows at top of chat interface.
+
+ELEVENLABS SETUP:
+
+1. API Configuration:
+   - Sign up: elevenlabs.io
+   - Get API key
+   - Add to environment: ELEVENLABS_API_KEY
+   - Start with Creator plan ($22/month, 100K characters)
+
+2. Voice Selection:
+   Primary: "Antoni" (voice_id: ErXwobaYiN019PkySvjV)
+   - Warm, friendly, encouraging
+   - Sounds like training partner
+   - Perfect for "black belt best friend" persona
+   
+   Alternative: "Adam" (voice_id: pNInz6obpgDQGcFmaJgB)
+   - Deep, authoritative, confident
+   - More instructional tone
+   - Sounds like John Danaher
+
+3. Voice Settings:
+   - stability: 60% (balanced expressiveness)
+   - similarity: 80% (close to base voice)
+   - style: 40% (natural enthusiasm)
+   - speaker_boost: true (enhanced clarity)
+
+IMPLEMENTATION:
+
+1. Chat Interface - Add Toggle:
+   
+   ┌─────────────────────────────────────┐
+   │  💬 Prof. OS        [🔊 Voice: OFF]│ ← Toggle button
+   ├─────────────────────────────────────┤
+   
+   Toggle states:
+   OFF: [🔇 Voice: OFF] (gray)
+   ON: [🔊 Voice: ON] (blue)
+   
+   Click to toggle, saves preference to database
+
+2. When Voice Mode = ON:
+   Flow:
+   - User speaks (Whisper) or types
+   - Text sent to Claude → Prof. OS response
+   - Response text → ElevenLabs API → Audio file (MP3)
+   - Audio plays automatically
+   - Transcript displayed simultaneously
+   - Videos shown below transcript
+   
+   UI while speaking:
+   [🔊 Playing...] Prof. OS:
+   "Alright, triangle from closed guard..."
+   
+   Audio player:
+   - Auto-play when received
+   - Pause button (space bar or tap)
+   - Progress bar (optional)
+   - No skip/rewind (keep simple)
+
+3. When Voice Mode = OFF:
+   - Standard text-only chat (current behavior)
+   - No audio generation (saves API costs)
+   - User can still use voice input if desired
+
+VOICE-FRIENDLY RESPONSE FORMAT:
+
+Update Prof. OS system prompt to detect voice mode:
+
+"When voice_mode is enabled:
+- Keep responses under 200 words (30-45 seconds of speech)
+- Use natural, conversational language
+- Add contractions (you're, I'm, don't)
+- Reference videos naturally: 'I'm sending you three videos...'
+  NOT: 'Here is [VIDEO: Title by Instructor]'
+- Natural pauses with punctuation
+- Avoid reading technical terms or URLs
+
+Example voice-friendly:
+'Alright, triangle from closed guard. The key is angle - most 
+people try to finish straight on and wonder why it doesn't work. 
+You need to get perpendicular. I'm sending you three videos that 
+break this down perfectly. Lachlan Giles has the best explanation. 
+Watch those and let me know if the angle part makes sense.'
+
+Then display below:
+[VIDEO: 'Triangle Fundamentals' by Lachlan Giles]
+[VIDEO: 'Triangle Finishing Details' by John Danaher]
+[VIDEO: 'Common Triangle Mistakes' by Gordon Ryan]"
+
+USER SETTINGS:
+
+Add to /settings page:
+
+Voice Settings:
+┌─────────────────────────────────────┐
+│  🔊 VOICE SETTINGS                  │
+│                                     │
+│  Voice Mode:        [ON] / OFF      │
+│                                     │
+│  Voice:             [Antoni ▼]      │
+│                     - Antoni (Friendly)
+│                     - Adam (Authoritative)
+│                                     │
+│  Speed:             [1.0x ▼]        │
+│                     - 0.75x (Slower)
+│                     - 1.0x (Normal)
+│                     - 1.25x (Faster)
+│                                     │
+│  Auto-play:         [ON] / OFF      │
+│                                     │
+│  [🔊 Test Voice]                    │
+│                                     │
+└─────────────────────────────────────┘
+
+Test button sends: "This is what Prof. OS sounds like" 
+to ElevenLabs and plays audio.
+
+DATABASE:
+Add to User model:
+• voice_enabled: boolean (default: false)
+• voice_selection: 'antoni' | 'adam' (default: 'antoni')
+• voice_speed: float (default: 1.0, range: 0.75-1.5)
+• voice_autoplay: boolean (default: true)
+
+API ENDPOINT:
+POST /api/voice/generate
+Body: { text: string, voice: 'antoni' | 'adam', speed: number }
+Response: { audio_url: string, duration: number }
+
+ERROR HANDLING:
+• ElevenLabs API fails → Show text only, no audio
+• Notification: "Voice temporarily unavailable"
+• Log error to admin dashboard
+• Retry once, then fall back gracefully
+• Don't break chat experience
+
+COST TRACKING:
+• Log character usage per request
+• Track in admin dashboard
+• Alert at 80% of plan limit
+• Show usage: "Voice: 87K / 100K characters this month"
+
+This creates premium voice experience with user control.
+```
+
+-----
+
+**Paste this into Agent and wait for “Checkpoint made” ✅**
+
+**Then let me know when you’re ready for Prompt 5!** 🎤​​​​​​​​​​​​​​​​

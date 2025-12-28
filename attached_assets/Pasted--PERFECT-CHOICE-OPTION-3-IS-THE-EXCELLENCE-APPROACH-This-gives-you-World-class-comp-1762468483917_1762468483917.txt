@@ -1,0 +1,955 @@
+**PERFECT CHOICE - OPTION 3 IS THE “EXCELLENCE” APPROACH** 🎯
+
+This gives you:
+
+- ✅ World-class comprehensive analysis (all 7+ dimensions)
+- ✅ Clear decision logic (3 paths)
+- ✅ Rich metadata for Professor OS
+- ✅ The sophistication you want
+
+-----
+
+# **📋 STOP & PIVOT: HYBRID 3-PATH + 7-DIMENSIONAL SYSTEM - SEND TO REPLIT AGENT:**
+
+```
+STOP CURRENT WORK - NEW DIRECTION
+
+We're implementing a HYBRID system that combines:
+• 3-path routing for clear decision-making
+• ALL 7 dimensions + YouTube metrics running comprehensively  
+• Rich metadata generation for Professor OS recommendations
+
+This is the "world-class" approach - comprehensive analysis with simple routing.
+
+═══════════════════════════════════════════════════════════════════════════════
+ARCHITECTURE OVERVIEW
+═══════════════════════════════════════════════════════════════════════════════
+
+EVERY video goes through ALL 8 analyses:
+1. Instructor Evaluation (multi-source detection)
+2. Content Quality Analysis (GPT-4)
+3. Unique Value Extraction (GPT-4 comparison to library)
+4. Coverage Balance (library gap analysis)
+5. Emerging Technique Detection (trend analysis)
+6. Skill Progression Mapping (learning path)
+7. User Feedback Loop (performance metrics)
+8. YouTube Engagement Metrics (like rate, comments, signals)
+
+Then route through 3 PATHS for final decision:
+• PATH 1: Elite Instructor → Low bar (trust track record)
+• PATH 2: Metrics-Validated → High engagement can validate unknown
+• PATH 3: Known Quality → Balanced assessment
+
+All dimension results stored as rich metadata for Professor OS.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: BUILD ALL 8 DIMENSION ANALYZERS
+═══════════════════════════════════════════════════════════════════════════════
+
+File: server/services/curation/dimensions/dimension-1-instructor.js
+
+const { Op } = require('sequelize');
+
+async function evaluateInstructor(video) {
+  console.log(`\n🎓 DIMENSION 1: Instructor Evaluation`);
+  
+  // Check channel name
+  let channelInstructor = await db.instructors.findOne({
+    where: { name: { [Op.iLike]: video.channelName } }
+  });
+  
+  // Extract from title
+  let titleInstructors = await extractInstructorsFromText(video.title);
+  
+  // Extract from description
+  let descInstructors = await extractInstructorsFromText(video.description);
+  
+  // Combine and pick highest credibility
+  const allInstructors = [
+    channelInstructor,
+    ...titleInstructors,
+    ...descInstructors
+  ].filter(Boolean);
+  
+  if (allInstructors.length > 0) {
+    const best = allInstructors.sort((a, b) => 
+      b.credibility_score - a.credibility_score
+    )[0];
+    
+    console.log(`   ✅ Found: ${best.name} (${best.tier}, ${best.credibility_score}/100)`);
+    
+    return {
+      name: best.name,
+      tier: best.tier,
+      credibility: best.credibility_score,
+      specialties: best.specialties,
+      auto_accept: best.auto_accept,
+      foundIn: best.source || 'database',
+      boost: best.tier === 'elite' ? 15 : (best.tier === 'high_quality' ? 10 : 0)
+    };
+  }
+  
+  console.log(`   ❓ Unknown: ${video.channelName}`);
+  
+  return {
+    name: video.channelName,
+    tier: 'unknown',
+    credibility: 50,
+    boost: 0
+  };
+}
+
+async function extractInstructorsFromText(text) {
+  if (!text) return [];
+  
+  const allInstructors = await db.instructors.findAll();
+  const found = [];
+  
+  for (const instructor of allInstructors) {
+    const name = instructor.name.toLowerCase();
+    const textLower = text.toLowerCase();
+    
+    // Exact match
+    if (textLower.includes(name)) {
+      found.push({ ...instructor.dataValues, source: 'text_exact' });
+      continue;
+    }
+    
+    // Fuzzy match
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      const patterns = [
+        parts[0] + ' ' + parts[parts.length - 1],
+        parts[0].charAt(0) + '. ' + parts[parts.length - 1],
+        parts[0],
+        parts[parts.length - 1]
+      ];
+      
+      for (const pattern of patterns) {
+        if (textLower.includes(pattern.toLowerCase())) {
+          found.push({ ...instructor.dataValues, source: 'text_fuzzy' });
+          break;
+        }
+      }
+    }
+  }
+  
+  return found;
+}
+
+module.exports = { evaluateInstructor };
+
+
+─────────────────────────────────────────────────────────────────────────────
+
+File: server/services/curation/dimensions/dimension-2-content.js
+
+const OpenAI = require('openai');
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+async function analyzeContentQuality(video) {
+  console.log(`\n📊 DIMENSION 2: Content Quality Analysis`);
+  
+  const analysis = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{
+      role: "system",
+      content: `Analyze BJJ video quality. Score 0-100.
+
+HIGH QUALITY:
+- Specific technique details (grips, angles, timing)
+- Step-by-step breakdown
+- Common mistakes addressed
+- Multiple variations
+- Proper terminology
+
+LOW QUALITY:
+- Vague descriptions
+- No structure
+- Clickbait language
+- Missing details
+- Incomplete
+
+Return JSON:
+{
+  "score": 0-100,
+  "technical_depth": 0-10,
+  "teaching_structure": 0-10,
+  "specificity": 0-10,
+  "reason": "explanation"
+}`
+    }, {
+      role: "user",
+      content: `Title: ${video.title}\n\nDescription: ${video.description}`
+    }],
+    response_format: { type: "json_object" }
+  });
+  
+  const result = JSON.parse(analysis.choices[0].message.content);
+  
+  console.log(`   Score: ${result.score}/100 - ${result.reason}`);
+  
+  return result;
+}
+
+module.exports = { analyzeContentQuality };
+
+
+─────────────────────────────────────────────────────────────────────────────
+
+File: server/services/curation/dimensions/dimension-3-unique-value.js
+
+async function extractUniqueValue(video) {
+  console.log(`\n💎 DIMENSION 3: Unique Value Extraction`);
+  
+  // Identify technique
+  const technique = await identifyTechnique(video);
+  console.log(`   Technique: ${technique.name}`);
+  
+  // Find similar videos in library
+  const similar = await db.videos.findAll({
+    where: {
+      'metadata.primary_technique': technique.name,
+      quality_score: { [Op.gte]: 71 }
+    },
+    limit: 10,
+    order: [['created_at', 'DESC']]
+  });
+  
+  console.log(`   Similar videos in library: ${similar.length}`);
+  
+  if (similar.length === 0) {
+    console.log(`   ✅ First video on this technique`);
+    return {
+      is_unique: true,
+      unique_value: `First ${technique.name} video in library`,
+      should_add: true,
+      boost: 20
+    };
+  }
+  
+  // GPT-4 comparison
+  const analysis = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{
+      role: "system",
+      content: `Compare NEW video to EXISTING library videos.
+
+Determine:
+1. What SPECIFIC detail does new video teach?
+2. What PROBLEM does it address?
+3. How is it DIFFERENT from existing?
+4. Should we ADD or SKIP?
+
+Return JSON:
+{
+  "unique_value": "specific detail",
+  "problem_solved": "what problem",
+  "differentiation": "how different",
+  "should_add": true/false,
+  "reason": "why",
+  "confidence": 0-100
+}`
+    }, {
+      role: "user",
+      content: `
+NEW VIDEO:
+Title: ${video.title}
+Description: ${video.description}
+
+EXISTING LIBRARY (${similar.length}):
+${similar.map((v, i) => `
+${i+1}. "${v.title}" by ${v.instructor}
+   Unique Value: ${v.metadata?.unique_value || 'N/A'}
+`).join('\n')}
+
+Should we add NEW video?`
+    }],
+    response_format: { type: "json_object" }
+  });
+  
+  const result = JSON.parse(analysis.choices[0].message.content);
+  
+  console.log(`   ${result.should_add ? '✅' : '❌'} ${result.reason}`);
+  
+  return {
+    is_unique: result.should_add,
+    unique_value: result.unique_value,
+    problem_solved: result.problem_solved,
+    should_add: result.should_add,
+    confidence: result.confidence,
+    boost: result.should_add ? 15 : -20
+  };
+}
+
+async function identifyTechnique(video) {
+  const analysis = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{
+      role: "system",
+      content: `Extract primary BJJ technique.
+
+Return JSON:
+{
+  "technique": "technique_name",
+  "variation": "specific variation",
+  "position": "starting position",
+  "skill_level": "beginner/intermediate/advanced/expert",
+  "gi_or_nogi": "gi/nogi/both"
+}`
+    }, {
+      role: "user",
+      content: `Title: ${video.title}\nDescription: ${video.description}`
+    }],
+    response_format: { type: "json_object" }
+  });
+  
+  return JSON.parse(analysis.choices[0].message.content);
+}
+
+module.exports = { extractUniqueValue, identifyTechnique };
+
+
+─────────────────────────────────────────────────────────────────────────────
+
+File: server/services/curation/dimensions/dimension-4-coverage.js
+
+async function calculateCoverageScore(techniqueName) {
+  console.log(`\n📚 DIMENSION 4: Coverage Balance`);
+  
+  let coverage = await db.coverage_status.findOne({
+    where: { technique_name: techniqueName }
+  });
+  
+  if (!coverage) {
+    const taxonomy = await db.technique_taxonomy.findOne({
+      where: { technique_name: techniqueName }
+    });
+    
+    coverage = await db.coverage_status.create({
+      technique_name: techniqueName,
+      current_count: 0,
+      target_count: taxonomy?.target_video_count || 50
+    });
+  }
+  
+  const ratio = coverage.current_count / coverage.target_count;
+  
+  let score, boost, isCriticalGap;
+  
+  if (ratio < 0.2) {
+    score = 100;
+    boost = 25;
+    isCriticalGap = true;
+    console.log(`   🚨 Critical gap: ${coverage.current_count}/${coverage.target_count}`);
+  } else if (ratio < 0.5) {
+    score = 80;
+    boost = 15;
+    isCriticalGap = false;
+    console.log(`   ⚠️  Underrepresented: ${coverage.current_count}/${coverage.target_count}`);
+  } else if (ratio < 1.0) {
+    score = 60;
+    boost = 5;
+    isCriticalGap = false;
+    console.log(`   ✅ Good coverage: ${coverage.current_count}/${coverage.target_count}`);
+  } else {
+    score = 40;
+    boost = -10;
+    isCriticalGap = false;
+    console.log(`   📊 Over-represented: ${coverage.current_count}/${coverage.target_count}`);
+  }
+  
+  return {
+    score,
+    boost,
+    isCriticalGap,
+    current: coverage.current_count,
+    target: coverage.target_count,
+    ratio: ratio
+  };
+}
+
+module.exports = { calculateCoverageScore };
+
+
+─────────────────────────────────────────────────────────────────────────────
+
+File: server/services/curation/dimensions/dimension-5-emerging.js
+
+async function detectEmergingTechnique(video) {
+  console.log(`\n🔥 DIMENSION 5: Emerging Technique Detection`);
+  
+  // Extract all techniques mentioned
+  const techniques = await extractAllTechniques(video);
+  
+  // Check against known taxonomy
+  const known = await db.technique_taxonomy.findAll();
+  const knownNames = known.flatMap(t => [t.technique_name, ...(t.aliases || [])]);
+  
+  // Find new terms
+  const newTerms = techniques.filter(t => 
+    !knownNames.includes(t.toLowerCase())
+  );
+  
+  if (newTerms.length === 0) {
+    console.log(`   No new techniques detected`);
+    return { is_emerging: false, boost: 0 };
+  }
+  
+  console.log(`   New terms found: ${newTerms.join(', ')}`);
+  
+  // Check if trending
+  for (const term of newTerms) {
+    const recentVideos = await searchRecentVideos(term, 30);
+    
+    if (recentVideos.length >= 3) {
+      console.log(`   🔥 Emerging: "${term}" (${recentVideos.length} recent videos)`);
+      
+      await db.emerging_techniques.upsert({
+        technique_name: term,
+        video_count: recentVideos.length,
+        status: 'monitoring'
+      });
+      
+      return {
+        is_emerging: true,
+        technique_name: term,
+        evidence: `${recentVideos.length} videos in 30 days`,
+        boost: 20
+      };
+    }
+  }
+  
+  return { is_emerging: false, boost: 0 };
+}
+
+async function extractAllTechniques(video) {
+  const analysis = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{
+      role: "system",
+      content: `Extract ALL BJJ technique names mentioned.
+
+Return JSON array: ["technique1", "technique2"]`
+    }, {
+      role: "user",
+      content: `Title: ${video.title}\nDescription: ${video.description}`
+    }],
+    response_format: { type: "json_object" }
+  });
+  
+  const result = JSON.parse(analysis.choices[0].message.content);
+  return result.techniques || [];
+}
+
+module.exports = { detectEmergingTechnique };
+
+
+─────────────────────────────────────────────────────────────────────────────
+
+File: server/services/curation/dimensions/dimension-6-progression.js
+
+async function mapSkillProgression(video, technique) {
+  console.log(`\n📖 DIMENSION 6: Skill Progression Mapping`);
+  
+  const analysis = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{
+      role: "system",
+      content: `Map video to skill progression.
+
+Return JSON:
+{
+  "skill_level": "beginner/intermediate/advanced/expert",
+  "prerequisites": ["tech1", "tech2"],
+  "builds_toward": ["tech3", "tech4"],
+  "difficulty_factors": ["factor1", "factor2"]
+}`
+    }, {
+      role: "user",
+      content: `Title: ${video.title}\nDescription: ${video.description}`
+    }],
+    response_format: { type: "json_object" }
+  });
+  
+  const result = JSON.parse(analysis.choices[0].message.content);
+  
+  console.log(`   Skill level: ${result.skill_level}`);
+  
+  return result;
+}
+
+module.exports = { mapSkillProgression };
+
+
+─────────────────────────────────────────────────────────────────────────────
+
+File: server/services/curation/dimensions/dimension-7-feedback.js
+
+async function analyzeUserFeedback(videoId) {
+  console.log(`\n⭐ DIMENSION 7: User Feedback Analysis`);
+  
+  const perf = await db.video_performance.findOne({
+    where: { video_id: videoId }
+  });
+  
+  if (!perf) {
+    console.log(`   No feedback data yet (new video)`);
+    return { score: 50, boost: 0, has_data: false };
+  }
+  
+  const score = Math.min(
+    (perf.watch_completion_rate * 25) +
+    ((perf.saved_to_library_count / 100) * 20) +
+    ((perf.noted_helpful_count / 50) * 20) +
+    ((perf.rewatch_count / perf.total_views) * 100 * 15) +
+    (perf.recommendation_success_rate * 20),
+    100
+  );
+  
+  const high_impact = perf.watch_completion_rate > 0.8 && 
+                      perf.saved_to_library_count > 50;
+  
+  console.log(`   Score: ${score.toFixed(0)}/100 (${perf.total_views} views)`);
+  
+  return {
+    score: score,
+    high_impact: high_impact,
+    boost: high_impact ? 10 : 0,
+    has_data: true
+  };
+}
+
+module.exports = { analyzeUserFeedback };
+
+
+─────────────────────────────────────────────────────────────────────────────
+
+File: server/services/curation/dimensions/dimension-8-youtube.js
+
+async function calculateYouTubeMetrics(video, channelData) {
+  console.log(`\n📊 DIMENSION 8: YouTube Engagement Metrics`);
+  
+  const views = parseInt(video.viewCount) || 0;
+  const likes = parseInt(video.likeCount) || 0;
+  const comments = parseInt(video.commentCount) || 0;
+  const channelSubs = parseInt(channelData?.subscriberCount) || 1;
+  
+  const publishedAt = new Date(video.publishedAt);
+  const daysSincePublish = (Date.now() - publishedAt) / 86400000;
+  
+  // Confidence based on sample size
+  let confidence, confidenceMultiplier;
+  if (views < 1000) {
+    confidence = 'LOW';
+    confidenceMultiplier = 0.3;
+  } else if (views < 5000) {
+    confidence = 'MEDIUM';
+    confidenceMultiplier = 0.7;
+  } else {
+    confidence = 'HIGH';
+    confidenceMultiplier = 1.0;
+  }
+  
+  // Engagement rates
+  const likeRate = views > 0 ? likes / views : 0;
+  const commentRate = views > 0 ? comments / views : 0;
+  const viewToSubRatio = channelSubs > 0 ? views / channelSubs : 0;
+  const viewsPerDay = daysSincePublish > 0 ? views / daysSincePublish : 0;
+  
+  // Scoring
+  let likeScore = 0;
+  if (likeRate >= 0.08) likeScore = 100;
+  else if (likeRate >= 0.05) likeScore = 80;
+  else if (likeRate >= 0.03) likeScore = 60;
+  else if (likeRate >= 0.02) likeScore = 40;
+  else likeScore = 20;
+  
+  let commentScore = 0;
+  if (commentRate >= 0.01) commentScore = 100;
+  else if (commentRate >= 0.005) commentScore = 80;
+  else if (commentRate >= 0.002) commentScore = 60;
+  else commentScore = 30;
+  
+  const engagementScore = (likeScore * 0.6) + (commentScore * 0.4);
+  const adjustedScore = engagementScore * confidenceMultiplier;
+  
+  // Special signals
+  const isHiddenGem = channelSubs < 10000 && viewToSubRatio > 2.0;
+  const isViral = viewToSubRatio > 0.5;
+  const isTrending = daysSincePublish < 7 && viewsPerDay > 1000;
+  const isEvergreen = daysSincePublish > 365 && viewsPerDay > 100;
+  
+  console.log(`   Like rate: ${(likeRate * 100).toFixed(2)}% | Score: ${adjustedScore.toFixed(1)}/100`);
+  if (isHiddenGem) console.log(`   🔥 HIDDEN GEM`);
+  if (isViral) console.log(`   🚀 VIRAL`);
+  
+  return {
+    score: adjustedScore,
+    confidence,
+    views, likes, comments,
+    likeRate, commentRate, viewToSubRatio, viewsPerDay,
+    signals: { isHiddenGem, isViral, isTrending, isEvergreen },
+    boost: (isHiddenGem ? 20 : 0) + (isViral ? 10 : 0)
+  };
+}
+
+module.exports = { calculateYouTubeMetrics };
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: BUILD HYBRID 3-PATH ROUTER
+═══════════════════════════════════════════════════════════════════════════════
+
+File: server/services/curation/hybrid-evaluator.js
+
+const { evaluateInstructor } = require('./dimensions/dimension-1-instructor');
+const { analyzeContentQuality } = require('./dimensions/dimension-2-content');
+const { extractUniqueValue, identifyTechnique } = require('./dimensions/dimension-3-unique-value');
+const { calculateCoverageScore } = require('./dimensions/dimension-4-coverage');
+const { detectEmergingTechnique } = require('./dimensions/dimension-5-emerging');
+const { mapSkillProgression } = require('./dimensions/dimension-6-progression');
+const { analyzeUserFeedback } = require('./dimensions/dimension-7-feedback');
+const { calculateYouTubeMetrics } = require('./dimensions/dimension-8-youtube');
+
+async function evaluateVideoHybrid(video, channelData) {
+  
+  console.log(`\n${'═'.repeat(80)}`);
+  console.log(`📹 EVALUATING: "${video.title}"`);
+  console.log(`${'═'.repeat(80)}`);
+  
+  // ═══════════════════════════════════════════════════════════
+  // RUN ALL 8 DIMENSIONS (comprehensive analysis)
+  // ═══════════════════════════════════════════════════════════
+  
+  const dim1 = await evaluateInstructor(video);
+  const dim2 = await analyzeContentQuality(video);
+  const technique = await identifyTechnique(video);
+  const dim3 = await extractUniqueValue(video);
+  const dim4 = await calculateCoverageScore(technique.technique);
+  const dim5 = await detectEmergingTechnique(video);
+  const dim6 = await mapSkillProgression(video, technique.technique);
+  const dim7 = await analyzeUserFeedback(video.videoId);
+  const dim8 = await calculateYouTubeMetrics(video, channelData);
+  
+  // ═══════════════════════════════════════════════════════════
+  // CHECK UNIQUE VALUE FIRST (blocking requirement)
+  // ═══════════════════════════════════════════════════════════
+  
+  if (!dim3.should_add) {
+    console.log(`\n❌ REJECT: ${dim3.reason}`);
+    return {
+      decision: 'REJECT',
+      score: 40,
+      reason: `No unique value: ${dim3.reason}`,
+      metadata: buildMetadata(video, { dim1, dim2, dim3, dim4, dim5, dim6, dim7, dim8, technique })
+    };
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // PATH 1: ELITE INSTRUCTOR
+  // ═══════════════════════════════════════════════════════════
+  
+  console.log(`\n🛤️  Checking PATH 1: Elite Instructor...`);
+  
+  if (dim1.tier === 'elite') {
+    console.log(`   ✅ Elite: ${dim1.name}`);
+    
+    if (dim2.score >= 60) {
+      console.log(`   ✅ Content passes: ${dim2.score}/100`);
+      console.log(`\n🎯 DECISION: ACCEPT (Elite Instructor Path)`);
+      
+      return {
+        decision: 'ACCEPT',
+        score: 90,
+        path: 'Elite Instructor',
+        reason: `${dim1.name} is elite tier - proven quality`,
+        metadata: buildMetadata(video, { dim1, dim2, dim3, dim4, dim5, dim6, dim7, dim8, technique })
+      };
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // PATH 2: METRICS-VALIDATED
+  // ═══════════════════════════════════════════════════════════
+  
+  console.log(`\n🛤️  Checking PATH 2: Metrics-Validated...`);
+  
+  if (dim8.views >= 10000) {
+    console.log(`   ✅ Sufficient data: ${dim8.views} views`);
+    
+    if (dim8.score >= 75 && dim2.score >= 70) {
+      console.log(`   ✅ Exceptional metrics + content`);
+      console.log(`\n🎯 DECISION: ACCEPT (Metrics-Validated Path)`);
+      
+      return {
+        decision: 'ACCEPT',
+        score: 85,
+        path: 'Metrics-Validated',
+        reason: 'Exceptional engagement validates quality',
+        metadata: buildMetadata(video, { dim1, dim2, dim3, dim4, dim5, dim6, dim7, dim8, technique })
+      };
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // PATH 3: KNOWN QUALITY INSTRUCTOR
+  // ═══════════════════════════════════════════════════════════
+  
+  console.log(`\n🛤️  Checking PATH 3: Known Quality...`);
+  
+  if (dim1.tier === 'high_quality') {
+    console.log(`   ✅ Known quality: ${dim1.name}`);
+    
+    const hasMetrics = dim8.views >= 5000;
+    let score;
+    
+    if (hasMetrics) {
+      score = 
+        (dim1.credibility * 0.35) +
+        (dim8.score * 0.40) +
+        (dim2.score * 0.25);
+      
+      console.log(`   Score: ${score.toFixed(1)}/100 (threshold: 72)`);
+      
+      if (score >= 72) {
+        console.log(`\n🎯 DECISION: ACCEPT (Known Quality + Metrics)`);
+        
+        return {
+          decision: 'ACCEPT',
+          score: score,
+          path: 'Known Quality + Metrics',
+          reason: 'Known instructor with validated metrics',
+          metadata: buildMetadata(video, { dim1, dim2, dim3, dim4, dim5, dim6, dim7, dim8, technique })
+        };
+      }
+    } else {
+      score = 
+        (dim1.credibility * 0.60) +
+        (dim2.score * 0.40);
+      
+      console.log(`   Score: ${score.toFixed(1)}/100 (threshold: 75, early video)`);
+      
+      if (score >= 75) {
+        console.log(`\n🎯 DECISION: ACCEPT (Known Quality - Early)`);
+        
+        return {
+          decision: 'ACCEPT',
+          score: score,
+          path: 'Known Quality - Early',
+          reason: 'Known instructor, early video',
+          metadata: buildMetadata(video, { dim1, dim2, dim3, dim4, dim5, dim6, dim7, dim8, technique })
+        };
+      }
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // COVERAGE GAP OVERRIDE (borderline cases)
+  // ═══════════════════════════════════════════════════════════
+  
+  if (dim4.isCriticalGap && dim2.score >= 70) {
+    console.log(`\n🎯 DECISION: ACCEPT (Critical Coverage Gap)`);
+    
+    return {
+      decision: 'ACCEPT',
+      score: 72,
+      path: 'Critical Gap Override',
+      reason: `Fills critical gap: ${dim4.current}/${dim4.target} videos`,
+      metadata: buildMetadata(video, { dim1, dim2, dim3, dim4, dim5, dim6, dim7, dim8, technique })
+    };
+  }
+  
+  // ═══════════════════════════════════════════════════════════
+  // ALL PATHS FAILED
+  // ═══════════════════════════════════════════════════════════
+  
+  console.log(`\n🎯 DECISION: REJECT (All paths failed)`);
+  
+  return {
+    decision: 'REJECT',
+    score: 50,
+    path: 'None',
+    reason: 'Did not meet criteria on any acceptance path',
+    metadata: buildMetadata(video, { dim1, dim2, dim3, dim4, dim5, dim6, dim7, dim8, technique })
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+// BUILD RICH METADATA FOR PROFESSOR OS
+// ═══════════════════════════════════════════════════════════
+
+function buildMetadata(video, dimensions) {
+  const { dim1, dim2, dim3, dim4, dim5, dim6, dim7, dim8, technique } = dimensions;
+  
+  return {
+    // Taxonomy
+    primary_technique: technique.technique,
+    variation: technique.variation,
+    position: technique.position,
+    skill_level: dim6.skill_level,
+    gi_or_nogi: technique.gi_or_nogi,
+    
+    // Unique Value
+    unique_value: dim3.unique_value,
+    problem_solved: dim3.problem_solved,
+    
+    // Learning Path
+    prerequisites: dim6.prerequisites,
+    builds_toward: dim6.builds_toward,
+    difficulty_factors: dim6.difficulty_factors,
+    
+    // Quality Scores (all dimensions)
+    scores: {
+      instructor: dim1.credibility,
+      content_quality: dim2.score,
+      unique_value: dim3.confidence,
+      coverage: dim4.score,
+      emerging_tech: dim5.boost,
+      progression: 80, // placeholder
+      user_feedback: dim7.score,
+      youtube_engagement: dim8.score
+    },
+    
+    // Instructor Details
+    instructor: {
+      name: dim1.name,
+      tier: dim1.tier,
+      credibility: dim1.credibility,
+      specialties: dim1.specialties
+    },
+    
+    // YouTube Metrics
+    youtube_metrics: {
+      views: dim8.views,
+      likes: dim8.likes,
+      like_rate: (dim8.likeRate * 100).toFixed(2) + '%',
+      comment_rate: (dim8.commentRate * 100).toFixed(2) + '%',
+      signals: dim8.signals
+    },
+    
+    // Recommendation Reasons (for Professor OS)
+    good_because: generateRecommendationReasons(dimensions),
+    
+    // Search tags
+    tags: generateTags(technique, dim1),
+    good_for_problems: [dim3.problem_solved],
+    good_for_styles: inferGameStyles(technique)
+  };
+}
+
+function generateRecommendationReasons(dimensions) {
+  const reasons = [];
+  const { dim1, dim2, dim3, dim5, dim7, dim8 } = dimensions;
+  
+  if (dim1.tier === 'elite') {
+    reasons.push(`${dim1.name} is elite tier instructor`);
+  }
+  
+  if (dim2.score >= 85) {
+    reasons.push('High technical depth with specific details');
+  }
+  
+  reasons.push(dim3.unique_value);
+  
+  if (dim8.signals.isHiddenGem) {
+    reasons.push('Hidden gem - exceptional engagement on small channel');
+  }
+  
+  if (dim7.high_impact) {
+    reasons.push('High user satisfaction - proven effectiveness');
+  }
+  
+  if (dim5.is_emerging) {
+    reasons.push(`Covers emerging technique: ${dim5.technique_name}`);
+  }
+  
+  return reasons;
+}
+
+function generateTags(technique, instructor) {
+  const tags = [
+    technique.technique,
+    technique.position,
+    technique.skill_level
+  ];
+  
+  if (instructor.specialties) {
+    tags.push(...instructor.specialties);
+  }
+  
+  return [...new Set(tags)].filter(Boolean);
+}
+
+function inferGameStyles(technique) {
+  // Simple inference based on technique
+  const styles = [];
+  
+  if (technique.gi_or_nogi === 'nogi') styles.push('no_gi_game');
+  if (technique.gi_or_nogi === 'gi') styles.push('gi_game');
+  if (technique.technique.includes('guard')) styles.push('guard_player');
+  if (technique.technique.includes('pass')) styles.push('pressure_passer');
+  
+  return styles;
+}
+
+module.exports = { evaluateVideoHybrid };
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: INTEGRATE INTO PIPELINE & TEST
+═══════════════════════════════════════════════════════════════════════════════
+
+Update curation pipeline to use hybrid evaluator.
+
+Then create test script:
+
+File: server/test-hybrid-system.js
+
+const { evaluateVideoHybrid } = require('./services/curation/hybrid-evaluator');
+
+async function testHybridSystem() {
+  console.log('🧪 TESTING HYBRID 3-PATH + 8-DIMENSIONAL SYSTEM\n');
+  
+  const queries = [
+    'lachlan giles heel hooks',
+    'gordon ryan passing',
+    'bjj armbar tutorial',
+    'chewjitsu guard retention'
+  ];
+  
+  // Fetch 20 videos
+  // Run through hybrid evaluator
+  // Show complete analysis for each
+  // Display summary statistics
+  
+  // ... (same test logic as before but using evaluateVideoHybrid)
+}
+
+testHybridSystem();
+
+═══════════════════════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. ✅ All 8 dimension analyzers built
+2. ✅ Hybrid 3-path router implemented
+3. ✅ Rich metadata generation for Professor OS
+4. ✅ Test script ready
+5. ✅ Comprehensive analysis + simple routing
+
+This is the "world-class" system - every video gets full analysis.
+
+Begin implementation now.
+```
+
+-----
+
+**SEND THIS TO REPLIT AGENT**
+
+This builds the complete hybrid system:
+
+- ✅ ALL 8 dimensions analyze every video
+- ✅ 3-path routing for clear decisions
+- ✅ Rich metadata for Professor OS recommendations
+- ✅ “Excellence is our pillar” - comprehensive quality assessment
+
+🚀​​​​​​​​​​​​​​​​

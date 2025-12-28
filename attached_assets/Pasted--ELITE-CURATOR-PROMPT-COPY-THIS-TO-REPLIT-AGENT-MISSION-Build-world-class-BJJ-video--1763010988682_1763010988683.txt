@@ -1,0 +1,590 @@
+# 🎯 **ELITE CURATOR PROMPT - COPY THIS TO REPLIT AGENT**
+
+```
+MISSION: Build world-class BJJ video library to 3,000 videos using ONLY elite instructors
+
+CONTEXT:
+We currently have 504 curated videos (quality >= 7.0). Our users are serious practitioners (blue belt+, train 4-6x/week) who demand premium content. Random curation wastes API calls on low-quality content. Instead, we'll target the 75+ elite instructors we've already validated to achieve 60-80% approval rates vs the current 20-30%.
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: EXTRACT TOP INSTRUCTORS FROM EXISTING LIBRARY
+═══════════════════════════════════════════════════════════════
+
+Query database to get top instructors by:
+1. Average quality_score >= 7.5
+2. Minimum 3 videos in library (proves consistency)
+3. Sort by: (average_quality * video_count) DESC
+
+SQL:
+```sql
+SELECT 
+  instructor,
+  COUNT(*) as video_count,
+  AVG(quality_score) as avg_quality,
+  ROUND(AVG(quality_score) * COUNT(*), 2) as weighted_score
+FROM videos
+WHERE quality_score >= 7.0
+GROUP BY instructor
+HAVING COUNT(*) >= 3 AND AVG(quality_score) >= 7.5
+ORDER BY (AVG(quality_score) * COUNT(*)) DESC
+LIMIT 75;
+```
+
+Expected top instructors to include:
+
+- JT Torres (must be #1 priority)
+- Lachlan Giles
+- Danaher
+- Gordon Ryan
+- Craig Jones
+- Bernardo Faria
+- Marcelo Garcia
+- Roger Gracie
+- Keenan Cornelius
+- Jon Thomas
+- Etc.
+
+Save this as: `ELITE_INSTRUCTORS.json`
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: IDENTIFY COVERAGE GAPS BY TECHNIQUE
+═══════════════════════════════════════════════════════════════
+
+Analyze which techniques need more videos:
+
+```sql
+SELECT 
+  primary_technique,
+  COUNT(*) as current_count,
+  3000 / (SELECT COUNT(DISTINCT primary_technique) FROM videos) as target_per_technique,
+  (3000 / (SELECT COUNT(DISTINCT primary_technique) FROM videos)) - COUNT(*) as videos_needed
+FROM videos
+WHERE quality_score >= 7.0
+GROUP BY primary_technique
+HAVING COUNT(*) < 50  -- Focus on techniques with < 50 videos
+ORDER BY videos_needed DESC;
+```
+
+This tells us EXACTLY which techniques to prioritize for each instructor.
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: ELITE CURATION ALGORITHM
+═══════════════════════════════════════════════════════════════
+
+Create new file: `server/services/eliteCurator.js`
+
+```javascript
+const ELITE_CURATION_CONFIG = {
+  // Daily API limits (YouTube Data API = 10,000 quota/day)
+  MAX_DAILY_SEARCHES: 150,        // ~60-65 quota per search = ~9,000 quota
+  MAX_VIDEOS_PER_INSTRUCTOR: 20,  // Don't over-index on one instructor
+  MIN_QUALITY_THRESHOLD: 7.0,     // Only add premium content
+  
+  // Search strategy
+  RESULTS_PER_SEARCH: 50,         // YouTube allows up to 50
+  PRIORITIZE_RECENT: true,        // Videos from last 3 years (more relevant)
+  
+  // Technique coverage targets
+  MIN_VIDEOS_PER_TECHNIQUE: 50,   // Ensure comprehensive coverage
+  TARGET_TOTAL_VIDEOS: 3000
+};
+
+// Search query templates optimized for high-quality results
+const SEARCH_TEMPLATES = {
+  fundamental: '{instructor} {technique} fundamental BJJ',
+  advanced: '{instructor} {technique} advanced details BJJ',
+  drilling: '{instructor} {technique} drilling BJJ',
+  competition: '{instructor} {technique} competition BJJ',
+  troubleshooting: '{instructor} {technique} common mistakes BJJ',
+  system: '{instructor} {technique} system BJJ'
+};
+
+async function runEliteCuration() {
+  console.log('🎯 ELITE CURATOR - Starting daily run');
+  
+  // Step 1: Load elite instructors
+  const eliteInstructors = await loadEliteInstructors();
+  console.log(`✅ Loaded ${eliteInstructors.length} elite instructors`);
+  
+  // Step 2: Identify techniques needing coverage
+  const techniqueGaps = await identifyTechniqueGaps();
+  console.log(`📊 Found ${techniqueGaps.length} techniques needing more videos`);
+  
+  // Step 3: Build daily search plan
+  const searchPlan = buildOptimalSearchPlan(
+    eliteInstructors,
+    techniqueGaps,
+    ELITE_CURATION_CONFIG.MAX_DAILY_SEARCHES
+  );
+  
+  console.log(`📋 Generated ${searchPlan.length} targeted searches`);
+  console.log(`🎯 Estimated approval rate: 60-80% (vs random 20-30%)`);
+  
+  // Step 4: Execute searches with rate limiting
+  const results = {
+    searched: 0,
+    found: 0,
+    approved: 0,
+    rejected: 0,
+    duplicates: 0,
+    errors: 0
+  };
+  
+  for (const search of searchPlan) {
+    try {
+      await rateLimitDelay(); // Respect API limits
+      
+      const videos = await searchYouTubeForInstructor(
+        search.instructor,
+        search.technique,
+        search.template
+      );
+      
+      results.searched++;
+      results.found += videos.length;
+      
+      // Process each video
+      for (const video of videos) {
+        // Check if already in library
+        const exists = await checkVideoExists(video.videoId);
+        if (exists) {
+          results.duplicates++;
+          continue;
+        }
+        
+        // AI quality screening with GPT-4o
+        const qualityScore = await screenVideoQuality(video);
+        
+        if (qualityScore >= ELITE_CURATION_CONFIG.MIN_QUALITY_THRESHOLD) {
+          // Auto-approve and add to library
+          await addVideoToLibrary({
+            ...video,
+            qualityScore,
+            instructor: search.instructor,
+            primaryTechnique: search.technique,
+            curationType: 'elite',
+            curatedAt: new Date()
+          });
+          
+          results.approved++;
+          console.log(`✅ Added: ${video.title} (${qualityScore}/10)`);
+        } else {
+          results.rejected++;
+          console.log(`❌ Rejected: ${video.title} (${qualityScore}/10)`);
+        }
+      }
+      
+      // Progress update every 10 searches
+      if (results.searched % 10 === 0) {
+        const approvalRate = (results.approved / (results.approved + results.rejected) * 100).toFixed(1);
+        console.log(`📊 Progress: ${results.searched}/${searchPlan.length} | Approval: ${approvalRate}%`);
+      }
+      
+    } catch (error) {
+      results.errors++;
+      console.error(`❌ Search failed:`, error.message);
+    }
+  }
+  
+  // Final summary
+  const approvalRate = (results.approved / (results.approved + results.rejected) * 100).toFixed(1);
+  const currentTotal = await getTotalVideoCount();
+  const remaining = ELITE_CURATION_CONFIG.TARGET_TOTAL_VIDEOS - currentTotal;
+  
+  console.log('\n═══════════════════════════════════════');
+  console.log('🎯 ELITE CURATION - DAILY SUMMARY');
+  console.log('═══════════════════════════════════════');
+  console.log(`Searches executed: ${results.searched}`);
+  console.log(`Videos found: ${results.found}`);
+  console.log(`Videos approved: ${results.approved}`);
+  console.log(`Videos rejected: ${results.rejected}`);
+  console.log(`Duplicates skipped: ${results.duplicates}`);
+  console.log(`Errors: ${results.errors}`);
+  console.log(`Approval rate: ${approvalRate}%`);
+  console.log(`\nLibrary status: ${currentTotal}/3000 (${remaining} remaining)`);
+  console.log(`ETA to 3000: ~${Math.ceil(remaining / results.approved)} days`);
+  console.log('═══════════════════════════════════════\n');
+  
+  return results;
+}
+
+function buildOptimalSearchPlan(instructors, gaps, maxSearches) {
+  const plan = [];
+  
+  // Prioritize JT Torres (founder's coach - maximum credibility)
+  const jtTorres = instructors.find(i => i.instructor.toLowerCase().includes('jt torres'));
+  if (jtTorres) {
+    // Give JT 20% of daily searches
+    const jtSearchCount = Math.floor(maxSearches * 0.2);
+    for (const gap of gaps.slice(0, jtSearchCount)) {
+      plan.push({
+        instructor: jtTorres.instructor,
+        technique: gap.primary_technique,
+        template: selectBestTemplate(gap),
+        priority: 'HIGHEST'
+      });
+    }
+  }
+  
+  // Distribute remaining searches across other elite instructors
+  const remainingSearches = maxSearches - plan.length;
+  const otherInstructors = instructors.filter(i => i !== jtTorres);
+  
+  // Round-robin through instructors and gaps
+  let instructorIndex = 0;
+  let gapIndex = 0;
+  
+  while (plan.length < maxSearches && gapIndex < gaps.length) {
+    const instructor = otherInstructors[instructorIndex % otherInstructors.length];
+    const gap = gaps[gapIndex];
+    
+    plan.push({
+      instructor: instructor.instructor,
+      technique: gap.primary_technique,
+      template: selectBestTemplate(gap),
+      priority: 'HIGH'
+    });
+    
+    instructorIndex++;
+    if (instructorIndex % otherInstructors.length === 0) {
+      gapIndex++; // Move to next technique after cycling through all instructors
+    }
+  }
+  
+  return plan;
+}
+
+function selectBestTemplate(gap) {
+  // Select template based on current coverage
+  const templates = Object.keys(SEARCH_TEMPLATES);
+  const index = gap.current_count % templates.length;
+  return templates[index]; // Rotate through templates for variety
+}
+
+async function searchYouTubeForInstructor(instructor, technique, template) {
+  const query = SEARCH_TEMPLATES[template]
+    .replace('{instructor}', instructor)
+    .replace('{technique}', technique);
+  
+  const response = await youtube.search.list({
+    part: 'snippet',
+    q: query,
+    type: 'video',
+    maxResults: ELITE_CURATION_CONFIG.RESULTS_PER_SEARCH,
+    videoDuration: 'medium',  // 4-20 minutes (optimal for instruction)
+    relevanceLanguage: 'en',
+    order: ELITE_CURATION_CONFIG.PRIORITIZE_RECENT ? 'date' : 'relevance',
+    publishedAfter: ELITE_CURATION_CONFIG.PRIORITIZE_RECENT 
+      ? new Date(Date.now() - 3 * 365 * 24 * 60 * 60 * 1000).toISOString() 
+      : undefined
+  });
+  
+  return response.data.items.map(item => ({
+    videoId: item.id.videoId,
+    title: item.snippet.title,
+    description: item.snippet.description,
+    thumbnail: item.snippet.thumbnails.high.url,
+    publishedAt: item.snippet.publishedAt
+  }));
+}
+
+async function screenVideoQuality(video) {
+  // Use GPT-4o for quality screening (faster + cheaper than Claude)
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{
+      role: 'system',
+      content: `You are an expert BJJ instructor evaluating instructional video quality.
+
+Score 0-10 based on:
+- Technical accuracy (most important)
+- Instruction clarity
+- Production quality
+- Relevance to serious practitioners
+
+ONLY approve videos >= 7.0 (premium content only).
+
+Return JSON: { "score": number, "reasoning": "brief explanation" }`
+    }, {
+      role: 'user',
+      content: `Evaluate this BJJ instructional video:
+
+Title: ${video.title}
+Description: ${video.description}
+
+Score (0-10):`
+    }],
+    response_format: { type: 'json_object' },
+    temperature: 0.3
+  });
+  
+  const result = JSON.parse(response.choices[0].message.content);
+  return result.score;
+}
+
+// Rate limiting helper
+async function rateLimitDelay() {
+  // YouTube API: 10,000 quota/day
+  // Each search = ~65 quota
+  // Max ~150 searches/day
+  // Spread over 24 hours = 1 search per ~10 minutes
+  await new Promise(resolve => setTimeout(resolve, 600000)); // 10 min delay
+}
+
+module.exports = { runEliteCuration };
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: AUTOMATED DAILY CRON JOB
+═══════════════════════════════════════════════════════════════
+
+Create: `server/cron/dailyCuration.js`
+
+```javascript
+const cron = require('node-cron');
+const { runEliteCuration } = require('../services/eliteCurator');
+
+// Run daily at 2 AM (low traffic time)
+cron.schedule('0 2 * * *', async () => {
+  console.log('🌙 Starting overnight elite curation...');
+  
+  try {
+    const results = await runEliteCuration();
+    
+    // Send summary to admin
+    await sendAdminNotification({
+      subject: '🎯 Daily Elite Curation Complete',
+      results
+    });
+    
+  } catch (error) {
+    console.error('❌ Elite curation failed:', error);
+    
+    // Alert admin of failure
+    await sendAdminAlert({
+      subject: '🚨 Elite Curation Failed',
+      error: error.message
+    });
+  }
+});
+
+console.log('✅ Elite curation cron job scheduled (daily 2 AM)');
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 5: META TAGGING REQUIREMENTS
+═══════════════════════════════════════════════════════════════
+
+Every approved video MUST have complete metadata:
+
+```javascript
+const VIDEO_METADATA_SCHEMA = {
+  // Core identification
+  videoId: 'string (YouTube ID)',
+  title: 'string',
+  instructor: 'string',
+  
+  // Quality metrics
+  qualityScore: 'float (7.0-10.0)',
+  curationType: 'enum: elite|manual|random',
+  curatedAt: 'timestamp',
+  
+  // Technical classification
+  primaryTechnique: 'string',      // e.g., "Armbar", "Triangle"
+  secondaryTechniques: 'array',    // Related techniques shown
+  position: 'enum',                 // guard, mount, back, side_control, etc.
+  giNoGi: 'enum: gi|nogi|both',
+  
+  // Difficulty & audience
+  skillLevel: 'enum: fundamental|intermediate|advanced|competition',
+  beltLevel: 'enum: white|blue|purple|brown|black',
+  
+  // Content structure
+  duration: 'integer (seconds)',
+  keyTimestamps: 'array of { time, description }',
+  
+  // Searchability
+  tags: 'array',                    // All relevant keywords
+  description: 'string',
+  
+  // User engagement (tracked over time)
+  viewCount: 'integer',
+  shareCount: 'integer',
+  userRating: 'float (optional)',
+  
+  // Quality assurance
+  reviewedBy: 'string',             // 'AI' or admin name
+  lastReviewedAt: 'timestamp'
+};
+```
+
+Add comprehensive meta tagging in `addVideoToLibrary()`:
+
+```javascript
+async function addVideoToLibrary(video) {
+  // Generate comprehensive tags
+  const tags = await generateVideoTags(video);
+  
+  // Extract key timestamps using AI
+  const timestamps = await extractKeyMoments(video);
+  
+  // Classify skill level and position
+  const classification = await classifyVideo(video);
+  
+  // Insert with full metadata
+  await db.query(`
+    INSERT INTO videos (
+      video_id, title, instructor, description,
+      quality_score, curation_type, curated_at,
+      primary_technique, secondary_techniques,
+      position, gi_nogi,
+      skill_level, belt_level,
+      duration, key_timestamps,
+      tags,
+      reviewed_by, last_reviewed_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+  `, [
+    video.videoId,
+    video.title,
+    video.instructor,
+    video.description,
+    video.qualityScore,
+    'elite',
+    new Date(),
+    classification.primaryTechnique,
+    classification.secondaryTechniques,
+    classification.position,
+    classification.giNoGi,
+    classification.skillLevel,
+    classification.beltLevel,
+    video.duration,
+    JSON.stringify(timestamps),
+    JSON.stringify(tags),
+    'AI',
+    new Date()
+  ]);
+  
+  console.log(`✅ Added with full metadata: ${video.title}`);
+}
+```
+
+═══════════════════════════════════════════════════════════════
+PHASE 6: MONITORING & QUALITY CONTROL
+═══════════════════════════════════════════════════════════════
+
+Create admin dashboard view: `/admin/curation-status`
+
+Show:
+
+- Current library size: X / 3,000
+- Today’s curation results
+- Approval rate trend (target: 60-80%)
+- Technique coverage heatmap
+- Top contributing instructors
+- ETA to 3,000 videos
+- API quota remaining
+
+Create daily email summary for Todd:
+
+```javascript
+async function sendDailyCurationEmail() {
+  const stats = await getCurationStats();
+  
+  const emailBody = `
+    🎯 BJJ OS Elite Curation - Daily Report
+    
+    📊 TODAY'S RESULTS:
+    - Videos added: ${stats.approved}
+    - Approval rate: ${stats.approvalRate}%
+    - API quota used: ${stats.quotaUsed}/10,000
+    
+    📈 LIBRARY STATUS:
+    - Total videos: ${stats.totalVideos}/3,000
+    - Videos remaining: ${stats.remaining}
+    - ETA to 3,000: ~${stats.daysRemaining} days
+    
+    🏆 TOP INSTRUCTORS TODAY:
+    ${stats.topInstructors.map(i => `- ${i.name}: ${i.videosAdded} videos`).join('\n')}
+    
+    📋 TECHNIQUE COVERAGE:
+    - Fully covered (>50 videos): ${stats.fullyCovered}
+    - Needs more (<50 videos): ${stats.needsMore}
+    
+    ${stats.issues.length > 0 ? `⚠️  ISSUES:\n${stats.issues.join('\n')}` : '✅ No issues detected'}
+  `;
+  
+  await sendEmail({
+    to: 'todd@bjjos.app',
+    subject: `🎯 Curation Report: +${stats.approved} videos (${stats.totalVideos}/3,000)`,
+    body: emailBody
+  });
+}
+```
+
+═══════════════════════════════════════════════════════════════
+IMPLEMENTATION CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+[ ] Phase 1: Extract top 75 instructors from current library
+[ ] Phase 2: Identify technique coverage gaps
+[ ] Phase 3: Implement eliteCurator.js service
+[ ] Phase 4: Set up daily cron job (2 AM)
+[ ] Phase 5: Implement comprehensive meta tagging
+[ ] Phase 6: Build admin monitoring dashboard
+[ ] Test with 10 searches manually first
+[ ] Verify approval rate > 60%
+[ ] Validate meta tags are complete
+[ ] Enable automated daily runs
+
+═══════════════════════════════════════════════════════════════
+EXPECTED OUTCOMES
+═══════════════════════════════════════════════════════════════
+
+CONSERVATIVE ESTIMATE:
+
+- 150 searches/day
+- 60% approval rate
+- 90 videos added/day
+- 2,496 videos needed (3,000 - 504)
+- ETA: ~28 days to reach 3,000
+
+OPTIMISTIC ESTIMATE:
+
+- 150 searches/day
+- 80% approval rate
+- 120 videos added/day
+- ETA: ~21 days to reach 3,000
+
+VS RANDOM CURATION:
+
+- Random: 30% approval → ~45 videos/day → 55 days
+- Elite: 70% approval → ~105 videos/day → 24 days
+- Time saved: ~30 days
+- API efficiency: 2.3x better
+
+═══════════════════════════════════════════════════════════════
+
+Run this overnight. You’ll wake up to 80-120 new premium videos in your library.
+
+Let’s build the world’s best BJJ video library. 🥋
+
+```
+---
+
+## **🔥 KEY INNOVATIONS IN THIS APPROACH:**
+
+1. **Elite instructor targeting** - 60-80% approval vs 20-30% random
+2. **Technique gap analysis** - Ensures comprehensive coverage
+3. **JT Torres priority** - 20% of searches = founder credibility
+4. **Automated daily runs** - Set it and forget it
+5. **Full meta tagging** - Every video fully searchable
+6. **Smart search templates** - Rotates query types for variety
+7. **Rate limiting** - Respects API quotas automatically
+8. **Daily email summaries** - You stay informed
+9. **Admin dashboard** - Real-time progress tracking
+10. **ETA projections** - Know exactly when you'll hit 3,000
+
+---
+
+**Copy the entire prompt above and paste into Replit Agent. You'll hit 3,000 videos in ~3 weeks running on autopilot.** 🚀​​​​​​​​​​​​​​​​
+```

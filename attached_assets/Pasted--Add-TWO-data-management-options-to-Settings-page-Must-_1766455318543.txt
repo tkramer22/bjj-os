@@ -1,0 +1,135 @@
+```
+Add TWO data management options to Settings page. Must work on iOS app, mobile web, AND desktop.
+
+═══════════════════════════════════════════════════════════════════════════════
+OPTION 1: DELETE CHAT HISTORY
+═══════════════════════════════════════════════════════════════════════════════
+
+LOCATION: Settings page, in a "Data & Privacy" section
+
+UI:
+- Button with trash icon: "Delete Chat History"
+- Subtext: "Removes all messages. Your profile stays intact."
+- Tap shows confirmation modal:
+  - Title: "Delete Chat History?"
+  - Body: "This will permanently delete all your conversations with Professor OS. Your profile (belt rank, goals, preferences) will not be affected. This cannot be undone."
+  - Buttons: [Cancel] [Delete] (Delete button in red)
+
+BACKEND:
+- Endpoint: DELETE /api/user/chat-history
+- Deletes all records from conversations table WHERE user_id = current user
+- Clears session context (lastInstructor, etc.)
+- Returns { success: true, message: "Chat history deleted" }
+
+WHAT GETS DELETED:
+✅ All chat messages
+✅ Conversation history
+✅ Session context (lastInstructor)
+
+WHAT STAYS:
+❌ User profile (name, belt, goals, struggles, training frequency)
+❌ Saved/favorited videos
+❌ Subscription status
+❌ Learned preferences
+❌ Training logs
+
+═══════════════════════════════════════════════════════════════════════════════
+OPTION 2: RESET PROFESSOR OS MEMORY
+═══════════════════════════════════════════════════════════════════════════════
+
+LOCATION: Settings page, directly below "Delete Chat History"
+
+UI:
+- Button with refresh icon: "Reset Professor OS Memory"
+- Subtext: "Start completely fresh. Removes all conversations AND your profile."
+- Tap shows WARNING modal:
+  - Title: "Reset Everything?"
+  - Body: "This will delete ALL your data including conversations, your belt rank, goals, training preferences, and everything Professor OS has learned about you. You'll need to set up your profile again. This cannot be undone."
+  - Buttons: [Cancel] [Reset Everything] (Reset button in red)
+
+BACKEND:
+- Endpoint: DELETE /api/user/reset-profile
+- Deletes all records from conversations table WHERE user_id = current user
+- Resets user profile fields to NULL/default:
+  - belt_level = NULL
+  - training_goals = NULL
+  - struggles = NULL
+  - training_frequency = NULL
+  - gi_or_nogi = NULL
+  - preferred_instructors = NULL
+  - any other learned preferences
+- Clears all session context
+- Returns { success: true, message: "Profile reset complete" }
+
+WHAT GETS DELETED:
+✅ All chat messages
+✅ Conversation history  
+✅ Session context
+✅ Belt level
+✅ Training goals
+✅ Struggles/weaknesses
+✅ Training frequency
+✅ Gi/NoGi preference
+✅ Instructor preferences
+✅ All learned data about user
+
+WHAT STAYS:
+❌ Account (email/phone, login)
+❌ Subscription status (still paid)
+❌ Saved/favorited videos
+
+AFTER RESET:
+- Redirect user to onboarding flow
+- Professor OS asks "What belt are you?" etc. like new user
+
+═══════════════════════════════════════════════════════════════════════════════
+UI LAYOUT (Settings Page)
+═══════════════════════════════════════════════════════════════════════════════
+
+Data & Privacy
+─────────────────────────────────
+🗑️ Delete Chat History
+   Removes all messages. Your profile stays intact.
+
+🔄 Reset Professor OS Memory
+   Start completely fresh. Removes conversations AND profile.
+─────────────────────────────────
+
+═══════════════════════════════════════════════════════════════════════════════
+PLATFORM REQUIREMENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+This must work on ALL platforms:
+
+1. iOS App (ios-settings.tsx or Settings component used by iOS)
+2. Mobile Web (settings-mobile.tsx)
+3. Desktop Web (settings.tsx or settings-desktop.tsx)
+
+Use the SAME API endpoints for all platforms.
+Use the SAME modal/confirmation components (or platform-appropriate equivalents).
+
+If there are separate Settings files for each platform, add to ALL of them.
+If there's one shared Settings component, add there.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing:
+
+1. Check iOS Settings page - both buttons visible
+2. Check mobile web Settings - both buttons visible  
+3. Check desktop Settings - both buttons visible
+4. Test Delete Chat History:
+   - Tap button → modal appears
+   - Confirm → chat deleted
+   - Go to Chat → empty state
+   - Profile still shows belt level, goals
+5. Test Reset Professor OS Memory:
+   - Tap button → warning modal appears
+   - Confirm → everything reset
+   - Redirected to onboarding
+   - Professor OS asks for belt level like new user
+
+Use Preview to verify all platforms before marking complete.
+```

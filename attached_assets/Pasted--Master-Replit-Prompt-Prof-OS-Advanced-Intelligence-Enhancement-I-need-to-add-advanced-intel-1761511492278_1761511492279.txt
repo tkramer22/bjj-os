@@ -1,0 +1,1332 @@
+# Master Replit Prompt: Prof. OS Advanced Intelligence Enhancement
+
+```
+I need to add advanced intelligence layers to my existing Prof. OS system in BJJ OS. This is ADDITIVE - do not modify existing functionality. Everything new should work alongside what already exists.
+
+## CRITICAL: WHAT ALREADY EXISTS (DO NOT MODIFY)
+
+EXISTING TABLES (keep as-is):
+- users
+- training_sessions
+- ai_video_knowledge
+- (any other existing tables)
+
+EXISTING FEATURES (preserve completely):
+- Prof. OS personality and coaching tone
+- Video recommendation system (1-3 videos with context)
+- Journey-focused language ("YOUR game", "YOUR journey")
+- Belt-specific coaching
+- Age/body type awareness
+- Injury awareness
+- Gi/No-gi preference tracking
+
+DO NOT modify existing Prof. OS system prompts or personality.
+DO NOT change existing database tables.
+DO NOT alter video recommendation logic.
+
+## OVERVIEW: 3 NEW INTELLIGENCE LAYERS
+
+We're adding:
+1. Individual User Intelligence (deep personalization)
+2. Population Intelligence (cross-user learning)  
+3. Self-Improvement Intelligence (system learns over time)
+
+Plus: Multi-model routing (Claude + GPT-4o)
+
+---
+
+## PART 1: NEW DATABASE TABLES
+
+Add these tables alongside existing ones:
+
+```sql
+-- ===== MULTI-MODEL TRACKING =====
+
+CREATE TABLE ai_model_usage (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  
+  model_name VARCHAR(50),              -- 'claude-sonnet-4.5', 'gpt-4o', 'gpt-4o-mini'
+  task_type VARCHAR(50),               -- 'coaching', 'extraction', 'embedding', 'vision'
+  
+  tokens_input INT,
+  tokens_output INT,
+  cost_usd DECIMAL(10, 6),
+  
+  response_time_ms INT,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_model_usage_user ON ai_model_usage(user_id);
+CREATE INDEX idx_model_usage_created ON ai_model_usage(created_at DESC);
+
+-- ===== LAYER 1: INDIVIDUAL INTELLIGENCE =====
+
+-- Track how each user learns and communicates
+CREATE TABLE user_cognitive_profile (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  
+  -- Learning style (detected from conversation patterns)
+  learning_style VARCHAR(50),              -- "visual", "kinesthetic", "conceptual", "repetition_based"
+  learning_style_confidence DECIMAL(3,2),
+  
+  -- Communication preferences (detected)
+  prefers_brief_responses BOOLEAN DEFAULT false,
+  prefers_detailed_explanations BOOLEAN DEFAULT false,
+  prefers_questions_first BOOLEAN DEFAULT false,
+  prefers_direct_answers BOOLEAN DEFAULT false,
+  
+  -- Cognitive patterns
+  asks_why_frequently BOOLEAN DEFAULT false,
+  asks_how_frequently BOOLEAN DEFAULT false,
+  
+  -- Response to coaching
+  responds_to_encouragement BOOLEAN DEFAULT false,
+  responds_to_directness BOOLEAN DEFAULT false,
+  responds_to_data BOOLEAN DEFAULT false,
+  
+  -- Meta-awareness
+  self_aware_level INT CHECK (self_aware_level BETWEEN 1 AND 10),
+  accepts_criticism_well BOOLEAN DEFAULT true,
+  
+  -- Sample size for confidence
+  interactions_analyzed INT DEFAULT 0,
+  
+  last_updated TIMESTAMP DEFAULT NOW()
+);
+
+-- Technique relationship mapping (THE KEY INSIGHT LAYER)
+CREATE TABLE user_technique_ecosystem (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  technique_name VARCHAR(100) NOT NULL,
+  
+  -- Success metrics
+  attempts INT DEFAULT 0,
+  successes INT DEFAULT 0,
+  failures INT DEFAULT 0,
+  success_rate DECIMAL(4,2),
+  
+  -- Context where it works
+  works_best_from_position VARCHAR(100),
+  works_best_against VARCHAR(50),         -- "higher_belts", "same_belt", "lower_belts"
+  works_best_gi_or_nogi VARCHAR(10),
+  
+  -- Technique relationships (JSONB for flexibility)
+  leads_to_techniques JSONB,              -- [{"technique": "armbar", "frequency": 12, "success_rate": 0.75}]
+  led_from_techniques JSONB,              -- What creates this opportunity
+  fails_leads_to JSONB,                   -- When this fails, what happens
+  
+  -- Learning progression
+  first_attempted_date TIMESTAMP,
+  first_success_date TIMESTAMP,
+  attempts_to_first_success INT,
+  learning_curve VARCHAR(50),             -- "fast_learner", "slow_burn", "plateau", "abandoned"
+  
+  -- User confidence
+  user_confidence_level INT CHECK (user_confidence_level BETWEEN 1 AND 10),
+  
+  -- Flags
+  is_signature_move BOOLEAN DEFAULT false,
+  is_setup_move BOOLEAN DEFAULT false,
+  is_finishing_move BOOLEAN DEFAULT false,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(user_id, technique_name)
+);
+
+CREATE INDEX idx_technique_ecosystem_user ON user_technique_ecosystem(user_id);
+CREATE INDEX idx_technique_ecosystem_signature ON user_technique_ecosystem(user_id, is_signature_move) WHERE is_signature_move = true;
+
+-- Temporal pattern intelligence
+CREATE TABLE user_temporal_patterns (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  
+  -- Time-based performance patterns
+  performs_best_time_of_day VARCHAR(20),
+  performs_worst_time_of_day VARCHAR(20),
+  
+  optimal_training_frequency DECIMAL(3,1),
+  overtraining_threshold INT,
+  
+  -- Recovery patterns
+  optimal_rest_days_between_sessions DECIMAL(3,1),
+  injury_risk_increases_after INT,      -- Consecutive days
+  
+  -- Learning patterns
+  breakthrough_frequency_days INT,
+  plateau_cycle_length_days INT,
+  new_technique_retention_window_days INT,
+  
+  -- Statistical confidence
+  pattern_confidence DECIMAL(3,2),
+  sample_size INT,
+  
+  last_updated TIMESTAMP DEFAULT NOW()
+);
+
+-- Injury tracking and prevention
+CREATE TABLE user_injury_profile (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  
+  -- Historical injuries (JSONB array)
+  injury_history JSONB,                   -- [{"body_part": "shoulder", "severity": 7, "date": "2024-01-15", "recovery_days": 21}]
+  
+  -- Patterns
+  recurring_injury_areas TEXT[],
+  injury_triggers JSONB,
+  
+  -- Current concerns
+  active_injuries JSONB,
+  
+  -- Predictive intelligence
+  high_risk_techniques TEXT[],
+  high_risk_positions TEXT[],
+  
+  -- Recovery patterns
+  typical_recovery_time_minor_days INT,
+  typical_recovery_time_moderate_days INT,
+  
+  last_updated TIMESTAMP DEFAULT NOW()
+);
+
+-- Psychological profile
+CREATE TABLE user_psychological_profile (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  
+  -- Motivation
+  primary_motivation VARCHAR(50),         -- "competition", "self_defense", "fitness", "social", "mastery"
+  
+  -- Response to setbacks
+  resilience_score INT CHECK (resilience_score BETWEEN 1 AND 10),
+  typical_response_to_failure VARCHAR(50),
+  typical_response_to_success VARCHAR(50),
+  
+  -- Imposter syndrome
+  has_imposter_syndrome BOOLEAN DEFAULT false,
+  imposter_syndrome_triggers TEXT[],
+  
+  -- Communication style
+  openly_shares_struggles BOOLEAN DEFAULT false,
+  deflects_emotional_topics BOOLEAN DEFAULT false,
+  
+  last_updated TIMESTAMP DEFAULT NOW()
+);
+
+-- Memory markers (tiered memory system)
+CREATE TABLE user_memory_markers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  
+  memory_type VARCHAR(50),                -- "breakthrough", "injury", "milestone", "struggle_pattern"
+  significance_score INT CHECK (significance_score BETWEEN 1 AND 10),
+  
+  summary TEXT NOT NULL,
+  full_context JSONB,
+  related_session_ids UUID[],
+  
+  occurred_at TIMESTAMP NOT NULL,
+  memory_tier VARCHAR(20),                -- "working" (7 days), "medium" (3 months), "long_term"
+  
+  last_referenced_at TIMESTAMP,
+  reference_count INT DEFAULT 0,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_memory_user ON user_memory_markers(user_id);
+CREATE INDEX idx_memory_tier ON user_memory_markers(user_id, memory_tier);
+CREATE INDEX idx_memory_occurred ON user_memory_markers(occurred_at DESC);
+
+-- Detected patterns (proactive coaching triggers)
+CREATE TABLE detected_patterns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  
+  pattern_type VARCHAR(100),              -- "overtraining", "technique_plateau", "success_pattern", etc.
+  detected_at TIMESTAMP DEFAULT NOW(),
+  
+  trigger_data JSONB,                     -- Evidence that triggered detection
+  supporting_session_ids UUID[],
+  
+  intervention_suggested TEXT,
+  priority VARCHAR(20),                   -- "high", "medium", "low"
+  
+  status VARCHAR(20) DEFAULT 'detected',  -- "detected", "addressed", "resolved", "ignored"
+  addressed_at TIMESTAMP,
+  resolved_at TIMESTAMP,
+  
+  user_acknowledged BOOLEAN DEFAULT false,
+  user_response TEXT
+);
+
+CREATE INDEX idx_patterns_user_status ON detected_patterns(user_id, status);
+CREATE INDEX idx_patterns_priority ON detected_patterns(user_id, priority) WHERE status = 'detected';
+
+-- ===== LAYER 2: POPULATION INTELLIGENCE =====
+
+-- Technique effectiveness across all users
+CREATE TABLE technique_population_stats (
+  technique_name VARCHAR(100) PRIMARY KEY,
+  
+  total_users_attempted INT DEFAULT 0,
+  total_attempts INT DEFAULT 0,
+  total_successes INT DEFAULT 0,
+  population_success_rate DECIMAL(4,2),
+  
+  -- Segmented statistics (JSONB for flexibility)
+  success_by_belt_level JSONB,           -- {"white": 0.45, "blue": 0.62, "purple": 0.78}
+  success_by_body_type JSONB,
+  success_by_age_group JSONB,
+  
+  -- Learning curves
+  avg_attempts_to_first_success DECIMAL(5,1),
+  avg_attempts_to_consistency DECIMAL(5,1),
+  
+  abandonment_rate DECIMAL(4,2),
+  avg_attempts_before_abandonment INT,
+  
+  difficulty_score INT CHECK (difficulty_score BETWEEN 1 AND 10),
+  
+  last_updated TIMESTAMP DEFAULT NOW()
+);
+
+-- Injury patterns across population
+CREATE TABLE population_injury_patterns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  injury_type VARCHAR(100),
+  body_part VARCHAR(50),
+  
+  common_causes JSONB,                    -- [{"cause": "inverted_guard", "frequency": 234}]
+  high_risk_techniques TEXT[],
+  
+  total_reported_cases INT DEFAULT 0,
+  avg_recovery_time_days INT,
+  recurrence_rate DECIMAL(4,2),
+  
+  most_common_in_belt_level VARCHAR(20),
+  most_common_in_age_group VARCHAR(20),
+  
+  effective_prevention_strategies TEXT[],
+  
+  last_updated TIMESTAMP DEFAULT NOW()
+);
+
+-- Technique learning pathways (what leads to what)
+CREATE TABLE technique_progression_pathways (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  foundational_technique VARCHAR(100),
+  leads_to_technique VARCHAR(100),
+  
+  users_who_learned_both INT,
+  typical_time_gap_days INT,
+  
+  success_rate_with_foundation DECIMAL(4,2),
+  success_rate_without_foundation DECIMAL(4,2),
+  efficiency_multiplier DECIMAL(4,1),
+  
+  pathway_strength VARCHAR(20),           -- "strong", "moderate", "weak"
+  evidence_count INT,
+  
+  last_updated TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(foundational_technique, leads_to_technique)
+);
+
+-- Belt promotion readiness indicators
+CREATE TABLE belt_promotion_indicators (
+  belt_level VARCHAR(20) PRIMARY KEY,
+  next_belt VARCHAR(20),
+  
+  typical_technique_count INT,
+  typical_success_rate DECIMAL(4,2),
+  typical_position_diversity INT,
+  
+  avg_time_at_belt_months INT,
+  min_time_observed_months INT,
+  max_time_observed_months INT,
+  
+  typical_sparring_performance JSONB,
+  
+  common_gaps TEXT[],
+  common_strengths TEXT[],
+  
+  readiness_algorithm JSONB,
+  
+  last_updated TIMESTAMP DEFAULT NOW()
+);
+
+-- ===== LAYER 3: SELF-IMPROVEMENT =====
+
+-- Track coaching effectiveness
+CREATE TABLE coaching_intervention_outcomes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  
+  intervention_date TIMESTAMP DEFAULT NOW(),
+  intervention_type VARCHAR(50),
+  intervention_content TEXT,
+  intervention_context JSONB,
+  
+  -- User response
+  user_immediate_response TEXT,
+  user_acknowledged BOOLEAN DEFAULT false,
+  user_expressed_doubt BOOLEAN DEFAULT false,
+  
+  -- Follow-through
+  user_followed_advice BOOLEAN,
+  days_until_action INT,
+  
+  -- Effectiveness
+  intervention_successful BOOLEAN,
+  success_indicators JSONB,
+  measured_impact JSONB,
+  
+  -- Long-term
+  sustained_30_days BOOLEAN,
+  sustained_90_days BOOLEAN,
+  
+  -- ML features
+  features_at_intervention JSONB,
+  outcome_label VARCHAR(20)               -- "highly_effective", "somewhat_effective", "ineffective"
+);
+
+CREATE INDEX idx_coaching_outcomes_user ON coaching_intervention_outcomes(user_id);
+CREATE INDEX idx_coaching_outcomes_type ON coaching_intervention_outcomes(intervention_type, outcome_label);
+
+-- A/B testing framework
+CREATE TABLE coaching_ab_tests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  test_name VARCHAR(100) UNIQUE,
+  test_description TEXT,
+  
+  start_date TIMESTAMP DEFAULT NOW(),
+  end_date TIMESTAMP,
+  status VARCHAR(20) DEFAULT 'running',   -- "running", "completed", "paused"
+  
+  variant_a JSONB,
+  variant_b JSONB,
+  
+  applies_to_user_types TEXT[],
+  applies_to_situations TEXT[],
+  
+  -- Results
+  variant_a_users INT DEFAULT 0,
+  variant_b_users INT DEFAULT 0,
+  variant_a_success_rate DECIMAL(4,2),
+  variant_b_success_rate DECIMAL(4,2),
+  statistical_significance DECIMAL(4,2),
+  
+  winner VARCHAR(10),                     -- "a", "b", "inconclusive"
+  implemented_at TIMESTAMP,
+  
+  insight TEXT,
+  recommendation TEXT
+);
+
+-- User feedback on Prof. OS responses
+CREATE TABLE prof_os_response_ratings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  conversation_id UUID,
+  message_id UUID,
+  
+  prof_os_response TEXT,
+  response_type VARCHAR(50),
+  response_length INT,
+  
+  user_rating INT CHECK (user_rating BETWEEN 1 AND 5),
+  rating_timestamp TIMESTAMP DEFAULT NOW(),
+  
+  feedback_tags TEXT[],                   -- ["too_long", "perfect", "confusing", "helpful"]
+  user_comment TEXT,
+  
+  user_state_at_time JSONB,
+  conversation_context JSONB,
+  
+  response_features JSONB,
+  
+  used_for_training BOOLEAN DEFAULT false
+);
+
+CREATE INDEX idx_response_ratings_user ON prof_os_response_ratings(user_id);
+CREATE INDEX idx_response_ratings_low ON prof_os_response_ratings(user_rating) WHERE user_rating <= 2;
+
+-- Breakthrough moments database
+CREATE TABLE breakthrough_moments_database (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  
+  breakthrough_date TIMESTAMP DEFAULT NOW(),
+  breakthrough_description TEXT,
+  breakthrough_type VARCHAR(50),          -- "technical", "mental", "physical", "conceptual"
+  
+  -- Context before
+  months_of_struggle INT,
+  techniques_involved TEXT[],
+  
+  -- What caused it
+  triggering_event TEXT,
+  key_insight TEXT,
+  what_they_changed TEXT,
+  
+  -- Prof. OS involvement
+  prof_os_advice_given TEXT[],
+  prof_os_advice_followed BOOLEAN,
+  time_between_advice_and_breakthrough_days INT,
+  
+  -- Generalizability
+  transferable_lesson TEXT,
+  applicable_to_user_types TEXT[],
+  
+  -- Impact
+  sustained_improvement BOOLEAN,
+  cascading_breakthroughs BOOLEAN
+);
+
+CREATE INDEX idx_breakthrough_user ON breakthrough_moments_database(user_id);
+CREATE INDEX idx_breakthrough_type ON breakthrough_moments_database(breakthrough_type);
+
+-- System prompt evolution tracking
+CREATE TABLE system_prompt_evolution (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  version_number INT NOT NULL,
+  
+  prompt_text TEXT NOT NULL,
+  prompt_section VARCHAR(100),
+  
+  change_made TEXT,
+  reason_for_change TEXT,
+  evidence_supporting_change JSONB,
+  
+  deployed_date TIMESTAMP DEFAULT NOW(),
+  test_period_days INT,
+  
+  performance_metrics JSONB,
+  compared_to_version INT,
+  improvement_delta DECIMAL(5,2),
+  
+  status VARCHAR(20) DEFAULT 'testing',   -- "testing", "deployed", "rolled_back", "archived"
+  decision_date TIMESTAMP
+);
+```
+
+-----
+
+## PART 2: MULTI-MODEL AI ROUTER
+
+Create `services/aiRouter.js`:
+
+```javascript
+import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
+import { db } from './database';
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+export class AIRouter {
+  
+  // Route to appropriate model based on task
+  async handleMessage(userMessage, context, taskType = 'coaching') {
+    
+    const route = this.determineRoute(userMessage, context, taskType);
+    const startTime = Date.now();
+    
+    let result;
+    
+    try {
+      switch(route.model) {
+        case 'claude':
+          result = await this.callClaude(userMessage, context, route.config);
+          break;
+        case 'gpt':
+          result = await this.callGPT(userMessage, context, route.config);
+          break;
+        default:
+          throw new Error(`Unknown model: ${route.model}`);
+      }
+      
+      // Track usage
+      await this.trackUsage({
+        userId: context.userId,
+        modelName: result.model,
+        taskType,
+        tokensInput: result.tokens.input,
+        tokensOutput: result.tokens.output,
+        cost: this.calculateCost(result.model, result.tokens),
+        responseTimeMs: Date.now() - startTime
+      });
+      
+      return result.content;
+      
+    } catch (error) {
+      console.error('AI Router error:', error);
+      throw error;
+    }
+  }
+  
+  determineRoute(message, context, taskType) {
+    
+    // Explicit task routing
+    if (taskType === 'embedding') {
+      return {
+        model: 'gpt',
+        config: {model: 'text-embedding-3-small'}
+      };
+    }
+    
+    if (taskType === 'extraction') {
+      return {
+        model: 'gpt',
+        config: {
+          model: 'gpt-4o-mini',
+          response_format: {type: 'json_object'}
+        }
+      };
+    }
+    
+    if (taskType === 'summary' || taskType === 'structured') {
+      return {
+        model: 'gpt',
+        config: {
+          model: 'gpt-4o-mini',
+          response_format: {type: 'json_object'}
+        }
+      };
+    }
+    
+    if (taskType === 'vision') {
+      return {
+        model: 'gpt',
+        config: {model: 'gpt-4o'}
+      };
+    }
+    
+    // Default: Claude for main coaching
+    return {
+      model: 'claude',
+      config: {model: 'claude-sonnet-4-5-20250929'}
+    };
+  }
+  
+  async callClaude(message, context, config) {
+    const response = await anthropic.messages.create({
+      model: config.model,
+      max_tokens: 2000,
+      system: this.buildSystemPrompt(context),
+      messages: this.buildMessages(message, context)
+    });
+    
+    return {
+      content: response.content[0].text,
+      model: 'claude',
+      tokens: {
+        input: response.usage.input_tokens,
+        output: response.usage.output_tokens
+      }
+    };
+  }
+  
+  async callGPT(message, context, config) {
+    const response = await openai.chat.completions.create({
+      model: config.model,
+      messages: this.buildMessages(message, context),
+      ...(config.response_format && {response_format: config.response_format})
+    });
+    
+    return {
+      content: response.choices[0].message.content,
+      model: config.model,
+      tokens: {
+        input: response.usage.prompt_tokens,
+        output: response.usage.completion_tokens
+      }
+    };
+  }
+  
+  buildSystemPrompt(context) {
+    // Use existing Prof. OS system prompt as base
+    // Add enhancement layer if user has rich data
+    
+    let prompt = process.env.PROF_OS_BASE_PROMPT; // Your existing prompt
+    
+    if (context.enhancementLevel !== 'minimal') {
+      prompt += `\n\n${this.buildEnhancementLayer(context)}`;
+    }
+    
+    return prompt;
+  }
+  
+  buildEnhancementLayer(context) {
+    return `
+ENHANCED INTELLIGENCE AVAILABLE:
+
+${context.cognitiveProfile ? `
+Learning Style: ${context.cognitiveProfile.learning_style}
+Communication: ${context.cognitiveProfile.prefers_brief_responses ? 'Brief/direct' : 'Detailed'}
+` : ''}
+
+${context.techniqueEcosystem ? `
+Technique Patterns Detected:
+- High-percentage moves: ${this.getTopTechniques(context.techniqueEcosystem, 3)}
+- Struggles: ${this.getStrugglingTechniques(context.techniqueEcosystem, 2)}
+` : ''}
+
+${context.detectedPatterns?.length > 0 ? `
+Active Patterns: ${context.detectedPatterns.map(p => p.pattern_type).join(', ')}
+` : ''}
+
+USAGE GUIDELINES:
+- Use enhanced data when relevant, don't force it
+- Reference patterns naturally: "I've noticed..." not "My data shows..."
+- Save deep personalization for moments when it adds value
+- If user asks generic question, answer generically
+
+ENHANCEMENT LEVEL: ${context.enhancementLevel}
+    `.trim();
+  }
+  
+  buildMessages(message, context) {
+    // Build conversation history + current message
+    const messages = [];
+    
+    if (context.conversationHistory) {
+      messages.push(...context.conversationHistory);
+    }
+    
+    messages.push({
+      role: 'user',
+      content: message
+    });
+    
+    return messages;
+  }
+  
+  calculateCost(model, tokens) {
+    const pricing = {
+      'claude-sonnet-4-5-20250929': {
+        input: 0.003,    // per 1K tokens
+        output: 0.015
+      },
+      'gpt-4o': {
+        input: 0.0025,
+        output: 0.01
+      },
+      'gpt-4o-mini': {
+        input: 0.00015,
+        output: 0.0006
+      },
+      'text-embedding-3-small': {
+        input: 0.00002,
+        output: 0
+      }
+    };
+    
+    const rates = pricing[model];
+    if (!rates) return 0;
+    
+    const inputCost = (tokens.input / 1000) * rates.input;
+    const outputCost = (tokens.output / 1000) * rates.output;
+    
+    return inputCost + outputCost;
+  }
+  
+  async trackUsage(data) {
+    await db.ai_model_usage.create({
+      data: {
+        userId: data.userId,
+        modelName: data.modelName,
+        taskType: data.taskType,
+        tokensInput: data.tokensInput,
+        tokensOutput: data.tokensOutput,
+        costUsd: data.cost,
+        responseTimeMs: data.responseTimeMs
+      }
+    });
+  }
+  
+  getTopTechniques(ecosystem, limit) {
+    return ecosystem
+      .filter(t => t.is_signature_move)
+      .map(t => `${t.technique_name} (${Math.round(t.success_rate * 100)}%)`)
+      .slice(0, limit)
+      .join(', ');
+  }
+  
+  getStrugglingTechniques(ecosystem, limit) {
+    return ecosystem
+      .filter(t => t.attempts > 10 && t.success_rate < 0.4)
+      .map(t => t.technique_name)
+      .slice(0, limit)
+      .join(', ');
+  }
+}
+
+// Export singleton
+export const aiRouter = new AIRouter();
+```
+
+-----
+
+## PART 3: CONTEXT BUILDING SERVICE
+
+Create `services/contextBuilder.js`:
+
+```javascript
+import { db } from './database';
+
+export async function buildEnhancedContext(userId) {
+  
+  // Get base user data (existing)
+  const user = await db.users.findUnique({
+    where: { id: userId },
+    include: {
+      // Include existing relationships
+      training_sessions: {
+        orderBy: { session_date: 'desc' },
+        take: 30
+      }
+    }
+  });
+  
+  if (!user) throw new Error('User not found');
+  
+  // Determine enhancement level based on data availability
+  const sessionCount = user.training_sessions.length;
+  const enhancementLevel = 
+    sessionCount < 5 ? 'minimal' :
+    sessionCount < 20 ? 'moderate' : 
+    'advanced';
+  
+  // Base context (always included)
+  const context = {
+    userId,
+    user: {
+      beltLevel: user.belt_level,
+      trainingFrequency: user.training_frequency,
+      mainGoal: user.main_goal,
+      totalSessions: user.total_sessions
+    },
+    recentSessions: user.training_sessions.slice(0, 10),
+    enhancementLevel
+  };
+  
+  // Only load enhanced data if user has enough history
+  if (enhancementLevel !== 'minimal') {
+    
+    // Load cognitive profile
+    const cognitiveProfile = await db.user_cognitive_profile.findUnique({
+      where: { userId }
+    });
+    
+    // Load technique ecosystem
+    const techniqueEcosystem = await db.user_technique_ecosystem.findMany({
+      where: { userId },
+      orderBy: { success_rate: 'desc' }
+    });
+    
+    // Load active detected patterns
+    const detectedPatterns = await db.detected_patterns.findMany({
+      where: {
+        userId,
+        status: 'detected'
+      },
+      orderBy: { priority: 'desc' }
+    });
+    
+    // Load recent memory markers
+    const memoryMarkers = await db.user_memory_markers.findMany({
+      where: {
+        userId,
+        memory_tier: { in: ['working', 'medium'] }
+      },
+      orderBy: { occurred_at: 'desc' },
+      take: 20
+    });
+    
+    // Add to context
+    Object.assign(context, {
+      cognitiveProfile,
+      techniqueEcosystem,
+      detectedPatterns,
+      memoryMarkers
+    });
+  }
+  
+  return context;
+}
+
+export function determineEnhancementLevel(sessionCount, avgDetailLevel) {
+  if (sessionCount < 5) return 'minimal';
+  if (sessionCount < 20 || avgDetailLevel < 5) return 'moderate';
+  return 'advanced';
+}
+```
+
+-----
+
+## PART 4: BACKGROUND PROCESSING JOBS
+
+Create `jobs/intelligenceUpdater.js`:
+
+```javascript
+import cron from 'node-cron';
+import { db } from '../services/database';
+import { aiRouter } from '../services/aiRouter';
+
+// Update user intelligence profiles (runs daily at 4am)
+cron.schedule('0 4 * * *', async () => {
+  console.log('🧠 Running daily intelligence updates...');
+  
+  try {
+    // Get all active users (trained in last 30 days)
+    const activeUsers = await db.users.findMany({
+      where: {
+        last_session_date: {
+          gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        }
+      }
+    });
+    
+    for (const user of activeUsers) {
+      await updateUserIntelligence(user.id);
+    }
+    
+    console.log(`✅ Updated intelligence for ${activeUsers.length} users`);
+    
+  } catch (error) {
+    console.error('Intelligence update failed:', error);
+  }
+});
+
+async function updateUserIntelligence(userId) {
+  
+  // 1. Update cognitive profile
+  await updateCognitiveProfile(userId);
+  
+  // 2. Update technique ecosystem
+  await updateTechniqueEcosystem(userId);
+  
+  // 3. Detect new patterns
+  await detectPatterns(userId);
+  
+  // 4. Update temporal patterns
+  await updateTemporalPatterns(userId);
+}
+
+async function updateCognitiveProfile(userId) {
+  // Analyze last 20 conversations
+  const conversations = await db.conversations.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    take: 20
+  });
+  
+  if (conversations.length < 5) return; // Not enough data
+  
+  // Use GPT to analyze communication patterns
+  const analysis = await aiRouter.handleMessage(
+    `Analyze these conversation patterns and determine user's learning style and communication preferences: ${JSON.stringify(conversations)}`,
+    { userId },
+    'extraction'
+  );
+  
+  const profile = JSON.parse(analysis);
+  
+  // Upsert cognitive profile
+  await db.user_cognitive_profile.upsert({
+    where: { userId },
+    update: {
+      learning_style: profile.learning_style,
+      learning_style_confidence: profile.confidence,
+      prefers_brief_responses: profile.prefers_brief,
+      prefers_detailed_explanations: profile.prefers_detailed,
+      interactions_analyzed: conversations.length,
+      last_updated: new Date()
+    },
+    create: {
+      userId,
+      learning_style: profile.learning_style,
+      learning_style_confidence: profile.confidence,
+      interactions_analyzed: conversations.length
+    }
+  });
+}
+
+async function updateTechniqueEcosystem(userId) {
+  // Get all sessions with technique mentions
+  const sessions = await db.training_sessions.findMany({
+    where: {
+      userId,
+      techniques_mentioned: { not: null }
+    }
+  });
+  
+  // Build technique success/failure tracking
+  const techniqueStats = {};
+  
+  for (const session of sessions) {
+    for (const technique of session.techniques_mentioned || []) {
+      if (!techniqueStats[technique]) {
+        techniqueStats[technique] = {
+          attempts: 0,
+          successes: 0,
+          failures: 0
+        };
+      }
+      
+      techniqueStats[technique].attempts++;
+      
+      // Check if marked as success or struggle
+      if (session.successes_mentioned?.includes(technique)) {
+        techniqueStats[technique].successes++;
+      }
+      if (session.struggles_mentioned?.includes(technique)) {
+        techniqueStats[technique].failures++;
+      }
+    }
+  }
+  
+  // Update ecosystem table
+  for (const [technique, stats] of Object.entries(techniqueStats)) {
+    const successRate = stats.attempts > 0 
+      ? stats.successes / stats.attempts 
+      : 0;
+    
+    await db.user_technique_ecosystem.upsert({
+      where: {
+        user_id_technique_name: {
+          user_id: userId,
+          technique_name: technique
+        }
+      },
+      update: {
+        attempts: stats.attempts,
+        successes: stats.successes,
+        failures: stats.failures,
+        success_rate: successRate,
+        is_signature_move: stats.attempts > 10 && successRate > 0.75,
+        updated_at: new Date()
+      },
+      create: {
+        user_id: userId,
+        technique_name: technique,
+        attempts: stats.attempts,
+        successes: stats.successes,
+        failures: stats.failures,
+        success_rate: successRate
+      }
+    });
+  }
+}
+
+async function detectPatterns(userId) {
+  // Get recent sessions
+  const recentSessions = await db.training_sessions.findMany({
+    where: { userId },
+    orderBy: { session_date: 'desc' },
+    take: 10
+  });
+  
+  if (recentSessions.length < 3) return;
+  
+  // Pattern detection rules
+  
+  // 1. Recurring problem (same struggle 3+ times)
+  const struggles = recentSessions.flatMap(s => s.struggles_mentioned || []);
+  const struggleCounts = {};
+  struggles.forEach(s => struggleCounts[s] = (struggleCounts[s] || 0) + 1);
+  
+  for (const [struggle, count] of Object.entries(struggleCounts)) {
+    if (count >= 3) {
+      await db.detected_patterns.create({
+        data: {
+          userId,
+          pattern_type: 'recurring_problem',
+          trigger_data: { struggle, count },
+          supporting_session_ids: recentSessions.map(s => s.id),
+          intervention_suggested: `Address recurring struggle with ${struggle}`,
+          priority: 'high'
+        }
+      });
+    }
+  }
+  
+  // 2. Injury mentions (2+ in 2 weeks)
+  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const recentInjuryMentions = recentSessions.filter(s => 
+    new Date(s.session_date) > twoWeeksAgo && 
+    s.injuries_mentioned?.length > 0
+  );
+  
+  if (recentInjuryMentions.length >= 2) {
+    await db.detected_patterns.create({
+      data: {
+        userId,
+        pattern_type: 'injury_concern',
+        trigger_data: { 
+          injuries: recentInjuryMentions.flatMap(s => s.injuries_mentioned),
+          count: recentInjuryMentions.length 
+        },
+        supporting_session_ids: recentInjuryMentions.map(s => s.id),
+        intervention_suggested: 'Check in about injury and suggest rest/modification',
+        priority: 'high'
+      }
+    });
+  }
+  
+  // 3. Success pattern (same success 4+ times)
+  const successes = recentSessions.flatMap(s => s.successes_mentioned || []);
+  const successCounts = {};
+  successes.forEach(s => successCounts[s] = (successCounts[s] || 0) + 1);
+  
+  for (const [success, count] of Object.entries(successCounts)) {
+    if (count >= 4) {
+      await db.detected_patterns.create({
+        data: {
+          userId,
+          pattern_type: 'success_pattern',
+          trigger_data: { success, count },
+          supporting_session_ids: recentSessions.map(s => s.id),
+          intervention_suggested: `Reinforce strength: ${success} is becoming signature move`,
+          priority: 'medium'
+        }
+      });
+    }
+  }
+}
+
+async function updateTemporalPatterns(userId) {
+  // Analyze when user performs best
+  const sessions = await db.training_sessions.findMany({
+    where: { userId },
+    orderBy: { session_date: 'desc' },
+    take: 50
+  });
+  
+  if (sessions.length < 10) return;
+  
+  // Calculate patterns (simplified version)
+  const patterns = {
+    optimal_training_frequency: calculateOptimalFrequency(sessions),
+    breakthrough_frequency_days: calculateBreakthroughFrequency(sessions)
+  };
+  
+  await db.user_temporal_patterns.upsert({
+    where: { userId },
+    update: {
+      ...patterns,
+      sample_size: sessions.length,
+      last_updated: new Date()
+    },
+    create: {
+      userId,
+      ...patterns,
+      sample_size: sessions.length
+    }
+  });
+}
+
+function calculateOptimalFrequency(sessions) {
+  // Simplified: average sessions per week
+  const weeks = Math.ceil(sessions.length / 7);
+  return sessions.length / weeks;
+}
+
+function calculateBreakthroughFrequency(sessions) {
+  // Find sessions with significant successes
+  const breakthroughs = sessions.filter(s => 
+    s.successes_mentioned?.length > 0
+  );
+  
+  if (breakthroughs.length < 2) return null;
+  
+  // Average days between breakthroughs
+  let totalDays = 0;
+  for (let i = 1; i < breakthroughs.length; i++) {
+    const daysDiff = Math.abs(
+      (new Date(breakthroughs[i].session_date) - new Date(breakthroughs[i-1].session_date)) 
+      / (1000 * 60 * 60 * 24)
+    );
+    totalDays += daysDiff;
+  }
+  
+  return Math.round(totalDays / (breakthroughs.length - 1));
+}
+
+console.log('📅 Intelligence updater scheduled (daily 4am)');
+```
+
+-----
+
+## PART 5: INTEGRATION WITH EXISTING PROF. OS
+
+Update your existing Prof. OS message handler:
+
+```javascript
+import { aiRouter } from './services/aiRouter';
+import { buildEnhancedContext } from './services/contextBuilder';
+
+// Your existing handler - UPDATE IT
+export async function handleProfOsMessage(userMessage, userId) {
+  
+  // Build enhanced context (includes existing + new intelligence)
+  const context = await buildEnhancedContext(userId);
+  
+  // Route to appropriate model (Claude for coaching)
+  const response = await aiRouter.handleMessage(
+    userMessage,
+    context,
+    'coaching'
+  );
+  
+  return response;
+}
+
+// Example: Using GPT for structured data extraction
+export async function extractTrainingData(userMessage, userId) {
+  const context = await buildEnhancedContext(userId);
+  
+  // Use GPT for JSON extraction
+  const extracted = await aiRouter.handleMessage(
+    `Extract structured training data: ${userMessage}`,
+    context,
+    'extraction'
+  );
+  
+  return JSON.parse(extracted);
+}
+
+// Example: Using GPT for embeddings (semantic search)
+export async function generateEmbedding(text) {
+  const embedding = await aiRouter.handleMessage(
+    text,
+    {},
+    'embedding'
+  );
+  
+  return embedding;
+}
+```
+
+-----
+
+## PART 6: ENVIRONMENT VARIABLES
+
+Add to `.env`:
+
+```
+# Existing variables (keep these)
+ANTHROPIC_API_KEY=your_existing_key
+DATABASE_URL=your_existing_database_url
+
+# New variables (add these)
+OPENAI_API_KEY=your_openai_key_here
+
+# System prompts (add your existing Prof. OS prompt here)
+PROF_OS_BASE_PROMPT="You are Prof. OS, a Brazilian Jiu-Jitsu coach..."
+```
+
+-----
+
+## PART 7: TESTING CHECKLIST
+
+After implementation, test:
+
+1. **Basic functionality still works:**
+
+- Existing session logging
+- Existing video recommendations
+- Existing Prof. OS personality
+
+1. **New tables created:**
+
+- Check database has all new tables
+- No conflicts with existing tables
+
+1. **Multi-model routing works:**
+
+- Claude handles coaching conversations
+- GPT handles embeddings/extraction
+- Usage tracking logs to database
+
+1. **Context building works:**
+
+- New users get minimal context
+- Users with history get enhanced context
+- No errors when loading profiles
+
+1. **Background jobs run:**
+
+- Intelligence updater runs daily
+- Profiles update correctly
+- Patterns detected
+
+-----
+
+## CRITICAL REMINDERS
+
+**DO NOT:**
+
+- Modify existing database tables
+- Change existing Prof. OS system prompts
+- Alter existing video recommendation logic
+- Break any existing functionality
+
+**DO:**
+
+- Add new tables alongside existing ones
+- Enhance context with new intelligence layers
+- Keep existing Prof. OS personality intact
+- Use multi-model routing for efficiency
+- Track all AI usage for cost monitoring
+
+**GRADUAL ROLLOUT:**
+
+- New users get minimal enhancement (build relationship first)
+- Existing users get moderate → advanced enhancement as data grows
+- Intelligence layers activate automatically as user shares more
+
+-----
+
+## DEPENDENCIES TO INSTALL
+
+```bash
+npm install @anthropic-ai/sdk openai node-cron
+```
+
+-----
+
+## DEPLOYMENT ORDER
+
+1. Add new database tables (run migrations)
+1. Install dependencies
+1. Add AIRouter service
+1. Add contextBuilder service
+1. Update existing Prof. OS handler to use enhanced context
+1. Deploy background jobs
+1. Test with existing users
+1. Monitor AI costs and usage
+1. Iterate based on feedback
+
+-----
+
+**This is a complete additive enhancement. Everything existing stays intact. New intelligence layers activate progressively as users engage more with Prof. OS.**
+
+```
+---
+
+Want me to also create the news scraper prompt now, or is this complete master prompt ready to give to Replit Agent?​​​​​​​​​​​​​​​​
+```

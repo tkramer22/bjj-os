@@ -1,0 +1,900 @@
+# **ULTIMATE MEGA PROMPT - BJJ OS COMPLETE SYSTEM BUILD**
+
+```
+BUILD COMPLETE BJJ OS INSTRUCTOR PRIORITY SYSTEM + VIDEO CURATION + ACCOUNT SHARING PREVENTION + DEPLOY TO PRODUCTION
+
+═══════════════════════════════════════════════════════════════════
+MISSION: Build the complete BJJ OS system with excellence as the pillar
+═══════════════════════════════════════════════════════════════════
+
+This is a comprehensive build covering:
+1. Instructor priority system (AI auto-calculation + manual override protection)
+2. Data scraping (YouTube, achievements, instructionals)
+3. Video curation (quality-first, 2,000+ videos)
+4. User feedback system (auto-deletion of low quality)
+5. Account sharing prevention (device limits + behavioral analysis)
+6. Admin dashboard (complete visibility and control)
+7. Grant lifetime access fix (database error)
+8. AI Logs, Schedules, Techniques pages (404 fixes)
+9. Full deployment to bjjos.app production
+
+═══════════════════════════════════════════════════════════════════
+PART 1: DATABASE SCHEMA - COMPLETE SYSTEM
+═══════════════════════════════════════════════════════════════════
+
+CREATE OR ALTER these tables (check if exists first, add missing columns if needed):
+
+**1.1 - INSTRUCTOR CREDIBILITY TABLE**
+
+```sql
+CREATE TABLE IF NOT EXISTS instructor_credibility (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  tier INTEGER CHECK (tier IN (1, 2)),
+  
+  -- PRIORITY SYSTEM (CRITICAL)
+  priority_mode TEXT DEFAULT 'auto' NOT NULL CHECK (priority_mode IN ('auto', 'manual')),
+  auto_calculated_priority INTEGER DEFAULT 0 CHECK (auto_calculated_priority BETWEEN 0 AND 100),
+  manual_override_priority INTEGER CHECK (manual_override_priority BETWEEN 0 AND 100),
+  recommendation_priority INTEGER NOT NULL DEFAULT 0 CHECK (recommendation_priority BETWEEN 0 AND 100),
+  quality_threshold DECIMAL DEFAULT 7.5 CHECK (quality_threshold IN (6.5, 7.0, 7.5)),
+  
+  -- TRACKING & AUDIT
+  last_auto_calculation TIMESTAMP,
+  manual_override_date TIMESTAMP,
+  manual_override_by TEXT,
+  manual_override_reason TEXT,
+  
+  -- AI CALCULATION INPUTS (SCRAPED DATA)
+  achievements JSONB DEFAULT '[]'::jsonb,
+  youtube_channel_id TEXT,
+  youtube_channel_handle TEXT,
+  youtube_subscribers INTEGER DEFAULT 0,
+  youtube_video_count INTEGER DEFAULT 0,
+  youtube_last_scraped TIMESTAMP,
+  has_instructional_series BOOLEAN DEFAULT false,
+  instructional_platforms JSONB DEFAULT '[]'::jsonb,
+  
+  -- USER FEEDBACK (AUTO-CALCULATED)
+  total_videos INTEGER DEFAULT 0,
+  helpful_count INTEGER DEFAULT 0,
+  not_helpful_count INTEGER DEFAULT 0,
+  helpful_ratio DECIMAL DEFAULT 0,
+  
+  -- SPECIALTIES
+  specialties TEXT[] DEFAULT ARRAY[]::TEXT[],
+  
+  -- METADATA
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_instructor_priority ON instructor_credibility(recommendation_priority DESC);
+CREATE INDEX IF NOT EXISTS idx_instructor_mode ON instructor_credibility(priority_mode);
+CREATE INDEX IF NOT EXISTS idx_instructor_active ON instructor_credibility(is_active);
+CREATE INDEX IF NOT EXISTS idx_instructor_name ON instructor_credibility(LOWER(name));
+```
+
+**1.2 - ACCOUNT SHARING PREVENTION TABLES**
+
+```sql
+CREATE TABLE IF NOT EXISTS authorized_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  fingerprint TEXT NOT NULL,
+  device_name TEXT,
+  device_type TEXT,
+  browser TEXT,
+  os TEXT,
+  first_seen TIMESTAMP DEFAULT NOW(),
+  last_seen TIMESTAMP DEFAULT NOW(),
+  login_count INTEGER DEFAULT 1,
+  ip_address TEXT,
+  city TEXT,
+  country TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(user_id, fingerprint)
+);
+
+CREATE TABLE IF NOT EXISTS login_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  device_fingerprint TEXT,
+  ip_address TEXT,
+  city TEXT,
+  country TEXT,
+  latitude DECIMAL,
+  longitude DECIMAL,
+  login_time TIMESTAMP DEFAULT NOW(),
+  success BOOLEAN DEFAULT true
+);
+
+CREATE TABLE IF NOT EXISTS flagged_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  reason TEXT,
+  data JSONB,
+  flagged_at TIMESTAMP DEFAULT NOW(),
+  reviewed_by TEXT,
+  reviewed_at TIMESTAMP,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'false_positive', 'suspended')),
+  notes TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_devices ON authorized_devices(user_id);
+CREATE INDEX IF NOT EXISTS idx_login_events_user ON login_events(user_id, login_time DESC);
+CREATE INDEX IF NOT EXISTS idx_flagged_pending ON flagged_accounts(status) WHERE status = 'pending';
+```
+
+**1.3 - VERIFY USERS TABLE FIX**
+
+Ensure the users table does NOT have typo ‘bj_users’:
+
+```sql
+-- If a table called 'bj_users' exists, this is the bug causing grant lifetime access to fail
+-- Drop it if it exists (after migrating any data to correct 'users' table)
+DROP TABLE IF EXISTS bj_users CASCADE;
+
+-- Verify 'users' table exists and has required fields
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier TEXT DEFAULT 'free';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS granted_by TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS granted_at TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS granted_reason TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notes TEXT;
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 2: SEED ELITE INSTRUCTORS WITH INITIAL DATA
+═══════════════════════════════════════════════════════════════════
+
+Insert these instructors (check if exists first, skip if already present):
+
+```javascript
+const eliteInstructors = [
+  {
+    name: 'JT Torres',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@jtorresbjj',
+    achievements: ['IBJJF World Champion', 'IBJJF Pan Champion', 'ADCC Veteran'],
+    specialties: ['competition', 'guard', 'sweeps', 'berimbolo'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Gordon Ryan',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@gordonlovesjiujitsu',
+    achievements: ['ADCC Champion', 'IBJJF No-Gi World Champion', 'Submission Underground Champion'],
+    specialties: ['no-gi', 'leg locks', 'passing', 'back attacks'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Marcelo Garcia',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@marcelogarciajj',
+    achievements: ['ADCC Champion (multiple)', 'IBJJF World Champion'],
+    specialties: ['butterfly guard', 'guillotine', 'x-guard', 'back takes'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Roger Gracie',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@RogerGracieTV',
+    achievements: ['IBJJF World Champion (10x)', 'ADCC Champion'],
+    specialties: ['closed guard', 'mount', 'cross collar choke', 'fundamentals'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Mikey Musumeci',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@MikeyMusumeciJiuJitsu',
+    achievements: ['IBJJF World Champion', 'ONE Championship Champion'],
+    specialties: ['berimbolo', 'lapel guards', 'technique', 'details'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'John Danaher',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@DanaherDeathSquad',
+    achievements: ['Legendary Coach', 'Developed multiple champions'],
+    specialties: ['systems', 'leg locks', 'theory', 'instructional'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Lachlan Giles',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@LachlanGiles',
+    achievements: ['ADCC Medalist', 'Absolute MMA founder'],
+    specialties: ['leg locks', 'half guard', 'technical', 'instructional'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Craig Jones',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@CraigJones',
+    achievements: ['ADCC Medalist', 'No-Gi World Champion'],
+    specialties: ['leg locks', 'triangles', 'no-gi', 'back attacks'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Bernardo Faria',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@BernardoFaria',
+    achievements: ['IBJJF World Champion (5x)', 'ADCC Champion'],
+    specialties: ['pressure passing', 'deep half', 'over under'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Keenan Cornelius',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@KeenOnline',
+    achievements: ['IBJJF Pan Champion', 'IBJJF World Medalist'],
+    specialties: ['worm guard', 'lapel guards', 'creativity'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Demian Maia',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@DemianMaia',
+    achievements: ['ADCC Champion', 'UFC Welterweight Contender'],
+    specialties: ['back control', 'rear naked choke', 'MMA grappling'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Jon Thomas',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@JonThomasBJJ',
+    achievements: ['Black Belt Instructor', 'Popular BJJ Educator'],
+    specialties: ['fundamentals', 'teaching', 'concepts'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Chewy',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@Chewjitsu',
+    achievements: ['Black Belt Instructor', 'BJJ Lifestyle Coach'],
+    specialties: ['fundamentals', 'teaching', 'practical', 'mindset'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Ryan Hall',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@RyanHallBJJ',
+    achievements: ['IBJJF World Medalist', 'UFC Fighter'],
+    specialties: ['triangles', '50/50', 'theory', 'leg locks'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Stephan Kesting',
+    tier: 1,
+    quality_threshold: 6.5,
+    youtube_channel_handle: '@GrappleArts',
+    achievements: ['Black Belt Instructor', 'Grapplearts Founder'],
+    specialties: ['fundamentals', 'teaching', 'self-defense'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Knight Jiu Jitsu',
+    tier: 2,
+    quality_threshold: 7.0,
+    youtube_channel_handle: '@KnightJiuJitsu',
+    achievements: ['Black Belt Instructor', 'Popular BJJ Channel'],
+    specialties: ['fundamentals', 'drilling'],
+    priority_mode: 'auto'
+  },
+  {
+    name: 'Jordan Teaches Jiujitsu',
+    tier: 2,
+    quality_threshold: 7.0,
+    youtube_channel_handle: '@JordanTeachesJiujitsu',
+    achievements: ['Black Belt Instructor', 'BJJ Educator'],
+    specialties: ['teaching', 'fundamentals'],
+    priority_mode: 'auto'
+  }
+];
+
+// Insert each instructor
+for (const instructor of eliteInstructors) {
+  const existing = await db.query(
+    'SELECT id FROM instructor_credibility WHERE LOWER(name) = LOWER($1)',
+    [instructor.name]
+  );
+  
+  if (existing.rows.length === 0) {
+    await db.query(`
+      INSERT INTO instructor_credibility 
+      (name, tier, quality_threshold, youtube_channel_handle, achievements, specialties, priority_mode, recommendation_priority)
+      VALUES ($1, $2, $3, $4, $5, $6, 'auto', 0)
+    `, [
+      instructor.name,
+      instructor.tier,
+      instructor.quality_threshold,
+      instructor.youtube_channel_handle,
+      JSON.stringify(instructor.achievements),
+      instructor.specialties
+    ]);
+    console.log(`✅ Seeded ${instructor.name}`);
+  } else {
+    console.log(`${instructor.name} already exists - skipping`);
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 3: AI PRIORITY CALCULATION FUNCTION
+═══════════════════════════════════════════════════════════════════
+
+Implement this exact calculation:
+
+```javascript
+function calculateInstructorPriority(instructor) {
+  let priority = 0;
+  
+  // 1. COMPETITION CREDENTIALS (0-40 points)
+  const achievements = instructor.achievements || [];
+  
+  if (achievements.some(a => a.includes('IBJJF World Champion') || a.includes('ADCC Champion'))) {
+    priority += 40;
+  } else if (achievements.some(a => a.includes('IBJJF Pan Champion') || a.includes('ADCC Medalist'))) {
+    priority += 30;
+  } else if (achievements.some(a => a.includes('IBJJF European Champion') || a.includes('ADCC Trials'))) {
+    priority += 25;
+  } else if (achievements.some(a => a.includes('World Medalist'))) {
+    priority += 20;
+  } else if (achievements.some(a => a.includes('Black Belt Competitor'))) {
+    priority += 15;
+  }
+  
+  // 2. YOUTUBE SUBSCRIBERS (0-30 points)
+  const subs = instructor.youtube_subscribers || 0;
+  if (subs >= 500000) priority += 30;
+  else if (subs >= 200000) priority += 25;
+  else if (subs >= 100000) priority += 20;
+  else if (subs >= 50000) priority += 15;
+  else if (subs >= 10000) priority += 10;
+  else if (subs >= 5000) priority += 5;
+  
+  // 3. INSTRUCTIONAL SERIES (0-20 points)
+  if (instructor.has_instructional_series) {
+    const platforms = instructor.instructional_platforms || [];
+    if (platforms.length >= 3) priority += 20;
+    else if (platforms.length >= 1) priority += 15;
+  } else if (instructor.instructional_platforms?.length > 0) {
+    priority += 10;
+  }
+  
+  // 4. USER FEEDBACK (0-10 points)
+  const helpfulRatio = instructor.helpful_ratio || 0;
+  const totalFeedback = (instructor.helpful_count || 0) + (instructor.not_helpful_count || 0);
+  
+  if (totalFeedback >= 10) {
+    if (helpfulRatio >= 0.95) priority += 10;
+    else if (helpfulRatio >= 0.90) priority += 9;
+    else if (helpfulRatio >= 0.85) priority += 8;
+    else if (helpfulRatio >= 0.80) priority += 7;
+    else if (helpfulRatio >= 0.75) priority += 5;
+    else if (helpfulRatio >= 0.70) priority += 3;
+  }
+  
+  return Math.min(priority, 100);
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 4: DATA SCRAPING FUNCTIONS
+═══════════════════════════════════════════════════════════════════
+
+**4.1 - YOUTUBE DATA SCRAPER**
+
+```javascript
+async function scrapeYouTubeData(instructor) {
+  if (!instructor.youtube_channel_handle && !instructor.youtube_channel_id) {
+    return null;
+  }
+  
+  try {
+    const handle = instructor.youtube_channel_handle;
+    const channelId = instructor.youtube_channel_id;
+    
+    // Use YouTube Data API v3
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    
+    let url;
+    if (channelId) {
+      url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`;
+    } else if (handle) {
+      // First get channel ID from handle
+      const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(handle)}&type=channel&key=${apiKey}`;
+      const searchRes = await fetch(searchUrl);
+      const searchData = await searchRes.json();
+      
+      if (!searchData.items || searchData.items.length === 0) {
+        console.log(`No YouTube channel found for ${handle}`);
+        return null;
+      }
+      
+      const foundChannelId = searchData.items[0].id.channelId;
+      url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${foundChannelId}&key=${apiKey}`;
+    }
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (!data.items || data.items.length === 0) {
+      return null;
+    }
+    
+    const channel = data.items[0];
+    
+    return {
+      youtube_subscribers: parseInt(channel.statistics.subscriberCount) || 0,
+      youtube_video_count: parseInt(channel.statistics.videoCount) || 0,
+      youtube_channel_id: channel.id,
+      youtube_last_scraped: new Date()
+    };
+  } catch (error) {
+    console.error(`Failed to scrape YouTube for ${instructor.name}:`, error.message);
+    return null;
+  }
+}
+```
+
+**4.2 - UPDATE INSTRUCTOR WITH SCRAPED DATA**
+
+```javascript
+async function updateInstructorIntelligence(instructorId) {
+  const instructor = await db.query(
+    'SELECT * FROM instructor_credibility WHERE id = $1',
+    [instructorId]
+  );
+  
+  if (instructor.rows.length === 0) return;
+  
+  const inst = instructor.rows[0];
+  
+  // Scrape YouTube data
+  const youtubeData = await scrapeYouTubeData(inst);
+  
+  if (youtubeData) {
+    await db.query(`
+      UPDATE instructor_credibility 
+      SET 
+        youtube_subscribers = $1,
+        youtube_video_count = $2,
+        youtube_channel_id = $3,
+        youtube_last_scraped = $4,
+        updated_at = NOW()
+      WHERE id = $5
+    `, [
+      youtubeData.youtube_subscribers,
+      youtubeData.youtube_video_count,
+      youtubeData.youtube_channel_id,
+      youtubeData.youtube_last_scraped,
+      instructorId
+    ]);
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 5: NIGHTLY CRON - AUTO-CALCULATION (RESPECTS MANUAL OVERRIDES)
+═══════════════════════════════════════════════════════════════════
+
+```javascript
+async function recalculateInstructorPriorities() {
+  console.log('Starting nightly priority recalculation...');
+  
+  const instructors = await db.query(`
+    SELECT * FROM instructor_credibility WHERE is_active = true
+  `);
+  
+  for (const instructor of instructors.rows) {
+    try {
+      // Update user feedback stats
+      const feedback = await db.query(`
+        SELECT 
+          COUNT(*) FILTER (WHERE helpful = true) as helpful,
+          COUNT(*) FILTER (WHERE helpful = false) as not_helpful
+        FROM video_feedback vf
+        JOIN ai_video_knowledge avk ON vf.video_id = avk.id
+        WHERE LOWER(avk.instructor_name) = LOWER($1)
+      `, [instructor.name]);
+      
+      const helpfulCount = parseInt(feedback.rows[0]?.helpful) || 0;
+      const notHelpfulCount = parseInt(feedback.rows[0]?.not_helpful) || 0;
+      const totalFeedback = helpfulCount + notHelpfulCount;
+      const helpfulRatio = totalFeedback > 0 ? helpfulCount / totalFeedback : 0;
+      
+      instructor.helpful_count = helpfulCount;
+      instructor.not_helpful_count = notHelpfulCount;
+      instructor.helpful_ratio = helpfulRatio;
+      
+      // Scrape data if needed (once per week)
+      const lastScraped = instructor.youtube_last_scraped;
+      const daysSince = lastScraped ? (Date.now() - new Date(lastScraped)) / (1000 * 60 * 60 * 24) : 999;
+      
+      if (daysSince > 7) {
+        await updateInstructorIntelligence(instructor.id);
+        const updated = await db.query('SELECT * FROM instructor_credibility WHERE id = $1', [instructor.id]);
+        Object.assign(instructor, updated.rows[0]);
+      }
+      
+      // Calculate new priority
+      const newAutoPriority = calculateInstructorPriority(instructor);
+      
+      // ALWAYS update auto_calculated_priority
+      await db.query(`
+        UPDATE instructor_credibility 
+        SET 
+          auto_calculated_priority = $1,
+          last_auto_calculation = NOW(),
+          helpful_count = $2,
+          not_helpful_count = $3,
+          helpful_ratio = $4
+        WHERE id = $5
+      `, [newAutoPriority, helpfulCount, notHelpfulCount, helpfulRatio, instructor.id]);
+      
+      // ONLY update recommendation_priority if mode is 'auto'
+      if (instructor.priority_mode === 'auto') {
+        await db.query(`
+          UPDATE instructor_credibility 
+          SET recommendation_priority = $1
+          WHERE id = $2
+        `, [newAutoPriority, instructor.id]);
+        console.log(`✅ ${instructor.name}: Auto priority = ${newAutoPriority}`);
+      } else {
+        console.log(`🔒 ${instructor.name}: Manual override (${instructor.manual_override_priority}) - locked`);
+      }
+    } catch (error) {
+      console.error(`Error processing ${instructor.name}:`, error);
+    }
+  }
+  
+  console.log('Recalculation complete!');
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 6: MANUAL OVERRIDE API FUNCTIONS
+═══════════════════════════════════════════════════════════════════
+
+```javascript
+// Set manual override
+async function setManualPriority(instructorId, newPriority, adminEmail, reason) {
+  if (newPriority < 0 || newPriority > 100) {
+    throw new Error('Priority must be 0-100');
+  }
+  
+  await db.query(`
+    UPDATE instructor_credibility 
+    SET 
+      priority_mode = 'manual',
+      manual_override_priority = $1,
+      recommendation_priority = $1,
+      manual_override_date = NOW(),
+      manual_override_by = $2,
+      manual_override_reason = $3,
+      updated_at = NOW()
+    WHERE id = $4
+  `, [newPriority, adminEmail, reason || 'Manual override', instructorId]);
+}
+
+// Update existing manual override
+async function updateManualPriority(instructorId, newPriority, adminEmail, reason) {
+  await db.query(`
+    UPDATE instructor_credibility 
+    SET 
+      manual_override_priority = $1,
+      recommendation_priority = $1,
+      manual_override_date = NOW(),
+      manual_override_by = $2,
+      manual_override_reason = $3,
+      updated_at = NOW()
+    WHERE id = $4 AND priority_mode = 'manual'
+  `, [newPriority, adminEmail, reason || 'Manual update', instructorId]);
+}
+
+// Revert to auto
+async function revertToAuto(instructorId) {
+  const instructor = await db.query(
+    'SELECT auto_calculated_priority FROM instructor_credibility WHERE id = $1',
+    [instructorId]
+  );
+  
+  const autoPriority = instructor.rows[0].auto_calculated_priority;
+  
+  await db.query(`
+    UPDATE instructor_credibility 
+    SET 
+      priority_mode = 'auto',
+      manual_override_priority = NULL,
+      recommendation_priority = $1,
+      manual_override_date = NULL,
+      manual_override_by = NULL,
+      manual_override_reason = NULL,
+      updated_at = NOW()
+    WHERE id = $2
+  `, [autoPriority, instructorId]);
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 7: FIX GRANT LIFETIME ACCESS (DATABASE ERROR)
+═══════════════════════════════════════════════════════════════════
+
+The error “relation ‘bj_users’ does not exist” means there’s a typo in the code.
+
+Find and replace ALL instances of ‘bj_users’ with ‘users’:
+
+```javascript
+// CORRECT VERSION - Grant Lifetime Access
+async function grantLifetimeAccess(phoneNumber, reason, notes, adminEmail) {
+  // Look up user by phone
+  let user = await db.query(
+    'SELECT * FROM users WHERE phone = $1',  // NOT 'bj_users'
+    [phoneNumber]
+  );
+  
+  if (user.rows.length === 0) {
+    // User doesn't exist - create new user
+    await db.query(`
+      INSERT INTO users (phone, subscription_tier, subscription_status, granted_by, granted_at, granted_reason, notes)
+      VALUES ($1, 'lifetime', 'active', $2, NOW(), $3, $4)
+    `, [phoneNumber, adminEmail, reason, notes]);
+    
+    return { success: true, message: 'New user created with lifetime access' };
+  } else {
+    // User exists - update to lifetime
+    await db.query(`
+      UPDATE users 
+      SET 
+        subscription_tier = 'lifetime',
+        subscription_status = 'active',
+        granted_by = $1,
+        granted_at = NOW(),
+        granted_reason = $2,
+        notes = $3,
+        updated_at = NOW()
+      WHERE phone = $4
+    `, [adminEmail, reason, notes, phoneNumber]);
+    
+    return { success: true, message: 'User upgraded to lifetime access' };
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+PART 8: CREATE MISSING ADMIN PAGES (404 FIXES)
+═══════════════════════════════════════════════════════════════════
+
+**8.1 - AI LOGS PAGE (/admin/logs)**
+
+Create page showing AI conversation logs:
+
+- Timestamp, user, message, response, tokens used, success/error
+- Filters: date range, user, success/error
+- Pagination (50 per page)
+- Export to CSV
+
+**8.2 - SCHEDULES PAGE (/admin/schedules)**
+
+Create page for SMS/email schedules:
+
+- Active/paused status
+- Frequency, time of day, recipient count
+- Last sent, next scheduled send
+- Create/edit/pause/delete schedules
+
+**8.3 - TECHNIQUES/VIDEOS PAGE (/admin/techniques)**
+
+Create page showing all analyzed videos:
+
+- Video thumbnail, title, instructor
+- Scores, category, duration, date analyzed
+- Filters: instructor, category, score, date
+- Search by title
+- Click for full analysis details
+- Re-analyze or delete options
+- Stats: total videos, avg score, top instructors
+
+═══════════════════════════════════════════════════════════════════
+PART 9: ACCOUNT SHARING PREVENTION
+═══════════════════════════════════════════════════════════════════
+
+**9.1 - DEVICE LIMIT ENFORCEMENT (3 devices max)**
+
+On every login:
+
+1. Generate device fingerprint
+1. Check if device already authorized
+1. If new device and user has 3+ devices, BLOCK login
+1. Show “Remove a device in Settings” message
+
+**9.2 - BEHAVIORAL ANALYSIS**
+
+Track suspicious patterns:
+
+- 5+ unique IPs in 30 days → Flag
+- 3+ unique cities → Flag
+- Logins 20+ different hours/day → Flag
+- Impossible travel (NYC → LA in 2 hours) → Flag
+
+**9.3 - USER SETTINGS - MANAGE DEVICES**
+
+Create /settings/devices page:
+
+- Show all authorized devices (3/3 max)
+- Device name, last active, location
+- Remove device button
+- Warning when limit reached
+
+**9.4 - ADMIN - FLAGGED ACCOUNTS**
+
+Create /admin/flagged-accounts page:
+
+- List suspicious accounts
+- Show red flags (excessive IPs, impossible travel, etc.)
+- Actions: Suspend, Warn, Mark false positive
+
+═══════════════════════════════════════════════════════════════════
+PART 10: VIDEO CURATION - EXCELLENCE-FOCUSED
+═══════════════════════════════════════════════════════════════════
+
+**10.1 - QUALITY THRESHOLDS (STRICT)**
+
+- Elite instructors (Tier 1): 6.5+ quality score
+- Established (Tier 2): 7.0+ quality score
+- Unknown instructors: 7.5+ quality score
+
+NO EXCEPTIONS.
+
+**10.2 - SEARCH STRATEGY**
+
+Run scraper 4x per day with 150 queries:
+
+- 30 fundamental queries
+- 40 submission queries
+- 30 guard system queries
+- 25 passing queries
+- 15 no-gi queries
+- 10 competition queries
+
+**10.3 - TARGET: 2,000+ VIDEOS IN 2 WEEKS**
+
+Week 1: 1,000 videos (150-200 per day)
+Week 2: 2,000 total (continue 150-200 per day)
+Ongoing: 100-150 per day for gap filling
+
+**10.4 - USER FEEDBACK AUTO-DELETION**
+
+After 20+ votes, auto-delete videos with <40% helpful ratio:
+
+- Run daily check
+- Delete low-quality videos
+- Log deletions for admin review
+
+═══════════════════════════════════════════════════════════════════
+PART 11: INITIAL SETUP & DEPLOYMENT
+═══════════════════════════════════════════════════════════════════
+
+Execute these steps IN ORDER:
+
+1. ✅ Create all database tables (or add missing columns)
+1. ✅ Fix ‘bj_users’ typo (change to ‘users’)
+1. ✅ Seed elite instructors (17 instructors)
+1. ✅ Scrape YouTube data for all instructors
+1. ✅ Calculate initial auto priorities
+1. ✅ Set up cron jobs (nightly recalculation, integrity audit)
+1. ✅ Create admin pages (instructors, logs, schedules, techniques, flagged accounts)
+1. ✅ Implement account sharing prevention (device limits, behavioral analysis)
+1. ✅ Fix grant lifetime access function
+1. ✅ Test manual override → verify it LOCKS
+1. ✅ Test revert to auto → verify it UNLOCKS
+1. ✅ Deploy to production at bjjos.app
+
+═══════════════════════════════════════════════════════════════════
+PART 12: DEPLOYMENT TO PRODUCTION
+═══════════════════════════════════════════════════════════════════
+
+After all code is complete:
+
+1. Run database migrations on production
+1. Seed instructors on production database
+1. Deploy all code changes to bjjos.app
+1. Verify all pages load correctly:
+
+- bjjos.app/admin/instructors (should show 17 instructors)
+- bjjos.app/admin/logs (should load, empty at first)
+- bjjos.app/admin/schedules (should load)
+- bjjos.app/admin/techniques (should load, empty at first)
+- bjjos.app/admin/flagged-accounts (should load, empty)
+
+1. Test grant lifetime access with a test phone number
+1. Verify no ‘bj_users’ errors
+
+═══════════════════════════════════════════════════════════════════
+VERIFICATION CHECKLIST
+═══════════════════════════════════════════════════════════════════
+
+Before marking complete, verify:
+
+✅ instructor_credibility table exists with all columns
+✅ 17 elite instructors seeded
+✅ YouTube data scraped for all instructors
+✅ Auto priorities calculated (JT Torres, Gordon Ryan should have 80-95)
+✅ Manual override works (can set JT to 100, locks properly)
+✅ Nightly cron respects manual overrides
+✅ Revert to auto works (unlocks properly)
+✅ Grant lifetime access works (no ‘bj_users’ error)
+✅ AI Logs page exists and loads
+✅ Schedules page exists and loads
+✅ Techniques page exists and loads
+✅ Account sharing prevention active (device limits work)
+✅ Flagged accounts page exists
+✅ All changes deployed to bjjos.app production
+✅ Admin dashboard shows correct instructor count
+✅ No console errors on any admin page
+
+═══════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════
+
+System is COMPLETE when:
+
+1. bjjos.app/admin/instructors shows 17 instructors with priorities
+1. JT Torres can be set to manual priority 100 and stays locked
+1. Nightly recalculation never overwrites manual overrides
+1. Grant lifetime access works without database errors
+1. All admin pages (logs, schedules, techniques) load without 404s
+1. Account sharing prevention blocks 4th device
+1. Video curation uses instructor priorities correctly
+1. Everything is deployed and live on bjjos.app
+
+═══════════════════════════════════════════════════════════════════
+EXCELLENCE IS OUR PILLAR
+═══════════════════════════════════════════════════════════════════
+
+- Quality thresholds are STRICT (no compromises)
+- Manual overrides are SACRED (never auto-overwritten)
+- Data scraping is ACCURATE (YouTube API verified)
+- Auto-calculation is INTELLIGENT (competition + teaching + feedback)
+- User feedback is DECISIVE (<40% helpful = auto-delete)
+- Account sharing is PREVENTED (device limits + behavioral analysis)
+
+Build this system with EXCELLENCE as the foundation.
+
+DEPLOY TO PRODUCTION WHEN COMPLETE.
+
+```
+---
+
+**Paste this entire prompt into Replit Agent and it will:**
+
+1. ✅ Build complete instructor priority system
+2. ✅ Seed 17 elite instructors with data
+3. ✅ Fix all admin page 404s
+4. ✅ Fix grant lifetime access database error
+5. ✅ Implement account sharing prevention
+6. ✅ Deploy everything to bjjos.app production
+7. ✅ Verify instructor page shows data
+
+**Ready to paste? This is the ONE prompt that does EVERYTHING.** 🚀​​​​​​​​​​​​​​​​
+```

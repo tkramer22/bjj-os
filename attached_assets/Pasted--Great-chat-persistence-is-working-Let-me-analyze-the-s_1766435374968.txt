@@ -1,0 +1,102 @@
+**Great - chat persistence is working!** 🎉
+
+Let me analyze the screenshots:
+
+-----
+
+## ✅ WHAT’S WORKING:
+
+1. **Chat persistence** - Conversation stays when navigating away and back!
+1. **No duplicates** - Each video only shows once
+1. **Using “you/your”** - “This is your foundation”, “what you need”, “you’ve asked about armbars 7 times”
+1. **Multiple different videos** - Danaher, Lachlan Giles, Andre Galvao, Keenan Cornelius
+1. **Bottom nav with icons** - Chat, Videos, Saved, Settings all showing icons
+
+-----
+
+## 🔴 STILL BROKEN:
+
+### **1. Thumbnails Inconsistent**
+
+Looking at the images:
+
+- **Image 7:** Danaher video - ✅ HAS YouTube thumbnail
+- **Image 8:** Lachlan Giles - ❌ Shows weird white/gray loading placeholder (not BJJ OS fallback)
+- **Image 9:** Andre Galvao - ✅ HAS YouTube thumbnail
+- **Image 10:** Keenan Cornelius - ✅ HAS YouTube thumbnail
+- **Images 1-5:** Multiple videos showing BJJ/OS fallback instead of thumbnails
+
+So it’s inconsistent - sometimes loads, sometimes doesn’t.
+
+### **2. Third Person STILL Happening**
+
+**Image 11:** “fundamentals **Todd has been** asking about - this is **his** foundation video”
+
+This should be: “fundamentals **you’ve been** asking about - this is **your** foundation video”
+
+### **3. Settings Bottom Nav - STILL TEXT ONLY**
+
+**Image 12:** Shows “Chat Videos Saved Settings” - no icons
+
+### **4. Splash Screen Size** - Still too big (not shown but you mentioned)
+
+-----
+
+## 📋 SEND THIS TO REPLIT:
+
+```
+THREE ISSUES STILL NOT FIXED
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: THIRD PERSON REFERENCES STILL HAPPENING
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS is STILL using third person. Example from actual response:
+
+WRONG: "fundamentals Todd has been asking about - this is his foundation video"
+RIGHT: "fundamentals you've been asking about - this is your foundation video"
+
+The system prompt fix is NOT working. Check the prompt again and make sure 
+it explicitly says:
+
+"NEVER refer to the user in third person. NEVER say '[name] has been' or 
+'his/her'. ALWAYS use 'you have been' or 'your'. You are talking TO the user, 
+not ABOUT the user."
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: SETTINGS PAGE BOTTOM NAV STILL TEXT ONLY
+═══════════════════════════════════════════════════════════════════════════════
+
+Settings page STILL shows text-only nav: "Chat Videos Saved Settings"
+Other pages have icons + labels.
+
+This was reported multiple times. Find the Settings page component and make 
+it use the SAME MobileBottomNav component as other pages.
+
+Show me which file you're changing.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: THUMBNAIL LOADING INCONSISTENT
+═══════════════════════════════════════════════════════════════════════════════
+
+In the SAME response, some videos show YouTube thumbnails and others show 
+the BJJ/OS fallback or a weird white/gray loading state.
+
+Videos that loaded: Danaher, Andre Galvao, Keenan Cornelius
+Videos that didn't: Lachlan Giles (showed white placeholder)
+
+All these videos should have thumbnails. Debug why some load and others don't.
+
+Is it a race condition? Timeout? Missing videoId on some?
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+```
+
+-----
+
+**Send this to Replit. The third-person issue is the most important one for the product experience - it makes Professor OS feel robotic instead of personal.**

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SMS Test</title>
+</head>
+<body>
+    <h1>SMS Test</h1>
+    <button onclick="testSMS()">Send Test SMS to +19148373750</button>
+    <div id="result"></div>
+    
+    <script>
+        async function testSMS() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Sending...';
+            
+            try {
+                const response = await fetch('/api/test-sms', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ phoneNumber: '+19148373750' })
+                });
+                
+                const data = await response.json();
+                resultDiv.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                resultDiv.innerHTML = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

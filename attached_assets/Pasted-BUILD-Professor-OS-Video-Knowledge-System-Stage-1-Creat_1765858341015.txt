@@ -1,0 +1,81 @@
+BUILD: Professor OS Video Knowledge System - Stage 1
+
+Create a system where Professor OS "watches" every video by processing transcripts and storing the knowledge.
+
+PART A: Database Tables
+
+Create these tables:
+
+1. video_knowledge (the extracted knowledge)
+   - id (primary key)
+   - video_id (foreign key to ai_video_knowledge)
+   - technique_name (text)
+   - position_context (text) - e.g., "closed guard", "half guard"
+   - key_concepts (text array) - main teaching points
+   - instructor_tips (text array) - specific advice/cues
+   - common_mistakes (text array) - what to avoid
+   - timestamp_start (text) - when this technique starts
+   - timestamp_end (text) - when it ends
+   - full_summary (text) - overall summary of what's taught
+   - extracted_at (timestamp)
+
+2. video_watch_status (tracking what's been processed)
+   - id (primary key)
+   - video_id (foreign key)
+   - has_transcript (boolean)
+   - transcript_source (text) - 'youtube' or 'whisper'
+   - transcript_text (text) - the raw transcript
+   - processed (boolean, default false)
+   - processed_at (timestamp)
+   - error_message (text) - if processing failed
+
+3. video_engagement (user watching tracking)
+   - id (primary key)
+   - video_id (foreign key)
+   - user_id (foreign key)
+   - watched_at (timestamp)
+   - watch_duration_seconds (integer)
+   - completed (boolean)
+   - source (text) - 'chat', 'library', 'saved'
+   - helpful_vote (boolean, nullable) - thumbs up/down
+
+PART B: Transcript Fetcher
+
+Create a function that:
+1. Takes a YouTube video ID
+2. Fetches the transcript using youtube-transcript-api or similar
+3. Returns the transcript text
+4. Handles errors gracefully (no transcript available)
+
+PART C: Knowledge Extractor
+
+Create a function using Claude API that:
+1. Takes a transcript + video metadata (title, instructor, etc.)
+2. Extracts structured knowledge:
+   - All techniques taught
+   - Key concepts for each technique
+   - Instructor-specific tips and cues
+   - Common mistakes mentioned
+   - Timestamps if mentioned in transcript
+3. Returns structured JSON matching the video_knowledge schema
+
+PART D: Processing Pipeline
+
+Create a job that:
+1. Queries videos that haven't been processed (processed = false)
+2. Fetches transcript
+3. If transcript exists:
+   - Runs knowledge extraction
+   - Saves to video_knowledge table
+   - Marks as processed = true
+4. If no transcript:
+   - Marks has_transcript = false
+   - We'll handle with Whisper later
+5. Processes in batches of 10 to avoid rate limits
+6. Logs progress
+
+Create an admin endpoint to:
+- GET /api/admin/knowledge-status - show how many processed vs pending
+- POST /api/admin/process-videos - manually trigger processing batch
+
+Build all of this now. Show me the schema and core functions when done.

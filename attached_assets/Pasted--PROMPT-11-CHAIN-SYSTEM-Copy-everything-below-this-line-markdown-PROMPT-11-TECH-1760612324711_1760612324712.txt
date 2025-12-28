@@ -1,0 +1,3099 @@
+# PROMPT 11: CHAIN SYSTEM 🔗
+
+Copy everything below this line:
+
+-----
+
+```markdown
+# PROMPT 11: TECHNIQUE CHAIN SYSTEM
+
+Build a complete technique chain system that teaches sequences instead of isolated techniques. Build all sections sequentially without waiting for confirmation between sections. Only pause if a critical error occurs that prevents continuation.
+
+After each section, mark "✓ Section X complete" in console and continue immediately to next section.
+
+Total estimated build time: 2-3 hours
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 1: DATABASE SCHEMA (Build First - 15 min)
+
+Create the following new tables for chain system:
+
+### 1.1 Technique Chains Table
+
+```sql
+CREATE TABLE IF NOT EXISTS technique_chains (
+  id SERIAL PRIMARY KEY,
+  
+  -- Chain identity
+  name TEXT NOT NULL,
+  description TEXT,
+  chain_type TEXT DEFAULT 'pre_built', -- 'pre_built', 'ai_generated', 'user_custom'
+  
+  -- Chain structure
+  steps JSONB NOT NULL, -- Array of steps with video IDs and descriptions
+  step_count INTEGER NOT NULL,
+  
+  -- Classification
+  position_start TEXT, -- 'closed_guard', 'mount', 'back', etc.
+  position_end TEXT, -- Where chain typically ends
+  primary_category TEXT, -- 'submissions', 'sweeps', 'passes', 'escapes'
+  
+  -- Difficulty
+  difficulty_level TEXT, -- 'beginner', 'intermediate', 'advanced'
+  min_belt_level TEXT DEFAULT 'white', -- 'white', 'blue', 'purple', 'brown', 'black'
+  
+  -- Attributes
+  gi_preference TEXT DEFAULT 'both', -- 'gi', 'nogi', 'both'
+  requires_athleticism BOOLEAN DEFAULT false,
+  requires_flexibility BOOLEAN DEFAULT false,
+  technical_vs_athletic TEXT DEFAULT 'balanced', -- 'technical', 'balanced', 'athletic'
+  
+  -- Featured instructors
+  featured_instructor_id INTEGER REFERENCES featured_instructors(id),
+  uses_mixed_instructors BOOLEAN DEFAULT true,
+  
+  -- Analytics
+  times_recommended INTEGER DEFAULT 0,
+  times_saved INTEGER DEFAULT 0,
+  helpful_count INTEGER DEFAULT 0,
+  not_helpful_count INTEGER DEFAULT 0,
+  helpful_ratio DECIMAL,
+  
+  -- Meta
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_chains_position_start ON technique_chains(position_start);
+CREATE INDEX idx_chains_category ON technique_chains(primary_category);
+CREATE INDEX idx_chains_difficulty ON technique_chains(difficulty_level);
+```
+
+### 1.2 User Saved Chains Table
+
+```sql
+CREATE TABLE IF NOT EXISTS user_saved_chains (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  chain_id INTEGER REFERENCES technique_chains(id),
+  
+  -- User notes
+  personal_notes TEXT,
+  drilling_count INTEGER DEFAULT 0,
+  last_drilled_date DATE,
+  
+  -- Success tracking
+  success_in_rolling BOOLEAN DEFAULT false,
+  success_count INTEGER DEFAULT 0,
+  
+  saved_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(user_id, chain_id)
+);
+```
+
+### 1.3 Chain Feedback Table
+
+```sql
+CREATE TABLE IF NOT EXISTS chain_feedback (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  chain_id INTEGER REFERENCES technique_chains(id),
+  
+  feedback_type TEXT, -- 'helpful', 'not_helpful'
+  feedback_comment TEXT,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+✓ CHECKPOINT 1: Chain tables created. Test by running:
+
+```sql
+SELECT COUNT(*) FROM technique_chains;
+SELECT COUNT(*) FROM user_saved_chains;
+SELECT COUNT(*) FROM chain_feedback;
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 2: PRE-BUILT CHAINS (Populate 50 Chains - 30 min)
+
+Insert 50 fundamental chains covering all major positions.
+
+### 2.1 Closed Guard Chains (10 chains)
+
+```sql
+INSERT INTO technique_chains (
+  name, description, steps, step_count, position_start, position_end,
+  primary_category, difficulty_level, min_belt_level, technical_vs_athletic
+) VALUES
+
+-- Chain 1: Triangle Series
+(
+  'Triangle → Armbar → Omoplata → Back Take',
+  'Classic closed guard attack chain. If they defend one, the next option opens up.',
+  '[
+    {
+      "step": 1,
+      "name": "Triangle Attack",
+      "description": "Shoot the triangle from closed guard. Focus on angle and leg positioning.",
+      "technique_search": "triangle from closed guard setup",
+      "key_points": ["Break posture first", "Get angle", "Lock triangle tight"]
+    },
+    {
+      "step": 2,
+      "name": "Switch to Armbar",
+      "description": "When they posture up to defend triangle, their arm is exposed.",
+      "technique_search": "triangle to armbar transition",
+      "key_points": ["Maintain hip control", "Pivot for armbar", "Keep legs tight"]
+    },
+    {
+      "step": 3,
+      "name": "Roll to Omoplata",
+      "description": "If they pull arm out, roll to omoplata immediately.",
+      "technique_search": "armbar to omoplata transition",
+      "key_points": ["Keep grip on arm", "Roll forward", "Control shoulder"]
+    },
+    {
+      "step": 4,
+      "name": "Take the Back",
+      "description": "If they defend omoplata by rolling, climb to back control.",
+      "technique_search": "omoplata to back take",
+      "key_points": ["Follow their roll", "Get hooks in", "Secure seat belt"]
+    }
+  ]'::jsonb,
+  4,
+  'closed_guard',
+  'back_control',
+  'submissions',
+  'intermediate',
+  'blue',
+  'balanced'
+),
+
+-- Chain 2: Armbar Series
+(
+  'Armbar → Triangle → Omoplata',
+  'Direct armbar attack with backup options when they defend.',
+  '[
+    {
+      "step": 1,
+      "name": "Armbar from Guard",
+      "description": "Classic armbar setup from closed guard.",
+      "technique_search": "armbar from closed guard fundamentals",
+      "key_points": ["Control arm", "Hip up", "Pinch knees"]
+    },
+    {
+      "step": 2,
+      "name": "Switch to Triangle",
+      "description": "If they stack or pull arm out, switch to triangle.",
+      "technique_search": "armbar to triangle switch",
+      "key_points": ["Maintain leg control", "Shoot triangle", "Adjust angle"]
+    },
+    {
+      "step": 3,
+      "name": "Roll to Omoplata",
+      "description": "If triangle is defended, roll to omoplata.",
+      "technique_search": "triangle to omoplata flow",
+      "key_points": ["Keep control", "Roll forward", "Break posture"]
+    }
+  ]'::jsonb,
+  3,
+  'closed_guard',
+  'omoplata',
+  'submissions',
+  'intermediate',
+  'blue',
+  'balanced'
+),
+
+-- Chain 3: Guillotine Series
+(
+  'Guillotine → Armbar → Triangle',
+  'High percentage guillotine chain from closed guard.',
+  '[
+    {
+      "step": 1,
+      "name": "Guillotine from Guard",
+      "description": "Catch guillotine when they posture or try to pass.",
+      "technique_search": "guillotine from closed guard",
+      "key_points": ["Deep grip", "Close guard", "Pull down"]
+    },
+    {
+      "step": 2,
+      "name": "Switch to Armbar",
+      "description": "If guillotine slips, their arm is exposed for armbar.",
+      "technique_search": "guillotine to armbar transition",
+      "key_points": ["Maintain control", "Swing leg over", "Hip up"]
+    },
+    {
+      "step": 3,
+      "name": "Triangle Finish",
+      "description": "If armbar is defended, lock up triangle.",
+      "technique_search": "armbar to triangle",
+      "key_points": ["Leg over head", "Lock triangle", "Adjust angle"]
+    }
+  ]'::jsonb,
+  3,
+  'closed_guard',
+  'triangle',
+  'submissions',
+  'beginner',
+  'white',
+  'balanced'
+),
+
+-- Chain 4: Kimura Series
+(
+  'Kimura → Sweep → Back Take',
+  'Kimura grip opens multiple attack opportunities.',
+  '[
+    {
+      "step": 1,
+      "name": "Kimura Attack",
+      "description": "Get kimura grip from closed guard.",
+      "technique_search": "kimura from closed guard",
+      "key_points": ["Figure-four grip", "Control arm", "Apply pressure"]
+    },
+    {
+      "step": 2,
+      "name": "Kimura Sweep",
+      "description": "If submission is defended, use grip to sweep.",
+      "technique_search": "kimura sweep from guard",
+      "key_points": ["Keep grip", "Scissor sweep motion", "Come on top"]
+    },
+    {
+      "step": 3,
+      "name": "Take the Back",
+      "description": "From sweep, transition to back control.",
+      "technique_search": "sweep to back take",
+      "key_points": ["Don't lose kimura grip", "Circle to back", "Get hooks"]
+    }
+  ]'::jsonb,
+  3,
+  'closed_guard',
+  'back_control',
+  'submissions',
+  'intermediate',
+  'blue',
+  'technical'
+),
+
+-- Chain 5: Scissor Sweep Series
+(
+  'Scissor Sweep → Mount → Armbar',
+  'Fundamental sweep leading to mount attacks.',
+  '[
+    {
+      "step": 1,
+      "name": "Scissor Sweep",
+      "description": "Basic scissor sweep from closed guard.",
+      "technique_search": "scissor sweep fundamentals",
+      "key_points": ["Break posture", "Get angle", "Scissor motion"]
+    },
+    {
+      "step": 2,
+      "name": "Secure Mount",
+      "description": "After sweep, establish mount position.",
+      "technique_search": "sweep to mount transition",
+      "key_points": ["Walk up to mount", "Control posture", "Base wide"]
+    },
+    {
+      "step": 3,
+      "name": "Mounted Armbar",
+      "description": "Attack armbar from mount.",
+      "technique_search": "armbar from mount",
+      "key_points": ["Control arm", "Swing leg over", "Fall back"]
+    }
+  ]'::jsonb,
+  3,
+  'closed_guard',
+  'armbar',
+  'sweeps',
+  'beginner',
+  'white',
+  'balanced'
+),
+
+-- Chain 6: Hip Bump Series
+(
+  'Hip Bump → Kimura → Guillotine',
+  'Sit-up sweep series with submission options.',
+  '[
+    {
+      "step": 1,
+      "name": "Hip Bump Sweep",
+      "description": "Sit-up sweep when they posture in closed guard.",
+      "technique_search": "hip bump sweep",
+      "key_points": ["Sit up", "Off-balance forward", "Bump with hip"]
+    },
+    {
+      "step": 2,
+      "name": "Kimura Counter",
+      "description": "If they post, catch kimura on posting arm.",
+      "technique_search": "hip bump to kimura",
+      "key_points": ["Catch posted arm", "Figure-four grip", "Finish kimura"]
+    },
+    {
+      "step": 3,
+      "name": "Guillotine Finish",
+      "description": "If they pull arm out, catch guillotine.",
+      "technique_search": "kimura to guillotine",
+      "key_points": ["Wrap neck", "Close guard", "Squeeze"]
+    }
+  ]'::jsonb,
+  3,
+  'closed_guard',
+  'guillotine',
+  'sweeps',
+  'intermediate',
+  'blue',
+  'balanced'
+),
+
+-- Chain 7: Flower Sweep Series
+(
+  'Flower Sweep → Mount → Ezekiel Choke',
+  'Technical sweep to mount attacks.',
+  '[
+    {
+      "step": 1,
+      "name": "Flower Sweep",
+      "description": "Off-balance and sweep when they grip your collar.",
+      "technique_search": "flower sweep closed guard",
+      "key_points": ["Control arm", "Off-balance", "Bridge and sweep"]
+    },
+    {
+      "step": 2,
+      "name": "Establish Mount",
+      "description": "Walk up to mount after sweep.",
+      "technique_search": "maintaining mount position",
+      "key_points": ["Control hips", "Pressure forward", "Grapevine legs"]
+    },
+    {
+      "step": 3,
+      "name": "Ezekiel Choke",
+      "description": "Attack ezekiel from mount.",
+      "technique_search": "ezekiel choke from mount",
+      "key_points": ["Blade of wrist", "Feed through collar", "Squeeze"]
+    }
+  ]'::jsonb,
+  3,
+  'closed_guard',
+  'ezekiel',
+  'sweeps',
+  'beginner',
+  'white',
+  'technical'
+),
+
+-- Chain 8: Pendulum Sweep Series
+(
+  'Pendulum Sweep → Mount → Cross Collar Choke',
+  'Dynamic sweep to submission.',
+  '[
+    {
+      "step": 1,
+      "name": "Pendulum Sweep",
+      "description": "Swing leg for pendulum motion sweep.",
+      "technique_search": "pendulum sweep closed guard",
+      "key_points": ["Control arm", "Swing leg", "Use momentum"]
+    },
+    {
+      "step": 2,
+      "name": "Mount Position",
+      "description": "Land in mount after sweep.",
+      "technique_search": "mount control fundamentals",
+      "key_points": ["Chest pressure", "Control hips", "Base wide"]
+    },
+    {
+      "step": 3,
+      "name": "Cross Collar Choke",
+      "description": "Set up cross collar choke from mount.",
+      "technique_search": "cross collar choke from mount",
+      "key_points": ["Deep grips", "Squeeze elbows", "Expand chest"]
+    }
+  ]'::jsonb,
+  3,
+  'closed_guard',
+  'cross_collar_choke',
+  'sweeps',
+  'intermediate',
+  'blue',
+  'athletic'
+),
+
+-- Chain 9: Overhook Series
+(
+  'Overhook → Sweep → Back Take → RNC',
+  'Overhook control to back attacks.',
+  '[
+    {
+      "step": 1,
+      "name": "Overhook from Guard",
+      "description": "Secure overhook when they try to open guard.",
+      "technique_search": "overhook closed guard control",
+      "key_points": ["Deep overhook", "Break posture", "Control"]
+    },
+    {
+      "step": 2,
+      "name": "Overhook Sweep",
+      "description": "Use overhook to sweep to top.",
+      "technique_search": "overhook sweep closed guard",
+      "key_points": ["Off-balance", "Roll them", "Come on top"]
+    },
+    {
+      "step": 3,
+      "name": "Take the Back",
+      "description": "From top, transition to back control.",
+      "technique_search": "taking the back from top",
+      "key_points": ["Keep overhook", "Circle to back", "Get hooks"]
+    },
+    {
+      "step": 4,
+      "name": "Rear Naked Choke",
+      "description": "Finish with RNC from back.",
+      "technique_search": "rear naked choke details",
+      "key_points": ["Under chin", "Squeeze", "Lock hands"]
+    }
+  ]'::jsonb,
+  4,
+  'closed_guard',
+  'rear_naked_choke',
+  'sweeps',
+  'advanced',
+  'purple',
+  'technical'
+),
+
+-- Chain 10: Double Attack Series
+(
+  'Collar Choke → Armbar → Triangle',
+  'Collar grip opens multiple attacks.',
+  '[
+    {
+      "step": 1,
+      "name": "Collar Choke Setup",
+      "description": "Set up collar choke from closed guard.",
+      "technique_search": "collar choke closed guard",
+      "key_points": ["Deep grips", "Pull down", "Apply pressure"]
+    },
+    {
+      "step": 2,
+      "name": "Bait Armbar",
+      "description": "If they defend choke, arm is exposed.",
+      "technique_search": "collar choke to armbar",
+      "key_points": ["Switch to arm", "Swing leg", "Finish armbar"]
+    },
+    {
+      "step": 3,
+      "name": "Triangle Finish",
+      "description": "If armbar defended, lock triangle.",
+      "technique_search": "armbar to triangle transition",
+      "key_points": ["Lock triangle", "Adjust angle", "Squeeze"]
+    }
+  ]'::jsonb,
+  3,
+  'closed_guard',
+  'triangle',
+  'submissions',
+  'intermediate',
+  'blue',
+  'balanced'
+);
+```
+
+### 2.2 Open Guard Chains (10 chains)
+
+```sql
+INSERT INTO technique_chains (
+  name, description, steps, step_count, position_start, position_end,
+  primary_category, difficulty_level, min_belt_level, technical_vs_athletic
+) VALUES
+
+-- Chain 11: De La Riva Sweep Series
+(
+  'De La Riva → Back Take → RNC',
+  'Classic DLR sweep to back control.',
+  '[
+    {
+      "step": 1,
+      "name": "DLR Hook Entry",
+      "description": "Establish de la riva hook and control.",
+      "technique_search": "de la riva guard fundamentals",
+      "key_points": ["Hook leg", "Grip ankle", "Control"]
+    },
+    {
+      "step": 2,
+      "name": "DLR Back Take",
+      "description": "Use DLR to climb to back.",
+      "technique_search": "de la riva back take",
+      "key_points": ["Pull them forward", "Climb up", "Get hooks"]
+    },
+    {
+      "step": 3,
+      "name": "Rear Naked Choke",
+      "description": "Finish with choke from back.",
+      "technique_search": "rear naked choke fundamentals",
+      "key_points": ["Under chin", "Squeeze bicep", "Lock"]
+    }
+  ]'::jsonb,
+  3,
+  'de_la_riva',
+  'rear_naked_choke',
+  'sweeps',
+  'intermediate',
+  'blue',
+  'technical'
+),
+
+-- Chain 12: Spider Guard Attack
+(
+  'Spider Guard → Triangle → Omoplata',
+  'Spider guard to submission chain.',
+  '[
+    {
+      "step": 1,
+      "name": "Spider Guard Control",
+      "description": "Establish spider guard with sleeve grips.",
+      "technique_search": "spider guard fundamentals",
+      "key_points": ["Grip sleeves", "Feet on biceps", "Control distance"]
+    },
+    {
+      "step": 2,
+      "name": "Triangle Attack",
+      "description": "Shoot triangle from spider guard.",
+      "technique_search": "triangle from spider guard",
+      "key_points": ["Pull arm across", "Shoot triangle", "Lock"]
+    },
+    {
+      "step": 3,
+      "name": "Omoplata Backup",
+      "description": "If triangle defended, roll to omoplata.",
+      "technique_search": "spider guard omoplata",
+      "key_points": ["Keep sleeve grip", "Roll forward", "Control shoulder"]
+    }
+  ]'::jsonb,
+  3,
+  'spider_guard',
+  'omoplata',
+  'submissions',
+  'intermediate',
+  'blue',
+  'technical'
+),
+
+-- Chain 13: X-Guard Sweep Series
+(
+  'X-Guard → Sweep → Pass → Mount',
+  'X-guard sweep to top control.',
+  '[
+    {
+      "step": 1,
+      "name": "X-Guard Entry",
+      "description": "Establish X-guard position.",
+      "technique_search": "x-guard entry fundamentals",
+      "key_points": ["Hook legs", "Control ankle", "Off-balance"]
+    },
+    {
+      "step": 2,
+      "name": "X-Guard Sweep",
+      "description": "Sweep from X-guard to top.",
+      "technique_search": "x-guard sweep",
+      "key_points": ["Lift and twist", "Come on top", "Maintain control"]
+    },
+    {
+      "step": 3,
+      "name": "Pass to Mount",
+      "description": "Pass guard and establish mount.",
+      "technique_search": "passing to mount",
+      "key_points": ["Control hips", "Walk to mount", "Pressure"]
+    }
+  ]'::jsonb,
+  3,
+  'x_guard',
+  'mount',
+  'sweeps',
+  'advanced',
+  'purple',
+  'athletic'
+),
+
+-- Chain 14: Single Leg X Series
+(
+  'SLX → Sweep → Knee Bar',
+  'Single leg X to submission.',
+  '[
+    {
+      "step": 1,
+      "name": "Single Leg X Entry",
+      "description": "Enter single leg X-guard position.",
+      "technique_search": "single leg x-guard entry",
+      "key_points": ["Hook one leg", "Control ankle", "Off-balance"]
+    },
+    {
+      "step": 2,
+      "name": "SLX Sweep",
+      "description": "Sweep from single leg X.",
+      "technique_search": "single leg x sweep",
+      "key_points": ["Lift leg", "Twist", "Come on top"]
+    },
+    {
+      "step": 3,
+      "name": "Knee Bar Finish",
+      "description": "If sweep defended, attack knee bar.",
+      "technique_search": "kneebar from single leg x",
+      "key_points": ["Isolate leg", "Hip pressure", "Control ankle"]
+    }
+  ]'::jsonb,
+  3,
+  'single_leg_x',
+  'kneebar',
+  'submissions',
+  'advanced',
+  'purple',
+  'technical'
+),
+
+-- Chain 15: Butterfly Guard Sweep
+(
+  'Butterfly Sweep → Mount → Armbar',
+  'Classic butterfly sweep to mount attack.',
+  '[
+    {
+      "step": 1,
+      "name": "Butterfly Guard",
+      "description": "Establish butterfly hooks and control.",
+      "technique_search": "butterfly guard fundamentals Marcelo Garcia",
+      "key_points": ["Hooks in", "Overhook", "Off-balance"]
+    },
+    {
+      "step": 2,
+      "name": "Butterfly Sweep",
+      "description": "Elevate and sweep to top.",
+      "technique_search": "butterfly sweep technique",
+      "key_points": ["Lift with hooks", "Off-balance", "Come on top"]
+    },
+    {
+      "step": 3,
+      "name": "Armbar from Mount",
+      "description": "Walk to mount and attack armbar.",
+      "technique_search": "armbar from mount",
+      "key_points": ["Secure mount", "Isolate arm", "Finish"]
+    }
+  ]'::jsonb,
+  3,
+  'butterfly_guard',
+  'armbar',
+  'sweeps',
+  'intermediate',
+  'blue',
+  'balanced'
+),
+
+-- Chain 16: Lasso Guard Attack
+(
+  'Lasso → Omoplata → Sweep',
+  'Lasso guard submission and sweep options.',
+  '[
+    {
+      "step": 1,
+      "name": "Lasso Guard Control",
+      "description": "Establish lasso guard position.",
+      "technique_search": "lasso guard fundamentals",
+      "key_points": ["Sleeve grip", "Leg over arm", "Control"]
+    },
+    {
+      "step": 2,
+      "name": "Lasso Omoplata",
+      "description": "Attack omoplata from lasso.",
+      "technique_search": "omoplata from lasso guard",
+      "key_points": ["Control shoulder", "Roll forward", "Break posture"]
+    },
+    {
+      "step": 3,
+      "name": "Lasso Sweep",
+      "description": "If omoplata defended, sweep.",
+      "technique_search": "lasso guard sweep",
+      "key_points": ["Off-balance", "Use lasso", "Come on top"]
+    }
+  ]'::jsonb,
+  3,
+  'lasso_guard',
+  'sweep',
+  'submissions',
+  'intermediate',
+  'blue',
+  'technical'
+),
+
+-- Chain 17: Reverse De La Riva Chain
+(
+  'RDLR → Back Take → Bow and Arrow',
+  'Modern RDLR to back attack.',
+  '[
+    {
+      "step": 1,
+      "name": "RDLR Entry",
+      "description": "Establish reverse de la riva position.",
+      "technique_search": "reverse de la riva guard",
+      "key_points": ["Hook behind leg", "Control ankle", "Off-balance"]
+    },
+    {
+      "step": 2,
+      "name": "RDLR Back Take",
+      "description": "Use RDLR to take the back.",
+      "technique_search": "reverse de la riva back take",
+      "key_points": ["Pull forward", "Climb", "Get hooks"]
+    },
+    {
+      "step": 3,
+      "name": "Bow and Arrow",
+      "description": "Finish with bow and arrow choke.",
+      "technique_search": "bow and arrow choke",
+      "key_points": ["Grip collar and pant", "Stretch", "Squeeze"]
+    }
+  ]'::jsonb,
+  3,
+  'reverse_dlr',
+  'bow_and_arrow',
+  'sweeps',
+  'advanced',
+  'purple',
+  'technical'
+),
+
+-- Chain 18: 50/50 Guard Attack
+(
+  '50/50 → Heel Hook → Sweep',
+  'Modern 50/50 attack chain.',
+  '[
+    {
+      "step": 1,
+      "name": "50/50 Entry",
+      "description": "Enter 50/50 guard position.",
+      "technique_search": "50/50 guard entry",
+      "key_points": ["Both legs entangled", "Control", "Off-balance"]
+    },
+    {
+      "step": 2,
+      "name": "Heel Hook Attack",
+      "description": "Attack heel hook from 50/50.",
+      "technique_search": "heel hook from 50/50",
+      "key_points": ["Control leg", "Hip pressure", "Rotation"]
+    },
+    {
+      "step": 3,
+      "name": "50/50 Sweep",
+      "description": "If heel hook defended, sweep.",
+      "technique_search": "50/50 guard sweep",
+      "key_points": ["Off-balance", "Use entanglement", "Come on top"]
+    }
+  ]'::jsonb,
+  3,
+  '50_50_guard',
+  'heel_hook',
+  'submissions',
+  'advanced',
+  'brown',
+  'technical'
+),
+
+-- Chain 19: Collar Sleeve Guard
+(
+  'Collar Sleeve → Scissor Sweep → Mount',
+  'Traditional open guard control to sweep.',
+  '[
+    {
+      "step": 1,
+      "name": "Collar Sleeve Control",
+      "description": "Establish collar and sleeve grips.",
+      "technique_search": "collar sleeve guard",
+      "key_points": ["Grip collar and sleeve", "Foot on hip", "Control distance"]
+    },
+    {
+      "step": 2,
+      "name": "Scissor Sweep",
+      "description": "Execute scissor sweep.",
+      "technique_search": "scissor sweep from collar sleeve",
+      "key_points": ["Off-balance", "Scissor motion", "Come on top"]
+    },
+    {
+      "step": 3,
+      "name": "Secure Mount",
+      "description": "Walk to mount position.",
+      "technique_search": "establishing mount",
+      "key_points": ["Walk up", "Control hips", "Pressure"]
+    }
+  ]'::jsonb,
+  3,
+  'collar_sleeve',
+  'mount',
+  'sweeps',
+  'beginner',
+  'white',
+  'balanced'
+),
+
+-- Chain 20: Shin to Shin Guard
+(
+  'Shin to Shin → X-Guard → Sweep',
+  'Modern shin to shin progression.',
+  '[
+    {
+      "step": 1,
+      "name": "Shin to Shin Entry",
+      "description": "Establish shin to shin position.",
+      "technique_search": "shin to shin guard",
+      "key_points": ["Shin on shin", "Control ankle", "Off-balance"]
+    },
+    {
+      "step": 2,
+      "name": "Convert to X-Guard",
+      "description": "Transition from shin to shin to X-guard.",
+      "technique_search": "shin to shin to x-guard",
+      "key_points": ["Hook second leg", "Elevate", "Control"]
+    },
+    {
+      "step": 3,
+      "name": "X-Guard Sweep",
+      "description": "Sweep from X-guard.",
+      "technique_search": "x-guard sweep fundamentals",
+      "key_points": ["Lift and twist", "Come on top", "Control"]
+    }
+  ]'::jsonb,
+  3,
+  'shin_to_shin',
+  'sweep',
+  'sweeps',
+  'intermediate',
+  'blue',
+  'technical'
+);
+```
+
+### 2.3 Top Position Chains (10 chains)
+
+```sql
+INSERT INTO technique_chains (
+  name, description, steps, step_count, position_start, position_end,
+  primary_category, difficulty_level, min_belt_level, technical_vs_athletic
+) VALUES
+
+-- Chain 21: Mount Attack Series
+(
+  'Mount → Armbar → Triangle → Ezekiel',
+  'Classic mount attack progression.',
+  '[
+    {
+      "step": 1,
+      "name": "Maintain Mount",
+      "description": "Control mount position with pressure.",
+      "technique_search": "mount control fundamentals",
+      "key_points": ["Chest pressure", "Grapevine legs", "Control posture"]
+    },
+    {
+      "step": 2,
+      "name": "Mounted Armbar",
+      "description": "Attack armbar from mount.",
+      "technique_search": "armbar from mount",
+      "key_points": ["Isolate arm", "Swing leg", "Hip pressure"]
+    },
+    {
+      "step": 3,
+      "name": "Mounted Triangle",
+      "description": "If armbar defended, switch to triangle.",
+      "technique_search": "mounted triangle",
+      "key_points": ["Lock triangle", "Fall to side", "Squeeze"]
+    },
+    {
+      "step": 4,
+      "name": "Ezekiel Choke",
+      "description": "If both defended, attack ezekiel.",
+      "technique_search": "ezekiel choke from mount",
+      "key_points": ["Blade of wrist", "Through collar", "Squeeze"]
+    }
+  ]'::jsonb,
+  4,
+  'mount',
+  'ezekiel',
+  'submissions',
+  'intermediate',
+  'blue',
+  'balanced'
+),
+
+-- Chain 22: Side Control Attack
+(
+  'Side Control → Mount → Back Take → RNC',
+  'Side control to back attack progression.',
+  '[
+    {
+      "step": 1,
+      "name": "Side Control Pressure",
+      "description": "Maintain heavy side control.",
+      "technique_search": "side control fundamentals",
+      "key_points": ["Chest pressure", "Control hips", "Crossface"]
+    },
+    {
+      "step": 2,
+      "name": "Transition to Mount",
+      "description": "Walk from side control to mount.",
+      "technique_search": "side control to mount",
+      "key_points": ["Control near arm", "Walk legs", "Establish mount"]
+    },
+    {
+      "step": 3,
+      "name": "Take the Back",
+      "description": "From mount, transition to back.",
+      "technique_search": "mount to back take",
+      "key_points": ["Gift wrap", "Roll", "Get hooks"]
+    },
+    {
+      "step": 4,
+      "name": "Rear Naked Choke",
+      "description": "Finish with RNC.",
+      "technique_search": "rear naked choke details",
+      "key_points": ["Under chin", "Lock hands", "Squeeze"]
+    }
+  ]'::jsonb,
+  4,
+  'side_control',
+  'rear_naked_choke',
+  'positions',
+  'intermediate',
+  'blue',
+  'balanced'
+),
+
+-- Chain 23: North-South Choke Chain
+(
+  'North-South → Choke → Armbar',
+  'North-south submission options.',
+  '[
+    {
+      "step": 1,
+      "name": "North-South Control",
+      "description": "Establish north-south position.",
+      "technique_search": "north south control",
+      "key_points": ["Chest to chest", "Control arms", "Pressure"]
+    },
+    {
+      "step": 2,
+      "name": "North-South Choke",
+      "description": "Attack north-south choke.",
+      "technique_search": "north south choke",
+      "key_points": ["Wrap arm", "Squeeze", "Pressure with chest"]
+    },
+    {
+      "step": 3,
+      "name": "North-South Armbar",
+      "description": "If choke defended, switch to armbar.",
+      "technique_search": "north south armbar",
+      "key_points": ["Isolate arm", "Sit back", "Hip pressure"]
+    }
+  ]'::jsonb,
+  3,
+  'north_south',
+  'armbar',
+  'submissions',
+  'advanced',
+  'purple',
+  'technical'
+),
+
+-- Chain 24: Knee on Belly Chain
+(
+  'Knee on Belly → Armbar → Choke',
+  'Knee on belly attack options.',
+  '[
+    {
+      "step": 1,
+      "name": "Knee on Belly Control",
+      "description": "Establish knee on belly position.",
+      "technique_search": "knee on belly control",
+      "key_points": ["Knee on sternum", "Balance", "Control"]
+    },
+    {
+      "step": 2,
+      "name": "Baseball Choke",
+      "description": "Attack baseball choke from KOB.",
+      "technique_search": "baseball choke knee on belly",
+      "key_points": ["Grip collar", "Roll to side", "Squeeze"]
+    },
+    {
+      "step": 3,
+      "name": "Armbar from KOB",
+      "description": "If choke defended, attack armbar.",
+      "technique_search": "armbar from knee on belly",
+      "key_points": ["Isolate arm", "Swing leg", "Fall back"]
+    }
+  ]'::jsonb,
+  3,
+  'knee_on_belly',
+  'armbar',
+  'submissions',
+  'intermediate',
+  'blue',
+  'athletic'
+),
+
+-- Chain 25: Turtle Attack Chain
+(
+  'Turtle → Clock Choke → Back Take → RNC',
+  'Attacking opponent in turtle position.',
+  '[
+    {
+      "step": 1,
+      "name": "Turtle Control",
+      "description": "Control opponent in turtle position.",
+      "technique_search": "attacking turtle position",
+      "key_points": ["Control hips", "Break down", "Prevent escape"]
+    },
+    {
+      "step": 2,
+      "name": "Clock Choke",
+      "description": "Attack clock choke from turtle.",
+      "technique_search": "clock choke from turtle",
+      "key_points": ["Grip collar", "Walk around", "Pressure"]
+    },
+    {
+      "step": 3,
+      "name": "Take the Back",
+      "description": "If choke defended, take back.",
+      "technique_search": "back take from turtle",
+      "key_points": ["Get hooks", "Seat belt", "Control"]
+    },
+    {
+      "step": 4,
+      "name": "Rear Naked Choke",
+      "description": "Finish with RNC from back.",
+      "technique_search": "rear naked choke",
+      "key_points": ["Under chin", "Squeeze", "Lock"]
+    }
+  ]'::jsonb,
+  4,
+  'turtle',
+  'rear_naked_choke',
+  'submissions',
+  'intermediate',
+  'blue',
+  'balanced'
+),
+
+-- Chain 26: Pass to Mount Chain
+(
+  'Guard Pass → Mount → Submission',
+  'Passing to mount attack.',
+  '[
+    {
+      "step": 1,
+      "name": "Pressure Pass",
+      "description": "Execute pressure passing sequence.",
+      "technique_search": "pressure passing fundamentals",
+      "key_points": ["Control hips", "Smash pass", "Maintain pressure"]
+    },
+    {
+      "step": 2,
+      "name": "Establish Mount",
+      "description": "Walk to mount after pass.",
+      "technique_search": "passing to mount",
+      "key_points": ["Walk legs up", "Control posture", "Pressure"]
+    },
+    {
+      "step": 3,
+      "name": "Cross Collar Choke",
+      "description": "Attack choke from mount.",
+      "technique_search": "cross collar choke mount",
+      "key_points": ["Deep grips", "Squeeze", "Expand chest"]
+    }
+  ]'::jsonb,
+  3,
+  'guard_pass',
+  'cross_collar_choke',
+  'passing',
+  'beginner',
+  'white',
+  'balanced'
+),
+
+-- Chain 27: Leg Drag Chain
+(
+  'Leg Drag → Back Take → RNC',
+  'Leg drag to back control.',
+  '[
+    {
+      "step": 1,
+      "name": "Leg Drag Pass",
+      "description": "Execute leg drag pass.",
+      "technique_search": "leg drag pass",
+      "key_points": ["Control leg", "Circle around", "Stay tight"]
+    },
+    {
+      "step": 2,
+      "name": "Take the Back",
+      "description": "From leg drag, transition to back.",
+      "technique_search": "leg drag to back take",
+      "key_points": ["Climb to back", "Get hooks", "Control"]
+    },
+    {
+      "step": 3,
+      "name": "Rear Naked Choke",
+      "description": "Finish with RNC.",
+      "technique_search": "rear naked choke fundamentals",
+      "key_points": ["Under chin", "Squeeze bicep", "Lock"]
+    }
+  ]'::jsonb,
+  3,
+  'leg_drag',
+  'rear_naked_choke',
+  'passing',
+  'intermediate',
+  'blue',
+  'athletic'
+),
+
+-- Chain 28: Toreando Pass Chain
+(
+  'Toreando → Side Control → Mount',
+  'Dynamic passing to mount.',
+  '[
+    {
+      "step": 1,
+      "name": "Toreando Pass",
+      "description": "Execute toreando bullfighter pass.",
+      "technique_search": "toreando pass fundamentals",
+      "key_points": ["Control pants", "Throw legs", "Circle"]
+    },
+    {
+      "step": 2,
+      "name": "Secure Side Control",
+      "description": "Land in side control after pass.",
+      "technique_search": "side control pressure",
+      "key_points": ["Chest pressure", "Crossface", "Control hips"]
+    },
+    {
+      "step": 3,
+      "name": "Walk to Mount",
+      "description": "Transition to mount.",
+      "technique_search": "side control to mount",
+      "key_points": ["Walk legs", "Control near arm", "Establish mount"]
+    }
+  ]'::jsonb,
+  3,
+  'toreando',
+  'mount',
+  'passing',
+  'intermediate',
+  'blue',
+  'athletic'
+),
+
+-- Chain 29: Stack Pass Chain
+(
+  'Stack Pass → Mount → Armbar',
+  'Stack passing to submission.',
+  '[
+    {
+      "step": 1,
+      "name": "Stack Pass",
+      "description": "Execute stack pass.",
+      "technique_search": "stack pass fundamentals",
+      "key_points": ["Stack hips", "Control legs", "Pass"]
+    },
+    {
+      "step": 2,
+      "name": "Mount Position",
+      "description": "Walk to mount after stack pass.",
+      "technique_search": "stack pass to mount",
+      "key_points": ["Maintain pressure", "Walk up", "Control"]
+    },
+    {
+      "step": 3,
+      "name": "Mounted Armbar",
+      "description": "Attack armbar from mount.",
+      "technique_search": "armbar from mount",
+      "key_points": ["Isolate arm", "Swing leg", "Hip pressure"]
+    }
+  ]'::jsonb,
+  3,
+  'stack_pass',
+  'armbar',
+  'passing',
+  'beginner',
+  'white',
+  'balanced'
+),
+
+-- Chain 30: Smash Pass Chain
+(
+  'Smash Pass → Side Control → Kimura',
+  'Heavy pressure passing to submission.',
+  '[
+    {
+      "step": 1,
+      "name": "Smash Pass",
+      "description": "Execute smash pass with pressure.",
+      "technique_search": "smash pass half guard",
+      "key_points": ["Crossface", "Underhook", "Drive through"]
+    },
+    {
+      "step": 2,
+      "name": "Side Control Pressure",
+      "description": "Establish heavy side control.",
+      "technique_search": "side control pressure",
+      "key_points": ["Chest pressure", "Crossface", "Control hips"]
+    },
+    {
+      "step": 3,
+      "name": "Kimura from Side",
+      "description": "Attack kimura from side control.",
+      "technique_search": "kimura from side control",
+      "key_points": ["Figure-four grip", "Control arm", "Apply pressure"]
+    }
+  ]'::jsonb,
+  3,
+  'smash_pass',
+  'kimura',
+  'passing',
+  'intermediate',
+  'blue',
+  'technical'
+);
+```
+
+### 2.4 Escape & Defense Chains (10 chains)
+
+```sql
+INSERT INTO technique_chains (
+  name, description, steps, step_count, position_start, position_end,
+  primary_category, difficulty_level, min_belt_level, technical_vs_athletic
+) VALUES
+
+-- Chain 31: Mount Escape Chain
+(
+  'Mount Escape → Guard Recovery → Sweep',
+  'Escape mount and counterattack.',
+  '[
+    {
+      "step": 1,
+      "name": "Trap and Roll Escape",
+      "description": "Execute trap and roll from bottom mount.",
+      "technique_search": "trap and roll mount escape",
+      "key_points": ["Trap arm and leg", "Bridge and roll", "Reverse position"]
+    },
+    {
+      "step": 2,
+      "name": "Recover Guard",
+      "description": "Get back to closed guard.",
+      "technique_search": "mount escape to guard",
+      "key_points": ["Get hooks in", "Close guard", "Control posture"]
+    },
+    {
+      "step": 3,
+      "name": "Sweep to Top",
+      "description": "Sweep from guard to top position.",
+      "technique_search": "sweep from closed guard",
+      "key_points": ["Off-balance", "Execute sweep", "Come on top"]
+    }
+  ]'::jsonb,
+  3,
+  'bottom_mount',
+  'top_position',
+  'escapes',
+  'beginner',
+  'white',
+  'balanced'
+),
+
+-- Chain 32: Side Control Escape Chain
+(
+  'Side Control Escape → Guard → Sweep',
+  'Escape side control and attack.',
+  '[
+    {
+      "step": 1,
+      "name": "Elbow Escape",
+      "description": "Create space with elbow escape.",
+      "technique_search": "elbow escape side control",
+      "key_points": ["Frame with forearm", "Shrimp", "Create space"]
+    },
+    {
+      "step": 2,
+      "name": "Recover Half Guard",
+      "description": "Get to half guard position.",
+      "technique_search": "side control to half guard",
+      "key_points": ["Get knee in", "Lock half guard", "Control"]
+    },
+    {
+      "step": 3,
+      "name": "Old School Sweep",
+      "description": "Sweep from half guard.",
+      "technique_search": "old school sweep half guard",
+      "key_points": ["Underhook", "Roll", "Come on top"]
+    }
+  ]'::jsonb,
+  3,
+  'bottom_side_control',
+  'top_position',
+  'escapes',
+  'beginner',
+  'white',
+  'balanced'
+),
+
+-- Chain 33: Back Control Escape Chain
+(
+  'Back Escape → Guard Recovery → Attack',
+  'Escape back control and counterattack.',
+  '[
+    {
+      "step": 1,
+      "name": "Hand Fighting",
+      "description": "Defend the choke with hand fighting.",
+      "technique_search": "defending rear naked choke",
+      "key_points": ["Tuck chin", "Fight hands", "Create space"]
+    },
+    {
+      "step": 2,
+      "name": "Escape to Guard",
+      "description": "Escape back control to guard.",
+      "technique_search": "escaping back control",
+      "key_points": ["Remove hooks", "Turn in", "Recover guard"]
+    },
+    {
+      "step": 3,
+      "name": "Guard Attack",
+      "description": "Attack from guard position.",
+      "technique_search": "attacks from closed guard",
+      "key_points": ["Control posture", "Set up attack", "Execute"]
+    }
+  ]'::jsonb,
+  3,
+  'back_control_bottom',
+  'closed_guard',
+  'escapes',
+  'intermediate',
+  'blue',
+  'technical'
+),
+
+-- Chain 34: Triangle Defense Chain
+(
+  'Triangle Defense → Escape → Pass',
+  'Defend and escape triangle attempt.',
+  '[
+    {
+      "step": 1,
+      "name": "Triangle Defense",
+      "description": "Defend the triangle with posture.",
+      "technique_search": "defending triangle choke",
+      "key_points": ["Posture up", "Stack opponent", "Hand positioning"]
+    },
+    {
+      "step": 2,
+      "name": "Escape Triangle",
+      "description": "Escape the triangle position.",
+      "technique_search": "escaping triangle",
+      "key_points": ["Create space", "Pull head out", "Stabilize"]
+    },
+    {
+      "step": 3,
+      "name": "Pass Guard",
+      "description": "Pass guard after escape.",
+      "technique_search": "passing after triangle escape",
+      "key_points": ["Control legs", "Pass to side", "Establish position"]
+    }
+  ]'::jsonb,
+  3,
+  'triangle_defense',
+  'side_control',
+  'escapes',
+  'intermediate',
+  'blue',
+  'balanced'
+),
+
+-- Chain 35: Armbar Defense Chain
+(
+  'Armbar Defense → Escape → Pass',
+  'Defend and escape armbar.',
+  '[
+    {
+      "step": 1,
+      "name": "Armbar Defense",
+      "description": "Defend the armbar by hiding arm.",
+      "technique_search": "defending armbar",
+      "key_points": ["Hide arm", "Stack opponent", "Hitchhiker thumb"]
+    },
+    {
+      "step": 2,
+      "name": "Escape Armbar",
+      "description": "Pull arm out and escape.",
+      "technique_search": "escaping armbar",
+      "key_points": ["Pull elbow", "Stack", "Create space"]
+    },
+    {
+      "step": 3,
+      "name": "Pass to Side",
+      "description": "Pass guard to side control.",
+      "technique_search": "passing after armbar escape",
+      "key_points": ["Control hips", "Pass to side", "Pressure"]
+    }
+  ]'::jsonb,
+  3,
+  'armbar_defense',
+  'side_control',
+  'escapes',
+  'beginner',
+  'white',
+  'balanced'
+),
+
+-- Chain 36: Turtle Escape Chain
+(
+  'Turtle → Stand Up → Takedown',
+  'Escape turtle position and counterattack.',
+  '[
+    {
+      "step": 1,
+      "name": "Turtle Defense",
+      "description": "Protect yourself in turtle position.",
+      "technique_search": "turtle position defense",
+      "key_points": ["Elbows in", "Protect neck", "Stay tight"]
+    },
+    {
+      "step": 2,
+      "name": "Stand Up Escape",
+      "description": "Stand up from turtle safely.",
+      "technique_search": "standing up from turtle",
+      "key_points": ["Build base", "Stand up", "Face opponent"]
+    },
+    {
+      "step": 3,
+      "name": "Takedown",
+      "description": "Secure takedown from standing.",
+      "technique_search": "BJJ takedowns",
+      "key_points": ["Control grips", "Off-balance", "Execute"]
+    }
+  ]'::jsonb,
+  3,
+  'turtle',
+  'top_position',
+  'escapes',
+  'beginner',
+  'white',
+  'balanced'
+),
+
+-- Chain 37: Guard Retention Chain
+(
+  'Guard Retention → Recover → Sweep',
+  'Retain guard and attack.',
+  '[
+    {
+      "step": 1,
+      "name": "Guard Retention",
+      "description": "Prevent guard pass with frames.",
+      "technique_search": "guard retention fundamentals",
+      "key_points": ["Framing", "Hip movement", "Feet on hips"]
+    },
+    {
+      "step": 2,
+      "name": "Recover Full Guard",
+      "description": "Get back to closed or open guard.",
+      "technique_search": "recovering guard",
+      "key_points": ["Get hooks", "Control posture", "Stabilize"]
+    },
+    {
+      "step": 3,
+      "name": "Sweep Attack",
+      "description": "Attack sweep from guard.",
+      "technique_search": "sweeps from guard",
+      "key_points": ["Off-balance", "Execute sweep", "Come on top"]
+    }
+  ]'::jsonb,
+  3,
+  'guard_retention',
+  'top_position',
+  'escapes',
+  'intermediate',
+  'blue',
+  'athletic'
+),
+
+-- Chain 38: Half Guard Escape
+(
+  'Half Guard Bottom → Recover → Sweep',
+  'Escape bottom half guard.',
+  '[
+    {
+      "step": 1,
+      "name": "Half Guard Defense",
+      "description": "Defend in bottom half guard.",
+      "technique_search": "half guard bottom defense",
+      "key_points": ["Underhook", "Protect neck", "Create space"]
+    },
+    {
+      "step": 2,
+      "name": "Recover Full Guard",
+      "description": "Escape half guard to full guard.",
+      "technique_search": "half guard to full guard",
+      "key_points": ["Remove crossface", "Shrimp", "Get full guard"]
+    },
+    {
+      "step": 3,
+      "name": "Sweep from Guard",
+      "description": "Attack sweep.",
+      "technique_search": "sweeps from closed guard",
+      "key_points": ["Off-balance", "Execute", "Come on top"]
+    }
+  ]'::jsonb,
+  3,
+  'bottom_half_guard',
+  'top_position',
+  'escapes',
+  'beginner',
+  'white',
+  'balanced'
+),
+
+-- Chain 39: Guillotine Defense Chain
+(
+  'Guillotine Defense → Pass → Mount',
+  'Defend guillotine and counterattack.',
+  '[
+    {
+      "step": 1,
+      "name": "Guillotine Defense",
+      "description": "Defend the guillotine choke.",
+      "technique_search": "defending guillotine choke",
+      "key_points": ["Tuck chin", "Hand positioning", "Create space"]
+    },
+    {
+      "step": 2,
+      "name": "Pass Guard",
+      "description": "Pass guard while defending.",
+      "technique_search": "passing while defending guillotine",
+      "key_points": ["Maintain posture", "Pass to side", "Escape grip"]
+    },
+    {
+      "step": 3,
+      "name": "Mount Position",
+      "description": "Walk to mount after pass.",
+      "technique_search": "establishing mount",
+      "key_points": ["Walk legs up", "Control hips", "Pressure"]
+    }
+  ]'::jsonb,
+  3,
+  'guillotine_defense',
+  'mount',
+  'escapes',
+  'intermediate',
+  'blue',
+  'technical'
+),
+
+-- Chain 40: Kimura Defense Chain
+(
+  'Kimura Defense → Escape → Counter',
+  'Defend and counter kimura attack.',
+  '[
+    {
+      "step": 1,
+      "name": "Kimura Defense",
+      "description": "Defend the kimura grip.",
+      "technique_search": "defending kimura",
+      "key_points": ["Keep arm tight", "Turn into opponent", "Create space"]
+    },
+    {
+      "step": 2,
+      "name": "Escape Kimura",
+      "description": "Break grip and escape.",
+      "technique_search": "escaping kimura",
+      "key_points": ["Roll out", "Break grip", "Recover position"]
+    },
+    {
+      "step": 3,
+      "name": "Counter Kimura",
+      "description": "Counter with your own kimura.",
+      "technique_search": "counter kimura",
+      "key_points": ["Catch their arm", "Apply kimura", "Finish"]
+    }
+  ]'::jsonb,
+  3,
+  'kimura_defense',
+  'kimura',
+  'escapes',
+  'advanced',
+  'purple',
+  'technical'
+);
+```
+
+### 2.5 Back Control & Leg Lock Chains (10 chains)
+
+```sql
+INSERT INTO technique_chains (
+  name, description, steps, step_count, position_start, position_end,
+  primary_category, difficulty_level, min_belt_level, technical_vs_athletic
+) VALUES
+
+-- Chain 41: Back Control Submission Chain
+(
+  'Back Control → RNC → Armbar → Collar Choke',
+  'Multiple submission options from back.',
+  '[
+    {
+      "step": 1,
+      "name": "Maintain Back Control",
+      "description": "Secure back control with hooks and seat belt.",
+      "technique_search": "maintaining back control",
+      "key_points": ["Seat belt grip", "Hooks in", "Chest to back"]
+    },
+    {
+      "step": 2,
+      "name": "Rear Naked Choke",
+      "description": "Attack RNC first.",
+      "technique_search": "rear naked choke details",
+      "key_points": ["Under chin", "Squeeze bicep", "Lock hands"]
+    },
+    {
+      "step": 3,
+      "name": "Armbar from Back",
+      "description": "If RNC defended, attack armbar.",
+      "technique_search": "armbar from back control",
+      "key_points": ["Control arm", "Swing leg", "Hip pressure"]
+    },
+    {
+      "step": 4,
+      "name": "Collar Choke",
+      "description": "If armbar defended, collar choke.",
+      "technique_search": "collar choke from back",
+      "key_points": ["Grip collar deep", "Pull and squeeze", "Finish"]
+    }
+  ]'::jsonb,
+  4,
+  'back_control',
+  'collar_choke',
+  'submissions',
+  'intermediate',
+  'blue',
+  'balanced'
+),
+
+-- Chain 42: Back Take Chain
+(
+  'Turtle → Back Take → RNC',
+  'Take back from turtle and finish.',
+  '[
+    {
+      "step": 1,
+      "name": "Attack Turtle",
+      "description": "Break down opponent in turtle.",
+      "technique_search": "attacking turtle position",
+      "key_points": ["Control hips", "Break down", "Prevent escape"]
+    },
+    {
+      "step": 2,
+      "name": "Take the Back",
+      "description": "Secure back control with hooks.",
+      "technique_search": "back take from turtle",
+      "key_points": ["Get first hook", "Seat belt", "Second hook"]
+    },
+    {
+      "step": 3,
+      "name": "Rear Naked Choke",
+      "description": "Finish with RNC.",
+      "technique_search": "rear naked choke fundamentals",
+      "key_points": ["Under chin", "Lock hands", "Squeeze"]
+    }
+  ]'::jsonb,
+  3,
+  'turtle',
+  'rear_naked_choke',
+  'submissions',
+  'beginner',
+  'white',
+  'balanced'
+),
+
+-- Chain 43: Bow and Arrow Chain
+(
+  'Back Control → Bow and Arrow → RNC',
+  'Bow and arrow with backup option.',
+  '[
+    {
+      "step": 1,
+      "name": "Back Control",
+      "description": "Secure back control.",
+      "technique_search": "back control fundamentals",
+      "key_points": ["Hooks in", "Seat belt", "Control"]
+    },
+    {
+      "step": 2,
+      "name": "Bow and Arrow Setup",
+      "description": "Set up bow and arrow choke.",
+      "technique_search": "bow and arrow choke setup",
+      "key_points": ["Grip collar and pant", "Stretch", "Squeeze"]
+    },
+    {
+      "step": 3,
+      "name": "Rear Naked Choke",
+      "description": "If bow and arrow defended, RNC.",
+      "technique_search": "rear naked choke",
+      "key_points": ["Switch to neck", "Under chin", "Finish"]
+    }
+  ]'::jsonb,
+  3,
+  'back_control',
+  'rear_naked_choke',
+  'submissions',
+  'intermediate',
+  'blue',
+  'technical'
+),
+
+-- Chain 44: Straight Ankle Lock Chain
+(
+  'Ashi Garami → Straight Ankle → Toe Hold',
+  'Fundamental leg lock chain.',
+  '[
+    {
+      "step": 1,
+      "name": "Ashi Garami Entry",
+      "description": "Enter ashi garami position.",
+      "technique_search": "ashi garami entry",
+      "key_points": ["Control leg", "Secure position", "Off-balance"]
+    },
+    {
+      "step": 2,
+      "name": "Straight Ankle Lock",
+      "description": "Attack straight ankle lock.",
+      "technique_search": "straight ankle lock fundamentals",
+      "key_points": ["Blade of wrist", "Hip pressure", "Control knee"]
+    },
+    {
+      "step": 3,
+      "name": "Toe Hold",
+      "description": "If ankle lock defended, switch to toe hold.",
+      "technique_search": "toe hold from ashi garami",
+      "key_points": ["Grip toes", "Twist", "Control leg"]
+    }
+  ]'::jsonb,
+  3,
+  'ashi_garami',
+  'toe_hold',
+  'submissions',
+  'advanced',
+  'purple',
+  'technical'
+),
+
+-- Chain 45: Heel Hook Chain
+(
+  'Saddle → Inside Heel Hook → Toe Hold',
+  'Saddle position attacks.',
+  '[
+    {
+      "step": 1,
+      "name": "Saddle Entry",
+      "description": "Enter saddle/inside sankaku position.",
+      "technique_search": "saddle position entry",
+      "key_points": ["Control leg", "Inside position", "Off-balance"]
+    },
+    {
+      "step": 2,
+      "name": "Inside Heel Hook",
+      "description": "Attack inside heel hook.",
+      "technique_search": "inside heel hook saddle",
+      "key_points": ["Control heel", "Hip pressure", "Rotation"]
+    },
+    {
+      "step": 3,
+      "name": "Toe Hold Backup",
+      "description": "If heel hook defended, toe hold.",
+      "technique_search": "toe hold from saddle",
+      "key_points": ["Switch to toes", "Twist", "Maintain control"]
+    }
+  ]'::jsonb,
+  3,
+  'saddle',
+  'toe_hold',
+  'submissions',
+  'advanced',
+  'brown',
+  'technical'
+),
+
+-- Chain 46: Outside Heel Hook Chain
+(
+  'Outside Ashi → Outside Heel Hook → Kneebar',
+  'Outside heel hook system.',
+  '[
+    {
+      "step": 1,
+      "name": "Outside Ashi Entry",
+      "description": "Enter outside ashi position.",
+      "technique_search": "outside ashi entry",
+      "key_points": ["Outside position", "Control leg", "Off-balance"]
+    },
+    {
+      "step": 2,
+      "name": "Outside Heel Hook",
+      "description": "Attack outside heel hook.",
+      "technique_search": "outside heel hook",
+      "key_points": ["Control heel", "Hip pressure", "Rotation"]
+    },
+    {
+      "step": 3,
+      "name": "Kneebar",
+      "description": "If heel hook defended, kneebar.",
+      "technique_search": "kneebar from outside ashi",
+      "key_points": ["Control leg", "Hip pressure on knee", "Arch back"]
+    }
+  ]'::jsonb,
+  3,
+  'outside_ashi',
+  'kneebar',
+  'submissions',
+  'advanced',
+  'brown',
+  'technical'
+),
+
+-- Chain 47: Kneebar Chain
+(
+  'Top Position → Kneebar → Toe Hold',
+  'Kneebar from top.',
+  '[
+    {
+      "step": 1,
+      "name": "Kneebar Entry",
+      "description": "Enter kneebar​​​​​​​​​​​​​​​​
+```from top position.”,
+“technique_search”: “kneebar entry from top”,
+“key_points”: [“Isolate leg”, “Fall back”, “Control ankle”]
+},
+{
+“step”: 2,
+“name”: “Kneebar Attack”,
+“description”: “Apply kneebar pressure.”,
+“technique_search”: “kneebar technique details”,
+“key_points”: [“Hip pressure on knee”, “Arch back”, “Control ankle”]
+},
+{
+“step”: 3,
+“name”: “Toe Hold Switch”,
+“description”: “If kneebar defended, switch to toe hold.”,
+“technique_search”: “kneebar to toe hold transition”,
+“key_points”: [“Maintain leg control”, “Grip toes”, “Twist”]
+}
+]’::jsonb,
+3,
+‘top_position’,
+‘toe_hold’,
+‘submissions’,
+‘advanced’,
+‘purple’,
+‘technical’
+),
+
+– Chain 48: 50/50 Leg Lock Chain
+(
+‘50/50 → Heel Hook → Estima Lock’,
+‘Modern 50/50 attack sequence.’,
+‘[
+{
+“step”: 1,
+“name”: “50/50 Position”,
+“description”: “Establish 50/50 guard position.”,
+“technique_search”: “50/50 guard fundamentals”,
+“key_points”: [“Both legs entangled”, “Control”, “Off-balance”]
+},
+{
+“step”: 2,
+“name”: “Heel Hook from 50/50”,
+“description”: “Attack heel hook from 50/50.”,
+“technique_search”: “heel hook from 50/50 guard”,
+“key_points”: [“Control heel”, “Hip pressure”, “Rotation”]
+},
+{
+“step”: 3,
+“name”: “Estima Lock”,
+“description”: “If heel hook defended, estima lock.”,
+“technique_search”: “estima lock from 50/50”,
+“key_points”: [“Control both feet”, “Figure four”, “Pressure”]
+}
+]’::jsonb,
+3,
+‘50_50_guard’,
+‘estima_lock’,
+‘submissions’,
+‘advanced’,
+‘brown’,
+‘technical’
+),
+
+– Chain 49: Cross Ashi Chain
+(
+‘Cross Ashi → Heel Hook → Kneebar’,
+‘Cross ashi garami attacks.’,
+‘[
+{
+“step”: 1,
+“name”: “Cross Ashi Entry”,
+“description”: “Enter cross ashi garami position.”,
+“technique_search”: “cross ashi garami entry”,
+“key_points”: [“Cross legs”, “Control ankle”, “Off-balance”]
+},
+{
+“step”: 2,
+“name”: “Heel Hook Attack”,
+“description”: “Attack heel hook from cross ashi.”,
+“technique_search”: “heel hook cross ashi”,
+“key_points”: [“Control heel”, “Hip pressure”, “Rotation”]
+},
+{
+“step”: 3,
+“name”: “Kneebar Finish”,
+“description”: “If heel hook defended, kneebar.”,
+“technique_search”: “kneebar from cross ashi”,
+“key_points”: [“Maintain leg control”, “Hip on knee”, “Arch”]
+}
+]’::jsonb,
+3,
+‘cross_ashi’,
+‘kneebar’,
+‘submissions’,
+‘advanced’,
+‘brown’,
+‘technical’
+),
+
+– Chain 50: Leg Lock Defense Chain
+(
+‘Heel Hook Defense → Escape → Pass’,
+‘Defend and escape leg attacks.’,
+‘[
+{
+“step”: 1,
+“name”: “Heel Hook Defense”,
+“description”: “Defend heel hook attempt.”,
+“technique_search”: “defending heel hook Lachlan Giles”,
+“key_points”: [“Hide heel”, “Turn knee”, “Create space”]
+},
+{
+“step”: 2,
+“name”: “Escape Leg Entanglement”,
+“description”: “Extract leg from entanglement.”,
+“technique_search”: “escaping leg entanglements”,
+“key_points”: [“Clear legs”, “Pull leg out”, “Recover position”]
+},
+{
+“step”: 3,
+“name”: “Pass and Control”,
+“description”: “Pass guard after escape.”,
+“technique_search”: “passing after leg lock escape”,
+“key_points”: [“Control legs”, “Pass to side”, “Establish position”]
+}
+]’::jsonb,
+3,
+‘heel_hook_defense’,
+‘side_control’,
+‘escapes’,
+‘advanced’,
+‘purple’,
+‘technical’
+);
+
+```
+✓ CHECKPOINT 2: Pre-built chains populated. Test by running:
+```sql
+SELECT COUNT(*) FROM technique_chains WHERE chain_type = 'pre_built';
+SELECT position_start, COUNT(*) FROM technique_chains GROUP BY position_start;
+SELECT difficulty_level, COUNT(*) FROM technique_chains GROUP BY difficulty_level;
+```
+
+Should show 50 chains, distributed across positions and difficulty levels.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 3: CHAIN ENGINE (Build Chain Logic - 45 min)
+
+Create new file: `server/chain-engine.ts`
+
+```typescript
+import { anthropic } from './anthropic';
+import postgres from 'postgres';
+
+const sql = postgres(process.env.DATABASE_URL!);
+
+// ═══════════════════════════════════════════════════════════
+// CHAIN RETRIEVAL & RECOMMENDATION
+// ═══════════════════════════════════════════════════════════
+
+export async function getChainForUserQuery(
+  userId: number,
+  query: string,
+  userContext: any
+) {
+  console.log(`🔗 Finding chain for query: "${query}"`);
+  
+  // Analyze query to determine what chain to recommend
+  const chainIntent = await analyzeChainIntent(query, userContext);
+  
+  if (!chainIntent) {
+    return null;
+  }
+  
+  // Find matching chains from database
+  const matchingChains = await findMatchingChains(chainIntent, userContext);
+  
+  if (matchingChains.length === 0) {
+    // Generate chain on-the-fly if no pre-built match
+    return await generateChainOnDemand(chainIntent, userContext);
+  }
+  
+  // Return best matching chain
+  return matchingChains[0];
+}
+
+async function analyzeChainIntent(query: string, userContext: any) {
+  const prompt = `Analyze this BJJ query to determine if the user needs a technique chain:
+
+Query: "${query}"
+
+User Context:
+- Belt Level: ${userContext.belt_level || 'unknown'}
+- Age: ${userContext.age || 'unknown'}
+- Style: ${userContext.gi_preference || 'both'}
+
+Does this query indicate they need a CHAIN (sequence of techniques) or a single technique?
+
+Examples of chain queries:
+- "They keep defending my triangle" → needs triangle chain
+- "What do I do when X doesn't work" → needs chain with backup options
+- "How do I finish from mount" → needs mount attack chain
+- "They always escape my armbar" → needs armbar chain with alternatives
+
+Respond in JSON:
+{
+  "needs_chain": true/false,
+  "position_start": "closed_guard|mount|back|etc",
+  "primary_technique": "triangle|armbar|passing|etc",
+  "chain_type": "submission_chain|sweep_chain|escape_chain|position_chain",
+  "difficulty_preference": "beginner|intermediate|advanced"
+}`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 500,
+      messages: [{
+        role: 'user',
+        content: prompt
+      }]
+    });
+    
+    const content = response.content[0];
+    if (content.type !== 'text') return null;
+    
+    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    
+    const intent = JSON.parse(jsonMatch[0]);
+    
+    return intent.needs_chain ? intent : null;
+    
+  } catch (error) {
+    console.error('Error analyzing chain intent:', error);
+    return null;
+  }
+}
+
+async function findMatchingChains(chainIntent: any, userContext: any) {
+  const chains = await sql`
+    SELECT * FROM technique_chains
+    WHERE chain_type = 'pre_built'
+      AND (
+        position_start = ${chainIntent.position_start}
+        OR primary_category ILIKE ${'%' + chainIntent.primary_technique + '%'}
+      )
+      AND (
+        difficulty_level = ${chainIntent.difficulty_preference}
+        OR difficulty_level = 'intermediate'
+      )
+      AND (
+        gi_preference = ${userContext.gi_preference}
+        OR gi_preference = 'both'
+      )
+    ORDER BY 
+      helpful_ratio DESC NULLS LAST,
+      times_recommended DESC
+    LIMIT 3
+  `;
+  
+  return chains;
+}
+
+async function generateChainOnDemand(chainIntent: any, userContext: any) {
+  console.log('🤖 Generating chain on-demand...');
+  
+  // Get relevant videos from library for this technique
+  const videos = await sql`
+    SELECT * FROM ai_video_knowledge
+    WHERE (
+      technique_category ILIKE ${'%' + chainIntent.primary_technique + '%'}
+      OR technique_name ILIKE ${'%' + chainIntent.primary_technique + '%'}
+    )
+    AND difficulty_level IN (
+      ${userContext.belt_level},
+      'all'
+    )
+    ORDER BY quality_score DESC
+    LIMIT 20
+  `;
+  
+  if (videos.length < 3) {
+    return null; // Not enough videos to build a chain
+  }
+  
+  const prompt = `Create a BJJ technique chain using these available videos.
+
+Chain Requirements:
+- Start Position: ${chainIntent.position_start}
+- Primary Technique: ${chainIntent.primary_technique}
+- User Level: ${userContext.belt_level}
+- Style: ${userContext.gi_preference}
+
+Available Videos:
+${videos.map((v: any, i: number) => `${i + 1}. ${v.title} by ${v.instructor} (${v.quality_score}/10)`).join('\n')}
+
+Create a 3-4 step chain that shows:
+1. Primary technique attempt
+2. What to do if they defend option 1
+3. What to do if they defend option 2
+4. Final backup option
+
+Respond in JSON:
+{
+  "name": "Chain Name",
+  "description": "Brief description",
+  "steps": [
+    {
+      "step": 1,
+      "name": "Step Name",
+      "description": "What happens in this step",
+      "video_index": 0,
+      "key_points": ["Point 1", "Point 2", "Point 3"]
+    }
+  ]
+}`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      messages: [{
+        role: 'user',
+        content: prompt
+      }]
+    });
+    
+    const content = response.content[0];
+    if (content.type !== 'text') return null;
+    
+    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    
+    const chainData = JSON.parse(jsonMatch[0]);
+    
+    // Map video indices to actual video IDs
+    const stepsWithVideos = chainData.steps.map((step: any) => ({
+      ...step,
+      video_id: videos[step.video_index]?.video_id,
+      video_title: videos[step.video_index]?.title,
+      instructor: videos[step.video_index]?.instructor
+    }));
+    
+    // Save generated chain to database
+    const result = await sql`
+      INSERT INTO technique_chains (
+        name, description, steps, step_count,
+        position_start, primary_category,
+        difficulty_level, chain_type, gi_preference
+      ) VALUES (
+        ${chainData.name},
+        ${chainData.description},
+        ${JSON.stringify(stepsWithVideos)},
+        ${stepsWithVideos.length},
+        ${chainIntent.position_start},
+        ${chainIntent.primary_technique},
+        ${chainIntent.difficulty_preference},
+        'ai_generated',
+        ${userContext.gi_preference}
+      )
+      RETURNING *
+    `;
+    
+    return result[0];
+    
+  } catch (error) {
+    console.error('Error generating chain:', error);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHAIN PERSONALIZATION
+// ═══════════════════════════════════════════════════════════
+
+export async function personalizeChain(chain: any, userContext: any) {
+  // Determine if user needs athletic or technical version
+  const isAthletic = userContext.age < 35 && !userContext.technical_preference;
+  const isTechnical = userContext.age >= 40 || userContext.technical_preference;
+  
+  if (chain.technical_vs_athletic === 'balanced') {
+    // Chain works for everyone as-is
+    return {
+      ...chain,
+      personalization_note: null
+    };
+  }
+  
+  if (isAthletic && chain.technical_vs_athletic === 'technical') {
+    return {
+      ...chain,
+      personalization_note: "This is a technical chain. If you prefer a more athletic approach, let me know and I'll show you a dynamic version."
+    };
+  }
+  
+  if (isTechnical && chain.technical_vs_athletic === 'athletic') {
+    return {
+      ...chain,
+      personalization_note: "This is an athletic chain. Given your style, you might prefer the technical version - more methodical and less explosive. Want to see that instead?"
+    };
+  }
+  
+  return chain;
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHAIN FORMATTING FOR PROF. OS
+// ═══════════════════════════════════════════════════════════
+
+export async function formatChainForResponse(chain: any, userContext: any) {
+  const personalizedChain = await personalizeChain(chain, userContext);
+  const steps = typeof chain.steps === 'string' ? JSON.parse(chain.steps) : chain.steps;
+  
+  // Get actual video data for each step
+  const stepsWithVideos = await Promise.all(
+    steps.map(async (step: any) => {
+      // Find videos matching this step
+      const videos = await sql`
+        SELECT * FROM ai_video_knowledge
+        WHERE (
+          technique_name ILIKE ${'%' + step.name + '%'}
+          OR title ILIKE ${'%' + step.technique_search + '%'}
+        )
+        ORDER BY quality_score DESC
+        LIMIT 3
+      `;
+      
+      // Apply featured instructor boosting
+      const rankedVideos = await rankVideosWithFeaturedBoost(videos);
+      
+      return {
+        ...step,
+        videos: rankedVideos.slice(0, 1) // Just show top video per step
+      };
+    })
+  );
+  
+  // Format for Prof. OS response
+  let response = `Perfect - when they defend ${chain.name.split('→')[0].trim()}, you have a HIGH-PERCENTAGE chain ready:\n\n`;
+  response += `**${chain.name}**\n\n`;
+  response += `${chain.description}\n\n`;
+  
+  stepsWithVideos.forEach((step: any, index: number) => {
+    response += `🔗 **Step ${step.step}: ${step.name}**\n`;
+    response += `${step.description}\n\n`;
+    
+    if (step.videos && step.videos.length > 0) {
+      const video = step.videos[0];
+      response += `[VIDEO: ${video.title} - ${video.instructor}]\n`;
+    }
+    
+    response += `Key points:\n`;
+    step.key_points.forEach((point: string) => {
+      response += `• ${point}\n`;
+    });
+    response += `\n`;
+  });
+  
+  if (personalizedChain.personalization_note) {
+    response += `\n💡 ${personalizedChain.personalization_note}\n\n`;
+  }
+  
+  response += `This is a proven chain - once you have the first position locked in, one of these ${steps.length} options will finish.\n\n`;
+  response += `Want me to save this chain to your library?`;
+  
+  return {
+    response,
+    chainId: chain.id,
+    steps: stepsWithVideos
+  };
+}
+
+async function rankVideosWithFeaturedBoost(videos: any[]) {
+  const featured = await sql`
+    SELECT * FROM featured_instructors WHERE is_active = true
+  `;
+  
+  const featuredMap = new Map(
+    featured.map((f: any) => [f.instructor_id, f.recommendation_boost_percentage])
+  );
+  
+  return videos.map((video: any) => {
+    const boost = featuredMap.get(video.featured_instructor_id) || 0;
+    return {
+      ...video,
+      boosted_score: video.quality_score * (1 + boost / 100)
+    };
+  }).sort((a, b) => b.boosted_score - a.boosted_score);
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHAIN FEEDBACK & ANALYTICS
+// ═══════════════════════════════════════════════════════════
+
+export async function recordChainRecommendation(chainId: number, userId: number) {
+  await sql`
+    UPDATE technique_chains
+    SET times_recommended = times_recommended + 1
+    WHERE id = ${chainId}
+  `;
+}
+
+export async function saveChainForUser(chainId: number, userId: number) {
+  await sql`
+    INSERT INTO user_saved_chains (user_id, chain_id)
+    VALUES (${userId}, ${chainId})
+    ON CONFLICT (user_id, chain_id) DO NOTHING
+  `;
+  
+  await sql`
+    UPDATE technique_chains
+    SET times_saved = times_saved + 1
+    WHERE id = ${chainId}
+  `;
+}
+
+export async function recordChainFeedback(
+  chainId: number,
+  userId: number,
+  feedbackType: 'helpful' | 'not_helpful',
+  comment?: string
+) {
+  await sql`
+    INSERT INTO chain_feedback (user_id, chain_id, feedback_type, feedback_comment)
+    VALUES (${userId}, ${chainId}, ${feedbackType}, ${comment || null})
+  `;
+  
+  // Update chain helpful ratio
+  const feedback = await sql`
+    SELECT 
+      COUNT(*) FILTER (WHERE feedback_type = 'helpful') as helpful,
+      COUNT(*) FILTER (WHERE feedback_type = 'not_helpful') as not_helpful
+    FROM chain_feedback
+    WHERE chain_id = ${chainId}
+  `;
+  
+  const helpful = parseInt(feedback[0].helpful);
+  const notHelpful = parseInt(feedback[0].not_helpful);
+  const total = helpful + notHelpful;
+  const helpfulRatio = total > 0 ? (helpful / total) * 100 : null;
+  
+  await sql`
+    UPDATE technique_chains
+    SET 
+      helpful_count = ${helpful},
+      not_helpful_count = ${notHelpful},
+      helpful_ratio = ${helpfulRatio}
+    WHERE id = ${chainId}
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// USER SAVED CHAINS
+// ═══════════════════════════════════════════════════════════
+
+export async function getUserSavedChains(userId: number) {
+  const chains = await sql`
+    SELECT 
+      tc.*,
+      usc.personal_notes,
+      usc.drilling_count,
+      usc.last_drilled_date,
+      usc.success_in_rolling
+    FROM user_saved_chains usc
+    JOIN technique_chains tc ON usc.chain_id = tc.id
+    WHERE usc.user_id = ${userId}
+    ORDER BY usc.saved_at DESC
+  `;
+  
+  return chains;
+}
+
+export async function updateChainDrillingLog(
+  userId: number,
+  chainId: number,
+  successInRolling: boolean = false
+) {
+  await sql`
+    UPDATE user_saved_chains
+    SET 
+      drilling_count = drilling_count + 1,
+      last_drilled_date = CURRENT_DATE,
+      success_in_rolling = ${successInRolling},
+      success_count = CASE WHEN ${successInRolling} THEN success_count + 1 ELSE success_count END
+    WHERE user_id = ${userId} AND chain_id = ${chainId}
+  `;
+}
+```
+
+✓ CHECKPOINT 3: Chain engine built. Core chain retrieval, personalization, and formatting logic complete.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 4: INTEGRATE WITH PROF. OS (30 min)
+
+Update Prof. OS to detect when chains are needed and recommend them.
+
+Add to `server/prof-os.ts`:
+
+```typescript
+import { getChainForUserQuery, formatChainForResponse, recordChainRecommendation } from './chain-engine';
+
+// Add this function to existing Prof. OS logic:
+
+async function detectAndRecommendChain(userMessage: string, userId: number, userContext: any) {
+  // Keywords that indicate user might need a chain
+  const chainKeywords = [
+    'defend', 'escape', 'counter', 'doesn\'t work', 'keep getting',
+    'always', 'stuck', 'trapped', 'can\'t finish', 'what if',
+    'backup', 'option', 'alternative', 'then what', 'next'
+  ];
+  
+  const needsChain = chainKeywords.some(keyword => 
+    userMessage.toLowerCase().includes(keyword)
+  );
+  
+  if (!needsChain) {
+    return null;
+  }
+  
+  // Get appropriate chain
+  const chain = await getChainForUserQuery(userId, userMessage, userContext);
+  
+  if (!chain) {
+    return null;
+  }
+  
+  // Record recommendation
+  await recordChainRecommendation(chain.id, userId);
+  
+  // Format for response
+  return await formatChainForResponse(chain, userContext);
+}
+
+// Modify main Prof. OS response function to include chain detection:
+// (Add this before returning normal video recommendations)
+
+const chainRecommendation = await detectAndRecommendChain(userMessage, userId, userContext);
+
+if (chainRecommendation) {
+  return {
+    ...normalResponse,
+    hasChain: true,
+    chainResponse: chainRecommendation.response,
+    chainId: chainRecommendation.chainId,
+    chainSteps: chainRecommendation.steps
+  };
+}
+```
+
+✓ CHECKPOINT 4: Prof. OS integration complete. Test by asking Prof. OS: “They keep defending my triangle” - should return a chain.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 5: API ENDPOINTS (20 min)
+
+Add chain-related API endpoints to `server/routes.ts`:
+
+```typescript
+import { 
+  getChainForUserQuery, 
+  saveChainForUser, 
+  recordChainFeedback,
+  getUserSavedChains,
+  updateChainDrillingLog
+} from './chain-engine';
+
+// Chain endpoints
+
+app.get('/api/chains/saved', async (req, res) => {
+  try {
+    const userId = req.user?.id; // Assuming auth middleware
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const chains = await getUserSavedChains(userId);
+    res.json(chains);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/chains/save', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const { chainId } = req.body;
+    await saveChainForUser(chainId, userId);
+    
+    res.json({ success: true, message: 'Chain saved' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/chains/feedback', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const { chainId, feedbackType, comment } = req.body;
+    await recordChainFeedback(chainId, userId, feedbackType, comment);
+    
+    res.json({ success: true, message: 'Feedback recorded' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/chains/log-drilling', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const { chainId, successInRolling } = req.body;
+    await updateChainDrillingLog(userId, chainId, successInRolling);
+    
+    res.json({ success: true, message: 'Drilling logged' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/chains', async (req, res) => {
+  try {
+    const chains = await sql`
+      SELECT 
+        id, name, description, step_count,
+        position_start, primary_category,
+        difficulty_level, chain_type,
+        times_recommended, times_saved,
+        helpful_ratio
+      FROM technique_chains
+      ORDER BY times_recommended DESC
+      LIMIT 100
+    `;
+    
+    res.json(chains);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+✓ CHECKPOINT 5: API endpoints created. Test by calling /api/chains/saved
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 6: ADMIN CHAIN DASHBOARD (30 min)
+
+Create admin page to view and manage chains.
+
+Create file: `client/src/pages/admin/AdminChains.tsx`
+
+```typescript
+import { useState, useEffect } from 'react';
+
+export function AdminChains() {
+  const [chains, setChains] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    fetchChains();
+  }, []);
+  
+  async function fetchChains() {
+    try {
+      const response = await fetch('/api/admin/chains');
+      const data = await response.json();
+      setChains(data);
+    } catch (error) {
+      console.error('Error fetching chains:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  if (loading) return <div>Loading chains...</div>;
+  
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8">Technique Chains</h1>
+      
+      <div className="bg-white rounded-lg shadow p-6 mb-8">
+        <h2 className="text-xl font-semibold mb-4">Chain Library Stats</h2>
+        <div className="grid grid-cols-4 gap-4">
+          <div>
+            <div className="text-2xl font-bold">{chains.length}</div>
+            <div className="text-gray-600">Total Chains</div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold">
+              {chains.filter((c: any) => c.chain_type === 'pre_built').length}
+            </div>
+            <div className="text-gray-600">Pre-Built</div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold">
+              {chains.filter((c: any) => c.chain_type === 'ai_generated').length}
+            </div>
+            <div className="text-gray-600">AI Generated</div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold">
+              {chains.reduce((sum: number, c: any) => sum + (c.times_recommended || 0), 0)}
+            </div>
+            <div className="text-gray-600">Total Recommendations</div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Position</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Steps</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Difficulty</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recommended</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Saved</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Helpful %</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {chains.map((chain: any) => (
+              <tr key={chain.id}>
+                <td className="px-6 py-4">
+                  <div className="text-sm font-medium text-gray-900">{chain.name}</div>
+                  <div className="text-sm text-gray-500">{chain.description?.slice(0, 60)}...</div>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500">{chain.position_start}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{chain.step_count}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{chain.difficulty_level}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">
+                  <span className={`px-2 py-1 rounded text-xs ${
+                    chain.chain_type === 'pre_built' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                  }`}>
+                    {chain.chain_type}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500">{chain.times_recommended || 0}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{chain.times_saved || 0}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">
+                  {chain.helpful_ratio ? `${chain.helpful_ratio.toFixed(0)}%` : 'N/A'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+```
+
+Add route to admin pages navigation.
+
+✓ CHECKPOINT 6: Admin dashboard created. Visit /admin/chains to view all chains.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 7: USER-FACING CHAIN FEATURES (20 min)
+
+Add “My Saved Chains” page for users.
+
+Create file: `client/src/pages/MySavedChains.tsx`
+
+```typescript
+import { useState, useEffect } from 'react';
+
+export function MySavedChains() {
+  const [chains, setChains] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    fetchSavedChains();
+  }, []);
+  
+  async function fetchSavedChains() {
+    try {
+      const response = await fetch('/api/chains/saved');
+      const data = await response.json();
+      setChains(data);
+    } catch (error) {
+      console.error('Error fetching saved chains:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  async function logDrilling(chainId: number, success: boolean) {
+    try {
+      await fetch('/api/chains/log-drilling', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chainId, successInRolling: success })
+      });
+      fetchSavedChains(); // Refresh
+    } catch (error) {
+      console.error('Error logging drilling:', error);
+    }
+  }
+  
+  if (loading) return <div>Loading your chains...</div>;
+  
+  if (chains.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+        <h1 className="text-3xl font-bold mb-4">My Saved Chains</h1>
+        <p className="text-gray-600 mb-8">
+          You haven't saved any chains yet. Ask Prof. OS about technique sequences and save the ones you like!
+        </p>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8">My Saved Chains</h1>
+      
+      <div className="space-y-6">
+        {chains.map((chain: any) => (
+          <div key={chain.id} className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold mb-2">{chain.name}</h2>
+            <p className="text-gray-600 mb-4">{chain.description}</p>
+            
+            <div className="flex gap-4 text-sm text-gray-500 mb-4">
+              <span>📍 {chain.position_start}</span>
+              <span>🎯 {chain.step_count} steps</span>
+              <span>⭐ {chain.difficulty_level}</span>
+            </div>
+            
+            {chain.drilling_count > 0 && (
+              <div className="bg-blue-50 rounded p-3 mb-4">
+                <div className="flex justify-between text-sm">
+                  <span>Drilled: {chain.drilling_count} times</span>
+                  {chain.last_drilled_date && (
+                    <span>Last: {new Date(chain.last_drilled_date).toLocaleDateString()}</span>
+                  )}
+                  {chain.success_count > 0 && (
+                    <span className="text-green-600">✅ Success: {chain.success_count}x</span>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {chain.personal_notes && (
+              <div className="bg-yellow-50 rounded p-3 mb-4">
+                <div className="text-sm font-medium mb-1">My Notes:</div>
+                <div className="text-sm">{chain.personal_notes}</div>
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => logDrilling(chain.id, false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                🔄 Log Drilling Session
+              </button>
+              <button
+                onClick={() => logDrilling(chain.id, true)}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                ✅ Hit in Rolling!
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+Add route to main app navigation.
+
+✓ CHECKPOINT 7: User chain features complete. Test by saving a chain and visiting /my-chains
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## SECTION 8: TESTING & VALIDATION (15 min)
+
+### 8.1 Automated tests
+
+Create file `tests/prompt-11-validation.test.ts`:
+
+```typescript
+import { sql } from '../server/db';
+
+async function runChainValidationTests() {
+  console.log('🧪 Running Prompt 11 validation tests...\n');
+  
+  let passed = 0;
+  let failed = 0;
+  
+  // Test 1: Chain tables exist
+  try {
+    await sql`SELECT 1 FROM technique_chains LIMIT 1`;
+    await sql`SELECT 1 FROM user_saved_chains LIMIT 1`;
+    await sql`SELECT 1 FROM chain_feedback LIMIT 1`;
+    console.log('✅ Test 1: Chain tables exist');
+    passed++;
+  } catch (error) {
+    console.error('❌ Test 1 FAILED: Chain tables missing');
+    failed++;
+  }
+  
+  // Test 2: Pre-built chains populated
+  try {
+    const count = await sql`SELECT COUNT(*) as count FROM technique_chains WHERE chain_type = 'pre_built'`;
+    if (parseInt(count[0].count) === 50) {
+      console.log('✅ Test 2: 50 pre-built chains populated');
+      passed++;
+    } else {
+      console.error(`❌ Test 2 FAILED: ${count[0].count} chains (expected 50)`);
+      failed++;
+    }
+  } catch (error) {
+    console.error('❌ Test 2 FAILED:', error);
+    failed++;
+  }
+  
+  // Test 3: Chains cover all major positions
+  try {
+    const positions = await sql`
+      SELECT DISTINCT position_start 
+      FROM technique_chains 
+      WHERE chain_type = 'pre_built'
+    `;
+    const positionList = positions.map((p: any) => p.position_start);
+    const hasClosedGuard = positionList.includes('closed_guard');
+    const hasMount = positionList.includes('mount');
+    const hasBack = positionList.includes('back_control');
+    
+    if (hasClosedGuard && hasMount && hasBack) {
+      console.log('✅ Test 3: Chains cover major positions');
+      passed++;
+    } else {
+      console.error('❌ Test 3 FAILED: Missing major positions');
+      failed++;
+    }
+  } catch (error) {
+    console.error('❌ Test 3 FAILED:', error);
+    failed++;
+  }
+  
+  // Test 4: Chains have valid JSON steps
+  try {
+    const chains = await sql`SELECT steps FROM technique_chains LIMIT 10`;
+    chains.forEach((chain: any) => {
+      const steps = typeof chain.steps === 'string' ? JSON.parse(chain.steps) : chain.steps;
+      if (!Array.isArray(steps) || steps.length === 0) {
+        throw new Error('Invalid steps format');
+      }
+    });
+    console.log('✅ Test 4: Chain steps are valid JSON');
+    passed++;
+  } catch (error) {
+    console.error('❌ Test 4 FAILED: Invalid chain steps format');
+    failed++;
+  }
+  
+  // Test 5: Difficulty levels distributed
+  try {
+    const levels = await sql`
+      SELECT difficulty_level, COUNT(*) as count 
+      FROM technique_chains 
+      WHERE chain_type = 'pre_built'
+      GROUP BY difficulty_level
+    `;
+    const hasBeginner = levels.some((l: any) => l.difficulty_level === 'beginner');
+    const hasIntermediate = levels.some((l: any) => l.difficulty_level === 'intermediate');
+    const hasAdvanced = levels.some((l: any) => l.difficulty_level === 'advanced');
+    
+    if (hasBeginner && hasIntermediate && hasAdvanced) {
+      console.log('✅ Test 5: Chains distributed across difficulty levels');
+      passed++;
+    } else {
+      console.error('❌ Test 5 FAILED: Missing difficulty levels');
+      failed++;
+    }
+  } catch (error) {
+    console.error('❌ Test 5 FAILED:', error);
+    failed++;
+  }
+  
+  console.log(`\n📊 Test Results: ${passed} passed, ${failed} failed`);
+  
+  if (failed === 0) {
+    console.log('\n🎉 ALL TESTS PASSED! Prompt 11 is ready.\n');
+  } else {
+    console.log('\n⚠️ Some tests failed. Review errors above.\n');
+  }
+}
+
+runChainValidationTests();
+```
+
+### 8.2 Manual test checklist
+
+```
+MANUAL TESTING CHECKLIST FOR PROMPT 11:
+
+□ Database Tests:
+  □ Run: SELECT COUNT(*) FROM technique_chains WHERE chain_type = 'pre_built';
+     Expected: 50 chains
+  
+  □ Run: SELECT DISTINCT position_start FROM technique_chains;
+     Expected: closed_guard, mount, back_control, spider_guard, etc.
+  
+  □ Run: SELECT name, step_count, difficulty_level FROM technique_chains LIMIT 10;
+     Expected: Chains with 3-4 steps, various difficulty levels
+
+□ Prof. OS Integration Tests:
+  □ Ask Prof. OS: "They keep defending my triangle"
+     Expected: Returns a triangle chain (Triangle → Armbar → Omoplata)
+  
+  □ Ask Prof. OS: "What do I do when my armbar doesn't work"
+     Expected: Returns an armbar chain with alternatives
+  
+  □ Ask Prof. OS: "How do I finish from mount"
+     Expected: Returns a mount attack chain
+
+□ Chain Display Tests:
+  □ Check that chain response includes:
+     - Chain name
+     - Description
+     - Multiple steps (3-4)
+     - Key points for each step
+     - "Save this chain" prompt
+
+□ User Features Tests:
+  □ Save a chain from Prof. OS conversation
+  □ Visit /my-chains page
+     Expected: Saved chain appears
+  
+  □ Click "Log Drilling Session"
+     Expected: Drilling count increases
+  
+  □ Click "Hit in Rolling!"
+     Expected: Success count increases
+
+□ Admin Dashboard Tests:
+  □ Visit /admin/chains
+     Expected: Shows all 50 chains
+  
+  □ Check stats:
+     - Total chains
+     - Pre-built vs AI generated
+     - Recommendation counts
+
+IF ALL TESTS PASS:
+✅ Prompt 11 is complete! Chain system is ready.
+
+CHAINS ARE NOW INTEGRATED:
+- Users can ask about techniques and get chains
+- Chains show progression (if X doesn't work, try Y)
+- Users can save and track chains
+- System learns which chains are helpful
+```
+
+✓ CHECKPOINT 8: Testing complete. Run automated tests, then work through manual checklist.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## FINAL: SYSTEM READY
+
+If all checkpoints passed:
+
+1. Database tables created ✅
+1. 50 pre-built chains populated ✅
+1. Chain engine built ✅
+1. Prof. OS integration complete ✅
+1. API endpoints created ✅
+1. Admin dashboard functional ✅
+1. User features working ✅
+1. Testing validated ✅
+
+**🎉 PROMPT 11 COMPLETE! 🎉**
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## WHAT’S NEW:
+
+**Prof. OS now teaches CHAINS, not just techniques:**
+
+- “They defend my triangle” → Shows triangle → armbar → omoplata → back take chain
+- 50 pre-built fundamental chains covering all positions
+- AI generates new chains on-demand when needed
+- Users can save chains and track drilling progress
+- Personalized based on age/style (athletic vs technical versions)
+- Featured instructors prioritized in chain videos
+
+**This makes Prof. OS feel like a REAL COACH.** 🔥
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## NEXT STEPS:
+
+Test the chain system:
+
+1. Ask Prof. OS about a technique that keeps getting defended
+1. Should return a multi-step chain with alternatives
+1. Save the chain
+1. Check “My Saved Chains” page
+1. Log drilling sessions
+
+**The chain system is your competitive advantage.** Nobody else is teaching sequences like this with AI. 🚀
+
+```
+---
+
+**Copy everything above and paste into Replit Agent.**
+
+**Build time: 2-3 hours**
+
+Wake up to chains! 🔗✨​​​​​​​​​​​​​​​​
+```

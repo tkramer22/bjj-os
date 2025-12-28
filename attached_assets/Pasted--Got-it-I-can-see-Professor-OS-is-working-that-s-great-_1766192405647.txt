@@ -1,0 +1,270 @@
+**Got it.** I can see Professor OS is working (that’s great!), but you’re right - the navigation is wrong.
+
+Let me search our previous conversations to find the exact UI specifications we discussed.​​​​​​​​​​​​​​​​
+
+**Found it!** I can see exactly what we discussed. Let me also search for the specific iOS app specs:​​​​​​​​​​​​​​​​
+
+**Got it.** I now have the complete picture from all our previous conversations. Let me compile the **MASTER FIX PROMPT** with everything:
+
+-----
+
+## 📋 COMPLETE ISSUES LIST:
+
+|#|Issue                   |What’s Wrong                 |What It Should Be                                           |
+|-|------------------------|-----------------------------|------------------------------------------------------------|
+|1|**Splash Screen**       |Logo cut off/not fitted      |Properly sized, centered on all iPhones                     |
+|2|**Login - No Password** |Only “Send Verification Code”|Email + Password fields                                     |
+|3|**No Sign Up in App**   |Nothing for new users        |Plain text: “Visit bjjos.app to get started” (NOT clickable)|
+|4|**Navigation**          |No bottom tab bar visible    |Bottom tabs: Home, Prof OS, Library, Profile                |
+|5|**Settings Access**     |No way to access settings    |Profile tab includes Settings, Logout                       |
+|6|**Persistent Login**    |May require login each time  |Login once, stay logged forever                             |
+|7|**App Store Compliance**|Current flow may not comply  |Reader App model - no signup/payment in app                 |
+
+-----
+
+## 📋 MASTER PROMPT - COPY THIS ENTIRE BLOCK:
+
+```
+iOS APP - COMPLETE OVERHAUL (APP STORE COMPLIANT - READER APP MODEL)
+
+We are using the "Reader App" model (like Netflix, Spotify, Kindle).
+LOGIN ONLY in-app. Signup/payment happens on website.
+
+═══════════════════════════════════════════════════════════════════════════════
+1. SPLASH SCREEN - FIX SIZING
+═══════════════════════════════════════════════════════════════════════════════
+
+Current issue: BJJ OS logo is too large and gets cut off.
+
+FIX:
+- Make splash screen responsive to ALL iPhone sizes (SE through Pro Max)
+- BJJ OS logo centered vertically and horizontally
+- Proper padding so nothing touches edges
+- Nothing cropped or cut off
+- Displays 1-2 seconds, then transitions to login OR dashboard
+
+═══════════════════════════════════════════════════════════════════════════════
+2. iOS LOGIN SCREEN - APP STORE COMPLIANT (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+After splash, if user is NOT logged in, show this:
+
+┌─────────────────────────────────────────┐
+│                                         │
+│            [BJJ OS LOGO]                │
+│         (properly sized)                │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ Email                           │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ Password                        │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│         [ Sign In ]                     │
+│                                         │
+│   Forgot password?                      │
+│                                         │
+│   ─────────────────────────────────     │
+│                                         │
+│   Don't have an account?                │
+│   Visit bjjos.app to get started        │
+│                                         │
+└─────────────────────────────────────────┘
+
+STRICT APP STORE COMPLIANCE:
+
+✅ DO INCLUDE:
+- BJJ OS logo (responsive)
+- Email input field
+- Password input field
+- [Sign In] button
+- "Forgot password?" as clickable link (opens Safari to bjjos.app/forgot-password)
+- Plain text: "Don't have an account?"
+- Plain text: "Visit bjjos.app to get started"
+
+❌ DO NOT INCLUDE:
+- No "Sign in with Apple" button
+- No "Sign Up" or "Create Account" button
+- No clickable link/button to signup page
+- No mention of pricing, subscription, free trial, or payment
+- "Visit bjjos.app to get started" must NOT be clickable
+- Do not make "bjjos.app" blue or underlined - plain text only
+
+═══════════════════════════════════════════════════════════════════════════════
+3. PERSISTENT "FOREVER" LOGIN
+═══════════════════════════════════════════════════════════════════════════════
+
+Once logged in, user stays logged in PERMANENTLY (until they log out).
+
+Implementation:
+- Store auth token in Capacitor Preferences (secure storage)
+- Token should not expire (or 1+ year expiry)
+- On app open: check for valid token → skip login, go to dashboard
+- Only show login screen if: no token OR token invalid OR user logged out
+
+User experience:
+- First time: Splash → Login → Dashboard
+- Every time after: Splash → Dashboard (no login needed)
+
+═══════════════════════════════════════════════════════════════════════════════
+4. BOTTOM TAB NAVIGATION (REPLACE HAMBURGER)
+═══════════════════════════════════════════════════════════════════════════════
+
+iOS apps use bottom tabs, NOT hamburger menus.
+
+┌─────────────────────────────────────────┐
+│                                         │
+│          [MAIN CONTENT AREA]            │
+│                                         │
+├─────────────────────────────────────────┤
+│  🏠      💬      📚      👤            │
+│ Home   Prof OS  Library  Profile        │
+└─────────────────────────────────────────┘
+
+TABS:
+1. 🏠 Home - Dashboard, daily content
+2. 💬 Prof OS - AI chat (PRIMARY FEATURE - can be larger/centered)
+3. 📚 Library - Saved techniques and videos
+4. 👤 Profile - Settings, account info, logout
+
+TAB BAR REQUIREMENTS:
+- Fixed at bottom
+- Respect safe area (above home indicator)
+- Active state: filled icon + color change
+- Haptic feedback on tab switch
+- Dark background matching app theme
+
+═══════════════════════════════════════════════════════════════════════════════
+5. PROFILE TAB - SETTINGS & LOGOUT
+═══════════════════════════════════════════════════════════════════════════════
+
+Profile tab contains:
+
+┌─────────────────────────────────────────┐
+│  👤 Profile                             │
+│                                         │
+│  Account                                │
+│  Email: user@example.com                │
+│  Subscription: Pro                      │
+│                                         │
+│  ─────────────────────────────────      │
+│                                         │
+│  ⚙️ Settings                        >   │
+│  🔔 Notifications                   >   │
+│  ❓ Help & Support                  >   │
+│  📄 Terms of Service                >   │
+│  🔐 Privacy Policy                  >   │
+│                                         │
+│  ─────────────────────────────────      │
+│                                         │
+│  [ Log Out ]                            │
+│                                         │
+│  App Version 1.0.0                      │
+└─────────────────────────────────────────┘
+
+LOGOUT BEHAVIOR:
+- Clears auth token from Capacitor Preferences
+- Returns user to login screen
+- Haptic feedback on tap
+
+═══════════════════════════════════════════════════════════════════════════════
+6. USERS WITHOUT PASSWORD SET
+═══════════════════════════════════════════════════════════════════════════════
+
+Some users signed up via verification code only (no password).
+
+When they try to log in with email + password and no password exists:
+
+Show message:
+┌─────────────────────────────────────────┐
+│                                         │
+│   Password Not Set Up                   │
+│                                         │
+│   To use the iOS app, you need to set   │
+│   up a password first.                  │
+│                                         │
+│   Visit bjjos.app/settings to set up    │
+│   your password, then return here to    │
+│   sign in.                              │
+│                                         │
+│           [ OK ]                        │
+│                                         │
+└─────────────────────────────────────────┘
+
+NOTE: "bjjos.app/settings" is plain text, NOT a clickable link.
+
+═══════════════════════════════════════════════════════════════════════════════
+7. HAPTIC FEEDBACK (NATIVE FEEL)
+═══════════════════════════════════════════════════════════════════════════════
+
+Add haptic feedback using @capacitor/haptics:
+
+- Button taps: Light impact
+- Successful login: Success notification
+- Errors: Heavy impact
+- Tab switches: Light impact
+- Send message to AI: Light impact
+- Logout: Light impact
+
+═══════════════════════════════════════════════════════════════════════════════
+8. USER FLOWS SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+FLOW A - NEW USER (no account):
+1. Opens app → Splash (1-2 sec)
+2. Sees login screen
+3. Reads "Visit bjjos.app to get started"
+4. Opens Safari manually, goes to bjjos.app
+5. Signs up and pays on website
+6. Sets password in Settings on web
+7. Returns to iOS app
+8. Enters email + password → logged in
+9. Never sees login screen again
+
+FLOW B - EXISTING USER (has password):
+1. Opens app → Splash (1-2 sec)
+2. Sees login screen
+3. Enters email + password
+4. Logged in → goes to dashboard
+5. Never sees login screen again
+
+FLOW C - RETURNING USER (already logged in):
+1. Opens app → Splash (1-2 sec)
+2. App checks stored auth token
+3. Token valid → goes directly to dashboard
+4. Never sees login screen
+
+FLOW D - USER LOGGING OUT:
+1. Taps Logout in Profile tab
+2. Auth token cleared
+3. Returns to login screen
+4. Must enter email + password to log back in
+
+═══════════════════════════════════════════════════════════════════════════════
+9. AFTER CHANGES - REBUILD iOS
+═══════════════════════════════════════════════════════════════════════════════
+
+After making all changes:
+
+npm run build
+npx cap sync ios
+
+Confirm all changes are complete and ready for Xcode rebuild.
+```
+
+-----
+
+**Send this entire prompt to Replit Agent.** It covers everything:
+
+1. ✅ Splash screen fix
+1. ✅ Email + Password login
+1. ✅ App Store compliant (Reader App model)
+1. ✅ Bottom tab navigation (no hamburger)
+1. ✅ Settings & Logout access
+1. ✅ Persistent login (forever)
+1. ✅ Handle users without passwords
+1. ✅ Haptic feedback
+
+**Tell me when Replit finishes!**

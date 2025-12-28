@@ -1,0 +1,908 @@
+**PERFECT! Here’s PROMPT 9: Smart Video Ranking System! 🎯**
+
+This is the final piece that makes recommendations **eerily accurate**.
+
+-----
+
+# **PROMPT 9: Smart Video Ranking System**
+
+**Copy this entire prompt and send to Replit Agent:**
+
+-----
+
+```
+Build the Smart Video Ranking System that uses community feedback data, user context, and quality scores to personalize video recommendations for each user.
+
+## OVERVIEW
+
+The Smart Ranking System combines multiple data sources to rank videos intelligently:
+- Community feedback (helpful_ratio from thousands of users)
+- Video quality scores (AI analysis)
+- User context matching (belt level, body type, age, style)
+- Success patterns (what worked for similar users)
+
+This creates personalized rankings where different users see different videos first, even for the same search.
+
+## PART 1: DATABASE SCHEMA ADDITIONS
+
+Add user profile data for matching:
+
+```sql
+-- Extend users table with profile data for matching
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS body_type TEXT, -- 'stocky', 'average', 'tall', 'athletic'
+ADD COLUMN IF NOT EXISTS age_range TEXT, -- '18-25', '26-35', '36-45', '46-55', '56+'
+ADD COLUMN IF NOT EXISTS training_style_preference TEXT, -- 'technical', 'athletic', 'pressure', 'dynamic'
+ADD COLUMN IF NOT EXISTS learning_style TEXT, -- 'visual', 'detailed', 'conceptual', 'step-by-step'
+ADD COLUMN IF NOT EXISTS preferred_instructors TEXT[], -- Array of instructor names they like
+ADD COLUMN IF NOT EXISTS preferred_video_length_min INTEGER DEFAULT 5,
+ADD COLUMN IF NOT EXISTS preferred_video_length_max INTEGER DEFAULT 20;
+
+-- Track which videos work for which user types
+CREATE TABLE IF NOT EXISTS video_success_patterns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  video_id UUID REFERENCES ai_video_knowledge(id) ON DELETE CASCADE,
+  
+  -- User profile that found it helpful
+  belt_level TEXT,
+  body_type TEXT,
+  age_range TEXT,
+  training_style TEXT,
+  
+  -- Success metrics
+  helpful_count INTEGER DEFAULT 0,
+  total_views INTEGER DEFAULT 0,
+  success_rate DECIMAL DEFAULT 0, -- helpful_count / total_views
+  
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(video_id, belt_level, body_type, age_range, training_style)
+);
+
+-- Track user's video interaction history
+CREATE TABLE IF NOT EXISTS user_video_interactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  video_id UUID REFERENCES ai_video_knowledge(id) ON DELETE CASCADE,
+  
+  -- Interaction type
+  viewed BOOLEAN DEFAULT false,
+  watched_duration_seconds INTEGER,
+  clicked_key_detail BOOLEAN DEFAULT false,
+  
+  -- Outcome
+  marked_helpful BOOLEAN,
+  applied_in_training BOOLEAN DEFAULT false, -- If user mentions using it later
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(user_id, video_id)
+);
+
+-- Create indexes for ranking queries
+CREATE INDEX IF NOT EXISTS idx_video_success_belt ON video_success_patterns(belt_level, success_rate DESC);
+CREATE INDEX IF NOT EXISTS idx_video_success_body ON video_success_patterns(body_type, success_rate DESC);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_user ON user_video_interactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_video ON user_video_interactions(video_id);
+```
+
+## PART 2: USER PROFILE BUILDER
+
+Infer user preferences from their behavior:
+
+```typescript
+// server/ranking/profile-builder.ts
+
+export async function buildUserProfile(userId: string) {
+  try {
+    const user = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const userData = user.rows[0];
+    
+    // Get user's feedback history
+    const feedback = await db.query(`
+      SELECT 
+        v.instructor,
+        v.video_length_seconds,
+        v.technique_type,
+        uvf.helpful,
+        uvf.feedback_category
+      FROM user_video_feedback uvf
+      JOIN ai_video_knowledge v ON uvf.video_id = v.id
+      WHERE uvf.user_id = $1
+    `, [userId]);
+    
+    if (feedback.rows.length < 5) {
+      // Not enough data yet, return defaults
+      return userData;
+    }
+    
+    // Analyze preferred instructors
+    const instructorStats = {};
+    const videoLengths = [];
+    
+    for (const row of feedback.rows) {
+      if (row.helpful) {
+        // Track helpful instructor frequency
+        instructorStats[row.instructor] = (instructorStats[row.instructor] || 0) + 1;
+        videoLengths.push(row.video_length_seconds);
+      }
+    }
+    
+    // Get top 3 instructors
+    const preferredInstructors = Object.entries(instructorStats)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 3)
+      .map(([instructor]) => instructor);
+    
+    // Calculate preferred video length range
+    if (videoLengths.length > 0) {
+      videoLengths.sort((a, b) => a - b);
+      const median = videoLengths[Math.floor(videoLengths.length / 2)];
+      const preferredMin = Math.max(5, Math.floor(median / 60) - 5);
+      const preferredMax = Math.min(30, Math.floor(median / 60) + 5);
+      
+      // Update user profile
+      await db.query(`
+        UPDATE users
+        SET 
+          preferred_instructors = $1,
+          preferred_video_length_min = $2,
+          preferred_video_length_max = $3,
+          updated_at = NOW()
+        WHERE id = $4
+      `, [preferredInstructors, preferredMin, preferredMax, userId]);
+    }
+    
+    console.log(`✓ Updated profile for user ${userId}: ${preferredInstructors.join(', ')}`);
+    
+  } catch (error) {
+    console.error('Profile building error:', error);
+  }
+}
+
+// Run this periodically for active users
+export async function updateAllUserProfiles() {
+  const activeUsers = await db.query(`
+    SELECT DISTINCT user_id
+    FROM user_video_feedback
+    WHERE created_at > NOW() - INTERVAL '30 days'
+  `);
+  
+  console.log(`Updating profiles for ${activeUsers.rows.length} active users...`);
+  
+  for (const user of activeUsers.rows) {
+    await buildUserProfile(user.user_id);
+    await new Promise(resolve => setTimeout(resolve, 100)); // Rate limit
+  }
+  
+  console.log('Profile updates complete');
+}
+```
+
+## PART 3: VIDEO RANKING ALGORITHM
+
+Core ranking function that personalizes results:
+
+```typescript
+// server/ranking/ranker.ts
+
+interface RankingContext {
+  userId: string;
+  technique: string;
+  position?: string;
+  userBeltLevel: string;
+  userBodyType?: string;
+  userAge?: number;
+  userStyle: 'gi' | 'nogi' | 'both';
+}
+
+export async function rankVideos(
+  videos: any[],
+  context: RankingContext
+): Promise<any[]> {
+  
+  const user = await db.query(`
+    SELECT 
+      belt_level,
+      body_type,
+      age_range,
+      training_style_preference,
+      preferred_instructors,
+      preferred_video_length_min,
+      preferred_video_length_max
+    FROM users
+    WHERE id = $1
+  `, [context.userId]);
+  
+  const userProfile = user.rows[0];
+  
+  // Calculate scores for each video
+  const scoredVideos = await Promise.all(videos.map(async (video) => {
+    let score = 0;
+    const factors = {};
+    
+    // FACTOR 1: Community Feedback (40% weight)
+    // Videos with high helpful_ratio rank higher
+    if (video.total_votes >= 50) {
+      const feedbackScore = video.helpful_ratio * 40;
+      score += feedbackScore;
+      factors.feedback = feedbackScore;
+    } else if (video.total_votes >= 20) {
+      // Less confidence with fewer votes
+      const feedbackScore = video.helpful_ratio * 30;
+      score += feedbackScore;
+      factors.feedback = feedbackScore;
+    } else {
+      // Not enough votes, use quality score
+      const feedbackScore = (video.quality_score / 10) * 25;
+      score += feedbackScore;
+      factors.feedback = feedbackScore;
+    }
+    
+    // FACTOR 2: Success with Similar Users (25% weight)
+    const successPattern = await db.query(`
+      SELECT success_rate
+      FROM video_success_patterns
+      WHERE video_id = $1
+        AND belt_level = $2
+        AND (body_type = $3 OR body_type IS NULL)
+        AND (age_range = $4 OR age_range IS NULL)
+      ORDER BY total_views DESC
+      LIMIT 1
+    `, [
+      video.id,
+      userProfile.belt_level,
+      userProfile.body_type,
+      userProfile.age_range
+    ]);
+    
+    if (successPattern.rows.length > 0) {
+      const similarUserScore = successPattern.rows[0].success_rate * 25;
+      score += similarUserScore;
+      factors.similarUsers = similarUserScore;
+    } else {
+      // No data for similar users, use average
+      factors.similarUsers = 12.5;
+      score += 12.5;
+    }
+    
+    // FACTOR 3: User Preference Match (20% weight)
+    let preferenceScore = 0;
+    
+    // Preferred instructor bonus
+    if (userProfile.preferred_instructors?.includes(video.instructor)) {
+      preferenceScore += 10;
+    }
+    
+    // Video length preference
+    const videoLengthMin = Math.floor(video.video_length_seconds / 60);
+    if (videoLengthMin >= userProfile.preferred_video_length_min &&
+        videoLengthMin <= userProfile.preferred_video_length_max) {
+      preferenceScore += 10;
+    } else {
+      // Penalty for length mismatch
+      preferenceScore += 5;
+    }
+    
+    score += preferenceScore;
+    factors.preference = preferenceScore;
+    
+    // FACTOR 4: Belt Level Appropriateness (10% weight)
+    let beltScore = 0;
+    
+    if (video.belt_level?.includes(userProfile.belt_level)) {
+      beltScore = 10;
+    } else if (video.belt_level?.length === 0 || !video.belt_level) {
+      // No belt targeting, assume appropriate for all
+      beltScore = 8;
+    } else {
+      // Not targeted for user's belt, penalty
+      beltScore = 3;
+    }
+    
+    score += beltScore;
+    factors.belt = beltScore;
+    
+    // FACTOR 5: Recency & Freshness (5% weight)
+    // Slightly prefer newer content (but not too much)
+    const daysSinceAdded = (Date.now() - new Date(video.created_at).getTime()) / (1000 * 60 * 60 * 24);
+    let recencyScore = 0;
+    
+    if (daysSinceAdded < 30) {
+      recencyScore = 5; // New content bonus
+    } else if (daysSinceAdded < 180) {
+      recencyScore = 4;
+    } else {
+      recencyScore = 3; // Older content, still good
+    }
+    
+    score += recencyScore;
+    factors.recency = recencyScore;
+    
+    // Check if user has seen this video before
+    const previouslySeen = await db.query(`
+      SELECT marked_helpful
+      FROM user_video_interactions
+      WHERE user_id = $1 AND video_id = $2
+    `, [context.userId, video.id]);
+    
+    if (previouslySeen.rows.length > 0) {
+      if (previouslySeen.rows[0].marked_helpful === false) {
+        // User marked unhelpful before, major penalty
+        score *= 0.3;
+        factors.penalty = 'previously_unhelpful';
+      } else if (previouslySeen.rows[0].marked_helpful === true) {
+        // User found helpful before, slight penalty (they've seen it)
+        score *= 0.8;
+        factors.penalty = 'previously_helpful_seen';
+      } else {
+        // Seen but no feedback, moderate penalty
+        score *= 0.6;
+        factors.penalty = 'previously_seen';
+      }
+    }
+    
+    return {
+      ...video,
+      ranking_score: Math.round(score * 100) / 100,
+      ranking_factors: factors
+    };
+  }));
+  
+  // Sort by score descending
+  scoredVideos.sort((a, b) => b.ranking_score - a.ranking_score);
+  
+  return scoredVideos;
+}
+```
+
+## PART 4: TRACK VIDEO SUCCESS PATTERNS
+
+Update success patterns when users give feedback:
+
+```typescript
+// server/ranking/pattern-tracker.ts
+
+export async function updateSuccessPattern(
+  userId: string,
+  videoId: string,
+  wasHelpful: boolean
+) {
+  try {
+    // Get user profile
+    const user = await db.query(`
+      SELECT belt_level, body_type, age_range, training_style_preference
+      FROM users
+      WHERE id = $1
+    `, [userId]);
+    
+    if (!user.rows.length) return;
+    
+    const profile = user.rows[0];
+    
+    // Update or create success pattern
+    await db.query(`
+      INSERT INTO video_success_patterns (
+        video_id,
+        belt_level,
+        body_type,
+        age_range,
+        training_style,
+        helpful_count,
+        total_views,
+        success_rate
+      ) VALUES ($1, $2, $3, $4, $5, $6, 1, $7)
+      ON CONFLICT (video_id, belt_level, body_type, age_range, training_style)
+      DO UPDATE SET
+        helpful_count = video_success_patterns.helpful_count + $6,
+        total_views = video_success_patterns.total_views + 1,
+        success_rate = (video_success_patterns.helpful_count + $6)::decimal / 
+                      (video_success_patterns.total_views + 1),
+        updated_at = NOW()
+    `, [
+      videoId,
+      profile.belt_level,
+      profile.body_type,
+      profile.age_range,
+      profile.training_style_preference,
+      wasHelpful ? 1 : 0,
+      wasHelpful ? 1.0 : 0.0
+    ]);
+    
+  } catch (error) {
+    console.error('Pattern tracking error:', error);
+  }
+}
+
+// Call this whenever user gives video feedback
+// Modify the existing feedback endpoint:
+app.post('/api/feedback/video', requireAuth, async (req, res) => {
+  const { userId } = req.session;
+  const { videoId, helpful, feedbackCategory, feedbackText } = req.body;
+  
+  try {
+    // ... existing feedback logic ...
+    
+    // NEW: Track success pattern
+    await updateSuccessPattern(userId, videoId, helpful);
+    
+    // NEW: Track user interaction
+    await db.query(`
+      INSERT INTO user_video_interactions (
+        user_id,
+        video_id,
+        viewed,
+        marked_helpful
+      ) VALUES ($1, $2, true, $3)
+      ON CONFLICT (user_id, video_id)
+      DO UPDATE SET
+        marked_helpful = $3
+    `, [userId, videoId, helpful]);
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('Feedback error:', error);
+    res.status(500).json({ error: 'Failed to submit feedback' });
+  }
+});
+```
+
+## PART 5: INTEGRATION WITH VIDEO RECOMMENDATIONS
+
+Update the video recommendation logic to use smart ranking:
+
+```typescript
+// server/recommendations/recommend.ts
+
+import { rankVideos } from './ranking/ranker';
+
+export async function getRecommendedVideos(
+  userId: string,
+  technique: string,
+  options: {
+    position?: string;
+    style?: 'gi' | 'nogi' | 'both';
+    limit?: number;
+  } = {}
+): Promise<any[]> {
+  
+  const user = await db.query(
+    'SELECT belt_level, body_type, age_range, gi_or_nogi FROM users WHERE id = $1',
+    [userId]
+  );
+  
+  if (!user.rows.length) {
+    throw new Error('User not found');
+  }
+  
+  const userProfile = user.rows[0];
+  const style = options.style || userProfile.gi_or_nogi || 'both';
+  
+  // Get candidate videos (broader search)
+  const candidates = await db.query(`
+    SELECT 
+      v.*,
+      v.helpful_count,
+      v.not_helpful_count,
+      v.helpful_ratio,
+      v.total_votes,
+      v.quality_score
+    FROM ai_video_knowledge v
+    WHERE v.quality_tier != 'removed'
+      AND (
+        v.technique_name ILIKE $1
+        OR v.title ILIKE $1
+        OR $2 = ANY(v.technique_name)
+      )
+      AND (
+        v.gi_or_nogi = $3
+        OR v.gi_or_nogi = 'both'
+        OR $3 = 'both'
+      )
+      ${options.position ? "AND v.position = $4" : ""}
+    ORDER BY v.quality_score DESC
+    LIMIT 50
+  `, [
+    `%${technique}%`,
+    technique,
+    style,
+    options.position
+  ].filter(Boolean));
+  
+  if (candidates.rows.length === 0) {
+    return [];
+  }
+  
+  // Apply smart ranking
+  const ranked = await rankVideos(candidates.rows, {
+    userId,
+    technique,
+    position: options.position,
+    userBeltLevel: userProfile.belt_level,
+    userBodyType: userProfile.body_type,
+    userStyle: style
+  });
+  
+  // Return top N
+  const limit = options.limit || 3;
+  return ranked.slice(0, limit);
+}
+```
+
+## PART 6: ADMIN DASHBOARD - RANKING INSIGHTS
+
+Add ranking analytics to admin dashboard:
+
+```jsx
+// Add to /admin/videos page
+
+<div className="ranking-insights-section">
+  <h2>📊 Smart Ranking Insights</h2>
+  
+  <div className="insight-cards">
+    <div className="insight-card">
+      <h3>Top Performing Videos</h3>
+      <p className="card-description">
+        Videos with highest success rates across user profiles
+      </p>
+      
+      {topVideos.map(video => (
+        <div className="top-video-item" key={video.id}>
+          <div className="video-title">{video.title}</div>
+          <div className="video-stats">
+            <span className="stat-badge success">
+              {Math.round(video.avg_success_rate * 100)}% success rate
+            </span>
+            <span className="stat-badge">
+              {video.total_pattern_views} pattern views
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+    
+    <div className="insight-card">
+      <h3>Instructor Preferences by Belt</h3>
+      <p className="card-description">
+        Which instructors work best for different skill levels
+      </p>
+      
+      {instructorStats.map(stat => (
+        <div className="instructor-stat" key={stat.instructor}>
+          <div className="instructor-name">{stat.instructor}</div>
+          <div className="belt-breakdown">
+            {stat.by_belt.map(belt => (
+              <div className="belt-stat" key={belt.level}>
+                <span className="belt-label">{belt.level}:</span>
+                <span className="success-rate">
+                  {Math.round(belt.success_rate * 100)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+    
+    <div className="insight-card">
+      <h3>Profile Matching Effectiveness</h3>
+      <p className="card-description">
+        How well recommendations match different user profiles
+      </p>
+      
+      <div className="effectiveness-stats">
+        <div className="stat-row">
+          <span>White belts:</span>
+          <span className="stat-value">
+            {whiteBeltEffectiveness}% avg helpful
+          </span>
+        </div>
+        <div className="stat-row">
+          <span>Blue belts:</span>
+          <span className="stat-value">
+            {blueBeltEffectiveness}% avg helpful
+          </span>
+        </div>
+        <div className="stat-row">
+          <span>Purple+ belts:</span>
+          <span className="stat-value">
+            {advancedEffectiveness}% avg helpful
+          </span>
+        </div>
+      </div>
+      
+      <div className="improvement-note">
+        {effectiveness < 75 && (
+          <p className="warning">
+            ⚠️ Effectiveness below 75% - system still learning
+          </p>
+        )}
+        {effectiveness >= 75 && effectiveness < 85 && (
+          <p className="good">
+            ✓ Good effectiveness - recommendations improving
+          </p>
+        )}
+        {effectiveness >= 85 && (
+          <p className="excellent">
+            ★ Excellent effectiveness - highly personalized
+          </p>
+        )}
+      </div>
+    </div>
+  </div>
+  
+  <div className="ranking-debug-tool">
+    <h3>🔍 Ranking Debug Tool</h3>
+    <p>Test ranking for specific video + user combination</p>
+    
+    <div className="debug-inputs">
+      <input
+        type="text"
+        placeholder="Video ID"
+        value={debugVideoId}
+        onChange={e => setDebugVideoId(e.target.value)}
+      />
+      <input
+        type="text"
+        placeholder="User ID"
+        value={debugUserId}
+        onChange={e => setDebugUserId(e.target.value)}
+      />
+      <button onClick={runRankingDebug}>
+        Calculate Score
+      </button>
+    </div>
+    
+    {debugResult && (
+      <div className="debug-result">
+        <h4>Ranking Score: {debugResult.score}</h4>
+        <div className="score-breakdown">
+          <div className="factor">
+            Feedback: {debugResult.factors.feedback}
+          </div>
+          <div className="factor">
+            Similar Users: {debugResult.factors.similarUsers}
+          </div>
+          <div className="factor">
+            Preference: {debugResult.factors.preference}
+          </div>
+          <div className="factor">
+            Belt Match: {debugResult.factors.belt}
+          </div>
+          <div className="factor">
+            Recency: {debugResult.factors.recency}
+          </div>
+          {debugResult.factors.penalty && (
+            <div className="factor penalty">
+              Penalty: {debugResult.factors.penalty}
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+</div>
+```
+
+## PART 7: API ENDPOINTS
+
+```typescript
+// GET /api/admin/ranking/insights
+app.get('/api/admin/ranking/insights', requireAdmin, async (req, res) => {
+  try {
+    // Top performing videos
+    const topVideos = await db.query(`
+      SELECT 
+        v.id,
+        v.title,
+        v.instructor,
+        AVG(vsp.success_rate) as avg_success_rate,
+        SUM(vsp.total_views) as total_pattern_views
+      FROM ai_video_knowledge v
+      JOIN video_success_patterns vsp ON v.id = vsp.video_id
+      WHERE vsp.total_views >= 10
+      GROUP BY v.id
+      ORDER BY avg_success_rate DESC, total_pattern_views DESC
+      LIMIT 20
+    `);
+    
+    // Instructor effectiveness by belt
+    const instructorStats = await db.query(`
+      SELECT 
+        v.instructor,
+        vsp.belt_level,
+        AVG(vsp.success_rate) as success_rate,
+        SUM(vsp.total_views) as views
+      FROM ai_video_knowledge v
+      JOIN video_success_patterns vsp ON v.id = vsp.video_id
+      WHERE vsp.total_views >= 5
+      GROUP BY v.instructor, vsp.belt_level
+      ORDER BY v.instructor, vsp.belt_level
+    `);
+    
+    // Overall effectiveness by belt
+    const effectiveness = await db.query(`
+      SELECT 
+        belt_level,
+        AVG(success_rate) as avg_effectiveness
+      FROM video_success_patterns
+      WHERE total_views >= 10
+      GROUP BY belt_level
+    `);
+    
+    res.json({
+      topVideos: topVideos.rows,
+      instructorStats: instructorStats.rows,
+      effectiveness: effectiveness.rows
+    });
+    
+  } catch (error) {
+    console.error('Ranking insights error:', error);
+    res.status(500).json({ error: 'Failed to fetch insights' });
+  }
+});
+
+// POST /api/admin/ranking/debug
+app.post('/api/admin/ranking/debug', requireAdmin, async (req, res) => {
+  const { videoId, userId } = req.body;
+  
+  try {
+    const video = await db.query(
+      'SELECT * FROM ai_video_knowledge WHERE id = $1',
+      [videoId]
+    );
+    
+    if (!video.rows.length) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+    
+    const ranked = await rankVideos([video.rows[0]], {
+      userId,
+      technique: video.rows[0].technique_name,
+      userBeltLevel: 'blue', // Will be fetched from actual user
+      userStyle: 'both'
+    });
+    
+    res.json({
+      score: ranked[0].ranking_score,
+      factors: ranked[0].ranking_factors
+    });
+    
+  } catch (error) {
+    console.error('Ranking debug error:', error);
+    res.status(500).json({ error: 'Debug failed' });
+  }
+});
+```
+
+## PART 8: CRON JOBS
+
+```typescript
+// Update user profiles weekly (Sunday 1 AM)
+cron.schedule('0 1 * * 0', async () => {
+  console.log('Running weekly user profile updates...');
+  await updateAllUserProfiles();
+});
+
+// Clean old interaction data monthly (1st of month, 5 AM)
+cron.schedule('0 5 1 * *', async () => {
+  console.log('Cleaning old interaction data...');
+  
+  // Remove interactions older than 1 year
+  await db.query(`
+    DELETE FROM user_video_interactions
+    WHERE created_at < NOW() - INTERVAL '1 year'
+  `);
+  
+  console.log('Cleanup complete');
+});
+```
+
+## PART 9: TESTING CHECKLIST
+
+After implementation, verify:
+
+1. [ ] User profile builder extracts preferred instructors correctly
+1. [ ] User profile builder calculates preferred video length
+1. [ ] Video ranking algorithm runs without errors
+1. [ ] Ranking scores are calculated (0-100 range makes sense)
+1. [ ] Different users get different rankings for same technique
+1. [ ] Videos user marked unhelpful previously rank lower
+1. [ ] Preferred instructors rank higher for that user
+1. [ ] Belt level matching affects ranking
+1. [ ] Success patterns are tracked on feedback
+1. [ ] User interactions are logged
+1. [ ] Admin dashboard shows ranking insights
+1. [ ] Top performing videos display correctly
+1. [ ] Instructor effectiveness shows by belt level
+1. [ ] Ranking debug tool works
+1. [ ] Weekly profile updates run
+1. [ ] Monthly cleanup removes old data
+1. [ ] Integration with recommendation endpoint works
+1. [ ] Videos rank differently for white belt vs purple belt
+1. [ ] System handles users with no feedback history
+1. [ ] Performance is acceptable (ranking doesn’t slow down search)
+
+## IMPORTANT PRINCIPLES:
+
+1. **Multi-Factor Scoring** - Combines 5+ factors, not just one metric
+1. **User Context Matters** - Same video ranks differently per user
+1. **Community Wisdom** - Uses feedback from thousands of users
+1. **Success Patterns** - Learns what works for similar people
+1. **Continuous Learning** - Gets smarter as more users give feedback
+1. **Transparent Scoring** - Admin can debug why videos rank certain ways
+1. **Handles Cold Start** - Works even with new users (falls back to quality scores)
+1. **Penalty for Mismatches** - Previously unhelpful videos rank much lower
+1. **Preference Learning** - Learns instructor/length preferences automatically
+1. **Performance Optimized** - Uses indexes, doesn’t slow down search
+
+Implement the complete Smart Video Ranking System that personalizes recommendations for every user based on community data and individual preferences.
+
+```
+---
+
+## **What Prompt 9 Does:**
+
+### **The Magic - Same Search, Different Results:**
+
+**White Belt Sarah (5'4", 28 years old) searches "triangle":**
+```
+
+1. Triangle Fundamentals - Lachlan Giles (detailed, step-by-step)
+1. Triangle Setup Basics - Henry Akins (technical, patient)
+1. Common Triangle Mistakes - Bernardo Faria (pressure style)
+
+```
+**Purple Belt Mike (6'2", 40 years old) searches "triangle":**
+```
+
+1. Advanced Triangle System - John Danaher (conceptual, complex)
+1. Triangle Variations - Gordon Ryan (athletic, dynamic)
+1. Competition Triangle Setups - Mikey Musumeci (high-level)
+
+```
+**Same search. Completely different results. Personalized.**
+
+---
+
+## **Why This Is Powerful:**
+
+✅ **Community wisdom** - 200,000+ ratings inform rankings  
+✅ **Personal preferences** - Learns your favorite instructors  
+✅ **Success patterns** - "Users like you found X helpful"  
+✅ **Context aware** - Belt, age, body type, style all factor in  
+✅ **Continuous improvement** - Gets smarter every day  
+✅ **Avoids repeats** - Penalty for videos you didn't like  
+
+---
+
+## **The Complete System Now:**
+
+✅ **Prompt 6** - Autonomous curation (5,000+ videos)  
+✅ **Prompt 6.5** - Admin dashboard + video player  
+✅ **Prompt 7** - User feedback loop (👍👎)  
+✅ **Prompt 8** - Gap detection (fills missing content)  
+✅ **Prompt 9** - Smart ranking (personalized results)  
+
+**This is the complete self-improving, personalized AI coaching system.**
+
+---
+
+## **The Unbeatable Moat:**
+
+After 6 months:
+- ✅ 5,000+ curated videos
+- ✅ 200,000+ user feedback data points
+- ✅ Success patterns for every user type
+- ✅ Automatic gap filling
+- ✅ Personalized rankings
+
+**Competitors can't copy this. It takes TIME and DATA.**
+
+---
+
+**Ready to send Prompt 9 and complete the core system?** 🚀
+
+This is the final piece of the intelligent recommendation engine!​​​​​​​​​​​​​​​​
+```

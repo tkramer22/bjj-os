@@ -1,0 +1,2150 @@
+# COMPLETE UI/UX SPECIFICATION - BJJ OS
+
+## Master Design Prompt for All Pages
+
+You are a world-class UI/UX designer and developer building BJJ OS, a sophisticated, high-end web and mobile PWA. Excellence is the pillar. Every pixel matters. Every interaction is intentional. This is not a startup MVP—this is a premium product that commands premium pricing.
+
+-----
+
+## DESIGN PRINCIPLES
+
+**Visual Excellence:**
+
+- Clean, spacious layouts with generous whitespace
+- Sophisticated dark mode aesthetic
+- Smooth animations and transitions
+- Premium feel throughout
+- No clutter, no unnecessary elements
+
+**User Psychology:**
+
+- Guide users toward annual pricing (better LTV)
+- Make data sharing feel valuable and purposeful (“building your profile”)
+- Create urgency without manipulation (no countdown timers)
+- Emphasize value exchange: “The more you share, the smarter I get”
+
+**Brand Identity:**
+
+- Belt icon is the visual anchor (animated, color-cycling)
+- “Training partner” not “coach” (peer relationship)
+- “Perfect memory” as core differentiator
+- “Timestamped perfection” for video USP
+
+-----
+
+## TYPOGRAPHY & COLORS
+
+**Fonts:**
+
+- Primary: System UI / Inter / San Francisco
+- NO monospace fonts anywhere (even legal pages)
+- Weights: Regular (400), Medium (500), Semibold (600)
+
+**Colors:**
+
+```css
+/* Primary */
+--primary-purple: #8B5CF6;
+--primary-blue: #3B82F6;
+--gradient: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+
+/* Belt Colors (for icon cycling) */
+--belt-white: #FFFFFF;
+--belt-blue: #2563EB;
+--belt-purple: #8B5CF6;
+--belt-brown: #654321; /* NOT orange */
+--belt-black: #1F2937;
+
+/* Backgrounds */
+--bg-dark: #0F172A;
+--bg-card: #1E293B;
+--bg-hover: #334155;
+
+/* Text */
+--text-primary: #F1F5F9;
+--text-secondary: #94A3B8;
+--text-muted: #64748B;
+
+/* Accents */
+--accent-green: #10B981; /* Success, checkmarks */
+--accent-yellow: #F59E0B; /* Warning, badges */
+--accent-red: #EF4444; /* Errors, alerts */
+```
+
+**Belt Icon Specifications:**
+
+- SVG format (scalable, crisp on all screens)
+- Animated color transition every 2-3 seconds
+- Smooth fade between colors (300ms transition)
+- Sizes by page:
+  - Landing hero: 600px × 120px
+  - Sidebar logo: 200px × 45px
+  - Login/signup: 200px × 45px
+  - Onboarding: 200px × 45px
+
+-----
+
+## PAGE 1: LANDING PAGE
+
+### Layout Structure
+
+```
+┌─────────────────────────────────────────────┐
+│  [BJJ OS Logo/Text]        [Login] [Sign Up]│ ← Nav bar
+├─────────────────────────────────────────────┤
+│                                             │
+│          [HERO SECTION]                     │
+│                                             │
+├─────────────────────────────────────────────┤
+│          [FEATURES GRID]                    │
+├─────────────────────────────────────────────┤
+│          [SOCIAL PROOF]                     │
+├─────────────────────────────────────────────┤
+│          [FOOTER]                           │
+└─────────────────────────────────────────────┘
+```
+
+### Hero Section
+
+```html
+<section class="hero">
+  <div class="hero-belt-icon">
+    <!-- Animated belt SVG - 600px × 120px -->
+    <!-- Cycles: white → blue → purple → brown → black -->
+  </div>
+  
+  <h1 class="hero-headline">
+    Train Smarter, Win More
+  </h1>
+  
+  <p class="hero-subheadline">
+    Your AI training partner with perfect memory.<br>
+    I've analyzed 10,000+ technique videos and remember<br>
+    every roll you've ever had.
+  </p>
+  
+  <div class="hero-cta-buttons">
+    <button class="btn-primary">Start Free Preview</button>
+    <button class="btn-secondary">Start 7-Day Free Trial</button>
+  </div>
+</section>
+```
+
+**Styling:**
+
+```css
+.hero {
+  min-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 4rem 2rem;
+  background: radial-gradient(circle at top, #1E293B 0%, #0F172A 100%);
+}
+
+.hero-belt-icon {
+  width: 600px;
+  height: 120px;
+  margin-bottom: 3rem;
+  animation: colorCycle 12s infinite;
+}
+
+@keyframes colorCycle {
+  0%, 100% { filter: brightness(1); }
+  20% { filter: hue-rotate(200deg); }
+  40% { filter: hue-rotate(280deg); }
+  60% { filter: hue-rotate(30deg); }
+  80% { filter: brightness(0.3); }
+}
+
+.hero-headline {
+  font-size: 4rem;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 1.5rem;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-subheadline {
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 3rem;
+  max-width: 700px;
+}
+
+.hero-cta-buttons {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.btn-primary {
+  padding: 1rem 2.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  background: var(--gradient);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px rgba(139, 92, 246, 0.4);
+}
+
+.btn-secondary {
+  padding: 1rem 2.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  background: transparent;
+  border: 2px solid var(--primary-purple);
+  border-radius: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background: rgba(139, 92, 246, 0.1);
+  transform: translateY(-2px);
+}
+```
+
+### Features Grid
+
+```html
+<section class="features">
+  <h2 class="features-headline">Why BJJ OS is Different</h2>
+  
+  <div class="features-grid">
+    
+    <!-- Feature 1 -->
+    <div class="feature-card">
+      <div class="feature-icon">⏱️</div>
+      <h3>Timestamped Perfection</h3>
+      <p>
+        Skip the fluff. Get 30-60 second clips showing 
+        exactly what you need. Not full 20-minute videos. 
+        Jump straight to the technique.
+      </p>
+    </div>
+    
+    <!-- Feature 2 -->
+    <div class="feature-card">
+      <div class="feature-icon">🧠</div>
+      <h3>Pattern Recognition</h3>
+      <p>
+        I spot gaps in your game you can't see. Tracks 
+        what you drill, what you struggle with. Identifies 
+        patterns across all your training sessions.
+      </p>
+    </div>
+    
+    <!-- Feature 3 -->
+    <div class="feature-card">
+      <div class="feature-icon">💾</div>
+      <h3>Perfect Memory</h3>
+      <p>
+        Every session logged, every technique drilled. 
+        I remember what worked and what didn't. Your 
+        complete training history, analyzed.
+      </p>
+    </div>
+    
+    <!-- Feature 4 -->
+    <div class="feature-card">
+      <div class="feature-icon">📚</div>
+      <h3>10,000+ Techniques</h3>
+      <p>
+        Analyzed from Danaher, Gordon Ryan, Lachlan Giles, 
+        and more. Guard, passing, submissions, escapes. 
+        Beginner to black belt level.
+      </p>
+    </div>
+    
+  </div>
+</section>
+```
+
+**Styling:**
+
+```css
+.features {
+  padding: 8rem 2rem;
+  background: var(--bg-dark);
+}
+
+.features-headline {
+  font-size: 3rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 4rem;
+  color: var(--text-primary);
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.feature-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 2.5rem;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.feature-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.feature-icon {
+  font-size: 3rem;
+  margin-bottom: 1.5rem;
+}
+
+.feature-card h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.feature-card p {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+```
+
+-----
+
+## PAGE 2: PRICING SELECTION
+
+### Layout Structure
+
+```
+┌─────────────────────────────────────────────┐
+│  ← Back to Home                             │
+│                                             │
+│     [Belt Icon - 200px × 45px]              │
+│                                             │
+│     Choose Your Plan                        │
+│     [Annual ●] [Monthly]  ← Toggle          │
+│                                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
+│  │   FREE   │  │ FOUNDING │  │   PRO    │  │
+│  │          │  │ MEMBERS  │  │          │  │
+│  │   $0     │  │⭐ $89/yr │  │ $179/yr  │  │
+│  └──────────┘  └──────────┘  └──────────┘  │
+│                                             │
+│  Referral Code (Optional)                   │
+│  [Enter code]                               │
+│                                             │
+│  [Continue to Phone Verification →]         │
+│                                             │
+└─────────────────────────────────────────────┘
+```
+
+### Annual View (Default)
+
+```html
+<section class="pricing">
+  <a href="/" class="back-link">← Back to Home</a>
+  
+  <div class="pricing-belt-icon">
+    <!-- Animated belt SVG - 200px × 45px -->
+  </div>
+  
+  <h1>Choose Your Plan</h1>
+  
+  <div class="pricing-toggle">
+    <button class="active">Annual - Best Value</button>
+    <button>Monthly</button>
+  </div>
+  
+  <div class="pricing-grid">
+    
+    <!-- Free Tier -->
+    <div class="pricing-card">
+      <div class="plan-header">
+        <h3>Free</h3>
+        <div class="price">$0</div>
+      </div>
+      
+      <p class="plan-description">Try it out</p>
+      
+      <ul class="features-list">
+        <li>✓ 5 sessions/month</li>
+        <li>✓ Basic videos</li>
+        <li>✓ Voice input</li>
+        <li>✗ No AI coach</li>
+        <li>✗ No timestamps</li>
+      </ul>
+      
+      <button class="btn-outline">Get Started</button>
+    </div>
+    
+    <!-- Founding Members - Featured -->
+    <div class="pricing-card featured">
+      <div class="badge">⭐ BEST VALUE</div>
+      
+      <div class="plan-header">
+        <h3>Founding Members</h3>
+        <div class="price">
+          $89<span class="period">/year</span>
+        </div>
+        <div class="price-detail">$7.42/month</div>
+        <div class="savings">Save $90/year</div>
+      </div>
+      
+      <p class="plan-description">
+        Limited to first 100 members
+      </p>
+      
+      <ul class="features-list">
+        <li>✓ Unlimited training sessions</li>
+        <li>✓ Prof. OS AI Coach</li>
+        <li>✓ Timestamped videos</li>
+        <li>✓ Pattern recognition</li>
+        <li>✓ Progress tracking</li>
+        <li>✓ Voice input/output</li>
+        <li>✓ Works offline</li>
+        <li>✓ Price locked forever</li>
+        <li>✓ 7-day free trial</li>
+      </ul>
+      
+      <button class="btn-primary">Start Free Trial</button>
+      
+      <p class="help-text">
+        Need monthly billing? $9.99/month available
+      </p>
+    </div>
+    
+    <!-- Pro Annual -->
+    <div class="pricing-card">
+      <div class="badge">💎 ANNUAL</div>
+      
+      <div class="plan-header">
+        <h3>Pro</h3>
+        <div class="price">
+          $179<span class="period">/year</span>
+        </div>
+        <div class="price-detail">$14.92/month</div>
+        <div class="savings">Save $30/year</div>
+      </div>
+      
+      <ul class="features-list">
+        <li>✓ All features</li>
+        <li>✓ Works offline</li>
+        <li>✓ 7-day free trial</li>
+      </ul>
+      
+      <button class="btn-outline">Start Free Trial</button>
+    </div>
+    
+  </div>
+  
+  <div class="pricing-toggle-footer">
+    <a href="#" class="toggle-link">Switch to Monthly View</a>
+  </div>
+  
+  <div class="referral-section">
+    <label>Referral Code (Optional)</label>
+    <input type="text" placeholder="Enter code" />
+  </div>
+  
+  <button class="btn-continue">
+    Continue to Phone Verification →
+  </button>
+  
+</section>
+```
+
+**Styling:**
+
+```css
+.pricing {
+  min-height: 100vh;
+  padding: 3rem 2rem;
+  background: var(--bg-dark);
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 1rem;
+  margin-bottom: 2rem;
+  transition: color 0.2s;
+}
+
+.back-link:hover {
+  color: var(--text-primary);
+}
+
+.pricing-belt-icon {
+  width: 200px;
+  height: 45px;
+  margin: 0 auto 2rem;
+}
+
+.pricing h1 {
+  text-align: center;
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  color: var(--text-primary);
+}
+
+.pricing-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 4rem;
+}
+
+.pricing-toggle button {
+  padding: 0.75rem 2rem;
+  background: transparent;
+  border: 2px solid var(--bg-hover);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pricing-toggle button.active {
+  background: var(--gradient);
+  border-color: transparent;
+  color: white;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto 3rem;
+}
+
+.pricing-card {
+  background: var(--bg-card);
+  border: 2px solid transparent;
+  border-radius: 16px;
+  padding: 2rem;
+  position: relative;
+  transition: transform 0.3s, border-color 0.3s;
+}
+
+.pricing-card:hover {
+  transform: translateY(-4px);
+}
+
+.pricing-card.featured {
+  border-color: var(--primary-purple);
+  box-shadow: 0 0 60px rgba(139, 92, 246, 0.3);
+}
+
+.badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--gradient);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.plan-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--bg-hover);
+}
+
+.plan-header h3 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.price {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.price .period {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.price-detail {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+}
+
+.savings {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  background: var(--accent-green);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.plan-description {
+  text-align: center;
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+}
+
+.features-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 2rem 0;
+}
+
+.features-list li {
+  padding: 0.5rem 0;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+
+.help-text {
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-top: 1rem;
+}
+
+.referral-section {
+  max-width: 400px;
+  margin: 0 auto 2rem;
+}
+
+.referral-section label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.referral-section input {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-hover);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.btn-continue {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 1rem;
+  background: var(--gradient);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 1.125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+```
+
+-----
+
+## PAGE 3: LOGIN / PHONE ENTRY
+
+```html
+<section class="auth-page">
+  <a href="/" class="back-link">← Back to Home</a>
+  
+  <div class="auth-modal">
+    <div class="auth-belt-icon">
+      <!-- Animated belt SVG - 200px × 45px -->
+    </div>
+    
+    <h1>Welcome to BJJ OS</h1>
+    <p class="subtitle">Enter your phone number to continue</p>
+    
+    <form class="auth-form">
+      <label for="phone">Phone Number</label>
+      
+      <div class="phone-input-group">
+        <select class="country-code">
+          <option value="+1">🇺🇸 +1 US/CA</option>
+          <option value="+44">🇬🇧 +44 UK</option>
+          <option value="+61">🇦🇺 +61 AU</option>
+          <!-- More countries -->
+        </select>
+        
+        <input 
+          type="tel" 
+          id="phone" 
+          placeholder="(555) 123-4567"
+          class="phone-input"
+        />
+      </div>
+      
+      <p class="help-text">
+        We'll send you a verification code via SMS
+      </p>
+      
+      <button type="submit" class="btn-primary">
+        Continue →
+      </button>
+    </form>
+  </div>
+</section>
+```
+
+**Styling:**
+
+```css
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: radial-gradient(circle at center, #1E293B 0%, #0F172A 100%);
+  position: relative;
+}
+
+.auth-page .back-link {
+  position: absolute;
+  top: 2rem;
+  left: 2rem;
+}
+
+.auth-modal {
+  background: var(--bg-card);
+  border-radius: 20px;
+  padding: 3rem;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.auth-belt-icon {
+  width: 200px;
+  height: 45px;
+  margin: 0 auto 2rem;
+}
+
+.auth-modal h1 {
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.auth-modal .subtitle {
+  text-align: center;
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+}
+
+.auth-form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.phone-input-group {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.country-code {
+  flex: 0 0 140px;
+  padding: 0.75rem;
+  background: var(--bg-dark);
+  border: 1px solid var(--bg-hover);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.phone-input {
+  flex: 1;
+  padding: 0.75rem;
+  background: var(--bg-dark);
+  border: 1px solid var(--bg-hover);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.phone-input:focus {
+  outline: none;
+  border-color: var(--primary-purple);
+}
+
+.auth-form .help-text {
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: 2rem;
+}
+
+.auth-form .btn-primary {
+  width: 100%;
+  padding: 1rem;
+  font-size: 1.125rem;
+}
+```
+
+-----
+
+## PAGE 4: ONBOARDING (3 Steps)
+
+### Step 1: Belt Level
+
+```html
+<section class="onboarding-page">
+  <div class="onboarding-progress">
+    <div class="progress-bar">
+      <div class="progress-fill" style="width: 33%"></div>
+    </div>
+    <p class="progress-text">Step 1 of 3</p>
+  </div>
+  
+  <div class="onboarding-content">
+    <h1>What's your current belt level?</h1>
+    
+    <div class="option-list">
+      <button class="option-card">
+        <span class="belt-dot white"></span>
+        <span>White Belt</span>
+        <span class="arrow">→</span>
+      </button>
+      
+      <button class="option-card">
+        <span class="belt-dot blue"></span>
+        <span>Blue Belt</span>
+        <span class="arrow">→</span>
+      </button>
+      
+      <button class="option-card">
+        <span class="belt-dot purple"></span>
+        <span>Purple Belt</span>
+        <span class="arrow">→</span>
+      </button>
+      
+      <button class="option-card">
+        <span class="belt-dot brown"></span>
+        <span>Brown Belt</span>
+        <span class="arrow">→</span>
+      </button>
+      
+      <button class="option-card">
+        <span class="belt-dot black"></span>
+        <span>Black Belt</span>
+        <span class="arrow">→</span>
+      </button>
+    </div>
+  </div>
+</section>
+```
+
+### Step 2: Training Style
+
+```html
+<section class="onboarding-page">
+  <div class="onboarding-progress">
+    <div class="progress-bar">
+      <div class="progress-fill" style="width: 66%"></div>
+    </div>
+    <p class="progress-text">Step 2 of 3</p>
+  </div>
+  
+  <div class="onboarding-content">
+    <h1>What's your training style?</h1>
+    <p class="subtitle">Select the one that fits best</p>
+    
+    <div class="option-list">
+      <button class="option-card">
+        <div class="option-content">
+          <span class="option-icon">🔝</span>
+          <div>
+            <h3>Pressure Passer</h3>
+            <p>Top game, smash passing, control</p>
+          </div>
+        </div>
+        <span class="arrow">→</span>
+      </button>
+      
+      <button class="option-card">
+        <div class="option-content">
+          <span class="option-icon">🛡️</span>
+          <div>
+            <h3>Guard Player</h3>
+            <p>Bottom game, sweeps, submissions</p>
+          </div>
+        </div>
+        <span class="arrow">→</span>
+      </button>
+      
+      <button class="option-card">
+        <div class="option-content">
+          <span class="option-icon">⚡</span>
+          <div>
+            <h3>Scrambler</h3>
+            <p>Dynamic, athletic, transitions</p>
+          </div>
+        </div>
+        <span class="arrow">→</span>
+      </button>
+      
+      <button class="option-card">
+        <div class="option-content">
+          <span class="option-icon">🤼</span>
+          <div>
+            <h3>Wrestler</h3>
+            <p>Takedowns, top control, pressure</p>
+          </div>
+        </div>
+        <span class="arrow">→</span>
+      </button>
+      
+      <button class="option-card">
+        <div class="option-content">
+          <span class="option-icon">🤔</span>
+          <div>
+            <h3>Still Figuring It Out</h3>
+            <p>Exploring different styles</p>
+          </div>
+        </div>
+        <span class="arrow">→</span>
+      </button>
+    </div>
+    
+    <button class="btn-back">← Back</button>
+  </div>
+</section>
+```
+
+### Step 3: Training Frequency
+
+```html
+<section class="onboarding-page">
+  <div class="onboarding-progress">
+    <div class="progress-bar">
+      <div class="progress-fill" style="width: 100%"></div>
+    </div>
+    <p class="progress-text">Step 3 of 3</p>
+  </div>
+  
+  <div class="onboarding-content">
+    <h1>How often do you train?</h1>
+    
+    <div class="option-list">
+      <button class="option-card">
+        <span>1-2 times per week</span>
+        <span class="arrow">→</span>
+      </button>
+      
+      <button class="option-card">
+        <span>3-4 times per week</span>
+        <span class="arrow">→</span>
+      </button>
+      
+      <button class="option-card">
+        <span>5-6 times per week</span>
+        <span class="arrow">→</span>
+      </button>
+      
+      <button class="option-card">
+        <span>7+ times per week</span>
+        <span class="arrow">→</span>
+      </button>
+    </div>
+    
+    <button class="btn-back">← Back</button>
+  </div>
+</section>
+```
+
+**Onboarding Styling:**
+
+```css
+.onboarding-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-dark);
+  padding: 2rem;
+}
+
+.onboarding-progress {
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto 3rem;
+}
+
+.progress-bar {
+  height: 4px;
+  background: var(--bg-hover);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--gradient);
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.onboarding-content {
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.onboarding-content h1 {
+  font-size: 2rem;
+  text-align: center;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.onboarding-content .subtitle {
+  text-align: center;
+  color: var(--text-secondary);
+  margin-bottom: 3rem;
+}
+
+.option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex: 1;
+}
+
+.option-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  background: var(--bg-card);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 1.125rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.option-card:hover {
+  border-color: var(--primary-purple);
+  transform: translateX(4px);
+}
+
+.belt-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  margin-right: 1rem;
+  border: 2px solid currentColor;
+}
+
+.belt-dot.white { background: #FFFFFF; }
+.belt-dot.blue { background: #2563EB; }
+.belt-dot.purple { background: #8B5CF6; }
+.belt-dot.brown { background: #654321; }
+.belt-dot.black { background: #1F2937; }
+
+.option-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.option-icon {
+  font-size: 2rem;
+}
+
+.option-card h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--text-primary);
+}
+
+.option-card p {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.arrow {
+  color: var(--text-muted);
+  font-size: 1.5rem;
+}
+
+.btn-back {
+  margin-top: 2rem;
+  padding: 0.75rem;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  text-align: center;
+}
+
+.btn-back:hover {
+  color: var(--text-primary);
+}
+```
+
+-----
+
+## PAGE 5: CHAT INTERFACE
+
+### Desktop Layout
+
+```html
+<div class="chat-page">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-belt-icon">
+        <!-- Animated belt SVG - 200px × 45px -->
+      </div>
+      <h1 class="sidebar-logo">BJJ OS</h1>
+    </div>
+    
+    <nav class="sidebar-nav">
+      <a href="/chat" class="nav-item active">
+        <span class="nav-icon">💬</span>
+        <span>Chat with Prof. OS</span>
+      </a>
+      <a href="/saved" class="nav-item">
+        <span class="nav-icon">⭐</span>
+        <span>Saved Videos</span>
+      </a>
+      <a href="/progress" class="nav-item">
+        <span class="nav-icon">📊</span>
+        <span>Progress</span>
+      </a>
+      <a href="/settings" class="nav-item">
+        <span class="nav-icon">⚙️</span>
+        <span>Settings</span>
+      </a>
+    </nav>
+    
+    <div class="sidebar-footer">
+      <div class="user-profile">
+        <div class="user-avatar purple-belt">🟣</div>
+        <div class="user-info">
+          <div class="user-name">John Smith</div>
+          <div class="user-badge">Founding Member 🔥</div>
+        </div>
+      </div>
+      <button class="btn-logout">Logout</button>
+    </div>
+  </aside>
+  
+  <!-- Main Chat Area -->
+  <main class="chat-main">
+    <header class="chat-header">
+      <div>
+        <h2>Prof. OS</h2>
+        <p class="chat-subtitle">Your AI BJJ Training Partner</p>
+      </div>
+      <div class="chat-controls">
+        <button class="control-btn voice-toggle">
+          <span class="icon">🎤</span>
+          <span class="label">Voice: Off</span>
+        </button>
+        <button class="control-btn">
+          <span class="icon">⚙️</span>
+        </button>
+      </div>
+    </header>
+    
+    <div class="chat-messages">
+      <!-- First message (empty state) -->
+      <div class="message prof-message">
+        <div class="message-avatar">✨</div>
+        <div class="message-content">
+          <div class="message-text">
+            <p><strong>Hey! I'm Prof. OS</strong></p>
+            
+            <p>I can see you're a purple belt who plays guard and trains 4x per week.</p>
+            
+            <p>I've analyzed 10,000+ technique videos and I'm about to learn everything about YOUR specific game.</p>
+            
+            <p><strong>Here's how this works:</strong></p>
+            <ul>
+              <li>You share → I remember forever</li>
+              <li>I spot patterns → You fix gaps</li>
+              <li>You improve → I get smarter</li>
+            </ul>
+            
+            <p>The more details you give me about your training, the more accurate my recommendations become.</p>
+            
+            <p>Let's start building your profile.</p>
+            
+            <p><strong>How did your last training session go?</strong></p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Input Area - CRITICAL: MUST ALWAYS BE VISIBLE -->
+    <div class="chat-input-container">
+      <textarea 
+        class="chat-input"
+        placeholder="Ask Prof. OS anything..."
+        rows="1"
+      ></textarea>
+      <button class="btn-send">
+        <span>→</span>
+      </button>
+    </div>
+    
+    <div class="chat-footer-hint">
+      Press Enter to send. Shift+Enter for new line
+    </div>
+  </main>
+</div>
+```
+
+### Mobile Layout
+
+```html
+<div class="chat-page mobile">
+  <!-- Header -->
+  <header class="mobile-header">
+    <button class="menu-btn">☰</button>
+    <div>
+      <h2>Prof. OS</h2>
+      <p>Your AI BJJ Training Partner</p>
+    </div>
+    <div class="mobile-controls">
+      <button class="control-btn">🎤</button>
+      <button class="control-btn">⚙️</button>
+    </div>
+  </header>
+  
+  <!-- Messages -->
+  <div class="chat-messages mobile">
+    <!-- Messages here -->
+  </div>
+  
+  <!-- Input - CRITICAL: MUST BE ABOVE BOTTOM NAV -->
+  <div class="chat-input-container mobile">
+    <textarea 
+      class="chat-input mobile-chat-input"
+      placeholder="Ask about techniques..."
+      rows="1"
+    ></textarea>
+    <button class="btn-send">→</button>
+  </div>
+  
+  <!-- Bottom Nav -->
+  <nav class="mobile-bottom-nav">
+    <a href="/chat" class="nav-item active">
+      <span class="icon">💬</span>
+      <span class="label">Chat</span>
+    </a>
+    <a href="/saved" class="nav-item">
+      <span class="icon">⭐</span>
+      <span class="label">Saved</span>
+    </a>
+    <a href="/settings" class="nav-item">
+      <span class="icon">⚙️</span>
+      <span class="label">Settings</span>
+    </a>
+  </nav>
+</div>
+```
+
+**Chat Interface Styling:**
+
+```css
+/* Desktop Layout */
+.chat-page {
+  display: flex;
+  height: 100vh;
+  background: var(--bg-dark);
+}
+
+.sidebar {
+  width: 280px;
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--bg-hover);
+}
+
+.sidebar-header {
+  padding: 2rem 1.5rem;
+  border-bottom: 1px solid var(--bg-hover);
+}
+
+.sidebar-belt-icon {
+  width: 200px;
+  height: 45px;
+  margin: 0 auto 1rem;
+}
+
+.sidebar-logo {
+  text-align: center;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 1rem 0;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1.5rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--primary-purple);
+  border-left: 3px solid var(--primary-purple);
+}
+
+.nav-icon {
+  font-size: 1.25rem;
+}
+
+.sidebar-footer {
+  padding: 1.5rem;
+  border-top: 1px solid var(--bg-hover);
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.user-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: var(--bg-dark);
+}
+
+.user-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.user-badge {
+  font-size: 0.75rem;
+  color: var(--accent-yellow);
+}
+
+.btn-logout {
+  width: 100%;
+  padding: 0.75rem;
+  background: transparent;
+  border: 1px solid var(--bg-hover);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-logout:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Main Chat Area */
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 2rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--bg-hover);
+}
+
+.chat-header h2 {
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.chat-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.chat-controls {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.control-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg-dark);
+  border: 1px solid var(--bg-hover);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.control-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.control-btn.active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: var(--primary-purple);
+  color: var(--primary-purple);
+}
+
+/* Messages */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+}
+
+.message {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.message-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.message-content {
+  flex: 1;
+  max-width: 800px;
+}
+
+.message-text {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 1.5rem;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.message-text p {
+  margin-bottom: 1rem;
+}
+
+.message-text p:last-child {
+  margin-bottom: 0;
+}
+
+.message-text ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.message-text li {
+  padding: 0.25rem 0;
+}
+
+.message-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Video Card */
+.video-card {
+  background: var(--bg-dark);
+  border: 1px solid var(--bg-hover);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+}
+
+.video-thumbnail {
+  width: 100%;
+  height: 200px;
+  background: var(--bg-hover);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+}
+
+.video-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.video-timestamp {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.video-description {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.video-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+/* Input Container - CRITICAL */
+.chat-input-container {
+  display: flex !important; /* Force display */
+  visibility: visible !important; /* Force visibility */
+  opacity: 1 !important; /* Force opacity */
+  position: relative;
+  padding: 1.5rem 2rem 1rem;
+  background: var(--bg-card);
+  border-top: 1px solid var(--bg-hover);
+  z-index: 100;
+}
+
+.chat-input {
+  flex: 1;
+  min-height: 48px;
+  max-height: 200px;
+  padding: 0.875rem 1rem;
+  background: var(--bg-dark);
+  border: 1px solid var(--bg-hover);
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-family: inherit;
+  resize: none;
+  overflow-y: auto;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--primary-purple);
+}
+
+.btn-send {
+  width: 48px;
+  height: 48px;
+  margin-left: 0.75rem;
+  background: var(--gradient);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.btn-send:hover {
+  transform: scale(1.05);
+}
+
+.chat-footer-hint {
+  padding: 0.5rem 2rem 1.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-card);
+}
+
+/* Mobile Layout */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
+  }
+  
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--bg-hover);
+  }
+  
+  .mobile-header h2 {
+    font-size: 1.125rem;
+    margin-bottom: 0.125rem;
+  }
+  
+  .mobile-header p {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+  
+  .mobile-controls {
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  .chat-messages.mobile {
+    padding-bottom: 140px; /* Space for input + nav */
+  }
+  
+  /* CRITICAL: Mobile Input Positioning */
+  .chat-input-container.mobile {
+    position: fixed !important;
+    bottom: 60px !important; /* Above bottom nav */
+    left: 0;
+    right: 0;
+    padding: 1rem;
+    background: var(--bg-card);
+    border-top: 1px solid var(--bg-hover);
+    z-index: 100 !important;
+  }
+  
+  .mobile-chat-input {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  /* Bottom Nav */
+  .mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-around;
+    background: var(--bg-card);
+    border-top: 1px solid var(--bg-hover);
+    padding: 0.75rem 0;
+    z-index: 99;
+  }
+  
+  .mobile-bottom-nav .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.75rem;
+  }
+  
+  .mobile-bottom-nav .nav-item.active {
+    color: var(--primary-purple);
+  }
+  
+  .mobile-bottom-nav .icon {
+    font-size: 1.5rem;
+  }
+}
+```
+
+-----
+
+## PAGE 6: SETTINGS → PROFILE
+
+```html
+<section class="settings-page">
+  <div class="settings-container">
+    <header class="settings-header">
+      <a href="/chat" class="back-link">← Back to Chat</a>
+      <h1>Settings</h1>
+    </header>
+    
+    <nav class="settings-tabs">
+      <a href="#profile" class="tab active">Profile</a>
+      <a href="#subscription" class="tab">Subscription</a>
+      <a href="#preferences" class="tab">Preferences</a>
+      <a href="#referrals" class="tab">Referrals</a>
+      <a href="#privacy" class="tab">Data & Privacy</a>
+    </nav>
+    
+    <div class="settings-content">
+      <!-- Contact Info -->
+      <div class="settings-section">
+        <h2>Contact Info</h2>
+        
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Phone</strong>
+            <p class="help-text">Cannot be changed (login method)</p>
+          </div>
+          <div class="setting-value">(555) 123-4567</div>
+        </div>
+        
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Email</strong>
+            <p class="help-text">For notifications and receipts</p>
+          </div>
+          <div class="setting-value">
+            <input type="email" placeholder="Add email" />
+            <button class="btn-edit">Save</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- BJJ Profile -->
+      <div class="settings-section">
+        <h2>BJJ Profile</h2>
+        
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Belt Level</strong>
+          </div>
+          <div class="setting-value">
+            <span class="belt-badge purple">🟣 Purple Belt</span>
+            <button class="btn-edit">Edit</button>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Training Style</strong>
+          </div>
+          <div class="setting-value">
+            Guard Player
+            <button class="btn-edit">Edit</button>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Training Frequency</strong>
+          </div>
+          <div class="setting-value">
+            4x/week
+            <button class="btn-edit">Edit</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Physical Stats -->
+      <div class="settings-section">
+        <h2>Physical Stats (Optional)</h2>
+        <p class="section-description">
+          Helps match techniques to your body type and build.
+        </p>
+        
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Birthday</strong>
+            <p class="help-text">Age: 32 years old</p>
+          </div>
+          <div class="setting-value">
+            03/15/1992
+            <button class="btn-edit">Edit</button>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Height</strong>
+          </div>
+          <div class="setting-value">
+            6'0" (183 cm)
+            <button class="btn-edit">Edit</button>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div class="setting-label">
+            <strong>Weight</strong>
+          </div>
+          <div class="setting-value">
+            185 lbs (84 kg)
+            <button class="btn-edit">Edit</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Health & Safety -->
+      <div class="settings-section">
+        <h2>Health & Safety</h2>
+        <p class="section-description">
+          Prof. OS will avoid techniques that could aggravate your injuries.
+        </p>
+        
+        <div class="injury-list">
+          <div class="injury-item">
+            <div>
+              <strong>Left knee (meniscus)</strong>
+              <p class="injury-date">Added: Oct 2024</p>
+            </div>
+            <div class="injury-actions">
+              <button class="btn-small">Remove</button>
+              <button class="btn-small">Mark as Healed</button>
+            </div>
+          </div>
+          
+          <div class="injury-item">
+            <div>
+              <strong>Right shoulder pain</strong>
+              <p class="injury-date">Added: Sept 2024</p>
+            </div>
+            <div class="injury-actions">
+              <button class="btn-small">Remove</button>
+              <button class="btn-small">Mark as Healed</button>
+            </div>
+          </div>
+        </div>
+        
+        <button class="btn-add">+ Add New Injury</button>
+      </div>
+      
+      <!-- Account Info -->
+      <div class="settings-section">
+        <h2>Account Info</h2>
+        
+        <div class="info-grid">
+          <div class="info-item">
+            <strong>Member Since</strong>
+            <p>Oct 23, 2025</p>
+          </div>
+          <div class="info-item">
+            <strong>Last Updated</strong>
+            <p>Oct 23, 2025</p>
+          </div>
+          <div class="info-item">
+            <strong>Sessions Logged</strong>
+            <p>0</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Data Actions -->
+      <div class="settings-section">
+        <button class="btn-secondary">Export My Data</button>
+        <button class="btn-danger">Delete My Account</button>
+      </div>
+    </div>
+  </div>
+</section>
+```
+
+**Settings Styling:**
+
+```css
+.settings-page {
+  min-height: 100vh;
+  background: var(--bg-dark);
+  padding: 2rem;
+}
+
+.settings-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.settings-header {
+  margin-bottom: 2rem;
+}
+
+.settings-header h1 {
+  font-size: 2.5rem;
+  color: var(--text-primary);
+  margin-top: 1rem;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 3rem;
+  border-bottom: 1px solid var(--bg-hover);
+  overflow-x: auto;
+}
+
+.settings-tabs .tab {
+  padding: 1rem 1.5rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.settings-tabs .tab:hover {
+  color: var(--text-primary);
+}
+
+.settings-tabs .tab.active {
+  color: var(--primary-purple);
+  border-bottom-color: var(--primary-purple);
+}
+
+.settings-section {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.settings-section h2 {
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+}
+
+.section-description {
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--bg-hover);
+}
+
+.setting-item:last-child {
+  border-bottom: none;
+}
+
+.setting-label strong {
+  display: block;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.help-text {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.setting-value {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--text-secondary);
+}
+
+.belt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(139, 92, 246, 0.2);
+  border-radius: 20px;
+  color: var(--primary-purple);
+  font-weight: 600;
+}
+
+.btn-edit {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid var(--bg-hover);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.btn-edit:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.injury-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.injury-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: var(--bg-dark);
+  border-radius: 8px;
+}
+
+.injury-date {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.injury-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-small {
+  padding: 0.375rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--bg-hover);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.8125rem;
+}
+
+.btn-add {
+  padding: 0.75rem 1.5rem;
+  background: var(--gradient);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.info-item strong {
+  display: block;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.info-item p {
+  color: var(--text-secondary);
+}
+
+.btn-danger {
+  padding: 0.75rem 1.5rem;
+  background: transparent;
+  border: 1px solid var(--accent-red);
+  border-radius: 8px;
+  color: var(--accent-red);
+  cursor: pointer;
+  margin-top: 1rem;
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+```
+
+-----
+
+## SUMMARY OF COMPLETE UI/UX SPEC
+
+**Every page now has:**
+
+1. ✅ Exact HTML structure
+1. ✅ Complete CSS styling
+1. ✅ Responsive mobile/desktop layouts
+1. ✅ Belt icon placement and sizing
+1. ✅ Color scheme and typography
+1. ✅ Interactive states (hover, active, focus)
+1. ✅ Accessibility considerations
+1. ✅ Error states and edge cases
+
+**Design consistency across:**
+
+- Landing page
+- Pricing selection
+- Login/phone entry
+- Onboarding (3 steps)
+- Chat interface (desktop + mobile)
+- Settings/profile page
+
+**Critical elements:**
+
+- Belt icon animated everywhere
+- Input field ALWAYS visible (especially mobile)
+- Clean, spacious, premium feel
+- Sophisticated dark mode
+- Smooth transitions
+- No clutter
+
+**BUILD THIS EXACTLY AS SPECIFIED.**

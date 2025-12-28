@@ -1,0 +1,78 @@
+Perfect! Let’s fix **Issue #2 - Grant Lifetime Access** and make it bulletproof.
+
+Here’s the prompt for Replit Agent:
+
+-----
+
+```
+FIX GRANT LIFETIME ACCESS FEATURE - CRITICAL PRIORITY
+
+Currently there's a database error when trying to grant lifetime access: "relation 'bj_users' does not exist"
+
+REQUIREMENTS:
+
+1. FIX THE DATABASE QUERY ERROR:
+   - Find anywhere the code references 'bj_users' (typo)
+   - Change to the correct table name (likely 'users')
+   - Test the query works
+
+2. GRANT LIFETIME ACCESS FUNCTIONALITY:
+   - Input: Phone number (in format +15177770852)
+   - Input: Reason (dropdown or text field)
+   - Input: Additional notes (optional)
+   - Button: "Grant Lifetime Access"
+
+3. WHAT IT SHOULD DO:
+   - Look up user by phone number
+   - If user doesn't exist, CREATE the user with:
+     * phone_number
+     * subscription_tier: 'lifetime'
+     * subscription_status: 'active'
+     * granted_by: admin_id
+     * granted_at: current timestamp
+     * granted_reason: reason provided
+     * notes: additional notes
+   - If user DOES exist, UPDATE them to:
+     * subscription_tier: 'lifetime'
+     * subscription_status: 'active'
+     * updated_at: current timestamp
+   - NO SMS VERIFICATION REQUIRED - admin bypass
+   - Log the action in admin_actions table for audit trail
+
+4. SUCCESS BEHAVIOR:
+   - Show success toast: "Lifetime access granted to +1517777XXXX"
+   - Clear the form
+   - User can immediately use the app (no confirmation needed)
+   - Close the modal
+
+5. ERROR HANDLING:
+   - Invalid phone format: "Please enter valid phone number (+1XXXXXXXXXX)"
+   - Database error: Show actual error message
+   - Missing required fields: Highlight fields in red
+
+6. MAKE IT ADMIN-ACCESSIBLE FROM MULTIPLE PLACES:
+   - Button on User Management page
+   - Button on Overview Dashboard
+   - Quick action in top nav bar
+   - Keep existing modal location
+
+7. ADD BULK GRANT OPTION:
+   - Allow comma-separated phone numbers
+   - Grant lifetime access to multiple users at once
+   - Show progress indicator
+   - Show results: "5 users granted, 2 failed"
+
+8. DISPLAY GRANTED USERS:
+   - On User Management page, add filter: "Lifetime Access"
+   - Show who granted it and when
+   - Show reason for granting
+
+TEST IT:
+- Grant access to a new phone number that doesn't exist yet
+- Grant access to an existing user
+- Try invalid phone formats
+- Try leaving reason blank
+- Verify user can immediately access app without SMS verification
+
+Make this feature rock-solid - it's critical for onboarding early users quickly.
+```

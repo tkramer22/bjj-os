@@ -1,0 +1,105 @@
+```
+Create a two-tier referral system:
+
+=== REGULAR USERS (keep existing) ===
+Users get 1 free month per referral (no cash, just free service)
+
+=== INFLUENCER SYSTEM (new) ===
+
+1. **Update referral_codes table:**
+   Add columns:
+   - code_type: 'user' or 'influencer'
+   - commission_rate: decimal (0.25 for 25%)
+   - influencer_name: string
+   - total_signups: integer
+   - active_subscribers: integer
+   - total_revenue_generated: decimal
+   - commission_owed: decimal
+   - is_active: boolean
+   - created_at: timestamp
+
+2. **Create admin dashboard at /admin:**
+   
+   Simple password protection:
+   - Check against environment variable ADMIN_PASSWORD
+   - Session-based, nothing complex
+   
+   **Single page with two sections:**
+   
+   Section 1: Generate Codes
+   - Text input: "Paste influencer codes (one per line)"
+   - Input for default commission rate (default: 25%)
+   - Button: "Generate All Codes"
+   - Example:
+     ```
+     GORDONRYAN
+     LACHLAN
+     BERNARDO
+     CRAIGJONESBJJ
+     DANAHERGYM
+     ```
+   - Creates all codes instantly at 25% commission
+   
+   Alternative: Single code form
+   - Code name
+   - Influencer name
+   - Commission rate (%)
+   - Generate button
+   
+   Section 2: Performance Dashboard
+   Table showing all influencer codes:
+   | Code | Influencer | Total Signups | Active Subs | Monthly Revenue | Commission Owed | Status | Actions |
+   
+   Columns to track:
+   - Total signups via this code
+   - Currently active subscribers from this code
+   - Monthly revenue from active subs (active_subs * $3.99)
+   - Commission owed (monthly_revenue * commission_rate)
+   - Toggle to activate/deactivate code
+   
+   Features:
+   - Sort by any column
+   - Export to CSV button (for monthly payments)
+   - Search/filter codes
+
+3. **Tracking logic:**
+   When someone signs up via /ref/[CODE]:
+   - Check if code exists and is_active
+   - If code_type = 'influencer':
+     * Increment total_signups
+     * Increment active_subscribers
+     * Track user's subscription to this code
+   - If code_type = 'user':
+     * Give referrer 1 free month (existing logic)
+
+4. **Revenue calculation (runs daily):**
+   For each influencer code:
+   - Count active subscribers attributed to this code
+   - Calculate: active_subs * $3.99 = monthly_revenue
+   - Calculate: monthly_revenue * commission_rate = commission_owed
+   - Update the referral_codes table
+
+5. **When subscription cancels:**
+   - Decrement active_subscribers for that code
+   - Revenue calculation updates automatically
+
+6. **Monthly payout export:**
+   Button: "Export Monthly Report"
+   Generates CSV with:
+   - Influencer Name
+   - Code
+   - Active Subscribers
+   - Monthly Revenue
+   - Commission Rate
+   - Amount Owed
+   
+   After export, option to "Mark as Paid" which resets commission_owed counter
+
+7. **Auto-generate tracking URLs:**
+   When code created, generate: bjjos.app/ref/[CODE]
+   Show this URL in the admin dashboard for easy sharing
+
+Make the admin dashboard clean and simple - just these two sections. Use the same black/white minimal design as the landing page. This should take 30 minutes to use each month - generate codes, check stats, export, pay influencers manually via Venmo/PayPal.
+
+Default ALL influencer codes to 25% commission unless specified otherwise.
+```

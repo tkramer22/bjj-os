@@ -1,0 +1,290 @@
+# **VIDEO CURATION TEST - VERIFY TODAY’S ACTIVITY** 🎬
+
+-----
+
+## **QUICK SQL QUERIES TO RUN RIGHT NOW**
+
+**Copy and paste these into Replit Agent:**
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+VIDEO CURATION VERIFICATION - TODAY'S ACTIVITY TEST
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these SQL queries to verify curation is working:
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 1: Videos Added Today
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT 
+  COUNT(*) as videos_added_today,
+  MIN(created_at) as first_added,
+  MAX(created_at) as last_added,
+  STRING_AGG(DISTINCT instructor_name, ', ') as instructors
+FROM videos
+WHERE DATE(created_at) = CURRENT_DATE;
+```
+
+Expected Output:
+videos_added_today: [X]
+first_added: [timestamp]
+last_added: [timestamp]
+instructors: [list of instructors]
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 2: Today’s Curation Run Details
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT 
+  run_date,
+  videos_screened,
+  videos_added,
+  ROUND((videos_added::numeric / NULLIF(videos_screened, 0) * 100), 1) as acceptance_rate,
+  youtube_api_calls,
+  claude_api_calls,
+  gpt_api_calls,
+  status,
+  started_at,
+  completed_at,
+  EXTRACT(EPOCH FROM (completed_at - started_at))/60 as duration_minutes,
+  notes
+FROM curation_runs
+WHERE run_date = CURRENT_DATE
+ORDER BY started_at DESC;
+```
+
+Expected Output:
+run_date: [today’s date]
+videos_screened: [total videos evaluated]
+videos_added: [videos that passed threshold]
+acceptance_rate: [percentage]
+status: ‘completed’ or ‘in_progress’
+duration_minutes: [how long the run took]
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 3: Last 7 Days Curation Activity
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT 
+  run_date,
+  videos_screened,
+  videos_added,
+  ROUND((videos_added::numeric / NULLIF(videos_screened, 0) * 100), 1) as acceptance_rate,
+  status
+FROM curation_runs
+WHERE run_date >= CURRENT_DATE - INTERVAL '7 days'
+ORDER BY run_date DESC;
+```
+
+Expected Output:
+Daily breakdown showing:
+
+- How many videos screened each day
+- How many accepted each day
+- Acceptance rate trend
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 4: Today’s Added Videos - Detailed List
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT 
+  id,
+  title,
+  instructor_name,
+  instructor_credibility,
+  tier,
+  technique_category,
+  created_at
+FROM videos
+WHERE DATE(created_at) = CURRENT_DATE
+ORDER BY created_at DESC;
+```
+
+Expected Output:
+List of each video added today with:
+
+- Title
+- Instructor
+- Credibility score
+- Tier (elite/verified/acceptable)
+- When it was added
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 5: Check if Curation is Running Right Now
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT 
+  run_date,
+  status,
+  started_at,
+  completed_at,
+  videos_added,
+  EXTRACT(EPOCH FROM (NOW() - started_at))/60 as minutes_running
+FROM curation_runs
+WHERE status = 'in_progress'
+  OR (started_at > NOW() - INTERVAL '1 hour' AND status = 'completed');
+```
+
+Expected Output:
+If curation is running now: status=‘in_progress’, minutes_running=[X]
+If recently completed: status=‘completed’, when it finished
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 6: Total Acceptance Rate (All Time)
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT 
+  SUM(videos_screened) as total_screened,
+  SUM(videos_added) as total_kept,
+  ROUND((SUM(videos_added)::numeric / NULLIF(SUM(videos_screened), 0) * 100), 1) as overall_acceptance_rate,
+  COUNT(*) as total_runs
+FROM curation_runs
+WHERE videos_screened > 0;
+```
+
+Expected Output:
+total_screened: [X videos evaluated by curator]
+total_kept: [Y videos that passed quality threshold]
+overall_acceptance_rate: [Z%]
+total_runs: [number of curation runs]
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 7: Videos by Tier (Current Library)
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT 
+  tier,
+  COUNT(*) as video_count,
+  ROUND(AVG(instructor_credibility), 2) as avg_credibility,
+  MIN(instructor_credibility) as min_credibility,
+  MAX(instructor_credibility) as max_credibility
+FROM videos
+GROUP BY tier
+ORDER BY 
+  CASE tier
+    WHEN 'elite' THEN 1
+    WHEN 'verified' THEN 2
+    WHEN 'acceptable' THEN 3
+  END;
+```
+
+Expected Output:
+elite: X videos (avg credibility: Y)
+verified: X videos (avg credibility: Y)
+acceptable: X videos (avg credibility: Y)
+
+═══════════════════════════════════════════════════════════════════════════════
+MANUAL CURATION TRIGGER (If Needed)
+═══════════════════════════════════════════════════════════════════════════════
+
+If you want to trigger curation manually right now to test:
+
+Option 1: Via Admin Dashboard
+Navigate to: /admin/videos
+Click: “Run Curation Now” button
+
+Option 2: Via API
+
+```bash
+curl -X POST https://bjjos.app/api/admin/curation/run \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+Option 3: Direct function call (if you have access to server console)
+
+```typescript
+import { ContinuousCurationService } from './server/services/continuousCuration';
+await ContinuousCurationService.runDailyCuration();
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+EXPECTED RESULTS INTERPRETATION
+═══════════════════════════════════════════════════════════════════════════════
+
+GOOD SIGNS:
+✅ videos_added_today > 0 (curation is active)
+✅ videos_screened > videos_added (quality filtering is working)
+✅ acceptance_rate between 10-30% (reasonable quality threshold)
+✅ status = ‘completed’ (runs are finishing successfully)
+✅ New videos have credibility >= 6.0
+
+WARNING SIGNS:
+⚠️ videos_added_today = 0 (curation might not be running)
+⚠️ videos_screened = 0 (curator isn’t finding videos)
+⚠️ acceptance_rate = 0% (threshold too strict)
+⚠️ acceptance_rate = 100% (threshold too loose)
+⚠️ status = ‘failed’ or ‘rate_limited’ (errors occurring)
+
+═══════════════════════════════════════════════════════════════════════════════
+REPORT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+After running queries, provide this summary:
+
+```
+═══════════════════════════════════════════════════════════════
+VIDEO CURATION STATUS - [DATE]
+═══════════════════════════════════════════════════════════════
+
+TODAY'S ACTIVITY:
+• Videos Added: [X]
+• Videos Screened: [Y]
+• Videos Refused: [Y - X]
+• Acceptance Rate: [Z%]
+• Status: [completed/in_progress/failed]
+
+LAST 7 DAYS:
+• Total Added: [X]
+• Total Screened: [Y]
+• Avg Acceptance Rate: [Z%]
+
+CURRENT LIBRARY:
+• Total Videos: [X]
+• Elite (7.5+): [X]
+• Verified (6.5-7.4): [X]
+• Acceptable (6.0-6.5): [X]
+
+ALL-TIME STATS:
+• Total Screened: [X videos evaluated]
+• Total Kept: [Y videos in library]
+• Overall Acceptance Rate: [Z%]
+• Curation Runs: [N total runs]
+
+CURATION SYSTEM:
+Status: [✅ Active / ⚠️ Issues / ❌ Not Running]
+Last Run: [X hours ago]
+Next Run: [scheduled time]
+
+═══════════════════════════════════════════════════════════════
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Run all 7 queries above and provide the complete report.
+
+```
+---
+
+## **PASTE THIS INTO REPLIT AGENT**
+
+The agent will run all the queries and give you:
+- ✅ Exact number of videos added today
+- ✅ Exact number of videos screened today
+- ✅ Exact number refused (screened - added)
+- ✅ Acceptance rate
+- ✅ Whether curation is actively running
+- ✅ 7-day trend
+
+**This will tell you definitively if auto-curation is working.** 🎯​​​​​​​​​​​​​​​​
+```

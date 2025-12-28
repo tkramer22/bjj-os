@@ -1,0 +1,149 @@
+# 🚨 **CRITICAL ISSUE FOUND - CURATION IS BROKEN**
+
+Agent discovered the problem! Your Elite Curator is running on schedule but **not actually curating anything**.
+
+-----
+
+## **❌ THE PROBLEM**
+
+**Curation runs are completing in < 2 seconds with:**
+
+- ✅ Status: Completed
+- ❌ Videos Screened: 0
+- ❌ Videos Analyzed: 0
+- ❌ Videos Added: 0
+- ❌ API Calls: None
+- ❌ Quota Used: 0
+
+**Translation:** The cron job fires, but the actual curation code never executes.
+
+-----
+
+## **🔍 ROOT CAUSE (Most Likely)**
+
+One of these issues:
+
+1. **Elite Curator code was never actually implemented** (just the prompt was sent)
+1. **Cron job doesn’t call the right function**
+1. **API keys missing/invalid** (YouTube API key not configured)
+1. **Code has errors but fails silently**
+1. **Database connection issue in curation script**
+
+-----
+
+# **🔧 DIAGNOSTIC & FIX PROMPT - COPY TO AGENT**
+
+```
+CRITICAL: Elite Curation System is NOT Running
+
+PROBLEM DISCOVERED:
+Curation runs complete in <2 seconds with 0 videos processed.
+The scheduled jobs fire, but no actual curation happens.
+This means we have a cron job calling nothing, or calling broken code.
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: FIND WHAT'S ACTUALLY RUNNING
+═══════════════════════════════════════════════════════════════
+
+1. Find the cron job configuration
+   - Look for: server/cron/ or any file with cron.schedule
+   - Show me the EXACT code that runs on schedule
+
+2. Find what function the cron job calls
+   - Show me the function it's trying to execute
+
+3. Check if Elite Curator code actually exists
+   - Look for: server/services/eliteCurator.js
+   - Or any file with "elite curation" or "runEliteCuration"
+   - Does this file exist? YES or NO
+
+4. Check YouTube API configuration
+   - Look for: YOUTUBE_API_KEY in environment variables
+   - Is it set? YES or NO
+   - Show me where YouTube API is initialized
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: SHOW ME THE ACTUAL CODE
+═══════════════════════════════════════════════════════════════
+
+Find and show me the COMPLETE code for:
+
+1. The cron job schedule (likely in server/cron/ or server/index.js)
+2. The function that's supposed to run curation
+3. Any YouTube API initialization code
+
+Don't fix anything yet - just show me what currently exists.
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: CHECK LOGS
+═══════════════════════════════════════════════════════════════
+
+Check server logs for errors during curation runs:
+- Look for any error messages around 1:26 AM EST (last run time)
+- Look for "curation", "YouTube", "API" in logs
+- Show me any errors or warnings
+
+═══════════════════════════════════════════════════════════════
+
+STOP after Phase 1-3 and report back what you find.
+Do NOT implement fixes yet - we need to diagnose first.
+```
+
+-----
+
+## **🎯 LIKELY SCENARIOS**
+
+### **Scenario A: Code Never Implemented**
+
+The Elite Curator prompt was given to Agent, but Agent never actually created the code. The cron job exists but calls a non-existent function.
+
+**Fix:** Implement the Elite Curator code properly
+
+-----
+
+### **Scenario B: Missing API Key**
+
+Code exists but YouTube API key is not configured, so it fails silently.
+
+**Fix:** Add YouTube API key to environment variables
+
+-----
+
+### **Scenario C: Cron Calls Wrong Function**
+
+Cron job exists but calls the old/broken curation function instead of the new Elite Curator.
+
+**Fix:** Update cron job to call correct function
+
+-----
+
+## **⚡ WHILE AGENT INVESTIGATES**
+
+Can you quickly check in Replit:
+
+**Do you have a YouTube Data API key set up?**
+
+1. Go to Replit → Secrets (lock icon in sidebar)
+1. Look for: `YOUTUBE_API_KEY`
+1. Does it exist?
+
+If NO → That’s the problem. We need to set it up.
+
+If YES → Agent will find the code issue.
+
+-----
+
+## **📋 WHAT WE NEED TO FIX**
+
+Once Agent reports back, we’ll:
+
+1. ✅ Verify Elite Curator code exists (or create it)
+1. ✅ Verify YouTube API key is configured
+1. ✅ Fix the cron job to actually call curation
+1. ✅ Add proper error logging so failures don’t go silent
+1. ✅ Test a manual curation run
+1. ✅ Verify scheduled runs work
+
+-----
+
+**Copy the diagnostic prompt to Agent and paste back what it finds. Then we’ll fix it properly.** 🔍​​​​​​​​​​​​​​​​

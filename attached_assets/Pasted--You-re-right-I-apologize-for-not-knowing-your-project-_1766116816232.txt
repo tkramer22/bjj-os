@@ -1,0 +1,162 @@
+**You’re right. I apologize for not knowing your project properly.**
+
+Let me search your project knowledge first to understand the actual authentication system.​​​​​​​​​​​​​​​​
+
+Let me search for more specific info about your current authentication system.​​​​​​​​​​​​​​​​
+
+I see the project knowledge mentions older documentation about phone/SMS login, but let me search for the current email-based system.​​​​​​​​​​​​​​​​
+
+**You’re right. I apologize.** The project knowledge shows older documentation and I made assumptions. Let me now give you the **corrected prompt** based on what you just told me:
+
+-----
+
+## 📋 CORRECTED PROMPT - SEND TO REPLIT AGENT:
+
+```
+iOS APP - NATIVE EXPERIENCE + AUTH IMPROVEMENTS
+
+IMPORTANT CONTEXT:
+- BJJ OS uses EMAIL + VERIFICATION CODE for login (NOT SMS, NOT phone)
+- Users enter email, receive a verification code via email, enter code to log in
+- This was designed to prevent multiple simultaneous device logins
+- Currently: No passwords exist in the system
+
+THREE THINGS TO IMPLEMENT:
+
+═══════════════════════════════════════════════════════════════════════════════
+1. iOS APP - SKIP LANDING PAGE, GO NATIVE
+═══════════════════════════════════════════════════════════════════════════════
+
+The iOS app currently loads the marketing landing page. This feels like a website.
+
+FIX:
+- Detect if running in Capacitor native app:
+  import { Capacitor } from '@capacitor/core';
+  const isNativeApp = Capacitor.isNativePlatform();
+
+- If native app + NOT logged in → go directly to LOGIN screen (email entry)
+- If native app + logged in → go directly to DASHBOARD
+- NEVER show the marketing landing page in the iOS app
+- The landing page is for web visitors discovering BJJ OS
+
+Add this check in App.tsx or your main router.
+
+═══════════════════════════════════════════════════════════════════════════════
+2. iOS APP - PERSISTENT LOGIN (LOGGED IN FOREVER)
+═══════════════════════════════════════════════════════════════════════════════
+
+On iOS app, users should log in ONCE and stay logged in PERMANENTLY.
+
+IMPLEMENTATION:
+- Use @capacitor/preferences to store auth token securely on device
+- Token should NEVER expire on iOS app
+- On app launch: check for stored token → if valid, skip login entirely
+- Only require login if: first time, manually logged out, or token revoked
+
+import { Preferences } from '@capacitor/preferences';
+
+// After successful email verification:
+await Preferences.set({ key: 'authToken', value: token });
+await Preferences.set({ key: 'userId', value: oderId });
+
+// On app launch:
+const { value: token } = await Preferences.get({ key: 'authToken' });
+if (token && isValidToken(token)) {
+  // Go directly to dashboard - NO login required
+} else {
+  // Show login (email entry screen)
+}
+
+// On logout:
+await Preferences.remove({ key: 'authToken' });
+await Preferences.remove({ key: 'userId' });
+
+User experience on iOS:
+- First time: Enter email → receive code → enter code → logged in forever
+- Every time after: Open app → straight to dashboard (no login)
+
+═══════════════════════════════════════════════════════════════════════════════
+3. NEW FEATURE: OPTIONAL PASSWORD FOR WEB (30-day "Keep Me Signed In")
+═══════════════════════════════════════════════════════════════════════════════
+
+Currently: Web users must enter email + email verification code every time.
+
+NEW FLOW (WEB ONLY - not iOS app):
+After successful email verification, offer to set a password:
+
+"Want faster login next time? Create a password."
+
+[ Password field ]
+[ Confirm password field ]
+[✓] Keep me signed in for 30 days
+
+[ Skip ] [ Save Password ]
+
+If they set a password:
+- Store password_hash in database linked to their account
+- Next web login options:
+  A) Email + password (quick) with "Keep me signed in" checkbox
+  B) Email + verification code (original flow, always works)
+- "Keep me signed in" creates 30-day session
+- "Forgot password" sends email verification code to reset
+
+If they skip:
+- Continue with email + code only (current behavior)
+- Can set password later in Settings
+
+DATABASE CHANGES:
+- Add password_hash column to users table (nullable - not required)
+- Add password_created_at timestamp
+- Session management for 30-day persistence
+
+UI PLACEMENT:
+- Show password setup prompt after FIRST successful login
+- Add "Set Password" option in Settings for users who skipped
+- Login page: Show both options (email+password OR email+code)
+
+PASSWORD REQUIREMENTS:
+- Minimum 8 characters
+- At least 1 number
+- At least 1 special character
+
+FORGOT PASSWORD FLOW:
+- User clicks "Forgot password"
+- Enter email
+- Receive verification code via email (same as login)
+- After entering code, set new password
+
+═══════════════════════════════════════════════════════════════════════════════
+DEVICE LIMITS - 2 ACTIVE SESSIONS MAX
+═══════════════════════════════════════════════════════════════════════════════
+
+Maintain the existing limit: Users can be logged in on 2 devices max.
+- 1 web browser session
+- 1 iOS app session
+
+If they try to log in on a 3rd device, prompt to log out from another.
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+1. 🔴 iOS app: Skip landing page (native app feel)
+2. 🔴 iOS app: Persistent login forever
+3. 🟡 Web: Optional password with 30-day "keep me signed in"
+4. 🟡 Forgot password flow
+
+Start with #1 and #2 for the iOS app. Let me know when done.
+After iOS changes, I need to rebuild the app on my Mac to test.
+```
+
+-----
+
+**This is the correct prompt** based on your actual system:
+
+|Feature                  |Platform    |Behavior                  |
+|-------------------------|------------|--------------------------|
+|Email + verification code|Both        |Core auth method (stays)  |
+|Optional password        |Web only    |30-day “keep me signed in”|
+|Persistent login forever |iOS app only|Log in once, never again  |
+|2 device limit           |Both        |1 web + 1 app max         |
+
+**Send this to Replit when you’re ready.**

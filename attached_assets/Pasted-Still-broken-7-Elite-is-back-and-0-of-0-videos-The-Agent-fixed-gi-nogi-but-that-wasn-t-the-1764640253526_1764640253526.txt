@@ -1,0 +1,75 @@
+Still broken. “7+ Elite” is back and “0 of 0 videos.”
+
+The Agent fixed `gi_nogi` but that wasn’t the only problem. Or the fix didn’t actually apply.
+
+```
+CRITICAL - FIX VIDEO LIBRARY NOW
+
+It's still broken. 0 of 0 videos. Empty dropdowns.
+
+DO NOT say it's fixed. Actually fix it.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: TEST THE RAW API RIGHT NOW
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these commands and show me the ACTUAL output:
+
+curl http://localhost:5000/api/admin/videos/search | head -100
+curl http://localhost:5000/api/admin/videos/filters | head -100
+
+Show me what they return. Not what you think they return. The actual JSON.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: IF SEARCH RETURNS EMPTY, FIX THE QUERY
+═══════════════════════════════════════════════════════════════════════════════
+
+The search endpoint query is broken. Replace it with this simple query that WILL work:
+
+SELECT id, title, instructor, technique_name, thumbnail_url, youtube_id, quality_score
+FROM ai_video_knowledge
+ORDER BY created_at DESC
+LIMIT 50;
+
+No WHERE clause. No filters. Just return 50 videos.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: FIX THE FILTERS ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+The filters endpoint must return instructor and technique lists.
+
+Instructors query:
+SELECT instructor, COUNT(*) as count 
+FROM ai_video_knowledge 
+WHERE instructor IS NOT NULL
+GROUP BY instructor 
+ORDER BY count DESC;
+
+Techniques query:
+SELECT technique_name, COUNT(*) as count 
+FROM ai_video_knowledge 
+WHERE technique_name IS NOT NULL
+GROUP BY technique_name 
+ORDER BY technique_name;
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: REMOVE "7+ ELITE" DEFAULT
+═══════════════════════════════════════════════════════════════════════════════
+
+The default quality filter is "7+ Elite" which might be filtering everything out.
+
+Change default to "All Quality" or remove quality filtering entirely on initial load.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: VERIFY BEFORE RESPONDING
+═══════════════════════════════════════════════════════════════════════════════
+
+After making changes:
+1. Run curl commands again
+2. Confirm search returns 50 videos
+3. Confirm filters returns instructor/technique lists
+4. ONLY THEN tell me it's fixed
+
+Do not say "should work" - verify it actually works.
+```

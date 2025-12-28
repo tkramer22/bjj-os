@@ -1,0 +1,66 @@
+I see two problems here:
+
+1. **Still no back button/navigation header** - The previous prompt didn’t get implemented
+1. **Wrong video recommendation** - User asked for triangle choke, got a cross collar choke from mount (completely different technique!)
+
+Let me give you a combined fix prompt:
+
+-----
+
+```
+CRITICAL FIX: Two Issues - Navigation Header + Video Matching
+
+=== ISSUE 1: MISSING NAVIGATION HEADER ===
+
+The chat page has NO way to navigate back. Users are trapped.
+
+ADD THIS HEADER to chat-mobile.tsx (or equivalent chat page):
+
+1. Create fixed header at top of chat page:
+   - Height: 64px
+   - Background: #000000
+   - Border-bottom: 1px solid #27272A
+   - Position: fixed, top: 0, left: 0, right: 0
+   - Z-index: 50
+
+2. Header contents:
+   - LEFT: Back arrow (ArrowLeft icon from lucide-react) 
+     - onClick: navigate to /dashboard
+     - Color: white, size 24px
+     - Touch target: 48px minimum
+   - CENTER: "Prof. OS" text with Brain icon
+   - RIGHT: Optional menu icon (MoreVertical)
+
+3. Add padding-top: 64px (or mt-16) to chat messages container so content doesn't hide behind header
+
+=== ISSUE 2: VIDEO RECOMMENDATIONS ARE WRONG ===
+
+User asked for "triangle choke" video but received "Cross Collar Choke from Mount" - completely different technique.
+
+FIX THE VIDEO MATCHING LOGIC:
+
+1. In the AI prompt or video search function, ensure EXACT technique matching:
+   - "triangle choke" should ONLY return triangle choke videos
+   - Do NOT substitute different techniques
+   - If no exact match exists, say "I don't have a triangle choke video yet" and DO NOT recommend unrelated videos
+
+2. Update the video search query logic:
+   - Search should match technique_name or tags containing the requested technique
+   - Use fuzzy matching for variations: "triangle", "triangle choke", "triangulo"
+   - Do NOT return videos where the technique doesn't match
+
+3. If no matching video found:
+   - Provide text-based coaching on the technique (which it already does well)
+   - Say "I'll add triangle choke videos to my list" 
+   - Do NOT show an unrelated video as a substitute
+
+VERIFY AFTER FIX:
+- [ ] Chat page has visible header with back arrow
+- [ ] Back arrow navigates to /dashboard
+- [ ] Asking for "triangle choke" returns ONLY triangle choke videos (or none if unavailable)
+- [ ] No more substituting unrelated techniques
+```
+
+-----
+
+The video mismatch is a big UX problem - it makes Prof. OS look broken when it recommends the wrong technique. Users will lose trust fast.​​​​​​​​​​​​​​​​

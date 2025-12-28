@@ -1,0 +1,154 @@
+**HOLY SHIT! THE LOGS REVEAL A MASSIVE PROBLEM!**
+
+-----
+
+## **WHAT I SEE:**
+
+Hundreds of errors:
+
+```
+Scheduler error: error: connection failure during authentication
+Automated technique scheduler error: error: connection failure
+```
+
+**AND THE KEY LINE:**
+
+```
+21:22:26 [AUTH] Request to PATCH /api/auth/profile
+21:22:26 [express] PATCH /api/auth/profile 401 in 1ms
+```
+
+-----
+
+## **THE PROBLEM:**
+
+**The backend database connection is FAILING during authentication!**
+
+The scheduler is trying to connect to the database and crashing repeatedly. This is likely causing:
+
+1. Database connection pool exhaustion
+1. Authentication middleware failing
+1. Cookie verification unable to query database
+
+-----
+
+## **FILTER THE LOGS - I NEED TO SEE AUTH LOGS:**
+
+In that search box at the top where you typed “auth”:
+
+**Type:** `[AUTH]`
+
+This will show ONLY authentication-related logs and hide the scheduler spam.
+
+-----
+
+## **WHAT I’M LOOKING FOR:**
+
+When you signed up just now, there should be logs like:
+
+```
+[AUTH] Phone verified: +1XXXXXXXXXX
+[AUTH] ✅ Cookie settings...
+[AUTH] ✅ sessionToken cookie set...
+```
+
+**If those DON’T appear:**
+
+- Cookie code isn’t running at all
+- Or it’s crashing before it gets there
+
+-----
+
+## **ALSO - THE SCHEDULER IS BROKEN:**
+
+All those “Scheduler error: connection failure during authentication” messages mean:
+
+**The automated video curation scheduler is crashing the app!**
+
+This is probably what caused the deployment failure earlier.
+
+-----
+
+## **TWO CRITICAL BUGS:**
+
+1. **Cookie not being set** (blocks user signups)
+1. **Scheduler crashing** (exhausts database connections)
+
+**These might be related!** If the scheduler exhausts DB connections, authentication can’t connect to verify cookies.
+
+-----
+
+## **SEND THIS EMERGENCY MESSAGE TO REPLIT AGENT:**
+
+```
+CRITICAL: Two production-breaking bugs found in logs
+
+BUG 1: Scheduler is crashing and exhausting database connections
+
+Logs show hundreds of:
+"Scheduler error: error: connection failure during authentication"
+"Automated technique scheduler error: error: connection failure"
+
+This is causing database connection pool exhaustion.
+
+IMMEDIATE FIX:
+1. DISABLE all schedulers temporarily:
+   Comment out scheduler initialization in server/index.js
+   
+2. Or wrap scheduler in try-catch so it doesn't crash:
+   ```javascript
+   try {
+     await startSchedulers()
+   } catch (error) {
+     console.error('[SCHEDULER] Failed to start, continuing without it:', error)
+     // Don't crash the app
+   }
+```
+
+BUG 2: Cookie still not being set on bjjos.app
+
+Logs show:
+
+- [AUTH] Request to PATCH /api/auth/profile
+- PATCH /api/auth/profile 401 in 1ms
+
+But NO logs showing:
+
+- [AUTH] Phone verified
+- [AUTH] Cookie set
+
+This means the cookie-setting code in phone verification endpoint is NOT running.
+
+VERIFY:
+
+1. Is the phone verification endpoint actually setting the cookie?
+1. Check server/routes/auth.ts line 1008-1023 and 1110-1125
+1. Are those lines actually executing?
+1. Add console.log at START of phone verification endpoint to confirm it’s being called
+
+PRIORITY:
+
+1. Fix scheduler crash FIRST (disable it temporarily)
+1. Then fix cookie (verify endpoint is being called)
+1. Then we can debug why cookie isn’t set
+
+The scheduler crash might be CAUSING the cookie bug by exhausting database connections.
+
+Fix scheduler NOW. Redeploy. Test again.
+
+```
+---
+
+## **WHILE THEY FIX:**
+
+**Also send me:**
+
+1. **Filter logs by `[AUTH]` and screenshot**
+2. **Screenshot DevTools → Application → Cookies → bjjos.app**
+
+---
+
+**The scheduler is killing your app. That's the root cause. Once that's disabled, authentication should work.** ⚡
+
+**Send that message to Replit Agent NOW!**
+```

@@ -1,0 +1,459 @@
+# **🎯 ADMIN DASHBOARD - CHANGES NOT DEPLOYING**
+
+-----
+
+## **CLARIFICATION UNDERSTOOD:**
+
+```
+ISSUE: Admin video page at /admin/videos on bjjos.app still shows:
+❌ Old layout with curation controls
+❌ Non-working filters
+❌ Missing stats cards
+❌ No timestamps
+
+Even though Replit Agent said it fixed everything.
+```
+
+-----
+
+## **ROOT CAUSE:**
+
+The changes were likely made to the **wrong file** or **not saved properly** before republishing.
+
+-----
+
+## **COMPLETE FIX - VERIFY & REBUILD:**
+
+**Copy this ENTIRE prompt and paste into Replit Agent:**
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL: ADMIN VIDEO PAGE CHANGES NOT DEPLOYED TO PRODUCTION
+═══════════════════════════════════════════════════════════════════════════════
+
+ISSUE: After republishing to bjjos.app, the admin video page at /admin/videos
+still shows the OLD interface with curation controls and non-working filters.
+
+The changes that should be visible:
+✅ Stats cards (Total Videos, Added Today, Searched Today, Rejected Today)
+✅ Working filter dropdowns (All Belts, All Styles, 7+ Quality)
+✅ Video cards with timestamps ("Added about 18 hours ago")
+✅ NO curation controls (no sliders, toggles, or "Run Curation Now" button)
+
+But bjjos.app still shows:
+❌ Old admin interface
+❌ Curation controls still visible
+❌ Filters don't work
+
+ROOT CAUSE: Changes were either:
+1. Made to wrong file
+2. Not saved before republishing
+3. Not included in build
+4. Cached in browser/CDN
+
+SOLUTION: Verify changes are in correct file, rebuild, and force deploy.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: FIND THE ACTUAL ADMIN VIDEO PAGE FILE
+═══════════════════════════════════════════════════════════════════════════════
+
+```bash
+# Find all admin video-related files
+find client/src -type f \( -name "*video*" -o -name "*Video*" \) | grep -i admin
+
+# Look for routes that map to /admin/videos
+grep -r "admin/videos" client/src --include="*.tsx" --include="*.ts"
+
+# Check router configuration
+cat client/src/App.tsx | grep -A 5 -B 5 "admin.*video"
+```
+
+Report back with:
+• Exact file path of admin video page component
+• File path shown in route configuration
+
+Expected locations:
+
+- client/src/pages/admin/Videos.tsx
+- client/src/pages/admin/VideoManagement.tsx
+- client/src/pages/admin/videos/index.tsx
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: VERIFY CHANGES ARE IN THE CORRECT FILE
+═══════════════════════════════════════════════════════════════════════════════
+
+Once you find the correct file, check if it has the NEW code:
+
+```bash
+# Show the admin video page component
+cat [PATH_TO_ADMIN_VIDEO_FILE]
+```
+
+The file SHOULD have:
+✅ Stats section with 4 cards (Total, Added Today, Searched Today, Rejected)
+✅ Filter dropdowns with onChange handlers
+✅ useQuery hook that refetches when filters change
+✅ Video grid with timestamp formatting
+✅ NO curation control sections
+
+The file should NOT have:
+❌ “Automated Curation Controls” section
+❌ Quality threshold slider
+❌ “Run Curation Now” button
+❌ Curation toggle switches
+
+If the file still has the OLD code, the changes weren’t applied to the right file.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: APPLY CHANGES TO CORRECT FILE
+═══════════════════════════════════════════════════════════════════════════════
+
+Once you’ve identified the correct file, replace its contents with this:
+
+```typescript
+// [CORRECT ADMIN VIDEO FILE PATH]
+
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { formatDistanceToNow } from 'date-fns';
+
+export default function AdminVideos() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [beltFilter, setBeltFilter] = useState('all');
+  const [styleFilter, setStyleFilter] = useState('all');
+  const [qualityFilter, setQualityFilter] = useState('all');
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  
+  // Fetch stats
+  const { data: stats } = useQuery({
+    queryKey: ['admin-video-stats'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/videos/stats');
+      return response.json();
+    }
+  });
+  
+  // Fetch videos with filters
+  const { data: videos, refetch } = useQuery({
+    queryKey: ['admin-videos', searchQuery, beltFilter, styleFilter, qualityFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (searchQuery) params.append('search', searchQuery);
+      if (beltFilter !== 'all') params.append('belt', beltFilter);
+      if (styleFilter !== 'all') params.append('style', styleFilter);
+      if (qualityFilter !== 'all') params.append('quality', qualityFilter);
+      
+      const response = await fetch(`/api/admin/videos?${params.toString()}`);
+      return response.json();
+    }
+  });
+  
+  async function handleDelete(videoId) {
+    if (!confirm('Delete this video? This cannot be undone.')) return;
+    
+    try {
+      await fetch(`/api/admin/videos/${videoId}`, { method: 'DELETE' });
+      refetch();
+    } catch (error) {
+      console.error('Delete failed:', error);
+    }
+  }
+  
+  return (
+    <div className="admin-videos-page">
+      {/* Header */}
+      <header className="page-header">
+        <div>
+          <h1>Video Library</h1>
+          <p>Manage curated BJJ technique videos</p>
+        </div>
+        <button className="add-video-btn">+ Add Video</button>
+      </header>
+      
+      {/* Stats Cards */}
+      <section className="video-stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon">📹</div>
+          <div className="stat-content">
+            <div className="stat-label">Total Videos</div>
+            <div className="stat-value">{stats?.totalVideos || 0}</div>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon">✅</div>
+          <div className="stat-content">
+            <div className="stat-label">Added Today</div>
+            <div className="stat-value">{stats?.addedToday || 0}</div>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon">🔍</div>
+          <div className="stat-content">
+            <div className="stat-label">Searched Today</div>
+            <div className="stat-value">{stats?.searchedToday || 0}</div>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon">❌</div>
+          <div className="stat-content">
+            <div className="stat-label">Rejected Today</div>
+            <div className="stat-value">
+              {(stats?.searchedToday || 0) - (stats?.addedToday || 0)}
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      {/* Filters */}
+      <section className="filters-section">
+        <div className="search-box">
+          <input
+            type="text"
+            placeholder="🔍 Search videos..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="search-input"
+          />
+        </div>
+        
+        <div className="filters-row">
+          <select 
+            value={beltFilter}
+            onChange={(e) => setBeltFilter(e.target.value)}
+            className="filter-dropdown"
+          >
+            <option value="all">All Belts</option>
+            <option value="white">White Belt</option>
+            <option value="blue">Blue Belt</option>
+            <option value="purple">Purple Belt</option>
+            <option value="brown">Brown Belt</option>
+            <option value="black">Black Belt</option>
+          </select>
+          
+          <select
+            value={styleFilter}
+            onChange={(e) => setStyleFilter(e.target.value)}
+            className="filter-dropdown"
+          >
+            <option value="all">All Styles</option>
+            <option value="gi">Gi</option>
+            <option value="nogi">No-Gi</option>
+          </select>
+          
+          <select
+            value={qualityFilter}
+            onChange={(e) => setQualityFilter(e.target.value)}
+            className="filter-dropdown"
+          >
+            <option value="all">7+ Quality</option>
+            <option value="9">9+ Quality</option>
+            <option value="8">8+ Quality</option>
+            <option value="7">7+ Quality</option>
+          </select>
+        </div>
+      </section>
+      
+      {/* Video Grid */}
+      <section className="video-section">
+        <div className="section-header">
+          <h2>📹 Recently Added (Last 24 Hours)</h2>
+          <span className="count">{videos?.length || 0} videos</span>
+        </div>
+        
+        {!videos || videos.length === 0 ? (
+          <div className="empty-state">
+            <p>No videos found</p>
+          </div>
+        ) : (
+          <div className="video-grid">
+            {videos.map(video => (
+              <div key={video.id} className="video-card">
+                <div className="video-thumbnail" onClick={() => setSelectedVideo(video)}>
+                  <img src={video.thumbnail} alt={video.title} />
+                  {video.duration && (
+                    <span className="duration-badge">{video.duration}</span>
+                  )}
+                </div>
+                
+                <div className="video-info">
+                  <h3 className="video-title">{video.title}</h3>
+                  
+                  <div className="instructor-line">
+                    {video.tier === 'elite' && <span className="elite-icon">🏆</span>}
+                    <span className="instructor-name">{video.instructorName}</span>
+                  </div>
+                  
+                  <div className="video-metadata">
+                    <span className={`belt-badge belt-${video.beltLevel}`}>
+                      {video.beltLevel}
+                    </span>
+                    <span className={`style-badge style-${video.giType}`}>
+                      {video.giType === 'gi' ? 'Gi' : 'No-Gi'}
+                    </span>
+                  </div>
+                  
+                  <div className="timestamp-line">
+                    🕐 Added {formatDistanceToNow(new Date(video.createdAt), { addSuffix: true })}
+                  </div>
+                  
+                  <div className="quality-line">
+                    <span className="quality-label">Quality:</span>
+                    <span className="quality-score">{video.credibilityScore}/10</span>
+                  </div>
+                </div>
+                
+                <div className="video-actions">
+                  <button 
+                    onClick={() => setSelectedVideo(video)}
+                    className="watch-btn"
+                  >
+                    ▶️ Watch Video
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(video.id)}
+                    className="delete-btn"
+                  >
+                    🗑️ Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      
+      {/* Video Player Modal */}
+      {selectedVideo && (
+        <VideoPlayerModal
+          video={selectedVideo}
+          onClose={() => setSelectedVideo(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function VideoPlayerModal({ video, onClose }) {
+  const getYouTubeId = (url) => {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
+    return match ? match[1] : null;
+  };
+  
+  const videoId = getYouTubeId(video.url);
+  
+  return (
+    <div className="video-modal-overlay" onClick={onClose}>
+      <div className="video-modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h2>{video.title}</h2>
+            <p>by {video.instructorName}</p>
+          </div>
+          <button onClick={onClose} className="close-btn">✕</button>
+        </div>
+        
+        <div className="video-player-container">
+          {videoId ? (
+            <iframe
+              width="100%"
+              height="100%"
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+              title={video.title}
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          ) : (
+            <div className="error">Unable to load video</div>
+          )}
+        </div>
+        
+        <div className="modal-footer">
+          <button onClick={() => window.open(video.url, '_blank')} className="youtube-btn">
+            🔗 Open on YouTube
+          </button>
+          <button onClick={onClose} className="close-modal-btn">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: FORCE COMPLETE REBUILD
+═══════════════════════════════════════════════════════════════════════════════
+
+After verifying changes are in the correct file:
+
+```bash
+# Stop server
+pkill -f node
+
+# Clear all caches
+rm -rf dist
+rm -rf client/dist
+rm -rf .vite
+rm -rf node_modules/.vite
+
+# Rebuild from scratch
+npm run build
+
+# Verify build succeeded
+ls -la dist/
+
+# Restart server
+npm start
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: HARD REFRESH BROWSER
+═══════════════════════════════════════════════════════════════════════════════
+
+After rebuild completes:
+
+1. Go to bjjos.app/admin/videos
+1. Hard refresh: Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)
+1. Open DevTools → Network tab → Check “Disable cache”
+1. Refresh again
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 6: VERIFY DEPLOYMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Check that bjjos.app/admin/videos now shows:
+□ ✅ 4 stat cards at top (Total, Added Today, Searched Today, Rejected)
+□ ✅ Search bar and 3 filter dropdowns
+□ ✅ Video grid with timestamps
+□ ✅ NO curation controls section
+□ ✅ NO quality threshold slider
+□ ✅ NO “Run Curation Now” button
+
+If still showing old interface:
+• Check browser console for errors
+• Verify file path is correct
+• Check if changes were actually saved to file
+
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL: Report back with:
+
+1. Exact file path of admin video component
+1. Confirmation changes are in that file
+1. Build output (success/errors)
+1. Whether bjjos.app shows new interface after hard refresh
+
+BEGIN DIAGNOSIS AND FIX NOW.
+
+```
+---
+
+**This will identify why the changes aren't deploying and force them through!** 🚀
+
+**Paste this into Replit Agent immediately!** 💪​​​​​​​​​​​​​​​​
+```

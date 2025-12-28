@@ -1,0 +1,1365 @@
+# BJJ OS - COMMAND 2 OF 5: SIGNUP, PAYMENTS & ONBOARDING
+
+Copy and paste this into Replit Agent:
+
+-----
+
+```
+REBUILD BJJ OS WEBSITE - COMMAND 2 OF 5: SIGNUP, PAYMENTS & ONBOARDING
+
+CRITICAL REQUIREMENTS:
+✅ Signup flow for both products (SMS Only & Full AI)
+✅ Stripe payment integration
+✅ 7-day free trial
+✅ Referral code support (20% recurring commission)
+✅ Enhanced onboarding with belt selection
+✅ Dynamic belt-colored send button with stripes (black belt = red stripes)
+✅ Email/phone verification
+✅ User dashboard after signup
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: SIGNUP PAGE HTML
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /public/signup.html:
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up - BJJ OS</title>
+  <link rel="stylesheet" href="/styles/auth.css">
+  <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+  
+  <div class="auth-container">
+    <div class="auth-card">
+      
+      <!-- Logo -->
+      <div class="auth-logo">
+        <span class="logo-icon">🥋</span>
+        <h1>BJJ OS</h1>
+      </div>
+      
+      <!-- Step Indicator -->
+      <div class="step-indicator">
+        <div class="step active" data-step="1">
+          <div class="step-number">1</div>
+          <span>Plan</span>
+        </div>
+        <div class="step" data-step="2">
+          <div class="step-number">2</div>
+          <span>Account</span>
+        </div>
+        <div class="step" data-step="3">
+          <div class="step-number">3</div>
+          <span>Payment</span>
+        </div>
+      </div>
+      
+      <!-- Step 1: Plan Selection -->
+      <div class="signup-step" data-step="1">
+        <h2>Choose Your Plan</h2>
+        <p class="step-description">7-day free trial • Cancel anytime</p>
+        
+        <div class="plan-selector">
+          <div class="plan-option" data-plan="sms-only">
+            <input type="radio" name="plan" value="sms-only" id="plan-sms">
+            <label for="plan-sms">
+              <div class="plan-header">
+                <h3>SMS Only</h3>
+                <div class="plan-price">$4.99<span>/mo</span></div>
+              </div>
+              <ul class="plan-features-mini">
+                <li>Daily technique via text</li>
+                <li>Video links</li>
+              </ul>
+            </label>
+          </div>
+          
+          <div class="plan-option featured" data-plan="full-ai">
+            <div class="popular-badge">Most Popular</div>
+            <input type="radio" name="plan" value="full-ai-monthly" id="plan-full-monthly" checked>
+            <label for="plan-full-monthly">
+              <div class="plan-header">
+                <h3>Full AI Package</h3>
+                <div class="plan-price">$14.99<span>/mo</span></div>
+              </div>
+              <ul class="plan-features-mini">
+                <li>Prof. OS AI Coach</li>
+                <li>Unlimited chat</li>
+                <li>Video library</li>
+                <li>Progress tracking</li>
+              </ul>
+            </label>
+          </div>
+          
+          <div class="plan-option" data-plan="full-ai-yearly">
+            <div class="save-badge">Save $30/year</div>
+            <input type="radio" name="plan" value="full-ai-yearly" id="plan-full-yearly">
+            <label for="plan-full-yearly">
+              <div class="plan-header">
+                <h3>Full AI Package</h3>
+                <div class="plan-price">$149<span>/year</span></div>
+              </div>
+              <p class="yearly-note">$12.42/month billed annually</p>
+              <ul class="plan-features-mini">
+                <li>Everything in monthly</li>
+                <li><strong>Save $30 per year</strong></li>
+              </ul>
+            </label>
+          </div>
+        </div>
+        
+        <!-- Referral Code -->
+        <div class="referral-section">
+          <button class="referral-toggle" onclick="toggleReferral()">
+            Have a referral code? 🎁
+          </button>
+          <div class="referral-input hidden">
+            <input type="text" id="referral-code" placeholder="Enter referral code">
+            <button onclick="applyReferral()">Apply</button>
+          </div>
+          <div class="referral-success hidden">
+            ✅ Code applied! You get 20% off
+          </div>
+        </div>
+        
+        <button class="btn-next" onclick="nextStep(2)">Continue</button>
+      </div>
+      
+      <!-- Step 2: Account Creation -->
+      <div class="signup-step hidden" data-step="2">
+        <button class="btn-back" onclick="prevStep(1)">← Back</button>
+        
+        <h2>Create Your Account</h2>
+        <p class="step-description">We'll use this to personalize your experience</p>
+        
+        <form class="signup-form" id="account-form">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="name" required placeholder="Your name">
+          </div>
+          
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="email" required placeholder="you@example.com">
+          </div>
+          
+          <div class="form-group">
+            <label>Phone Number</label>
+            <input type="tel" id="phone" required placeholder="(555) 123-4567">
+            <small>For SMS delivery (required for both plans)</small>
+          </div>
+          
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="password" required placeholder="Min. 8 characters">
+          </div>
+          
+          <div class="form-group">
+            <label>Belt Level</label>
+            <div class="belt-selector">
+              <div class="belt-option" data-belt="white">
+                <input type="radio" name="belt" value="white" id="belt-white" required>
+                <label for="belt-white">
+                  <div class="belt-icon white"></div>
+                  <span>White</span>
+                </label>
+              </div>
+              <div class="belt-option" data-belt="blue">
+                <input type="radio" name="belt" value="blue" id="belt-blue">
+                <label for="belt-blue">
+                  <div class="belt-icon blue"></div>
+                  <span>Blue</span>
+                </label>
+              </div>
+              <div class="belt-option" data-belt="purple">
+                <input type="radio" name="belt" value="purple" id="belt-purple">
+                <label for="belt-purple">
+                  <div class="belt-icon purple"></div>
+                  <span>Purple</span>
+                </label>
+              </div>
+              <div class="belt-option" data-belt="brown">
+                <input type="radio" name="belt" value="brown" id="belt-brown">
+                <label for="belt-brown">
+                  <div class="belt-icon brown"></div>
+                  <span>Brown</span>
+                </label>
+              </div>
+              <div class="belt-option" data-belt="black">
+                <input type="radio" name="belt" value="black" id="belt-black">
+                <label for="belt-black">
+                  <div class="belt-icon black"></div>
+                  <span>Black</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </form>
+        
+        <button class="btn-next" onclick="nextStep(3)">Continue to Payment</button>
+      </div>
+      
+      <!-- Step 3: Payment -->
+      <div class="signup-step hidden" data-step="3">
+        <button class="btn-back" onclick="prevStep(2)">← Back</button>
+        
+        <h2>Start Your Free Trial</h2>
+        <p class="step-description">You won't be charged for 7 days</p>
+        
+        <div class="trial-info">
+          <div class="trial-badge">🎉 7-Day Free Trial</div>
+          <p>Try it risk-free. Cancel anytime in the first 7 days for a full refund.</p>
+        </div>
+        
+        <div class="order-summary">
+          <h3>Order Summary</h3>
+          <div class="summary-item">
+            <span id="summary-plan">Full AI Package (Monthly)</span>
+            <span id="summary-price">$14.99/mo</span>
+          </div>
+          <div class="summary-item discount hidden" id="discount-row">
+            <span>Referral Discount (20%)</span>
+            <span id="discount-amount">-$3.00</span>
+          </div>
+          <div class="summary-divider"></div>
+          <div class="summary-total">
+            <span>Due after trial</span>
+            <span id="total-price">$14.99</span>
+          </div>
+          <p class="trial-note">First charge on <span id="trial-end-date"></span></p>
+        </div>
+        
+        <form id="payment-form">
+          <div class="form-group">
+            <label>Card Information</label>
+            <div id="card-element"></div>
+            <div id="card-errors" class="error-message"></div>
+          </div>
+          
+          <div class="terms-checkbox">
+            <input type="checkbox" id="terms" required>
+            <label for="terms">
+              I agree to the <a href="/terms" target="_blank">Terms of Service</a> and 
+              <a href="/privacy" target="_blank">Privacy Policy</a>
+            </label>
+          </div>
+          
+          <button type="submit" class="btn-submit" id="submit-button">
+            <span id="button-text">Start Free Trial</span>
+            <span id="spinner" class="spinner hidden"></span>
+          </button>
+        </form>
+        
+        <div class="security-note">
+          🔒 Secure payment via Stripe • Card info never stored on our servers
+        </div>
+      </div>
+      
+    </div>
+  </div>
+
+  <script src="/scripts/signup.js"></script>
+</body>
+</html>
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: LOGIN PAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /public/login.html:
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - BJJ OS</title>
+  <link rel="stylesheet" href="/styles/auth.css">
+</head>
+<body>
+  
+  <div class="auth-container">
+    <div class="auth-card">
+      
+      <div class="auth-logo">
+        <span class="logo-icon">🥋</span>
+        <h1>BJJ OS</h1>
+      </div>
+      
+      <h2>Welcome Back</h2>
+      <p class="step-description">Login to continue your training</p>
+      
+      <form class="signup-form" id="login-form">
+        <div class="form-group">
+          <label>Email or Phone</label>
+          <input type="text" id="login-identifier" required placeholder="you@example.com or (555) 123-4567">
+        </div>
+        
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" required placeholder="Your password">
+        </div>
+        
+        <a href="/forgot-password" class="forgot-link">Forgot password?</a>
+        
+        <button type="submit" class="btn-submit">Login</button>
+      </form>
+      
+      <div class="auth-footer">
+        Don't have an account? <a href="/signup">Sign up</a>
+      </div>
+      
+    </div>
+  </div>
+
+  <script src="/scripts/login.js"></script>
+</body>
+</html>
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: AUTH STYLES
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /public/styles/auth.css:
+
+:root {
+  --black: #000000;
+  --dark: #0a0a0a;
+  --gray: #1a1a1a;
+  --border: #333333;
+  --text-secondary: #888888;
+  --text-tertiary: #555555;
+  --primary: #667eea;
+  --primary-dark: #764ba2;
+  --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --success: #4ade80;
+  --error: #f87171;
+  
+  /* Belt Colors */
+  --belt-white: #ffffff;
+  --belt-blue: #1e40af;
+  --belt-purple: #7c3aed;
+  --belt-brown: #92400e;
+  --belt-black: #000000;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: var(--black);
+  color: #ffffff;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 600px;
+}
+
+.auth-card {
+  background: var(--dark);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 3rem;
+}
+
+.auth-logo {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.logo-icon {
+  font-size: 3rem;
+}
+
+.auth-logo h1 {
+  font-size: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+/* Step Indicator */
+.step-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-tertiary);
+}
+
+.step.active {
+  color: var(--primary);
+}
+
+.step.completed {
+  color: var(--success);
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--gray);
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.step.active .step-number {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.step.completed .step-number {
+  background: var(--success);
+  border-color: var(--success);
+  color: white;
+}
+
+/* Signup Steps */
+.signup-step {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.signup-step.hidden {
+  display: none;
+}
+
+.signup-step h2 {
+  font-size: 1.75rem;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.step-description {
+  text-align: center;
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+}
+
+/* Plan Selector */
+.plan-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.plan-option {
+  position: relative;
+  background: var(--gray);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.plan-option:hover {
+  border-color: var(--primary);
+}
+
+.plan-option.featured {
+  border-color: var(--primary);
+}
+
+.plan-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+}
+
+.plan-option input[type="radio"]:checked + label {
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.plan-option label {
+  cursor: pointer;
+  display: block;
+}
+
+.plan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.plan-header h3 {
+  font-size: 1.25rem;
+}
+
+.plan-price {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.plan-price span {
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+.plan-features-mini {
+  list-style: none;
+}
+
+.plan-features-mini li {
+  padding: 0.5rem 0;
+  color: var(--text-secondary);
+}
+
+.plan-features-mini li:before {
+  content: "✓ ";
+  color: var(--success);
+  margin-right: 0.5rem;
+}
+
+.popular-badge, .save-badge {
+  position: absolute;
+  top: -12px;
+  right: 20px;
+  padding: 0.25rem 0.75rem;
+  background: var(--gradient);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.save-badge {
+  background: var(--success);
+  color: var(--black);
+}
+
+.yearly-note {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+/* Referral Section */
+.referral-section {
+  margin-bottom: 2rem;
+}
+
+.referral-toggle {
+  width: 100%;
+  padding: 1rem;
+  background: var(--gray);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.referral-toggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.referral-input {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.referral-input input {
+  flex: 1;
+  padding: 0.75rem;
+  background: var(--gray);
+  border: 1px solid var(--border);
+  color: white;
+  border-radius: 8px;
+}
+
+.referral-input button {
+  padding: 0.75rem 1.5rem;
+  background: var(--primary);
+  border: none;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.referral-success {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid var(--success);
+  color: var(--success);
+  border-radius: 8px;
+  text-align: center;
+}
+
+/* Form */
+.signup-form {
+  margin-bottom: 2rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--gray);
+  border: 1px solid var(--border);
+  color: white;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.form-group small {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+/* Belt Selector */
+.belt-selector {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.75rem;
+}
+
+.belt-option input[type="radio"] {
+  display: none;
+}
+
+.belt-option label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 0.5rem;
+  background: var(--gray);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.belt-option input[type="radio"]:checked + label {
+  border-color: var(--primary);
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.belt-icon {
+  width: 40px;
+  height: 8px;
+  border-radius: 2px;
+  position: relative;
+}
+
+.belt-icon.white {
+  background: var(--belt-white);
+  border: 1px solid var(--border);
+}
+
+.belt-icon.blue { background: var(--belt-blue); }
+.belt-icon.purple { background: var(--belt-purple); }
+.belt-icon.brown { background: var(--belt-brown); }
+.belt-icon.black { background: var(--belt-black); }
+
+/* Add stripes to belt icons */
+.belt-icon:after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 8px;
+  width: 2px;
+  height: 100%;
+  background: white;
+  box-shadow: 6px 0 0 white, 12px 0 0 white, 18px 0 0 white;
+}
+
+.belt-icon.black:after {
+  background: #dc2626;
+  box-shadow: 6px 0 0 #dc2626, 12px 0 0 #dc2626, 18px 0 0 #dc2626;
+}
+
+.belt-option span {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Trial Info */
+.trial-info {
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid var(--primary);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.trial-badge {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+/* Order Summary */
+.order-summary {
+  background: var(--gray);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.order-summary h3 {
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  color: var(--text-secondary);
+}
+
+.summary-item.discount {
+  color: var(--success);
+}
+
+.summary-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 1rem 0;
+}
+
+.summary-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.trial-note {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: 0.5rem;
+}
+
+/* Stripe Card Element */
+#card-element {
+  padding: 0.75rem;
+  background: var(--gray);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.error-message {
+  color: var(--error);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+/* Terms Checkbox */
+.terms-checkbox {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.terms-checkbox input[type="checkbox"] {
+  width: auto;
+  margin-top: 0.25rem;
+}
+
+.terms-checkbox label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.terms-checkbox a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+/* Buttons */
+.btn-next, .btn-submit {
+  width: 100%;
+  padding: 1rem;
+  background: var(--gradient);
+  border: none;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.btn-next:hover, .btn-submit:hover {
+  transform: translateY(-2px);
+}
+
+.btn-next:disabled, .btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-back {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+  padding: 0.5rem 0;
+}
+
+.btn-back:hover {
+  color: var(--primary);
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.security-note {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: 1rem;
+}
+
+.forgot-link {
+  display: block;
+  text-align: right;
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+}
+
+.auth-footer {
+  text-align: center;
+  margin-top: 2rem;
+  color: var(--text-secondary);
+}
+
+.auth-footer a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .auth-card {
+    padding: 2rem 1.5rem;
+  }
+  
+  .belt-selector {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: SIGNUP JAVASCRIPT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create /public/scripts/signup.js:
+
+// Get plan from URL
+const urlParams = new URLSearchParams(window.location.search);
+const selectedPlan = urlParams.get('plan') || 'full-ai-monthly';
+const selectedPeriod = urlParams.get('period') || 'monthly';
+
+// Stripe setup
+const stripe = Stripe('pk_test_YOUR_PUBLISHABLE_KEY'); // Replace with your key
+let elements, cardElement;
+let referralCode = null;
+let referralDiscount = 0;
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  // Pre-select plan from URL
+  const planRadio = document.querySelector(`input[value="${selectedPlan}"]`);
+  if (planRadio) planRadio.checked = true;
+  
+  // Set trial end date (7 days from now)
+  const trialEnd = new Date();
+  trialEnd.setDate(trialEnd.getDate() + 7);
+  document.getElementById('trial-end-date').textContent = trialEnd.toLocaleDateString();
+  
+  // Initialize Stripe Elements (but don't mount yet)
+  elements = stripe.elements();
+  cardElement = elements.create('card', {
+    style: {
+      base: {
+        color: '#ffffff',
+        fontSize: '16px',
+        '::placeholder': {
+          color: '#555555'
+        }
+      },
+      invalid: {
+        color: '#f87171'
+      }
+    }
+  });
+});
+
+// Step navigation
+function nextStep(step) {
+  // Validate current step
+  const currentStep = document.querySelector('.signup-step:not(.hidden)');
+  if (!validateStep(currentStep)) return;
+  
+  // Hide all steps
+  document.querySelectorAll('.signup-step').forEach(s => s.classList.add('hidden'));
+  
+  // Show target step
+  document.querySelector(`.signup-step[data-step="${step}"]`).classList.remove('hidden');
+  
+  // Update step indicator
+  document.querySelectorAll('.step').forEach(s => {
+    const stepNum = parseInt(s.dataset.step);
+    if (stepNum < step) {
+      s.classList.add('completed');
+      s.classList.remove('active');
+    } else if (stepNum === step) {
+      s.classList.add('active');
+      s.classList.remove('completed');
+    } else {
+      s.classList.remove('active', 'completed');
+    }
+  });
+  
+  // Mount Stripe card element when reaching step 3
+  if (step === 3 && !cardElement._mounter) {
+    cardElement.mount('#card-element');
+    cardElement._mounter = true;
+    updateOrderSummary();
+  }
+  
+  // Scroll to top
+  window.scrollTo(0, 0);
+}
+
+function prevStep(step) {
+  nextStep(step);
+}
+
+function validateStep(stepElement) {
+  const stepNum = parseInt(stepElement.dataset.step);
+  
+  if (stepNum === 1) {
+    // Validate plan selection
+    const plan = document.querySelector('input[name="plan"]:checked');
+    if (!plan) {
+      alert('Please select a plan');
+      return false;
+    }
+  }
+  
+  if (stepNum === 2) {
+    // Validate account form
+    const form = document.getElementById('account-form');
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return false;
+    }
+    
+    // Validate belt selection
+    const belt = document.querySelector('input[name="belt"]:checked');
+    if (!belt) {
+      alert('Please select your belt level');
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+// Referral code
+function toggleReferral() {
+  const input = document.querySelector('.referral-input');
+  input.classList.toggle('hidden');
+}
+
+async function applyReferral() {
+  const code = document.getElementById('referral-code').value.trim();
+  if (!code) return;
+  
+  try {
+    const response = await fetch('/api/validate-referral', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    
+    const data = await response.json();
+    
+    if (data.valid) {
+      referralCode = code;
+      referralDiscount = 0.20; // 20% discount
+      document.querySelector('.referral-input').classList.add('hidden');
+      document.querySelector('.referral-success').classList.remove('hidden');
+      updateOrderSummary();
+    } else {
+      alert('Invalid referral code');
+    }
+  } catch (error) {
+    console.error('Referral validation error:', error);
+    alert('Failed to validate referral code');
+  }
+}
+
+function updateOrderSummary() {
+  const plan = document.querySelector('input[name="plan"]:checked').value;
+  let planName, price, period;
+  
+  if (plan === 'sms-only') {
+    planName = 'SMS Only';
+    price = 4.99;
+    period = 'month';
+  } else if (plan === 'full-ai-monthly') {
+    planName = 'Full AI Package (Monthly)';
+    price = 14.99;
+    period = 'month';
+  } else if (plan === 'full-ai-yearly') {
+    planName = 'Full AI Package (Yearly)';
+    price = 149;
+    period = 'year';
+  }
+  
+  document.getElementById('summary-plan').textContent = planName;
+  document.getElementById('summary-price').textContent = `$${price}/${period === 'month' ? 'mo' : 'yr'}`;
+  
+  if (referralDiscount > 0) {
+    const discount = price * referralDiscount;
+    const finalPrice = price - discount;
+    
+    document.getElementById('discount-row').classList.remove('hidden');
+    document.getElementById('discount-amount').textContent = `-$${discount.toFixed(2)}`;
+    document.getElementById('total-price').textContent = `$${finalPrice.toFixed(2)}`;
+  } else {
+    document.getElementById('discount-row').classList.add('hidden');
+    document.getElementById('total-price').textContent = `$${price}`;
+  }
+}
+
+// Payment form submission
+document.getElementById('payment-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const submitButton = document.getElementById('submit-button');
+  const buttonText = document.getElementById('button-text');
+  const spinner = document.getElementById('spinner');
+  
+  // Disable submit button
+  submitButton.disabled = true;
+  buttonText.classList.add('hidden');
+  spinner.classList.remove('hidden');
+  
+  try {
+    // Create payment method
+    const { paymentMethod, error } = await stripe.createPaymentMethod({
+      type: 'card',
+      card: cardElement,
+      billing_details: {
+        name: document.getElementById('name').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value
+      }
+    });
+    
+    if (error) {
+      throw new Error(error.message);
+    }
+    
+    // Get form data
+    const plan = document.querySelector('input[name="plan"]:checked').value;
+    const belt = document.querySelector('input[name="belt"]:checked').value;
+    
+    const userData = {
+      name: document.getElementById('name').value,
+      email: document.getElementById('email').value,
+      phone: document.getElementById('phone').value,
+      password: document.getElementById('password').value,
+      belt: belt,
+      plan: plan,
+      paymentMethodId: paymentMethod.id,
+      referralCode: referralCode
+    };
+    
+    // Create subscription
+    const response = await fetch('/api/create-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData)
+    });
+    
+    const result = await response.json();
+    
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    
+    // Success! Redirect to dashboard or app
+    if (result.requiresAction) {
+      // Handle 3D Secure
+      const { error: confirmError } = await stripe.confirmCardPayment(result.clientSecret);
+      if (confirmError) {
+        throw new Error(confirmError.message);
+      }
+    }
+    
+    // Store user session
+    localStorage.setItem('userId', result.userId);
+    localStorage.setItem('userBelt', belt);
+    
+    // Redirect based on plan
+    if (plan === 'sms-only') {
+      window.location.href = '/dashboard?welcome=true';
+    } else {
+      window.location.href = '/app?welcome=true';
+    }
+    
+  } catch (error) {
+    console.error('Payment error:', error);
+    document.getElementById('card-errors').textContent = error.message;
+    
+    // Re-enable submit button
+    submitButton.disabled = false;
+    buttonText.classList.remove('hidden');
+    spinner.classList.add('hidden');
+  }
+});
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: BELT-COLORED SEND BUTTON (FOR MOBILE APP)
+═══════════════════════════════════════════════════════════════════════════════
+
+Update /components/MessageInput.jsx (create if doesn't exist):
+
+import React from 'react';
+import './MessageInput.css';
+
+function MessageInput({ value, onChange, onSend, onVoiceRecord, belt }) {
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
+  };
+  
+  return (
+    <div className="message-input-container">
+      <input
+        type="text"
+        className="message-input"
+        placeholder="Ask Prof. OS anything..."
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyPress={handleKeyPress}
+      />
+      <button 
+        className={`btn-send belt-${belt}`}
+        onClick={onSend}
+        disabled={!value.trim()}
+      >
+        <span className="send-icon">➤</span>
+      </button>
+    </div>
+  );
+}
+
+export default MessageInput;
+
+---
+
+Create /components/MessageInput.css:
+
+.message-input-container {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1rem;
+  background: var(--dark-gray);
+  border-top: 1px solid var(--border-gray);
+}
+
+.message-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background: var(--medium-gray);
+  border: 1px solid var(--border-gray);
+  border-radius: 24px;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.message-input:focus {
+  outline: none;
+  border-color: var(--primary-purple);
+}
+
+.btn-send {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.2s;
+}
+
+.btn-send:active {
+  transform: scale(0.95);
+}
+
+.btn-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Belt colors */
+.btn-send.belt-white {
+  background: #ffffff;
+  color: #000000;
+}
+
+.btn-send.belt-blue {
+  background: #1e40af;
+  color: #ffffff;
+}
+
+.btn-send.belt-purple {
+  background: #7c3aed;
+  color: #ffffff;
+}
+
+.btn-send.belt-brown {
+  background: #92400e;
+  color: #ffffff;
+}
+
+.btn-send.belt-black {
+  background: #000000;
+  color: #ffffff;
+  border: 1px solid #333333;
+}
+
+/* Stripes on send button */
+.btn-send:after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: repeating-linear-gradient(
+    to right,
+    white 0px,
+    white 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+/* Black belt gets red stripes */
+.btn-send.belt-black:after {
+  background: repeating-linear-gradient(
+    to right,
+    #dc2626 0px,
+    #dc2626 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+.send-icon {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After Command 2:
+
+1. Visit /signup
+2. Select a plan (SMS Only or Full AI)
+3. Apply referral code (20% discount should apply)
+4. Fill in account details + select belt
+5. Enter card details (use Stripe test card: 4242 4242 4242 4242)
+6. Complete signup
+7. Should redirect to app/dashboard
+8. Check that send button in app has correct belt color with stripes
+9. Black belt should have RED stripes (not white)
+
+Next: Command 3 will build web chat interface, Command 4 will build admin dashboard.
+```
+
+-----
+
+**📋 PASTE COMMAND 2 INTO REPLIT AGENT NOW**
+
+Let me know when complete and I’ll give you Command 3! 🥋​​​​​​​​​​​​​​​​

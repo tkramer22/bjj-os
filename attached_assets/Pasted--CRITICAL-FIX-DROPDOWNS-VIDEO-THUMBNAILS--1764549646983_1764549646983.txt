@@ -1,0 +1,91 @@
+```
+CRITICAL FIX: DROPDOWNS + VIDEO THUMBNAILS
+
+═══════════════════════════════════════════════════════════════════════════════
+PROBLEM 1: DROPDOWNS EMPTY
+═══════════════════════════════════════════════════════════════════════════════
+
+Admin panel shows "No techniques found" when clicking the Techniques dropdown.
+This was working before. Now it's broken.
+
+The database has 780+ videos. The dropdowns should be populated.
+
+DEBUG:
+1. Check /api/ai/techniques endpoint - is it returning data?
+2. Check /api/ai/instructors endpoint - is it returning data?
+3. Run these queries directly:
+   SELECT technique_name, COUNT(*) FROM ai_video_knowledge GROUP BY technique_name ORDER BY technique_name;
+   SELECT instructor, COUNT(*) FROM ai_video_knowledge GROUP BY instructor ORDER BY COUNT(*) DESC;
+4. Show me what the API endpoints return
+
+FIX:
+- Techniques dropdown: Show all techniques alphabetically with counts
+- Instructors dropdown: Show all instructors by count (highest first)
+- Both must work on ADMIN and USER interfaces
+
+═══════════════════════════════════════════════════════════════════════════════
+PROBLEM 2: VIDEO THUMBNAILS NOT DISPLAYING
+═══════════════════════════════════════════════════════════════════════════════
+
+Video thumbnails WERE displaying before. Now they're gone.
+
+This is a regression. Something broke them.
+
+DEBUG:
+1. Check if thumbnail_url is saved in database:
+   SELECT id, title, thumbnail_url FROM ai_video_knowledge LIMIT 10;
+
+2. Check frontend component rendering thumbnails - what changed?
+
+3. Check network tab - are thumbnail requests being made? Failing?
+
+FIX:
+- Restore thumbnail display exactly as it was before
+- If thumbnail_url missing from DB, backfill using:
+  https://img.youtube.com/vi/[YOUTUBE_ID]/mqdefault.jpg
+- Video cards should show thumbnail image prominently
+- Works on BOTH admin video browser AND user saved videos
+
+═══════════════════════════════════════════════════════════════════════════════
+PROBLEM 3: VIDEO COUNT DISCREPANCY  
+═══════════════════════════════════════════════════════════════════════════════
+
+Replit says 800+ videos
+Admin shows 781 / 208
+Need consistent count everywhere.
+
+Run: SELECT COUNT(*) FROM ai_video_knowledge;
+
+This is the source of truth.
+
+═══════════════════════════════════════════════════════════════════════════════
+WHAT IT SHOULD LOOK LIKE (RESTORE PREVIOUS STATE)
+═══════════════════════════════════════════════════════════════════════════════
+
+ADMIN VIDEO BROWSER:
+- Grid or list of videos with THUMBNAIL IMAGE visible for each
+- Techniques dropdown populated with all techniques + counts
+- Instructors dropdown populated with all instructors + counts
+- Click video to see details
+
+USER SAVED VIDEOS:
+- Grid or list with THUMBNAIL IMAGE visible for each saved video
+- Filter by technique (dropdown with counts)
+- Filter by instructor (dropdown with counts)
+- Clean, visual, easy to browse
+
+Thumbnails are critical - they make the library look real and valuable.
+
+═══════════════════════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Debug results showing what broke
+2. Fix dropdowns - techniques and instructors populated
+3. Fix thumbnails - displaying on all video cards
+4. Consistent video count everywhere
+5. Screenshot: Admin video browser with thumbnails + working dropdowns
+6. Screenshot: User video library with thumbnails + working dropdowns
+
+Do not change anything else. Just restore what was working.
+```

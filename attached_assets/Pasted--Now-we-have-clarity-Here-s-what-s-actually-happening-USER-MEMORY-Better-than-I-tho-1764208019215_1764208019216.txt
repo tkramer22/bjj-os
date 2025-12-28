@@ -1,0 +1,128 @@
+**Now we have clarity.** Here’s what’s actually happening:
+
+-----
+
+## USER MEMORY (Better than I thought)
+
+|Component           |Status     |Meaning                                  |
+|--------------------|-----------|-----------------------------------------|
+|User Profile        |✅ PERMANENT|Each user has permanent profile in DB    |
+|Full History        |✅ STORED   |ALL messages saved forever               |
+|Last 20 Loaded      |✅ By Design|Context window optimization - not a limit|
+|Patterns Auto-Detect|⚠️ Scheduled|System exists, needs user data           |
+|Population Learning |❌ NOT BUILT|Needs chat-to-technique extraction       |
+
+**Key insight:** Full history IS stored. Only last 20 loaded into Claude’s context window per call - that’s smart token management, not a memory limitation.
+
+-----
+
+## WHAT’S BROKEN
+
+|System             |Issue                                        |
+|-------------------|---------------------------------------------|
+|Curation           |❌ STOPPED - V2 freezes at startup, jobs fail |
+|Population Learning|❌ NOT BUILT - no chat-to-technique extraction|
+
+-----
+
+**Here’s the fix prompt:**
+
+```
+FIX BOTH BROKEN SYSTEMS
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 1: CURATION PIPELINE (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+The curation runs every 4 hours but freezes at startup. We have 10,000 YouTube quota sitting unused daily.
+
+1. Show me the V2 curation startup code and identify where it hangs
+2. Add detailed logging at each step to pinpoint the freeze
+3. Fix the freeze issue
+4. Run a test curation cycle and show live progress
+5. Confirm videos are being added
+
+Goal: Curation runs automatically every 4 hours and uses the full 10,000 daily quota.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 2: POPULATION LEARNING (BUILD IT)
+═══════════════════════════════════════════════════════════════════════════════
+
+We need Professor OS to LEARN from user conversations and update population_intelligence.
+
+BUILD THIS:
+
+1. CHAT-TO-TECHNIQUE EXTRACTION
+
+After each Professor OS response, analyze the conversation for:
+- Technique mentioned (triangle, armbar, hip bump, etc.)
+- Success/failure signal ("I finally hit it", "I keep failing", "it worked!", etc.)
+- Time indicators ("after 3 weeks", "first time", etc.)
+- User context (belt level, body type from profile)
+
+2. UPDATE user_technique_ecosystem
+
+When user reports success/failure:
+```sql
+INSERT INTO user_technique_ecosystem (user_id, technique_name, status, attempts, successes, last_updated)
+VALUES (...)
+ON CONFLICT (user_id, technique_name) 
+DO UPDATE SET attempts = attempts + 1, successes = successes + CASE WHEN success THEN 1 ELSE 0 END;
+```
+
+1. AGGREGATE TO population_intelligence
+
+Nightly job or triggered update:
+
+- Calculate success rates by belt level
+- Calculate average days to first success
+- Identify common mistakes from chat patterns
+- Update population_intelligence table
+
+1. EXAMPLE FLOW
+
+User: “I finally hit my first triangle today after 4 weeks of drilling!”
+
+System should:
+
+- Extract: technique=triangle, success=true, time=28 days
+- Update user_technique_ecosystem for this user
+- Eventually aggregate to population_intelligence
+
+1. ADD DIAGNOSTICS
+
+Log every extraction:
+
+```json
+{
+  "techniqueExtracted": "triangle",
+  "successSignal": true,
+  "timeIndicator": "4 weeks",
+  "userBelt": "blue",
+  "updatedTables": ["user_technique_ecosystem"]
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+CURATION:
+□ Freeze issue identified and fixed
+□ Test run completed successfully
+□ Videos added (show count)
+□ Auto-schedule confirmed working
+
+POPULATION LEARNING:
+□ Chat-to-technique extraction built
+□ user_technique_ecosystem updates working
+□ Aggregation to population_intelligence scheduled
+□ Test with sample message showing extraction works
+
+Then confirm: Ready for 145+ question test
+
+```
+---
+
+**Ready to send?**
+```

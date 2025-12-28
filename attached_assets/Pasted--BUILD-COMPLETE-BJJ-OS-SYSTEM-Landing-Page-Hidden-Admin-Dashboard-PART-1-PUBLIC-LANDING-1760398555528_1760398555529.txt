@@ -1,0 +1,675 @@
+```
+BUILD COMPLETE BJJ OS SYSTEM - Landing Page + Hidden Admin Dashboard
+
+=== PART 1: PUBLIC LANDING PAGE (bjjos.app) ===
+
+Build premium Japanese minimalist landing page at root (/):
+
+**Design System:**
+- Colors: Pure black (#000000), white (#FFFFFF), subtle gray (#A0A0A0), dark borders (#1A1A1A)
+- Typography: Inter font only, weights 400-700, huge headlines (96px desktop, 56px mobile)
+- Layout: Maximum whitespace, 1200px max-width, 8px grid alignment
+- NO gradients, NO shadows, NO decorations - brutal simplicity
+
+**Page Structure:**
+
+Hero Section:
+- Headline: "One Technique. Every Morning."
+- Subheading: "Stop searching YouTube. Get the key detail from elite instructors, timestamped and ready to drill."
+- Phone input + "Start Now" button (white with black text)
+- Small text: "Join 1,247 practitioners"
+
+Trust Bar:
+- "Elite instructors only • Key details that matter • Delivered at 8 AM"
+
+Problem/Solution (two columns):
+- Left: "The Problem" - wasting time on YouTube, no timestamps, bad advice
+- Right: "The Solution" - BJJ OS analyzes countless videos, finds elite instructors, extracts key details, sends exact timestamp
+
+Features (3 cards):
+1. "Elite Instructors Only" - Curates from Danaher, Gordon Ryan, Lachlan Giles, Bernardo Faria, etc.
+2. "Key Details, Not Tips" - Micro-adjustments that elite instructors use, specific angles and timing
+3. "One Per Day" - Discipline creates mastery, one technique from top instructor every morning
+
+How It Works (4 steps):
+1. Sign up (30 seconds)
+2. Tell us your belt and style (SMS, 3 questions)
+3. Receive first technique tomorrow at 8 AM
+4. Drill the key detail from elite instructor
+
+Pricing (side by side):
+- Monthly: $3.99/month
+- Annual: $29.99/year (Save $18)
+- "Cancel anytime. No contracts."
+
+Testimonials (3 quotes, minimal):
+- "Finally stopped wasting midnight hours on YouTube." - Marcus T., Purple Belt
+- "The key details from top instructors alone are worth $4/month." - Dev K., Brown Belt
+- "More progress in 30 days than 6 months of random videos." - Sarah M., Blue Belt
+
+FAQ (accordion, 6-8 questions):
+- Can I change my preferences?
+- What if I don't like a technique?
+- Which instructors do you feature? (Answer: "Elite instructors including John Danaher, Gordon Ryan, Lachlan Giles, Craig Jones, Bernardo Faria, Marcelo Garcia, and 40+ more top-level competitors and coaches.")
+- Can I pause my subscription?
+
+Footer:
+- BJJ OS logo (text only)
+- Terms • Privacy • Contact
+- © 2025
+
+Additional Pages:
+- /success - Black page, centered: "Check your phone. 📱"
+- /terms - Standard legal
+- /privacy - Standard privacy
+
+**Technical:**
+- Next.js 14 (app router)
+- Tailwind CSS
+- React Hook Form for phone input
+- Stripe Checkout integration
+- Lighthouse 95+ score
+- < 100KB page weight
+- Mobile responsive
+
+=== PART 2: HIDDEN ADMIN DASHBOARD (/admin) ===
+
+**Authentication:**
+- Login page at /admin/login
+- Password check against ADMIN_PASSWORD environment variable
+- Session-based auth
+- Logout button in header
+- All /admin/* routes protected
+
+**Design:**
+- Same black/white minimal design as main site
+- Left sidebar navigation
+- Clean sortable tables
+- Real-time stats
+- Export CSV buttons on all tables
+
+**SECTIONS TO BUILD:**
+
+--- 1. OVERVIEW DASHBOARD (/admin) ---
+
+Top Stats Cards:
+- Total Users
+- Active Subscribers (paid)
+- Free Users
+- MRR (Monthly Recurring Revenue)
+- Daily Techniques Sent Today
+- SMS Success Rate
+- Total Referral Revenue
+- Influencer Commissions Owed
+- Top Performing Referral Code
+
+Health Checks (status indicators):
+- Server Running
+- Database Connected
+- Twilio API Active
+- AI Service Responsive
+- Daily Scheduler Running
+- YouTube API Working
+
+Recent Activity Feed (last 50 events):
+- Signups, cancellations, SMS sent, errors, real-time updates
+
+Quick Actions:
+- Send Test Technique to My Phone
+- Generate Technique Preview
+- **ADD FREE USER (prominent button)**
+
+--- 2. ADD FREE USER (/admin/add-free-user) ---
+
+**CRITICAL FEATURE: Simple form to add free users**
+
+Form fields:
+- Phone number (required, with validation)
+- Name (optional)
+- Notes (optional - "Friend", "Influencer", "Test user", etc.)
+
+Button: "Add Free User"
+
+What happens when submitted:
+1. Creates user in database with subscription_status = "free"
+2. Sets subscription_type = "free_admin_grant"
+3. Sends immediate welcome SMS:
+
+"🥋 You've been given free access to BJJ OS!
+
+Every morning at 8 AM, you'll get ONE curated BJJ technique from elite instructors - timestamped and ready to drill.
+
+Quick setup (30 seconds):
+
+What belt are you?
+Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
+
+(You can opt out anytime by replying STOP)"
+
+4. Then continues with normal onboarding flow (belt, style, focus areas)
+5. NO PAYMENT required, NO Stripe involved
+6. User gets all features exactly like paid users
+7. Shows "FREE" badge next to their name in admin
+
+Admin can:
+- Convert free → paid later (button in user detail view)
+- Remove free access (changes to cancelled)
+- See list of all free users
+- Track which free users are most engaged (potential conversions)
+
+--- 3. USERS (/admin/users) ---
+
+User Table with columns:
+- Phone Number
+- Name (if provided)
+- Status Badge: "PAID" (green), "FREE" (blue), "TRIAL" (yellow), "CANCELLED" (red)
+- Belt Level
+- Style (Gi/NoGi/Both)
+- Subscription Status (free/trial/active/cancelled/paused)
+- Subscription Type (monthly/annual/free_admin_grant)
+- Days Subscribed
+- Referral Source (code used or "Direct" or "Free Admin Grant")
+- Last Technique Sent
+- Last Active
+- Total Techniques Received
+- Click Rate (%)
+- Actions (View, Edit, Message, Convert to Paid, Cancel)
+
+Filters:
+- Status (paid/free/trial/cancelled/paused)
+- Belt level
+- Subscription type
+- Referral source
+- Engagement level
+
+Quick filter buttons at top:
+- "Show Only Free Users"
+- "Show Only Paid Users"
+- "Show All Users"
+
+Search by phone number or name
+
+**User Detail View (modal/page):**
+- Full profile with all preferences
+- Subscription info:
+  * If FREE: Shows "Free access granted by admin on [date]" with button "Convert to Paid Subscription"
+  * If PAID: Shows billing info, next charge date, etc.
+- Referral info (if applicable)
+- If they referred others, show list
+- Technique history (all sent with click status)
+- SMS conversation history
+- Engagement stats graph
+- Admin notes section (editable)
+
+Manual actions:
+- Send custom technique
+- Update preferences (belt, style, focus areas)
+- Send custom SMS
+- Edit admin notes
+- Pause/Resume
+- If FREE: "Convert to Paid" button (creates Stripe subscription)
+- If PAID: "Make Free" button (cancels billing, keeps access)
+- Remove access (cancel completely)
+
+**Convert Free to Paid:**
+- Button: "Convert to Paid Subscription"
+- Modal: "Create paid subscription for this user?"
+- Options: Monthly ($3.99) or Annual ($29.99)
+- Creates Stripe subscription
+- Sends SMS: "Your free trial has ended. You've been upgraded to a paid subscription at $3.99/month. Reply CANCEL to stop billing."
+- OR: Generate payment link and send to user to complete themselves
+
+--- 4. TECHNIQUES (/admin/techniques) ---
+
+Sent Techniques Log (all techniques ever sent):
+- Date/Time
+- User Phone
+- User Type (FREE/PAID badge)
+- Technique Name
+- Category
+- Instructor
+- Video URL (clickable)
+- Clicked? (Yes/No)
+- Time to Click
+- User Feedback (if any)
+
+Filter by user type (free vs paid) to compare engagement
+
+Stats Dashboard:
+- Most clicked techniques
+- Top performing instructors (by engagement)
+- Best performing categories
+- Worst performing (flagged techniques)
+- Average click rate (overall, free users, paid users comparison)
+- Click rate trend over time
+
+Generate New Technique:
+- Manual technique generator form
+- Inputs: Technique name, belt level, style
+- Generates preview
+- Test send to admin phone
+
+Flagged Videos:
+- When user replies "BAD", log here
+- Show: Video, instructor, how many flags
+- Actions: Remove from rotation, blacklist instructor
+- Auto-remove if 3+ flags
+
+Instructor Management:
+- Whitelist (preferred instructors)
+- Blacklist (never use)
+- Priority list (prefer these)
+
+--- 5. REFERRALS (/admin/referrals) ---
+
+**Two Tabs:**
+
+Tab 1: Influencer Codes (25% commission)
+
+Bulk Code Generator:
+- Text area: "Paste codes (one per line)"
+- Input: Default commission rate (25%)
+- Button: "Generate All Codes"
+- Example:
+  GORDONRYAN
+  LACHLAN
+  BERNARDO
+
+Single Code Generator:
+- Code name
+- Influencer name
+- Commission rate (default 25%)
+- Max uses (optional)
+- Button: "Generate Code"
+
+Influencer Performance Table:
+Columns:
+- Code
+- Influencer Name
+- Total Signups
+- Active Subscribers (PAID only, free users don't count for commission)
+- Cancelled Subscribers
+- Retention Rate (%)
+- Monthly Revenue (active PAID subs × $3.99)
+- Commission Rate
+- Monthly Commission Owed
+- Lifetime Commission Paid
+- Last Signup Date
+- Status (Active/Inactive toggle)
+- Actions (View Users, Edit, Deactivate)
+
+Click "View Users" shows all users from that code with their status and revenue
+
+Export Monthly Payout:
+- Button: "Export Payout Report"
+- Generates CSV with all influencers and amounts owed
+- Option to "Mark as Paid" (resets monthly owed, tracks in history)
+
+Payout History:
+- Table of past payouts (date, amount, influencers paid)
+
+Tab 2: User Referrals (free month system)
+- Users who have referred others
+- How many referrals each has
+- Free months earned
+- Success rate
+
+--- 6. REVENUE (/admin/revenue) ---
+
+Financial Dashboard:
+- Total Revenue (all time, PAID users only)
+- MRR (Monthly Recurring Revenue, PAID only)
+- MRR Growth Rate
+- Average Revenue Per User (PAID users only)
+- Lifetime Value
+- Churn Rate
+- Total Free Users (cost center, not revenue)
+
+Revenue Attribution (PAID users only):
+- Direct Signups: $X,XXX (XX%)
+- User Referrals: $X,XXX (XX%)
+- Influencer Referrals: $X,XXX (XX%)
+
+Free Users Section:
+- Total free users active
+- Potential MRR if all converted: [count × $3.99]
+- Most engaged free users (conversion candidates)
+- Conversion rate (free → paid over time)
+
+Subscription Breakdown:
+- Monthly vs Annual split (PAID)
+- Free vs Paid split
+- New vs Existing
+
+Monthly Events:
+- New paid signups
+- New free users added
+- Cancellations
+- Conversions (free → paid)
+- Upgrades (monthly to annual)
+- Failed payments
+
+Cost Tracking:
+- Twilio costs (all users, free + paid)
+- AI API costs (all users)
+- Infrastructure costs
+- Influencer commissions owed
+- Total costs
+- Cost per user (including free)
+- Net profit
+
+Projections:
+- At current growth rate, MRR in 6 months
+- If X% of free users convert: projected MRR
+- Break-even date
+- Profit margin per paid user
+
+--- 7. ENGAGEMENT (/admin/engagement) ---
+
+Overall Metrics:
+- Click-through rate (overall, free vs paid comparison)
+- Average time to click
+- Response rate to SMS
+- Weekly recap engagement
+
+User Segments (separate free and paid):
+- Power Users (>80% click rate) - Free: X, Paid: Y
+- Engaged (50-80%)
+- At Risk (<50% clicks or no clicks in 14+ days)
+- Churned (cancelled)
+
+Free User Conversion Tracking:
+- Most engaged free users (potential conversions)
+- Free users ready to convert (high engagement, 30+ days)
+- Suggested conversion targets
+
+Retention Dashboard:
+- Cohort analysis (retention by signup month, free vs paid)
+- Churn reasons (if collected)
+- Lifetime value by cohort
+
+At-Risk Users:
+- List of users who haven't clicked in 14+ days
+- Separate free and paid users
+- Quick action: "Send check-in message"
+
+SMS Command Usage:
+- Most used commands
+- Common questions
+- Feedback themes
+
+--- 8. SUPPORT (/admin/support) ---
+
+User Messages Inbox:
+- All FEEDBACK messages
+- Unknown command messages
+- Flagged for review
+- Shows user type (FREE/PAID badge)
+- Status: New/Responded/Resolved
+- Actions: Reply via SMS, mark resolved
+
+Common Issues Quick Actions:
+- "Didn't receive technique" → check logs, resend
+- "Wrong belt level" → update preferences
+- "Want to upgrade to paid" → send payment link
+
+Saved Response Templates:
+- Common responses
+- One-click send
+- Personalize before sending
+
+Conversation History:
+- Search any user's full SMS history
+- See entire conversation thread
+
+--- 9. QUALITY (/admin/quality) ---
+
+Flagged Videos:
+- Videos users marked as "BAD"
+- Flag count per video
+- Shows if flags came from free or paid users
+- Actions: Remove, blacklist instructor, review
+
+Video Performance:
+- Highest click rate videos
+- Lowest click rate videos
+- Performance by instructor
+- Performance by category
+- Compare free user engagement vs paid
+
+Instructor Performance:
+- List all instructors used
+- Average engagement per instructor
+- Total techniques sent per instructor
+- Actions: Add to priority list, blacklist
+
+Quality Thresholds:
+- Auto-remove videos with 3+ flags
+- Alert if overall click rate drops below 40%
+
+--- 10. AUTOMATIONS (/admin/automations) ---
+
+Automated Workflows:
+
+Active Workflows:
+- If user hasn't clicked 7 consecutive days → "Not finding value? Reply FEEDBACK or PAUSE"
+- If paid user cancels → "Sorry to see you go. What could we improve?"
+- If free user requests STOP → Remove from system, send: "You've been removed from BJJ OS. Thanks for trying it out."
+- 30 days before annual renewal → "Your subscription renews [date]. Reply CANCEL to stop or PREFERENCES to update"
+- If 3+ users flag same video → auto-remove from rotation
+
+Free User Conversion Prompts:
+- After 30 days + high engagement (>70% click rate) → "Loving BJJ OS? Upgrade to annual for $29.99/year: [link]"
+- Don't spam - max one conversion prompt per free user
+
+Re-engagement (cancelled paid users only):
+- 60 days after cancel → "We've improved BJJ OS. Want to try again? First week free."
+- If no response, never message again
+
+Schedule Overview:
+- Daily techniques scheduler
+- Weekly recap scheduler
+- Check-in messages queue
+
+Manual Triggers:
+- Test any automation
+- Send custom broadcast
+- Skip scheduled send
+
+--- 11. COMPETITION MODE (/admin/competitions) ---
+
+Active Competitions:
+- List of users in comp mode (free and paid)
+- Competition date
+- Days remaining
+- Progress
+
+Stats:
+- How many users use comp mode
+- Retention during comp mode
+- Conversion after comp ends
+
+Manual Actions:
+- Add user to comp mode
+- Update comp date
+
+--- 12. WEEKLY RECAPS (/admin/recaps) ---
+
+Next Recap Info:
+- Send time
+- How many users will receive (free + paid count)
+- Preview of upcoming recap
+
+Performance:
+- Opt-out rate
+- Engagement with recaps
+
+Manual Actions:
+- Send test recap to admin
+- Skip this week
+- Send custom recap
+
+--- 13. SYSTEM (/admin/system) ---
+
+Error Logs:
+- SMS send failures
+- AI generation errors
+- API failures
+- Database errors
+- Filter by type, date, component
+
+Activity Logs:
+- Admin actions (especially "added free user")
+- System events
+- Scheduled jobs
+- API usage
+
+API Monitoring:
+- Twilio: Messages sent (free + paid), cost this month, cost per user type
+- AI API: Calls made, tokens used, cost
+- YouTube API: Quota remaining
+- Stripe: Transaction volume (paid only)
+- Alerts when approaching limits
+
+Backups:
+- One-click database backup
+- Schedule automatic backups
+- Restore from backup
+
+--- 14. SETTINGS (/admin/settings) ---
+
+SMS Configuration:
+- Default send time (8:00 AM)
+- Twilio phone number
+- Message templates (edit onboarding texts, including free user welcome)
+
+Free User Settings:
+- Customize free user welcome message
+- Enable/disable free user conversions
+- Auto-conversion prompts (on/off)
+
+AI Configuration:
+- Preferred instructors
+- Quality thresholds
+- Video search parameters
+- Duplicate prevention window (90 days)
+
+Scheduling:
+- Daily technique default time
+- Weekly recap time (Sunday 6 PM)
+- Timezone handling
+
+Feature Flags:
+- Enable/disable weekly recaps
+- Enable/disable competition mode
+- Enable/disable referrals
+- Enable/disable free user conversion prompts
+- Maintenance mode (pause all sends)
+
+Broadcast Tools:
+- Send announcement to all users (or just free, or just paid)
+- Schedule maintenance message
+- Emergency stop
+
+--- 15. ANALYTICS (/admin/analytics) ---
+
+Growth Metrics:
+- Daily new signups (free vs paid breakdown)
+- Growth rate
+- Conversion funnel
+- Free → paid conversion rate over time
+
+User Behavior:
+- Most active times
+- Command usage patterns
+- Feature adoption
+- Free vs paid engagement comparison
+
+Content Performance:
+- Which techniques get best engagement
+- Category preferences by belt level
+- Instructor popularity
+- Free user preferences vs paid
+
+Referral Analytics:
+- Top performing codes
+- Referral quality score
+- Revenue per code
+- Lifetime value by source
+
+Conversion Analytics:
+- Which free users are most likely to convert
+- Best time to prompt conversion
+- Conversion rate by engagement level
+- Revenue from converted free users
+
+--- 16. EXPORTS (/admin/exports) ---
+
+Export Options:
+- All users data (CSV) - with free/paid indicator
+- Free users only (CSV)
+- Paid users only (CSV)
+- All techniques sent (CSV)
+- Revenue data (CSV)
+- Referral data (CSV)
+- Influencer payout report (CSV)
+
+GDPR Tools:
+- Export specific user data
+- Delete user data completely (works for free and paid)
+- Data retention policy
+
+=== DATABASE REQUIREMENTS ===
+
+Update bjj_users table to include:
+- subscription_status: 'free' | 'trial' | 'active' | 'cancelled' | 'paused'
+- subscription_type: 'monthly' | 'annual' | 'free_admin_grant'
+- granted_free_by: 'admin' (for tracking)
+- free_granted_date: timestamp
+- admin_notes: text field (for notes about why they're free)
+- can_convert_to_paid: boolean (default true)
+
+All other tables stay the same, but queries should:
+- Filter free users out of revenue calculations
+- Include free users in engagement metrics
+- Track free users separately in analytics
+
+=== FREE USER FLOW ===
+
+1. Admin adds phone number via "Add Free User" form
+2. System creates user with subscription_status = 'free'
+3. Immediate SMS sent with custom welcome message for free users
+4. Normal onboarding (belt, style, preferences)
+5. User receives daily techniques exactly like paid users
+6. NO billing, NO Stripe, NO payment info needed
+7. Admin can convert to paid anytime
+8. User can opt out anytime with STOP
+
+Free users have ALL features:
+- Daily techniques
+- Weekly recaps
+- Competition mode
+- All SMS commands
+- Same quality as paid users
+
+Only difference: No billing, admin can revoke access anytime
+
+=== SECURITY ===
+
+- All /admin routes require authentication
+- ADMIN_PASSWORD environment variable
+- Session timeout after 24 hours
+- CSRF protection
+- Rate limiting
+- Log all admin actions (especially adding free users)
+
+=== DEPLOYMENT ===
+
+- Build for Vercel
+- Connect bjjos.app domain
+- /admin hidden (no public links)
+- All environment variables configured
+- Production error handling
+
+BUILD THIS COMPLETE SYSTEM with special focus on the free user management system. Make it incredibly easy to add free users - just phone number and click. They get full access, you maintain control, and can convert them to paid whenever appropriate.
+```

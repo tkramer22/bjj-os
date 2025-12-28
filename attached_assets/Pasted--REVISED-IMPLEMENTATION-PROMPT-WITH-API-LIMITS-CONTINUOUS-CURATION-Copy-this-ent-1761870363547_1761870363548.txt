@@ -1,0 +1,1110 @@
+# **REVISED IMPLEMENTATION PROMPT - WITH API LIMITS & CONTINUOUS CURATION** 🚀
+
+-----
+
+Copy this entire block and paste into Replit Agent:
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+INTELLIGENT VIDEO RECOMMENDATION SYSTEM + CONTINUOUS CURATION
+COMPLETE IMPLEMENTATION WITH API RATE LIMITING
+═══════════════════════════════════════════════════════════════════════════════
+
+MISSION: 
+1. Transform video recommendation to show best content first with strategic repetition
+2. Implement continuous auto-curation that respects daily API limits
+3. Run curation daily until we reach 2,000 videos in database
+
+CORE PHILOSOPHY:
+• Curate permissively (6.0+ credibility threshold)
+• Curate continuously (daily until 2,000 videos reached)
+• Respect API limits (stop at daily max, restart at 12:01 AM)
+• Recommend intelligently (show best content first)
+• Repeat transparently (tell user when showing video again)
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 1: DATABASE SCHEMA UPDATES
+═══════════════════════════════════════════════════════════════════════════════
+
+Add new tables and columns to support intelligent recommendations and curation tracking:
+
+```sql
+-- 1. Add video tier column
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS tier VARCHAR(20);
+
+-- Update existing videos with tier based on credibility
+UPDATE videos 
+SET tier = CASE 
+  WHEN instructor_credibility >= 7.5 THEN 'elite'
+  WHEN instructor_credibility >= 6.5 THEN 'verified'
+  WHEN instructor_credibility >= 6.0 THEN 'acceptable'
+  ELSE 'excluded'
+END
+WHERE tier IS NULL;
+
+-- Create index for fast tier filtering
+CREATE INDEX IF NOT EXISTS idx_video_tier ON videos(tier);
+CREATE INDEX IF NOT EXISTS idx_video_credibility ON videos(instructor_credibility DESC);
+
+-- 2. Create video_views table to track watch history
+CREATE TABLE IF NOT EXISTS video_views (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  video_id INTEGER REFERENCES videos(id) ON DELETE CASCADE,
+  viewed_at TIMESTAMP DEFAULT NOW(),
+  watch_duration INTEGER DEFAULT 0, -- seconds watched
+  completed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_video_views_user ON video_views(user_id);
+CREATE INDEX IF NOT EXISTS idx_video_views_video ON video_views(video_id);
+CREATE INDEX IF NOT EXISTS idx_video_views_user_video ON video_views(user_id, video_id);
+CREATE INDEX IF NOT EXISTS idx_video_views_viewed_at ON video_views(viewed_at);
+
+-- 3. Create user_video_stats table for aggregated stats (performance optimization)
+CREATE TABLE IF NOT EXISTS user_video_stats (
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  video_id INTEGER REFERENCES videos(id) ON DELETE CASCADE,
+  view_count INTEGER DEFAULT 0,
+  first_viewed_at TIMESTAMP,
+  last_viewed_at TIMESTAMP,
+  total_watch_time INTEGER DEFAULT 0,
+  PRIMARY KEY (user_id, video_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_video_stats_user ON user_video_stats(user_id);
+
+-- 4. Add user tier tracking columns
+ALTER TABLE users ADD COLUMN IF NOT EXISTS videos_watched_count INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS recommendation_tier VARCHAR(20) DEFAULT 'new_user';
+
+-- Update existing users based on their activity
+UPDATE users 
+SET videos_watched_count = COALESCE((
+  SELECT COUNT(DISTINCT video_id) 
+  FROM video_views 
+  WHERE video_views.user_id = users.id
+), 0);
+
+UPDATE users
+SET recommendation_tier = CASE
+  WHEN videos_watched_count >= 50 THEN 'power_user'
+  WHEN videos_watched_count >= 10 THEN 'established_user'
+  ELSE 'new_user'
+END;
+
+-- 5. Create curation_runs table to track daily API usage
+CREATE TABLE IF NOT EXISTS curation_runs (
+  id SERIAL PRIMARY KEY,
+  run_date DATE NOT NULL UNIQUE,
+  videos_added INTEGER DEFAULT 0,
+  api_calls_used INTEGER DEFAULT 0,
+  youtube_api_calls INTEGER DEFAULT 0,
+  claude_api_calls INTEGER DEFAULT 0,
+  gpt_api_calls INTEGER DEFAULT 0,
+  status VARCHAR(50) DEFAULT 'in_progress', -- in_progress, completed, failed, rate_limited
+  started_at TIMESTAMP DEFAULT NOW(),
+  completed_at TIMESTAMP,
+  error_message TEXT,
+  notes TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_curation_runs_date ON curation_runs(run_date DESC);
+
+-- 6. Create curation_config table for dynamic configuration
+CREATE TABLE IF NOT EXISTS curation_config (
+  key VARCHAR(100) PRIMARY KEY,
+  value TEXT NOT NULL,
+  description TEXT,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Insert default configuration
+INSERT INTO curation_config (key, value, description) VALUES
+  ('target_total_videos', '2000', 'Stop curation when this many videos are in database'),
+  ('credibility_threshold', '6.0', 'Minimum instructor credibility to include video'),
+  ('daily_video_target', '50', 'Target number of videos to add per day'),
+  ('youtube_api_daily_limit', '10000', 'YouTube API quota per day'),
+  ('claude_api_daily_limit', '1000', 'Claude API calls per day for video analysis'),
+  ('gpt_api_daily_limit', '500', 'GPT-4o API calls per day for pre-filtering'),
+  ('curation_enabled', 'true', 'Master switch for auto-curation'),
+  ('curation_start_hour', '0', 'Hour to start daily curation (0-23, 0 = midnight)'),
+  ('elite_tier_threshold', '7.5', 'Credibility threshold for elite tier'),
+  ('verified_tier_threshold', '6.5', 'Credibility threshold for verified tier')
+ON CONFLICT (key) DO NOTHING;
+
+-- 7. Add video recommendation metadata
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS recommendation_count INTEGER DEFAULT 0;
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0;
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS avg_watch_duration INTEGER DEFAULT 0;
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS repeat_recommendation_count INTEGER DEFAULT 0;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 2: VIDEO VIEW TRACKING SERVICE
+═══════════════════════════════════════════════════════════════════════════════
+
+Create: server/services/videoViewTracking.ts
+
+```typescript
+import { db } from '../db';
+import { videoViews, userVideoStats, videos, users } from '../db/schema';
+import { eq, and, sql } from 'drizzle-orm';
+
+export class VideoViewTrackingService {
+  
+  /**
+   * Record when a user views a video
+   * Updates both video_views and user_video_stats
+   */
+  static async recordView(userId: number, videoId: number, watchDuration: number = 0, completed: boolean = false) {
+    try {
+      // 1. Insert view record
+      await db.insert(videoViews).values({
+        userId,
+        videoId,
+        watchDuration,
+        completed,
+        viewedAt: new Date()
+      });
+
+      // 2. Update or create aggregated stats
+      const existing = await db.query.userVideoStats.findFirst({
+        where: and(
+          eq(userVideoStats.userId, userId),
+          eq(userVideoStats.videoId, videoId)
+        )
+      });
+
+      if (existing) {
+        // Update existing stats
+        await db.update(userVideoStats)
+          .set({
+            viewCount: sql`${userVideoStats.viewCount} + 1`,
+            lastViewedAt: new Date(),
+            totalWatchTime: sql`${userVideoStats.totalWatchTime} + ${watchDuration}`
+          })
+          .where(and(
+            eq(userVideoStats.userId, userId),
+            eq(userVideoStats.videoId, videoId)
+          ));
+      } else {
+        // Create new stats
+        await db.insert(userVideoStats).values({
+          userId,
+          videoId,
+          viewCount: 1,
+          firstViewedAt: new Date(),
+          lastViewedAt: new Date(),
+          totalWatchTime: watchDuration
+        });
+      }
+
+      // 3. Update user's total videos watched count
+      await db.update(users)
+        .set({
+          videosWatchedCount: sql`${users.videosWatchedCount} + 1`
+        })
+        .where(eq(users.id, userId));
+
+      // 4. Update user's recommendation tier based on watch count
+      await this.updateUserTier(userId);
+
+      // 5. Update video's view count
+      await db.update(videos)
+        .set({
+          viewCount: sql`${videos.viewCount} + 1`
+        })
+        .where(eq(videos.id, videoId));
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error recording video view:', error);
+      return { success: false, error };
+    }
+  }
+
+  /**
+   * Update user's recommendation tier based on videos watched
+   */
+  static async updateUserTier(userId: number) {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { videosWatchedCount: true }
+    });
+
+    if (!user) return;
+
+    let newTier = 'new_user';
+    if (user.videosWatchedCount >= 50) {
+      newTier = 'power_user';
+    } else if (user.videosWatchedCount >= 10) {
+      newTier = 'established_user';
+    }
+
+    await db.update(users)
+      .set({ recommendationTier: newTier })
+      .where(eq(users.id, userId));
+  }
+
+  /**
+   * Get user's watch history for a specific video
+   */
+  static async getUserVideoHistory(userId: number, videoId: number) {
+    const stats = await db.query.userVideoStats.findFirst({
+      where: and(
+        eq(userVideoStats.userId, userId),
+        eq(userVideoStats.videoId, videoId)
+      )
+    });
+
+    return stats || {
+      viewCount: 0,
+      firstViewedAt: null,
+      lastViewedAt: null,
+      totalWatchTime: 0
+    };
+  }
+
+  /**
+   * Get all videos a user has watched
+   */
+  static async getUserWatchHistory(userId: number, limit: number = 50) {
+    const history = await db.query.userVideoStats.findMany({
+      where: eq(userVideoStats.userId, userId),
+      with: {
+        video: true
+      },
+      orderBy: (stats, { desc }) => [desc(stats.lastViewedAt)],
+      limit
+    });
+
+    return history;
+  }
+
+  /**
+   * Check if a video should be repeated for this user
+   */
+  static async shouldRepeatVideo(userId: number, videoId: number, videoCredibility: number): Promise<{
+    shouldRepeat: boolean;
+    reason?: string;
+    daysSinceLastView?: number;
+  }> {
+    // Only consider repetition for elite videos (>8.5 credibility)
+    if (videoCredibility < 8.5) {
+      return { shouldRepeat: false };
+    }
+
+    const history = await this.getUserVideoHistory(userId, videoId);
+
+    // Never seen it? Not a repeat
+    if (history.viewCount === 0) {
+      return { shouldRepeat: false };
+    }
+
+    // Seen 3+ times? Don't repeat
+    if (history.viewCount >= 3) {
+      return { shouldRepeat: false };
+    }
+
+    // Check days since last view
+    const daysSinceLastView = history.lastViewedAt 
+      ? Math.floor((Date.now() - new Date(history.lastViewedAt).getTime()) / (1000 * 60 * 60 * 24))
+      : 999;
+
+    // Repeat if >7 days since last view
+    if (daysSinceLastView >= 7) {
+      return { 
+        shouldRepeat: true, 
+        reason: 'repetition_for_mastery',
+        daysSinceLastView 
+      };
+    }
+
+    return { shouldRepeat: false, daysSinceLastView };
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 3: INTELLIGENT RECOMMENDATION ENGINE
+═══════════════════════════════════════════════════════════════════════════════
+
+Create: server/services/videoRecommendation.ts
+
+```typescript
+import { db } from '../db';
+import { videos, users } from '../db/schema';
+import { eq, and, gte, inArray, notInArray, sql, desc } from 'drizzle-orm';
+import { VideoViewTrackingService } from './videoViewTracking';
+
+interface RecommendationContext {
+  userId: number;
+  query: string;
+  technique?: string;
+  position?: string;
+  beltLevel?: string;
+  excludeVideoIds?: number[];
+}
+
+interface VideoRecommendation {
+  video: any;
+  isRepeat: boolean;
+  tier: string;
+  message?: string;
+  repeatReason?: string;
+  viewCount?: number;
+  daysSinceLastView?: number;
+}
+
+export class VideoRecommendationService {
+  
+  /**
+   * Get recommended videos for a user based on their tier and history
+   */
+  static async getRecommendations(context: RecommendationContext, limit: number = 5): Promise<VideoRecommendation[]> {
+    const { userId, query, technique, position, beltLevel, excludeVideoIds = [] } = context;
+
+    // 1. Get user's recommendation tier
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: {
+        recommendationTier: true,
+        videosWatchedCount: true
+      }
+    });
+
+    const userTier = user?.recommendationTier || 'new_user';
+
+    // 2. Determine which video tiers to show based on user tier
+    const allowedTiers = this.getAllowedTiers(userTier);
+
+    // 3. Build query for relevant videos
+    let whereConditions: any[] = [
+      inArray(videos.tier, allowedTiers)
+    ];
+
+    if (technique) {
+      whereConditions.push(eq(videos.techniqueCategory, technique));
+    }
+
+    if (position) {
+      whereConditions.push(eq(videos.position, position));
+    }
+
+    if (beltLevel) {
+      // Filter by belt level (you may need to add this column)
+      // whereConditions.push(sql`${videos.beltLevel} <= ${beltLevel}`);
+    }
+
+    if (excludeVideoIds.length > 0) {
+      whereConditions.push(notInArray(videos.id, excludeVideoIds));
+    }
+
+    // 4. Fetch candidate videos
+    const candidates = await db.query.videos.findMany({
+      where: and(...whereConditions),
+      orderBy: [desc(videos.instructorCredibility)],
+      limit: limit * 3 // Get more candidates to allow for repetition logic
+    });
+
+    // 5. Process each candidate for repetition logic
+    const recommendations: VideoRecommendation[] = [];
+
+    for (const video of candidates) {
+      if (recommendations.length >= limit) break;
+
+      // Check if this video should be repeated
+      const repetitionCheck = await VideoViewTrackingService.shouldRepeatVideo(
+        userId, 
+        video.id, 
+        video.instructorCredibility
+      );
+
+      const history = await VideoViewTrackingService.getUserVideoHistory(userId, video.id);
+
+      recommendations.push({
+        video,
+        isRepeat: repetitionCheck.shouldRepeat,
+        tier: video.tier,
+        message: repetitionCheck.shouldRepeat 
+          ? this.generateRepetitionMessage(video, history.viewCount, repetitionCheck.daysSinceLastView)
+          : undefined,
+        repeatReason: repetitionCheck.reason,
+        viewCount: history.viewCount,
+        daysSinceLastView: repetitionCheck.daysSinceLastView
+      });
+    }
+
+    // 6. Sort by tier priority (elite first), then by credibility
+    recommendations.sort((a, b) => {
+      const tierPriority = { elite: 3, verified: 2, acceptable: 1 };
+      const tierDiff = tierPriority[b.tier] - tierPriority[a.tier];
+      if (tierDiff !== 0) return tierDiff;
+      return b.video.instructorCredibility - a.video.instructorCredibility;
+    });
+
+    return recommendations;
+  }
+
+  /**
+   * Determine which video tiers a user should see based on their recommendation tier
+   */
+  private static getAllowedTiers(userTier: string): string[] {
+    switch (userTier) {
+      case 'new_user':
+        // Only show elite content to new users
+        return ['elite'];
+      
+      case 'established_user':
+        // Show mostly elite, some verified (algorithm will prioritize elite)
+        return ['elite', 'verified'];
+      
+      case 'power_user':
+        // Show everything - they've earned it
+        return ['elite', 'verified', 'acceptable'];
+      
+      default:
+        return ['elite'];
+    }
+  }
+
+  /**
+   * Generate natural language message for repeated video recommendations
+   */
+  private static generateRepetitionMessage(video: any, viewCount: number, daysSinceLastView?: number): string {
+    const instructor = video.instructorName;
+    const messages = [
+      `I've recommended ${instructor}'s approach before, and it's worth revisiting. This is elite-level instruction—watch for the details at key moments.`,
+      
+      `You've seen this ${instructor} video before, but repetition is how mastery happens. Pay attention to the specific techniques and timing this time.`,
+      
+      `This is your ${viewCount === 1 ? 'second' : viewCount === 2 ? 'third' : 'another'} time seeing ${instructor}'s technique. That's intentional—this is genuinely the best approach for your situation.`,
+      
+      `I know I've shown you ${instructor} before (${daysSinceLastView} days ago), but this video is that good. Focus on how they break down the technique step-by-step.`,
+      
+      `Bringing you back to ${instructor}'s instruction. Elite competitors watch the same techniques multiple times to refine their understanding.`,
+    ];
+
+    return messages[Math.floor(Math.random() * messages.length)];
+  }
+
+  /**
+   * Get user's recommendation tier info for display
+   */
+  static async getUserTierInfo(userId: number) {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: {
+        recommendationTier: true,
+        videosWatchedCount: true
+      }
+    });
+
+    if (!user) return null;
+
+    const tierInfo = {
+      tier: user.recommendationTier,
+      videosWatched: user.videosWatchedCount,
+      description: '',
+      allowedTiers: this.getAllowedTiers(user.recommendationTier)
+    };
+
+    switch (user.recommendationTier) {
+      case 'new_user':
+        tierInfo.description = 'You\'re seeing only elite instructors (world champions and ADCC medalists) to build your foundation.';
+        break;
+      case 'established_user':
+        tierInfo.description = 'You now have access to both elite instructors and verified black belts.';
+        break;
+      case 'power_user':
+        tierInfo.description = 'You have access to our complete library. The system personalizes based on what works for you.';
+        break;
+    }
+
+    return tierInfo;
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 4: CONTINUOUS CURATION SERVICE WITH API LIMITS
+═══════════════════════════════════════════════════════════════════════════════
+
+Create: server/services/continuousCuration.ts
+
+```typescript
+import { db } from '../db';
+import { videos, curationRuns, curationConfig } from '../db/schema';
+import { eq, sql } from 'drizzle-orm';
+
+export class ContinuousCurationService {
+  
+  /**
+   * Main curation function - runs daily until 2,000 videos reached
+   * Respects API daily limits and restarts at 12:01 AM
+   */
+  static async runDailyCuration() {
+    try {
+      console.log('🎬 Starting daily curation run...');
+
+      // 1. Check if we've reached target video count
+      const config = await this.getConfig();
+      const targetVideos = parseInt(config.target_total_videos);
+      const credibilityThreshold = parseFloat(config.credibility_threshold);
+      
+      const currentVideoCount = await db.select({ count: sql<number>`count(*)` })
+        .from(videos);
+      const totalVideos = Number(currentVideoCount[0].count);
+
+      console.log(`📊 Current videos: ${totalVideos} / Target: ${targetVideos}`);
+
+      if (totalVideos >= targetVideos) {
+        console.log('🎉 Target video count reached! Stopping curation.');
+        await this.updateConfig('curation_enabled', 'false');
+        return {
+          success: true,
+          message: 'Target reached',
+          totalVideos
+        };
+      }
+
+      // 2. Check if curation is enabled
+      if (config.curation_enabled !== 'true') {
+        console.log('⏸️  Curation is disabled in config.');
+        return {
+          success: false,
+          message: 'Curation disabled'
+        };
+      }
+
+      // 3. Get or create today's curation run
+      const today = new Date().toISOString().split('T')[0];
+      let todayRun = await db.query.curationRuns.findFirst({
+        where: eq(curationRuns.runDate, today)
+      });
+
+      if (!todayRun) {
+        const [newRun] = await db.insert(curationRuns).values({
+          runDate: today,
+          status: 'in_progress'
+        }).returning();
+        todayRun = newRun;
+      }
+
+      // 4. Check if we've hit API limits today
+      const dailyLimits = {
+        youtube: parseInt(config.youtube_api_daily_limit),
+        claude: parseInt(config.claude_api_daily_limit),
+        gpt: parseInt(config.gpt_api_daily_limit)
+      };
+
+      if (todayRun.youtubeApiCalls >= dailyLimits.youtube ||
+          todayRun.claudeApiCalls >= dailyLimits.claude ||
+          todayRun.gptApiCalls >= dailyLimits.gpt) {
+        console.log('⚠️  Daily API limits reached. Waiting for midnight reset...');
+        await db.update(curationRuns)
+          .set({ status: 'rate_limited' })
+          .where(eq(curationRuns.id, todayRun.id));
+        
+        return {
+          success: false,
+          message: 'Daily API limit reached',
+          limitsUsed: {
+            youtube: `${todayRun.youtubeApiCalls} / ${dailyLimits.youtube}`,
+            claude: `${todayRun.claudeApiCalls} / ${dailyLimits.claude}`,
+            gpt: `${todayRun.gptApiCalls} / ${dailyLimits.gpt}`
+          }
+        };
+      }
+
+      // 5. Calculate how many videos we can add today
+      const dailyTarget = parseInt(config.daily_video_target);
+      const videosToAdd = Math.min(
+        dailyTarget - todayRun.videosAdded,
+        targetVideos - totalVideos
+      );
+
+      if (videosToAdd <= 0) {
+        console.log('✅ Daily target already reached.');
+        return {
+          success: true,
+          message: 'Daily target reached',
+          videosAdded: todayRun.videosAdded
+        };
+      }
+
+      console.log(`🎯 Target: Add ${videosToAdd} videos today`);
+
+      // 6. Run the actual curation
+      const result = await this.curateVideos({
+        maxVideos: videosToAdd,
+        credibilityThreshold,
+        dailyLimits: {
+          youtube: dailyLimits.youtube - todayRun.youtubeApiCalls,
+          claude: dailyLimits.claude - todayRun.claudeApiCalls,
+          gpt: dailyLimits.gpt - todayRun.gptApiCalls
+        }
+      });
+
+      // 7. Update curation run with results
+      await db.update(curationRuns)
+        .set({
+          videosAdded: sql`${curationRuns.videosAdded} + ${result.videosAdded}`,
+          youtubeApiCalls: sql`${curationRuns.youtubeApiCalls} + ${result.apiCalls.youtube}`,
+          claudeApiCalls: sql`${curationRuns.claudeApiCalls} + ${result.apiCalls.claude}`,
+          gptApiCalls: sql`${curationRuns.gptApiCalls} + ${result.apiCalls.gpt}`,
+          status: result.success ? 'completed' : 'failed',
+          completedAt: new Date(),
+          notes: result.notes
+        })
+        .where(eq(curationRuns.id, todayRun.id));
+
+      console.log(`✅ Curation complete! Added ${result.videosAdded} videos.`);
+
+      return {
+        success: true,
+        message: 'Curation completed',
+        videosAdded: result.videosAdded,
+        totalVideos: totalVideos + result.videosAdded,
+        remainingToTarget: targetVideos - (totalVideos + result.videosAdded),
+        apiCalls: result.apiCalls
+      };
+
+    } catch (error) {
+      console.error('❌ Curation error:', error);
+      return {
+        success: false,
+        message: 'Curation failed',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * The actual video curation logic
+   * This should call your existing curation system
+   */
+  private static async curateVideos(options: {
+    maxVideos: number;
+    credibilityThreshold: number;
+    dailyLimits: { youtube: number; claude: number; gpt: number };
+  }) {
+    // TODO: Call your existing video curation system here
+    // This should:
+    // 1. Search YouTube for BJJ instructional videos
+    // 2. Filter by instructor credibility (>= threshold)
+    // 3. Use GPT-4o/Claude to assess quality
+    // 4. Add videos to database
+    // 5. Track API calls
+    
+    // For now, return a placeholder
+    // Replace this with your actual curation logic
+    
+    console.log('🔍 Running video curation with options:', options);
+    
+    // PLACEHOLDER - Replace with your actual curation code
+    return {
+      success: true,
+      videosAdded: 0, // Will be actual count from curation
+      apiCalls: {
+        youtube: 0,
+        claude: 0,
+        gpt: 0
+      },
+      notes: 'Curation system needs to be connected'
+    };
+  }
+
+  /**
+   * Get configuration value
+   */
+  private static async getConfig() {
+    const configs = await db.query.curationConfig.findMany();
+    return configs.reduce((acc, config) => {
+      acc[config.key] = config.value;
+      return acc;
+    }, {} as Record<string, string>);
+  }
+
+  /**
+   * Update configuration value
+   */
+  private static async updateConfig(key: string, value: string) {
+    await db.update(curationConfig)
+      .set({ value, updatedAt: new Date() })
+      .where(eq(curationConfig.key, key));
+  }
+
+  /**
+   * Check if it's time to run curation (called by cron)
+   */
+  static async checkAndRunCuration() {
+    const config = await this.getConfig();
+    const currentHour = new Date().getHours();
+    const startHour = parseInt(config.curation_start_hour);
+
+    // Only run at the configured hour (default: midnight)
+    if (currentHour === startHour) {
+      return await this.runDailyCuration();
+    }
+
+    return {
+      success: false,
+      message: 'Not time to run curation yet'
+    };
+  }
+
+  /**
+   * Get curation status for admin dashboard
+   */
+  static async getCurationStatus() {
+    const config = await this.getConfig();
+    
+    const [videoCount] = await db.select({ count: sql<number>`count(*)` })
+      .from(videos);
+    const totalVideos = Number(videoCount.count);
+    
+    const targetVideos = parseInt(config.target_total_videos);
+    const percentComplete = (totalVideos / targetVideos * 100).toFixed(1);
+
+    // Get today's run
+    const today = new Date().toISOString().split('T')[0];
+    const todayRun = await db.query.curationRuns.findFirst({
+      where: eq(curationRuns.runDate, today)
+    });
+
+    // Get last 7 days of runs
+    const recentRuns = await db.query.curationRuns.findMany({
+      orderBy: (runs, { desc }) => [desc(runs.runDate)],
+      limit: 7
+    });
+
+    return {
+      enabled: config.curation_enabled === 'true',
+      currentVideos: totalVideos,
+      targetVideos,
+      percentComplete: parseFloat(percentComplete),
+      videosRemaining: targetVideos - totalVideos,
+      credibilityThreshold: parseFloat(config.credibility_threshold),
+      dailyTarget: parseInt(config.daily_video_target),
+      todayProgress: todayRun ? {
+        videosAdded: todayRun.videosAdded,
+        status: todayRun.status,
+        apiCalls: {
+          youtube: `${todayRun.youtubeApiCalls} / ${config.youtube_api_daily_limit}`,
+          claude: `${todayRun.claudeApiCalls} / ${config.claude_api_daily_limit}`,
+          gpt: `${todayRun.gptApiCalls} / ${config.gpt_api_daily_limit}`
+        }
+      } : null,
+      recentRuns: recentRuns.map(run => ({
+        date: run.runDate,
+        videosAdded: run.videosAdded,
+        status: run.status
+      }))
+    };
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 5: UPDATE PROFESSOR OS TO USE NEW RECOMMENDATION ENGINE
+═══════════════════════════════════════════════════════════════════════════════
+
+Update: server/routes/professorOS.ts (or wherever Professor OS chat is handled)
+
+Add imports:
+
+```typescript
+import { VideoRecommendationService } from '../services/videoRecommendation';
+import { VideoViewTrackingService } from '../services/videoViewTracking';
+```
+
+Update the Professor OS chat endpoint to use intelligent recommendations:
+
+```typescript
+// When Professor OS recommends videos, use the new system:
+const recommendations = await VideoRecommendationService.getRecommendations({
+  userId: req.user.id,
+  query: userMessage,
+  technique: extractedTechnique, // Extract from user's question
+  position: extractedPosition,   // Extract from user's question
+  beltLevel: req.user.beltLevel || 'white'
+}, 5); // Limit to 5 recommendations
+
+// Format response to user
+let response = `Here's what I recommend:\n\n`;
+
+for (const rec of recommendations) {
+  if (rec.isRepeat) {
+    // CRITICAL: Tell user this is a repeat recommendation
+    response += `\n📹 **${rec.video.title}** by ${rec.video.instructorName}\n`;
+    response += `⚠️ *I've shown you this video before (you've watched it ${rec.viewCount} time${rec.viewCount > 1 ? 's' : ''}).*\n`;
+    response += `${rec.message}\n`;
+    response += `[Watch again](${rec.video.url})\n`;
+  } else {
+    response += `\n📹 **${rec.video.title}** by ${rec.video.instructorName}\n`;
+    if (rec.tier === 'elite') {
+      response += `🏆 *Elite Instructor*\n`;
+    } else if (rec.tier === 'verified') {
+      response += `✓ *Verified Black Belt*\n`;
+    }
+    response += `[Watch video](${rec.video.url})\n`;
+  }
+}
+
+// When user clicks/views a video, track it:
+app.post('/api/professor-os/track-view', async (req, res) => {
+  const { videoId, watchDuration, completed } = req.body;
+  
+  await VideoViewTrackingService.recordView(
+    req.user.id,
+    videoId,
+    watchDuration || 0,
+    completed || false
+  );
+  
+  res.json({ success: true });
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 6: CRON JOB SETUP FOR CONTINUOUS CURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Create: server/jobs/dailyCuration.ts
+
+```typescript
+import { ContinuousCurationService } from '../services/continuousCuration';
+
+/**
+ * Run this function via cron every hour
+ * It will check if it's time to run curation (midnight by default)
+ * and respect API limits
+ */
+export async function runScheduledCuration() {
+  console.log('⏰ Scheduled curation check triggered');
+  
+  const result = await ContinuousCurationService.checkAndRunCuration();
+  
+  console.log('📊 Curation result:', result);
+  
+  return result;
+}
+
+// If using node-cron
+import cron from 'node-cron';
+
+// Run every hour (curation service will check if it's the right time)
+export function startCurationCron() {
+  cron.schedule('0 * * * *', async () => {
+    await runScheduledCuration();
+  });
+  
+  console.log('✅ Curation cron job started (runs hourly, curates at midnight)');
+}
+```
+
+Update: server/index.ts
+
+Add at startup:
+
+```typescript
+import { startCurationCron } from './jobs/dailyCuration';
+
+// Start the curation cron job
+startCurationCron();
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 7: ADMIN DASHBOARD ENDPOINTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Add these endpoints for monitoring curation:
+
+```typescript
+// Get curation status
+app.get('/api/admin/curation/status', requireAdmin, async (req, res) => {
+  const status = await ContinuousCurationService.getCurationStatus();
+  res.json(status);
+});
+
+// Manually trigger curation (for testing)
+app.post('/api/admin/curation/run', requireAdmin, async (req, res) => {
+  const result = await ContinuousCurationService.runDailyCuration();
+  res.json(result);
+});
+
+// Update curation config
+app.post('/api/admin/curation/config', requireAdmin, async (req, res) => {
+  const { key, value } = req.body;
+  
+  await db.update(curationConfig)
+    .set({ value, updatedAt: new Date() })
+    .where(eq(curationConfig.key, key));
+  
+  res.json({ success: true });
+});
+
+// Get user's recommendation tier info
+app.get('/api/user/recommendation-tier', requireAuth, async (req, res) => {
+  const tierInfo = await VideoRecommendationService.getUserTierInfo(req.user.id);
+  res.json(tierInfo);
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 8: TESTING & VALIDATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, test these scenarios:
+
+1. NEW USER TEST:
+
+- Create new account
+- Ask Professor OS for video recommendations
+- Verify: Only elite videos (7.5+) are shown
+- Watch 5 videos
+- Verify: Still only elite videos
+
+1. ESTABLISHED USER TEST:
+
+- Account with 15 videos watched
+- Ask for recommendations
+- Verify: Mix of elite and verified videos
+- Verify: Elite videos shown first
+
+1. REPEAT RECOMMENDATION TEST:
+
+- Watch an elite video (>8.5 credibility)
+- Wait 7 days (or manually adjust timestamp in DB)
+- Ask for same technique
+- Verify: Professor OS says “I’ve shown you this before…”
+- Verify: Clear messaging about why repeating
+
+1. CURATION TEST:
+
+- Check current video count
+- Manually trigger curation: POST /api/admin/curation/run
+- Verify: New videos added (up to daily limit)
+- Verify: API calls tracked
+- Trigger again same day
+- Verify: Stops at daily API limit
+
+1. MIDNIGHT RESET TEST:
+
+- Hit API limit during day
+- Wait for midnight (or manually update curation_runs.run_date)
+- Trigger curation
+- Verify: New day, new quota, curation resumes
+
+1. TARGET REACHED TEST:
+
+- Manually set target_total_videos to current count + 10
+- Run curation
+- Verify: Stops automatically when target reached
+- Verify: curation_enabled set to ‘false’
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 9: MONITORING & ALERTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Add Dev OS queries to monitor curation:
+
+```typescript
+// Dev OS should be able to answer:
+"How many videos do we have?" → Query videos table
+"How many videos added today?" → Query curation_runs for today
+"What's the curation status?" → Call getCurationStatus()
+"Are we on track to hit 2,000 videos?" → Calculate based on daily rate
+"Which API limits are we hitting?" → Check curation_runs API usage
+"What tier is user X?" → Query users.recommendation_tier
+"How many users are power users?" → Count by recommendation_tier
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+SUMMARY OF CHANGES
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ VIDEO TIERS: Elite (7.5+), Verified (6.5-7.4), Acceptable (6.0-6.5)
+
+✅ USER TIERS: new_user (0-10 videos), established_user (10-50), power_user (50+)
+
+✅ PROGRESSIVE DISCLOSURE:
+• New users see only elite content
+• Established users see elite + verified
+• Power users see everything
+
+✅ STRATEGIC REPETITION:
+• Elite videos (>8.5) can be shown up to 3 times
+• Must be 7+ days between repetitions
+• User is ALWAYS TOLD when seeing repeat: “I’ve shown you this before…”
+• Includes explanation of why repeating
+
+✅ CONTINUOUS CURATION:
+• Runs daily at midnight (configurable)
+• Adds up to 50 videos/day (configurable)
+• Respects YouTube, Claude, GPT API limits
+• Stops automatically at 2,000 videos
+• Tracks all API usage per day
+• Resets at 12:01 AM each day
+
+✅ VIEW TRACKING:
+• Records every video view
+• Tracks watch duration
+• Updates user tier automatically
+• Enables repeat recommendation logic
+
+✅ ADMIN DASHBOARD:
+• Monitor curation progress
+• View API usage
+• Manually trigger curation
+• Update configuration
+• See user tier distribution
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL SUCCESS FACTORS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. ✅ User ALWAYS knows when seeing repeat video
+1. ✅ API limits respected (no overages)
+1. ✅ Curation runs automatically until 2,000 videos
+1. ✅ New users only see elite content (quality perception)
+1. ✅ System learns from user behavior
+1. ✅ Progressive disclosure maintains trust
+
+═══════════════════════════════════════════════════════════════════════════════
+
+IMPLEMENTATION ORDER:
+
+1. Phase 1: Database schema (foundation)
+1. Phase 2: View tracking (enables repetition logic)
+1. Phase 3: Recommendation engine (intelligent display)
+1. Phase 5: Update Professor OS (user-facing)
+1. Phase 4: Continuous curation (growth engine)
+1. Phase 6: Cron jobs (automation)
+1. Phase 7: Admin dashboard (monitoring)
+1. Phase 8: Testing (validation)
+1. Phase 9: Dev OS integration (intelligence)
+
+BEGIN IMPLEMENTATION NOW.
+Report progress after each phase.
+Test thoroughly before moving to next phase.
+
+```
+---
+
+**This prompt includes:**
+1. ✅ Full database schema for tracking
+2. ✅ Intelligent recommendation engine with tiers
+3. ✅ Strategic repetition with CLEAR user communication
+4. ✅ Continuous curation that respects API limits
+5. ✅ Daily reset at midnight
+6. ✅ Auto-stop at 2,000 videos
+7. ✅ Complete monitoring and admin tools
+
+**The key insight: User is ALWAYS told when seeing a repeat video, with explanation of why it's valuable.** 🎯​​​​​​​​​​​​​​​​
+```

@@ -1,0 +1,927 @@
+**MASTER PROMPT FOR REPLIT AGENT - BJJ OS COMPLETE REBUILD**
+
+-----
+
+# BJJ OS - Complete App Specification & Bug Fixes
+
+You are building BJJ OS, a progressive web app (PWA) that serves as an AI-powered Brazilian Jiu-Jitsu training partner. This document contains ALL specifications, changes, and bug fixes needed.
+
+-----
+
+## CRITICAL BUG TO FIX FIRST
+
+**INPUT FIELD HIDDEN/UNUSABLE:**
+
+The textarea chat input exists in the DOM but is not visible or usable:
+
+- Element: `<textarea placeholder="Ask about techniques..." class="mobile-chat-input" rows="1" data-testid="input-chat-message">`
+- Element exists but is hidden or covered
+- User cannot interact with it
+
+**ROOT CAUSE:**
+Video parsing errors (“insufficient data parts: 1”) are cascading and breaking chat UI rendering, preventing input field from displaying properly.
+
+**IMMEDIATE FIXES REQUIRED:**
+
+1. **Fix video token parsing:**
+
+```javascript
+// Current broken format:
+[VIDEO: Title]
+
+// Expected format:
+[VIDEO: Title | URL | Timestamp | Duration]
+
+// Add error handling:
+function parseVideoToken(token) {
+  try {
+    const parts = token.split('|');
+    if (parts.length < 4) {
+      console.warn('Video token incomplete, skipping:', token);
+      return null; // Don't crash
+    }
+    return {
+      title: parts[0].replace('[VIDEO:', '').trim(),
+      url: parts[1].trim(),
+      timestamp: parts[2].trim(),
+      duration: parts[3].replace(']', '').trim()
+    };
+  } catch (error) {
+    console.error('Video parsing error:', error);
+    return null; // Fail gracefully
+  }
+}
+```
+
+1. **Always render input field:**
+
+```javascript
+// In chat component, ALWAYS render input regardless of video parsing status
+function ChatInterface() {
+  return (
+    <>
+      <MessageList messages={messages} />
+      {/* ALWAYS render input, even if videos fail */}
+      <ChatInput /> 
+      <BottomNav />
+    </>
+  );
+}
+```
+
+1. **Fix CSS for input visibility:**
+
+```css
+.mobile-chat-input {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: fixed;
+  bottom: 80px; /* Above bottom nav */
+  left: 10px;
+  right: 10px;
+  z-index: 100;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 12px;
+  min-height: 48px;
+}
+```
+
+1. **Add graceful video rendering:**
+
+```javascript
+function renderMessage(message) {
+  const videos = extractVideoTokens(message);
+  
+  return (
+    <>
+      {renderText(message)}
+      {videos.map((video, index) => {
+        try {
+          const parsed = parseVideoToken(video);
+          if (!parsed) return null; // Skip invalid
+          return <VideoCard key={index} {...parsed} />;
+        } catch (error) {
+          console.error('Video render failed:', error);
+          return null; // Don't crash UI
+        }
+      })}
+    </>
+  );
+}
+```
+
+-----
+
+## PRODUCT OVERVIEW
+
+**Name:** BJJ OS  
+**Tagline:** Train Smarter, Win More  
+**Core Value:** AI training partner with perfect memory who remembers every roll you’ve ever had
+
+**Key Differentiators:**
+
+1. Timestamped video recommendations (30-60 second clips, not full videos)
+1. Pattern recognition across training sessions
+1. Perfect memory (remembers every detail you share)
+1. 10,000+ techniques analyzed from top instructors
+
+-----
+
+## PRICING STRUCTURE
+
+### Free Tier
+
+- $0/month forever
+- 5 training sessions per month
+- Basic video recommendations
+- Voice input
+- No credit card required
+
+### Founding Members (First 100)
+
+- **Monthly:** $9.99/month locked forever
+- **Annual:** $89/year locked forever ($7.42/month)
+- Unlimited training sessions
+- Prof. OS AI Coach
+- Timestamped video recommendations (exact moments)
+- Pattern recognition
+- Progress tracking
+- Voice input/output
+- Works offline after download
+- 7-day free trial
+- Price locked forever - if canceled, cannot get rate back
+
+### Pro
+
+- **Monthly:** $14.99/month
+- **Annual:** $179/year ($14.92/month - save $30)
+- All Founding Members features
+- 7-day free trial
+- Standard pricing
+
+**Pricing Page Display:**
+
+- Default to Annual view (feature savings)
+- Founding Members Annual featured with “⭐ BEST VALUE” badge
+- No countdown timer (just “Limited to first 100 members”)
+- Toggle between Annual/Monthly views
+- Show monthly equivalent cost for annual plans
+- Emphasize total savings in dollars
+
+-----
+
+## LANDING PAGE
+
+### Hero Section
+
+```
+[════════════════════════════]
+Belt icon (600px wide, animated color cycling: white → blue → purple → brown → black)
+
+Train Smarter, Win More
+
+Your AI training partner with perfect memory.
+I've analyzed 10,000+ technique videos and remember 
+every roll you've ever had.
+
+[Start Free Preview] [Start 7-Day Free Trial]
+```
+
+### Key Features (Cards)
+
+**1. Timestamped Perfection**
+Icon: ⏱️
+
+- Skip the fluff. Get 30-60 second clips showing exactly what you need
+- Not full 20-minute videos
+- Jump straight to the technique
+
+**2. Pattern Recognition**
+Icon: 🧠
+
+- I spot gaps in your game you can’t see
+- Tracks what you drill, what you struggle with
+- Identifies patterns across all your training sessions
+
+**3. Perfect Memory**
+Icon: 💾
+
+- Every session logged, every technique drilled
+- I remember what worked and what didn’t
+- Your complete training history, analyzed
+
+**4. 10,000+ Techniques**
+Icon: 📚
+
+- Analyzed from Danaher, Gordon Ryan, Lachlan Giles, and more
+- Guard, passing, submissions, escapes
+- Beginner to black belt level
+
+### Social Proof
+
+```
+Trusted by grapplers at:
+[Gym logos or names - if you have them]
+```
+
+### Footer
+
+- Terms of Service
+- Privacy Policy
+- Refund Policy
+- Contact/Support link
+
+-----
+
+## BRAND & DESIGN
+
+### Colors
+
+- Primary: Purple/Blue gradient (BJJ belt inspired)
+- Background: Dark mode default
+- Accent: White/light gray text
+- Belt icon: Animated cycling through belt colors
+
+### Typography
+
+- **Landing page, app UI:** System UI / Inter / San Francisco
+- **Legal pages:** System UI / Inter (NOT monospace)
+
+### Belt Icon
+
+- **Landing page hero:** 600px wide, 120px tall
+- **Sidebar logo:** 200px wide, 45px tall
+- **Login page:** 200px wide, 45px tall
+- **Onboarding:** 200px wide, 45px tall
+- Animated color cycling (2-3 second intervals)
+
+-----
+
+## USER FLOWS
+
+### New User Signup
+
+```
+1. Landing page
+2. Click "Start Free Preview" or "Start 7-Day Free Trial"
+3. Pricing selection page
+   - Free ($0)
+   - Founding Members ($89/year or $9.99/month) - featured
+   - Pro ($179/year or $14.99/month)
+4. Phone number entry
+5. SMS verification code
+6. Onboarding (3 steps - MUST complete, cannot skip)
+7. Chat with Prof. OS (personalized first message)
+```
+
+### Existing User Login
+
+```
+1. Landing page or bjjos.app/login
+2. Phone number entry
+3. SMS verification code
+4. Directly to chat (skip onboarding)
+```
+
+-----
+
+## ONBOARDING (3 STEPS)
+
+**CRITICAL:** User CANNOT skip onboarding. Must complete all 3 steps before accessing chat.
+
+### Step 1 of 3: Belt Level
+
+```
+[Progress: ═══════════░░░░░░░░░░]
+Step 1 of 3
+
+What's your current belt level?
+
+⚪ White Belt
+🔵 Blue Belt
+🟣 Purple Belt
+🟤 Brown Belt (color: #654321, NOT orange)
+⚫ Black Belt
+
+[Continue →]
+```
+
+### Step 2 of 3: Training Style
+
+```
+[Progress: ══════════════════░░░]
+Step 2 of 3
+
+What's your training style?
+Select the one that fits best
+
+🔝 Pressure Passer
+   (Top game, smash passing, control)
+
+🛡️ Guard Player
+   (Bottom game, sweeps, submissions)
+
+⚡ Scrambler
+   (Dynamic, athletic, transitions)
+
+🤼 Wrestler
+   (Takedowns, top control, pressure)
+
+🤔 Still Figuring It Out
+   (Exploring different styles)
+
+[← Back] [Continue →]
+```
+
+### Step 3 of 3: Training Frequency
+
+```
+[Progress: ════════════════════════]
+Step 3 of 3
+
+How often do you train?
+
+⃝ 1-2 times per week
+⃝ 3-4 times per week
+⃝ 5-6 times per week
+⃝ 7+ times per week
+
+[← Back] [Get Started →]
+```
+
+**After completion:** All data auto-saved to user profile in Settings.
+
+-----
+
+## LOGIN/SIGNUP PAGE
+
+```
+┌─────────────────────────────────────────────┐
+│  ← Back to Home                             │
+│                                             │
+│     [════════════════════]                  │
+│      Belt icon (200px × 45px, animated)     │
+│                                             │
+│     Welcome to BJJ OS                       │
+│     Enter your phone number to continue     │
+│                                             │
+│     Phone Number                            │
+│     ┌──────────────────────────────────┐   │
+│     │ 🇺🇸 +1 ▼ │ (555) 123-4567       │   │
+│     └──────────────────────────────────┘   │
+│                                             │
+│     We'll send you a verification code      │
+│     via SMS                                 │
+│                                             │
+│     [Continue →]                            │
+│                                             │
+└─────────────────────────────────────────────┘
+```
+
+**Changes from current:**
+
+- Replace phone icon with belt icon
+- “Continue” instead of “access your account”
+- Remove “Don’t have an account? Sign Up” (unnecessary for phone auth)
+- Add error states for invalid numbers, SMS failures, rate limiting
+
+-----
+
+## CHAT INTERFACE
+
+### Layout
+
+**Sidebar (Desktop):**
+
+```
+[════════════]  ← Belt icon (animated)
+BJJ OS
+
+💬 Chat with Prof. OS
+⭐ Saved Videos
+📊 Progress
+⚙️ Settings
+
+[🟣] John Smith         ← User avatar + belt color
+     Founding Member 🔥  ← Subscription badge
+     [Logout]
+```
+
+**Mobile:**
+
+- Bottom navigation: [💬 Chat] [⭐ Saved] [⚙️ Settings]
+- Hamburger menu or bottom nav (NOT permanent sidebar)
+
+### Main Chat Area
+
+**Header:**
+
+```
+Prof. OS
+Your AI BJJ Training Partner  ← NOT "Coach"
+
+🎤 Voice: Off [Toggle]  ⚙️
+```
+
+**First Message (New User - After Onboarding):**
+
+```
+[✨ Prof. OS icon - 60px]
+
+Hey! I'm Prof. OS
+
+I can see you're a [purple belt] who plays [guard] 
+and trains [4x per week].
+
+I've analyzed 10,000+ technique videos and I'm about 
+to learn everything about YOUR specific game.
+
+Here's how this works:
+
+• You share → I remember forever
+• I spot patterns → You fix gaps
+• You improve → I get smarter
+
+The more details you give me about your training, 
+the more accurate my recommendations become.
+
+Let's start building your profile.
+
+How did your last training session go?
+```
+
+**NO SUGGESTED PROMPT BUTTONS** - Force users to type detailed responses.
+
+**Input Field (MUST BE VISIBLE AND FUNCTIONAL):**
+
+```
+Ask Prof. OS anything...
+┌─────────────────────────────────────────────┐
+│ [Type here]                                 │
+└─────────────────────────────────────────────┘
+Press Enter to send. Shift+Enter for new line [→]
+```
+
+-----
+
+## VIDEO RECOMMENDATIONS
+
+**Format in Prof. OS response:**
+
+```
+**THEN WATCH THIS:**
+
+[VIDEO: Title | https://youtube.com/watch?v=abc | 2:35-3:45 | 1m10s]
+```
+
+**Parsed and displayed as:**
+
+```
+┌─────────────────────────────────────────────┐
+│  [📹 Video Thumbnail]                       │
+│                                             │
+│  Jon Thomas - Armbar from Closed Guard      │
+│  ⏱️ 2:35-3:45 (Watch 1m 10s)                │
+│                                             │
+│  "Overview of guard concepts and armbar     │
+│  transitions..."                            │
+│                                             │
+│  [▶️ Watch Now] [🔖 Save]                   │
+└─────────────────────────────────────────────┘
+```
+
+**CRITICAL:** Video parsing must not crash chat UI. If parsing fails, show text only and log error.
+
+-----
+
+## SETTINGS → PROFILE
+
+**Auto-filled from onboarding (editable):**
+
+```
+┌─────────────────────────────────────────────┐
+│  PROFILE                                    │
+├─────────────────────────────────────────────┤
+│                                             │
+│  Contact Info                               │
+│  ├── Phone: (555) 123-4567 (cannot change)  │
+│  └── Email: [Add email] [Optional]          │
+│                                             │
+│  BJJ Profile (From Onboarding)              │
+│  ├── Belt Level: Purple Belt      [Edit]    │
+│  ├── Training Style: Guard Player [Edit]    │
+│  └── Training Frequency: 4x/week  [Edit]    │
+│                                             │
+│  Physical Stats (Optional - Add Later)      │
+│  ├── Birthday: [MM/DD/YYYY]      [Add]     │
+│  │   Age: [Auto-calculated]                │
+│  ├── Height: [__ ft __ in]       [Add]     │
+│  └── Weight: [___ lbs]           [Add]     │
+│                                             │
+│  Health & Safety (Optional)                 │
+│  └── Injuries: [Add injuries]    [Add]     │
+│                                             │
+│  Account Info                               │
+│  ├── Member Since: Oct 23, 2025             │
+│  ├── Last Updated: Oct 23, 2025             │
+│  └── Total Sessions Logged: 0               │
+│                                             │
+└─────────────────────────────────────────────┘
+```
+
+**Use birthday, not age:**
+
+- Auto-calculates age
+- Updates automatically
+- More accurate
+
+**Injuries section:**
+
+- Can add multiple
+- Can mark as healed
+- Prof. OS uses to avoid dangerous techniques
+
+-----
+
+## SETTINGS → SUBSCRIPTION
+
+```
+Subscription
+├── Status: Founding Member 🔥
+├── Plan: $89/year
+├── Renews: January 1, 2026
+├── Payment Method: •••• 4242
+└── [Manage Subscription]
+    ├── Change Plan
+    ├── Update Payment Method
+    ├── View Billing History
+    └── Cancel Subscription
+```
+
+-----
+
+## SETTINGS → REFERRALS
+
+**Structure:**
+
+- Every paid user gets 5 referral codes
+- When someone uses your code AND pays for 3 months → you get 1 free month
+- Max 5 free months can be earned
+
+```
+Your Referral Codes
+
+You have 5 referral codes to share. When someone 
+subscribes using your code and completes 3 months, 
+you get 1 free month.
+
+Code 1: BJJOS-ABC123  [Copy] [Share]
+Status: Unused
+
+Code 2: BJJOS-DEF456  [Copy] [Share]
+Status: Used - 2 months remaining (1 free month earned)
+
+Code 3: BJJOS-GHI789  [Copy] [Share]
+Status: Completed ✓ (Free month awarded)
+
+Code 4: BJJOS-JKL012  [Copy] [Share]
+Status: Unused
+
+Code 5: BJJOS-MNO345  [Copy] [Share]
+Status: Unused
+
+Free Months Earned: 1 / 5
+Next Free Month Applies: After current billing cycle
+```
+
+-----
+
+## LEGAL PAGES (TERMS, PRIVACY, REFUND)
+
+**Changes for ALL legal pages:**
+
+1. **Font:** System UI / Inter / San Francisco (NOT monospace)
+1. **Language:** “Sessions” not “questions” throughout
+1. **Add Founding Members tier** in all relevant sections
+1. **Add referral program** to Terms of Service only (not refund policy)
+
+### Terms of Service - Add Section 14
+
+```
+14. Referral Program
+
+Each paid subscriber receives 5 referral codes to share.
+
+Referrer Reward:
+• When someone uses your code and completes 3 months of 
+  paid subscription, you receive 1 free month
+• Maximum 5 free months can be earned per account
+• Free months are applied to your next billing cycle
+• Cannot be combined with other promotional offers
+
+Referee Benefit:
+• Users who sign up with a referral code receive standard
+  7-day free trial
+• No additional discount beyond free trial
+
+Restrictions:
+• Referral codes cannot be used on your own additional accounts
+• Free months earned via referrals are non-refundable
+• BJJ OS reserves the right to revoke rewards if fraud is detected
+• Referral program terms may change with notice
+```
+
+### Privacy Policy - Updates
+
+**Add to “Information We Collect”:**
+
+```
+Referral Data:
+• Referral codes you generate
+• Referral codes used by others
+• Referral rewards earned
+• Used only to track and issue promotional credits
+```
+
+**Add to “How We Use Information”:**
+
+```
+• Track and process referral rewards
+```
+
+### Refund Policy - Updates
+
+**Add Founding Members section:**
+
+```
+Founding Members (First 100):
+
+If you're a Founding Member ($9.99/month or $89/year locked rate):
+• Canceling forfeits your lifetime locked pricing
+• If you rejoin later, you'll pay standard Pro pricing
+• Founding Member status cannot be restored once canceled
+• All other refund terms apply normally
+```
+
+**Change non-refundable items:**
+
+```
+Non-Refundable:
+• Partial month subscriptions (after 7 days)
+• Promotional credits or free months
+• Account deletions (data recovery not possible)
+```
+
+-----
+
+## TECHNICAL REQUIREMENTS
+
+### Tech Stack
+
+- Frontend: React (PWA)
+- Backend: Node.js / Python
+- Database: PostgreSQL
+- SMS: Twilio
+- Payments: Stripe
+- Hosting: Replit
+
+### Authentication
+
+- Phone number only (no password)
+- SMS verification via Twilio
+- Session management with JWT tokens
+
+### Data Storage
+
+**User Profile:**
+
+- Phone (login method)
+- Email (optional)
+- Belt level
+- Training style
+- Training frequency
+- Birthday (optional)
+- Height/weight (optional)
+- Injuries (optional, multiple)
+- Subscription status
+- Account created date
+- Last updated date
+
+**Training Sessions:**
+
+- Session text (what user shared)
+- Timestamp
+- Prof. OS response
+- Videos recommended
+- Videos saved
+
+**Videos:**
+
+- Title
+- URL
+- Timestamp
+- Duration
+- Source (instructor name)
+- Position/technique tags
+
+### PWA Features
+
+- Offline functionality
+- Add to home screen
+- Push notifications (optional)
+- Service worker for caching
+
+-----
+
+## VOICE INPUT/OUTPUT
+
+**Toggle in header:**
+
+- Single toggle for both input and output
+- Blue when on, gray when off
+- Clear visual state
+
+**When enabled:**
+
+- User can speak to Prof. OS
+- Prof. OS can speak responses back
+- Uses Web Speech API
+
+-----
+
+## MOBILE RESPONSIVENESS
+
+**Bottom Navigation (Mobile):**
+
+```
+┌─────────────────────────────────────────────┐
+│  [Prof. OS message content]                 │
+├─────────────────────────────────────────────┤
+│  Ask Prof. OS anything...                   │
+│  [Input field]                           [→]│
+├─────────────────────────────────────────────┤
+│  [💬 Chat] [⭐ Saved] [⚙️ Settings]         │
+└─────────────────────────────────────────────┘
+```
+
+**Input must be:**
+
+- Above bottom nav
+- Always visible
+- Minimum 48px tall (iOS touch target)
+- Fixed position at bottom
+
+-----
+
+## ERROR HANDLING
+
+**Input field must ALWAYS render:**
+
+- Even if video parsing fails
+- Even if API calls fail
+- Even if Prof. OS is “typing”
+- Add fallback: If input not present after 3 seconds, auto-refresh
+
+**Video parsing:**
+
+- Wrap in try/catch
+- Return null for invalid videos
+- Log errors but don’t crash UI
+- Show text-only if video fails
+
+**Rate limits:**
+
+- Free tier: 5 sessions per month
+- Show upgrade message when limit hit
+- Don’t just hide input
+
+-----
+
+## COPY CONSISTENCY
+
+**Use throughout app:**
+
+- “Training partner” not “coach”
+- “Sessions” not “questions”
+- “Prof. OS” not “Professor OS” or “OS”
+- “Timestamped videos” not “video clips”
+- “Perfect memory” (key differentiator)
+
+-----
+
+## TESTING CHECKLIST
+
+Before deploying, test:
+
+**Critical Path:**
+
+- [ ] Signup flow (phone → SMS → onboarding → chat)
+- [ ] Login flow (phone → SMS → chat)
+- [ ] Input field visible and functional on all devices
+- [ ] Video recommendations display properly
+- [ ] Video parsing errors don’t crash UI
+- [ ] Free tier limit enforcement
+- [ ] Payment processing (Stripe)
+- [ ] Referral code generation and tracking
+
+**Desktop:**
+
+- [ ] Chrome, Safari, Firefox
+- [ ] Sidebar navigation works
+- [ ] All pages render correctly
+
+**Mobile:**
+
+- [ ] iOS Safari
+- [ ] Android Chrome
+- [ ] Bottom navigation works
+- [ ] Input field above nav, always visible
+- [ ] Touch targets 48px minimum
+- [ ] PWA install prompt
+
+**Edge Cases:**
+
+- [ ] User hits Free tier limit
+- [ ] SMS fails to send
+- [ ] Payment fails
+- [ ] Video parsing fails
+- [ ] Network offline (PWA functionality)
+
+-----
+
+## ANALYTICS TO TRACK
+
+**User Behavior:**
+
+- Signup conversion rate
+- Onboarding completion rate
+- Average first message length
+- Sessions per user per month
+- Video save rate
+- Churn rate by tier
+
+**Technical:**
+
+- API response times
+- Video parsing success rate
+- Input field render failures
+- JavaScript errors
+- Page load times
+
+-----
+
+## FUTURE FEATURES (NOT IN V1)
+
+- Competition tracking
+- Training partner matching
+- Gym integration
+- Android/iOS native apps
+- Video upload (user’s own rolls)
+- AI analysis of uploaded videos
+
+-----
+
+## SUMMARY OF ALL CHANGES
+
+### CRITICAL FIXES:
+
+1. ✅ Input field must always render and be visible
+1. ✅ Video parsing error handling (don’t crash UI)
+1. ✅ Belt icon everywhere (landing, login, chat, onboarding)
+1. ✅ Onboarding mandatory (cannot skip)
+1. ✅ Training style question replaces goals
+
+### PRICING:
+
+1. ✅ Free tier: $0, 5 sessions/month
+1. ✅ Founding Members: $89/year or $9.99/month (locked forever)
+1. ✅ Pro: $179/year or $14.99/month
+1. ✅ Default to Annual view
+1. ✅ No countdown timer
+
+### COPY:
+
+1. ✅ “Training partner” not “coach”
+1. ✅ “Sessions” not “questions”
+1. ✅ Remove suggested prompts (force detailed input)
+1. ✅ First message emphasizes data exchange
+
+### UI/UX:
+
+1. ✅ Belt icon animated color cycling
+1. ✅ System UI font (not monospace)
+1. ✅ Mobile bottom nav
+1. ✅ Settings → Profile auto-filled from onboarding
+
+### FEATURES:
+
+1. ✅ Referral program (5 codes, 1 free month per 3-month completion)
+1. ✅ Timestamped video recommendations
+1. ✅ Voice input/output toggle
+1. ✅ Injuries tracking (optional, safety-critical)
+
+-----
+
+**BUILD THIS APP ACCORDING TO THESE SPECS. FIX THE INPUT FIELD BUG FIRST, THEN IMPLEMENT ALL OTHER CHANGES.**

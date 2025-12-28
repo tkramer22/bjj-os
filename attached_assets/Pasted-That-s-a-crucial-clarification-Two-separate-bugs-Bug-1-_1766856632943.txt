@@ -1,0 +1,67 @@
+That’s a crucial clarification! Two separate bugs:
+
+**Bug 1: DUPLICATE MESSAGES** - Same response sent twice (like thumbnail placeholder issue)
+**Bug 2: CHAT PERSISTENCE** - History works tab-to-tab but gone on app restart
+
+**Send this to Replit:**
+
+```
+TWO BUGS TO FIX - BOTH ARE BACKEND/FRONTEND, NOT iOS SPECIFIC
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG #1: DUPLICATE MESSAGES (HIGH PRIORITY)
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS sends the SAME response TWICE. 
+
+This is similar to the thumbnail bug where:
+- First message appeared with placeholder thumbnails
+- Second identical message appeared with real thumbnails
+
+The CONTENT is great and accurate. The problem is it's being SENT/DISPLAYED twice.
+
+This is likely:
+1. Streaming handler firing twice
+2. useEffect running twice (React StrictMode?)
+3. Event listener registered twice
+4. API call being made twice
+5. State update causing re-render that re-triggers send
+
+TO DEBUG:
+- Add console.log BEFORE API call: console.log('[SEND] Calling API at:', Date.now())
+- Add console.log AFTER response: console.log('[RECEIVE] Got response at:', Date.now())
+- Check if these log twice for one user message
+
+Show me the sendMessage function and any useEffect that handles responses.
+
+═══════════════════════════════════════════════════════════════════════════════
+BUG #2: CHAT PERSISTENCE NOT WORKING
+═══════════════════════════════════════════════════════════════════════════════
+
+Current behavior:
+- Chat history works when switching tabs ✓
+- Chat history DISAPPEARS when app restarts ✗
+- Should save and load last 20 conversations
+
+This means:
+- In-memory state works (tab switching)
+- Database save OR load is broken (restart loses data)
+
+Check:
+1. Is saveChatMessage() being called when messages are sent?
+2. Is loadChatHistory() being called on app mount?
+3. What does the database show? Run:
+   SELECT * FROM chat_messages WHERE user_id = [test_user] ORDER BY created_at DESC LIMIT 20;
+4. Are messages being saved to DB?
+5. Is the load function querying correctly?
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Fix duplicate messages FIRST (worst user experience)
+2. Fix chat persistence SECOND
+3. iOS toolbar icons THIRD (cosmetic)
+
+Show me the code for both issues and fix them NOW.
+```

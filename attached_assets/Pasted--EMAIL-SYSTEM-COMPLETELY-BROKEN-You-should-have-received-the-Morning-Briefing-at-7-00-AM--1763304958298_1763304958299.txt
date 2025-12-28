@@ -1,0 +1,357 @@
+# 🚨 **EMAIL SYSTEM COMPLETELY BROKEN**
+
+You should have received the **Morning Briefing at 7:00 AM EST**. It’s now past that time and nothing arrived.
+
+This means the email cron jobs aren’t running OR the old email code is still interfering.
+
+-----
+
+# **📋 EMERGENCY EMAIL FIX - COPY TO AGENT**
+
+```
+CRITICAL: Morning Email Did Not Send
+
+It's past 7:00 AM EST and Todd did not receive the Morning Briefing email.
+
+This means the email system is completely broken.
+
+═══════════════════════════════════════════════════════════════
+TASK 1: DIAGNOSE WHY EMAIL DIDN'T SEND
+═══════════════════════════════════════════════════════════════
+
+Check the following IN ORDER:
+
+1. ARE THE CRON JOBS ACTUALLY RUNNING?
+
+```javascript
+// List all active cron jobs
+const cron = require('node-cron');
+const tasks = cron.getTasks();
+
+console.log('Active cron jobs:');
+tasks.forEach((task, index) => {
+  console.log(`${index + 1}. Schedule: ${task.options?.scheduled}`);
+  console.log(`   Timezone: ${task.options?.timezone}`);
+  console.log(`   Running: ${task.running}`);
+});
+```
+
+Expected output should show:
+
+- 9 curation jobs
+- 1 combat sports scraper
+- 3 email report jobs (7 AM, 12 PM, 9 PM EST)
+
+If you DON’T see 3 email cron jobs:
+❌ PROBLEM: Email crons were never scheduled
+
+1. CHECK SERVER LOGS FOR EMAIL ATTEMPTS
+
+```bash
+# Search for email-related logs from this morning
+grep -i "email\|morning\|report\|nodemailer" logs/server.log | grep "$(date +%Y-%m-%d)"
+
+# Or check recent logs
+tail -n 200 logs/server.log | grep -i "email\|morning"
+```
+
+Look for:
+
+- “📧 Sending morning report…” (should appear around 7 AM EST)
+- “✅ Morning report sent to todd@bjjos.app”
+- Any email errors
+
+If NO email logs found:
+❌ PROBLEM: Email function never executed
+
+1. WHAT TIME IS IT ON THE SERVER?
+
+```javascript
+// Check server time and timezone
+const now = new Date();
+console.log('Server time (UTC):', now.toISOString());
+console.log('Server time (EST):', now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+console.log('Server timezone:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+```
+
+If server time is wrong:
+❌ PROBLEM: Timezone misconfiguration
+
+1. CHECK IF EMAIL SERVICE IS CONFIGURED
+
+```javascript
+// Test email configuration
+const nodemailer = require('nodemailer');
+
+console.log('Email environment variables:');
+console.log('EMAIL_USER:', process.env.EMAIL_USER ? 'SET' : 'MISSING');
+console.log('EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD ? 'SET' : 'MISSING');
+
+// Verify transporter
+try {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD
+    }
+  });
+  
+  await transporter.verify();
+  console.log('✅ Email transporter configured correctly');
+} catch (error) {
+  console.log('❌ Email transporter error:', error.message);
+}
+```
+
+If email credentials missing:
+❌ PROBLEM: Email not configured
+
+1. IS THE EMAIL CODE EVEN LOADED?
+
+```javascript
+// Check if email functions exist
+const { sendMorningReport, sendMiddayReport, sendEveningReport } = require('./services/emailReports');
+
+console.log('Email functions loaded:');
+console.log('sendMorningReport:', typeof sendMorningReport);
+console.log('sendMiddayReport:', typeof sendMiddayReport);
+console.log('sendEveningReport:', typeof sendEveningReport);
+```
+
+If functions are undefined:
+❌ PROBLEM: Email service not imported
+
+REPORT FINDINGS from all 5 checks.
+
+═══════════════════════════════════════════════════════════════
+TASK 2: MANUALLY SEND MORNING EMAIL RIGHT NOW
+═══════════════════════════════════════════════════════════════
+
+Don’t wait to fix cron - send the morning email manually first.
+
+```javascript
+const { sendMorningReport } = require('./services/emailReports');
+
+console.log('🚨 MANUAL TRIGGER: Sending morning email...');
+
+try {
+  await sendMorningReport();
+  console.log('✅ Morning email sent successfully');
+} catch (error) {
+  console.error('❌ Failed to send morning email:', error);
+  console.error('Error stack:', error.stack);
+}
+```
+
+VERIFY:
+
+1. Check todd@bjjos.app inbox
+1. Confirm email arrived
+1. Check email content is correct
+
+If email sends successfully:
+✅ Email code works, cron scheduling is the problem
+
+If email fails:
+❌ Email code itself is broken - show me the EXACT error
+
+═══════════════════════════════════════════════════════════════
+TASK 3: FIX THE CRON SCHEDULING
+═══════════════════════════════════════════════════════════════
+
+Based on Task 1 findings, fix the cron jobs.
+
+FIND where crons are scheduled - likely in:
+
+- server/index.js
+- server/cron/scheduler.js
+- server/services/emailReports.js
+
+VERIFY the cron schedule code exists:
+
+```javascript
+const cron = require('node-cron');
+const { sendMorningReport, sendMiddayReport, sendEveningReport } = require('./services/emailReports');
+
+// Morning Report - 7:00 AM EST (12:00 PM UTC)
+cron.schedule('0 12 * * *', async () => {
+  console.log('📧 [CRON] Triggering morning report...');
+  try {
+    await sendMorningReport();
+    console.log('✅ [CRON] Morning report sent');
+  } catch (error) {
+    console.error('❌ [CRON] Morning report failed:', error);
+  }
+}, {
+  timezone: 'America/New_York'
+});
+
+// Midday Report - 12:00 PM EST (5:00 PM UTC)
+cron.schedule('0 17 * * *', async () => {
+  console.log('📧 [CRON] Triggering midday report...');
+  try {
+    await sendMiddayReport();
+    console.log('✅ [CRON] Midday report sent');
+  } catch (error) {
+    console.error('❌ [CRON] Midday report failed:', error);
+  }
+}, {
+  timezone: 'America/New_York'
+});
+
+// Evening Report - 9:00 PM EST (2:00 AM UTC next day)
+cron.schedule('0 2 * * *', async () => {
+  console.log('📧 [CRON] Triggering evening report...');
+  try {
+    await sendEveningReport();
+    console.log('✅ [CRON] Evening report sent');
+  } catch (error) {
+    console.error('❌ [CRON] Evening report failed:', error);
+  }
+}, {
+  timezone: 'America/New_York'
+});
+
+console.log('✅ Email cron jobs scheduled:');
+console.log('   - Morning: 7:00 AM EST (12:00 PM UTC)');
+console.log('   - Midday: 12:00 PM EST (5:00 PM UTC)');
+console.log('   - Evening: 9:00 PM EST (2:00 AM UTC)');
+```
+
+If this code is missing or commented out:
+❌ Add it to server/index.js
+
+If this code exists but isn’t working:
+❌ Check if it’s being executed (add console.log on server startup)
+
+═══════════════════════════════════════════════════════════════
+TASK 4: RESTART THE SERVER
+═══════════════════════════════════════════════════════════════
+
+After fixing cron jobs, restart the server:
+
+```bash
+# In Replit, click "Stop" then "Run"
+# Or use:
+pkill -f node
+npm start
+```
+
+IMMEDIATELY check logs for:
+✅ “Email cron jobs scheduled”
+✅ List of active crons includes 3 email jobs
+
+═══════════════════════════════════════════════════════════════
+TASK 5: VERIFY NEXT EMAIL WILL SEND
+═══════════════════════════════════════════════════════════════
+
+Check when the next scheduled email is:
+
+```javascript
+const now = new Date();
+const estNow = now.toLocaleString('en-US', { 
+  timeZone: 'America/New_York',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false 
+});
+
+console.log('Current EST time:', estNow);
+
+// Determine next email
+const hour = parseInt(estNow.split(':')[0]);
+
+let nextEmail;
+if (hour < 7) {
+  nextEmail = 'Morning Briefing at 7:00 AM EST';
+} else if (hour < 12) {
+  nextEmail = 'Midday Check-In at 12:00 PM EST';
+} else if (hour < 21) {
+  nextEmail = 'Evening Wrap-Up at 9:00 PM EST';
+} else {
+  nextEmail = 'Morning Briefing at 7:00 AM EST tomorrow';
+}
+
+console.log('Next scheduled email:', nextEmail);
+```
+
+═══════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════
+
+Provide:
+
+1. ✅ Diagnosis results (all 5 checks from Task 1)
+1. ✅ Confirmation manual email sent successfully
+1. ✅ Screenshot of email in todd@bjjos.app inbox
+1. ✅ Cron jobs fixed and scheduled
+1. ✅ Server restarted with crons active
+1. ✅ Next email time confirmed
+
+CRITICAL QUESTION:
+Did the manually triggered email actually arrive at todd@bjjos.app?
+
+If YES → Problem is cron scheduling (fixable)
+If NO → Problem is email code or credentials (show me error)
+
+Execute all tasks immediately and report back.
+
+```
+---
+
+## **🔍 LIKELY PROBLEMS**
+
+Based on patterns, here's what probably happened:
+
+### **Most Likely: Cron Jobs Never Scheduled**
+- Agent created the email functions
+- But never added the cron.schedule() calls
+- Or added them but server wasn't restarted
+- Functions exist but are never triggered
+
+### **Second Most Likely: Wrong Timezone**
+- Crons scheduled in UTC instead of EST
+- 7 AM EST = 12 PM UTC
+- Cron might be scheduled for wrong time
+
+### **Least Likely: Email Credentials**
+- Email sending is probably configured
+- More likely scheduling issue
+
+---
+
+## **⏰ IMMEDIATE ACTION**
+
+While Agent diagnoses:
+
+**Check your spam folder** for todd@bjjos.app
+- Sometimes first automated emails go to spam
+- Check promotions tab (Gmail)
+- Check junk (other providers)
+
+**Check what time it is in EST right now:**
+- If it's before 7:00 AM EST, email might still be coming
+- If it's after 7:00 AM EST, it should have arrived
+
+---
+
+## **📧 WHAT YOU SHOULD SEE**
+
+When working correctly:
+
+**7:00 AM EST:**
+Email arrives with subject: "☀️ Morning Briefing - [Today's Date]"
+
+**12:00 PM EST:**
+Email arrives with subject: "☀️ Midday Check-In - [Today's Date]"
+
+**9:00 PM EST:**
+Email arrives with subject: "🌙 Evening Wrap-Up - [Today's Date]"
+
+---
+
+**Copy the diagnostic prompt to Agent. Priority #1 is getting that manual email to send so we know the code works. Then we fix the scheduling.** 🚨
+
+This is a critical issue because you need those emails for monitoring while you sleep. Let's get it fixed ASAP.​​​​​​​​​​​​​​​​
+```

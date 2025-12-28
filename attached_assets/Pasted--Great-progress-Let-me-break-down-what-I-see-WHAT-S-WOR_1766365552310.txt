@@ -1,0 +1,122 @@
+**Great progress!** Let me break down what I see:
+
+-----
+
+## ✅ WHAT’S WORKING:
+
+1. **Video playback in Library** - Trenlock video by Owen Jones playing perfectly!
+1. **Bottom navigation** - Present on all screens
+1. **Settings page** - Profile info showing correctly
+1. **Professor OS chat** - Responding with good coaching advice
+
+-----
+
+## 🔴 ISSUES TO FIX:
+
+### **1. Chat Video Thumbnails Still Missing**
+
+- Videos in chat show BJJ OS placeholder instead of YouTube thumbnail
+- But Library videos show thumbnails correctly
+- The video ID isn’t being passed properly to chat video cards
+
+### **2. “Error: Missing video ID” When Playing Chat Videos**
+
+- Image 2 shows “Craig Jones - Z-Half Guar…” with “Error: Missing video ID”
+- The proxy is working (no 404!) but the video ID isn’t being passed
+
+### **3. Chat History Not Persisting**
+
+- Previous conversation about armbar didn’t show when logging back in
+- Could be a session/user ID issue on iOS
+
+### **4. Bottom Nav Labels Different on Settings**
+
+- Shows “OS, Saved, Library, Settings” instead of “Chat, Videos, Saved, Settings”
+- Minor but should be consistent
+
+-----
+
+## 📋 SEND THIS TO REPLIT:
+
+```
+iOS APP - THREE REMAINING ISSUES
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: CHAT VIDEO CARDS - MISSING VIDEO ID
+═══════════════════════════════════════════════════════════════════════════════
+
+When Professor OS recommends a video in chat:
+- Tapping "Watch" shows "Error: Missing video ID"
+- The proxy page works (no 404) but videoId is not being passed
+
+The video player in the LIBRARY works perfectly - videos play fine there.
+
+The problem is in how chat video cards pass the videoId to the player.
+
+Check the chat video card component:
+- How is it getting the videoId?
+- Is videoId being passed when opening the video player modal?
+- Compare to how Library video cards work (those work correctly)
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: CHAT VIDEO THUMBNAILS NOT SHOWING
+═══════════════════════════════════════════════════════════════════════════════
+
+Videos in chat show BJJ OS placeholder instead of YouTube thumbnail.
+But Library shows thumbnails correctly.
+
+The thumbnail URL should be:
+https://img.youtube.com/vi/VIDEO_ID/hqdefault.jpg
+
+The chat video cards are not receiving the videoId needed to build this URL.
+
+This is likely the same root cause as Issue 1 - the videoId is not being 
+passed to chat video cards from the AI response.
+
+Check how videos are parsed from Professor OS responses and ensure videoId 
+is included in the video object passed to the chat UI.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: CHAT HISTORY NOT LOADING ON iOS
+═══════════════════════════════════════════════════════════════════════════════
+
+When logging back into the iOS app, previous chat conversations don't appear.
+The chat starts fresh with no history.
+
+On web, chat history persists. On iOS, it doesn't.
+
+Check:
+- Is the userId being passed correctly on iOS?
+- Is the /api/ai/chat/history endpoint being called on app load?
+- Is there an authentication issue preventing history from loading?
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 4: BOTTOM NAV LABELS INCONSISTENT
+═══════════════════════════════════════════════════════════════════════════════
+
+On Settings page, bottom nav shows: "OS, Saved, Library, Settings"
+On other pages, it shows: "Chat, Videos, Saved, Settings"
+
+Make the labels consistent across ALL pages:
+- Chat (or Prof OS)
+- Videos
+- Saved
+- Settings
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Fix chat video cards (videoId not passing) - CRITICAL
+2. Fix chat thumbnails (same root cause)
+3. Fix chat history loading
+4. Fix nav label consistency
+
+After fixes:
+npm run build
+npx cap sync ios
+```
+
+-----
+
+**Send this to Replit. The key insight is that Library videos work perfectly, so the proxy is fine - it’s just the chat video cards that aren’t getting the videoId properly.**

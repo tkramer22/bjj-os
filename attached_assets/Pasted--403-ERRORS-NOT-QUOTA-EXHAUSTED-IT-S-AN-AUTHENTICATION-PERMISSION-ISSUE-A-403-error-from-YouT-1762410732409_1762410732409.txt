@@ -1,0 +1,260 @@
+**403 ERRORS = NOT QUOTA EXHAUSTED, IT’S AN AUTHENTICATION/PERMISSION ISSUE**
+
+A 403 error from YouTube API means:
+
+- ❌ NOT “quota exceeded” (that would be 429)
+- ✅ “Access forbidden” - your API key doesn’t have permission
+
+-----
+
+## **WHAT 403 MEANS:**
+
+**Possible causes:**
+
+1. **API key is invalid/expired**
+1. **YouTube Data API v3 not enabled** in Google Cloud project
+1. **API key has domain restrictions** (only allows certain domains)
+1. **Wrong credentials** (using wrong API key)
+1. **Service account issue** (if using service account)
+
+-----
+
+# **📋 URGENT: DEBUG YOUTUBE API 403 ERRORS - SEND TO REPLIT AGENT:**
+
+```
+CRITICAL: YouTube API returning 403 errors - curation completely blocked
+
+The system reports "API maxed out" but we're getting 403 errors, which means 
+PERMISSION DENIED, not quota exceeded. The API key either doesn't work or 
+doesn't have the right permissions.
+
+This is blocking ALL video curation. Fix this immediately.
+
+═══════════════════════════════════════════════════════════════════════════════
+DIAGNOSIS REQUIRED
+═══════════════════════════════════════════════════════════════════════════════
+
+1. CHECK ENVIRONMENT VARIABLE
+   ```bash
+   echo $YOUTUBE_API_KEY
+```
+
+Does it exist?
+Is it the correct format? (Should look like: AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX)
+
+1. TEST API KEY MANUALLY
+   Make a direct curl request:
+   
+   ```bash
+   curl "https://www.googleapis.com/youtube/v3/search?part=snippet&q=bjj&type=video&key=$YOUTUBE_API_KEY"
+   ```
+   
+   Expected responses:
+   • 200 = Key works ✅
+   • 403 = Permission denied ❌
+   • 400 = Invalid key format ❌
+   • 429 = Quota exceeded (different from 403) ⚠️
+   
+   Show me the EXACT error message from YouTube.
+1. CHECK YOUTUBE DATA API v3 IS ENABLED
+   The API key needs YouTube Data API v3 enabled in Google Cloud Console.
+   
+   Go to: <https://console.cloud.google.com/apis/library/youtube.googleapis.com>
+   
+   Is it ENABLED for this project?
+   If not, click “Enable” and wait 2 minutes.
+1. CHECK API KEY RESTRICTIONS
+   Go to: <https://console.cloud.google.com/apis/credentials>
+   
+   Find your API key → Click Edit
+   
+   Check:
+   • Application restrictions: Should be “None” or include bjjos.app domain
+   • API restrictions: Should include “YouTube Data API v3”
+   
+   If restricted to wrong domain/IP, curation will fail.
+1. CHECK ACTUAL QUOTA USAGE
+   Go to: <https://console.cloud.google.com/apis/api/youtube.googleapis.com/quotas>
+   
+   Show me:
+   • Queries per day: X / 10,000
+   • What’s the actual number used today?
+   
+   If it says 0 used, that proves the API calls aren’t even reaching YouTube.
+1. CHECK SERVER LOGS FOR EXACT ERROR
+   
+   ```bash
+   tail -100 /var/log/app.log | grep -i "403\|youtube\|forbidden"
+   ```
+   
+   Show me the FULL error message, including:
+   • Error code
+   • Error message from YouTube
+   • Request URL being called
+
+═══════════════════════════════════════════════════════════════════════════════
+LIKELY CAUSES (IN ORDER)
+═══════════════════════════════════════════════════════════════════════════════
+
+CAUSE 1: YouTube Data API v3 not enabled (90% probability)
+• Go to Google Cloud Console
+• Navigate to APIs & Services → Library
+• Search “YouTube Data API v3”
+• Click Enable
+• Wait 2 minutes, try again
+
+CAUSE 2: API key has domain restrictions
+• Go to Google Cloud Console → Credentials
+• Click on your API key
+• Under “Application restrictions”: Set to “None”
+• Under “API restrictions”: Ensure “YouTube Data API v3” is checked
+• Save changes
+
+CAUSE 3: Wrong API key in environment
+• Double-check the API key in Replit Secrets
+• Generate a NEW API key if needed:
+
+- Go to Google Cloud Console → Credentials
+- Click “Create Credentials” → “API Key”
+- Copy new key
+- Update YOUTUBE_API_KEY in Replit Secrets
+- Restart server
+
+CAUSE 4: IP/Domain not whitelisted
+• If using Application restrictions on the API key
+• Add bjjos.app and Replit’s IP ranges
+• Or set to “None” temporarily for testing
+
+═══════════════════════════════════════════════════════════════════════════════
+TEMPORARY TEST
+═══════════════════════════════════════════════════════════════════════════════
+
+Create a simple test script to isolate the issue:
+
+File: test-youtube-api.js
+
+```javascript
+const axios = require('axios');
+
+async function testYouTubeAPI() {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  
+  console.log('Testing YouTube API...');
+  console.log('API Key exists:', !!apiKey);
+  console.log('API Key length:', apiKey?.length);
+  console.log('API Key format:', apiKey?.substring(0, 10) + '...');
+  
+  try {
+    // Simple search request
+    const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+      params: {
+        part: 'snippet',
+        q: 'bjj',
+        type: 'video',
+        maxResults: 1,
+        key: apiKey
+      }
+    });
+    
+    console.log('✅ SUCCESS! API key works');
+    console.log('Response:', response.data);
+    
+  } catch (error) {
+    console.error('❌ ERROR:', error.response?.status);
+    console.error('Error message:', error.response?.data);
+    console.error('Full error:', error.message);
+    
+    if (error.response?.status === 403) {
+      console.error('\n🚨 403 FORBIDDEN - This means:');
+      console.error('1. YouTube Data API v3 is NOT enabled in Google Cloud');
+      console.error('2. OR API key has wrong restrictions');
+      console.error('3. OR API key is invalid');
+      console.error('\nGo to: https://console.cloud.google.com/apis/library/youtube.googleapis.com');
+      console.error('And click ENABLE');
+    }
+    
+    if (error.response?.status === 400) {
+      console.error('\n🚨 400 BAD REQUEST - API key format is wrong');
+    }
+    
+    if (error.response?.status === 429) {
+      console.error('\n🚨 429 TOO MANY REQUESTS - Quota actually exceeded');
+    }
+  }
+}
+
+testYouTubeAPI();
+```
+
+Run this:
+
+```bash
+node test-youtube-api.js
+```
+
+Show me the EXACT output.
+
+═══════════════════════════════════════════════════════════════════════════════
+IF API KEY IS THE PROBLEM - GET NEW ONE
+═══════════════════════════════════════════════════════════════════════════════
+
+Steps to create a fresh API key:
+
+1. Go to: <https://console.cloud.google.com/apis/credentials>
+1. Click “Create Credentials” → “API Key”
+1. Copy the new key (starts with AIza…)
+1. Click “Edit API Key”
+1. Under “API restrictions”:
+
+- Select “Restrict key”
+- Check ONLY “YouTube Data API v3”
+
+1. Under “Application restrictions”:
+
+- Set to “None” for now (can restrict later)
+
+1. Save
+1. Update in Replit:
+
+- Go to Replit Secrets
+- Update YOUTUBE_API_KEY with new value
+
+1. Restart server
+1. Test again
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXING
+═══════════════════════════════════════════════════════════════════════════════
+
+Once API key works:
+
+1. Start curation immediately
+1. Verify videos are being screened
+1. Check quota usage increases in Google Cloud Console
+
+Show me:
+• Screenshot of successful API test
+• Quota usage showing requests going through
+• First video being analyzed
+
+═══════════════════════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Exact 403 error message from logs
+1. Output of test-youtube-api.js script
+1. Screenshot of YouTube Data API v3 status (enabled/disabled)
+1. Screenshot of API key restrictions
+1. Actual quota usage from Google Cloud Console
+
+This is CRITICAL - curation is completely blocked without working YouTube API.
+
+```
+---
+
+**SEND THIS TO REPLIT AGENT**
+
+Then let me know what the error message actually says. 
+
+My bet: **YouTube Data API v3 is not enabled** in the Google Cloud project. That's the #1 cause of 403 errors. 🎯​​​​​​​​​​​​​​​​
+```

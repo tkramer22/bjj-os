@@ -1,0 +1,1005 @@
+# **REPLIT AGENT MEGA OPTIMIZATION PROMPT** 🚀
+
+-----
+
+**Copy the entire block below and paste into Replit Agent in ONE message:**
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+BJJ OS PRODUCTION OPTIMIZATION - CRITICAL PRE-LAUNCH HARDENING
+═══════════════════════════════════════════════════════════════════════════════
+
+CONTEXT:
+You are optimizing BJJ OS for a viral launch. A major influencer with 150K followers
+will post about this app, potentially driving 500-1,000 signups in the first 24 hours.
+The current system is built but not optimized for scale. We need to harden it NOW.
+
+CRITICAL REQUIREMENTS:
+• Zero downtime during optimization
+• Every change must be tested before deployment
+• All optimizations must be production-ready
+• System must handle 1,000 concurrent users
+• Response times must be <500ms under load
+• Database must handle 10,000+ queries/minute
+• API costs must stay under $1 per user per month
+• No breaking changes to existing functionality
+
+YOUR MISSION:
+Implement ALL optimizations below in order. Test each one. Deploy incrementally.
+This is production. Be careful. Be thorough. No shortcuts.
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 1: DATABASE OPTIMIZATION (CRITICAL - DO FIRST)
+═══════════════════════════════════════════════════════════════════════════════
+
+TASK 1.1: ADD CRITICAL INDEXES
+
+Find the database connection file (likely db/index.ts or server/db.ts).
+Add a migration file or run these SQL commands directly in the database:
+
+```sql
+-- Video search optimization (most critical)
+CREATE INDEX IF NOT EXISTS idx_videos_instructor ON videos(instructor_name);
+CREATE INDEX IF NOT EXISTS idx_videos_technique ON videos(technique_category);
+CREATE INDEX IF NOT EXISTS idx_videos_credibility ON videos(instructor_credibility DESC);
+CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_videos_url ON videos(video_url);
+
+-- Message history optimization  
+CREATE INDEX IF NOT EXISTS idx_messages_user_created ON messages(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC);
+
+-- User lookup optimization
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_subscription ON users(subscription_status, created_at);
+CREATE INDEX IF NOT EXISTS idx_users_created ON users(created_at DESC);
+
+-- Subscription lookup optimization
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe ON subscriptions(stripe_subscription_id);
+```
+
+VERIFICATION:
+After adding indexes, run these test queries and log execution time:
+
+```sql
+EXPLAIN ANALYZE SELECT * FROM videos WHERE instructor_name = 'Gordon Ryan' LIMIT 20;
+EXPLAIN ANALYZE SELECT * FROM messages WHERE user_id = 'test-user-id' ORDER BY created_at DESC LIMIT 50;
+EXPLAIN ANALYZE SELECT * FROM users WHERE email = 'test@example.com';
+```
+
+All queries should show “Index Scan” and execute in <10ms.
+Log the results to console with execution times.
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 2: RATE LIMITING (CRITICAL - PREVENTS ABUSE)
+═══════════════════════════════════════════════════════════════════════════════
+
+TASK 2.1: INSTALL RATE LIMITING
+
+```bash
+npm install express-rate-limit express-slow-down
+```
+
+TASK 2.2: CREATE RATE LIMIT MIDDLEWARE
+
+Create new file: server/middleware/rateLimiter.ts
+
+```typescript
+import rateLimit from 'express-rate-limit';
+import slowDown from 'express-slow-down';
+
+// Aggressive rate limiting for Professor OS messages
+export const messageLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  max: async (req) => {
+    // Get user from request (adjust based on your auth setup)
+    const user = req.user;
+    
+    // Paid users: 100 messages/day
+    // Free/trial users: 10 messages/day
+    // No user (shouldn't happen): 5 messages/day
+    if (user?.subscriptionStatus === 'active') {
+      return 100;
+    } else if (user) {
+      return 10;
+    } else {
+      return 5;
+    }
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Daily message limit reached',
+    message: 'You have reached your daily message limit. Upgrade to premium for unlimited messages.',
+    upgradeUrl: '/pricing'
+  },
+  // Store rate limit info in memory (Redis would be better but this works)
+  store: undefined // Uses default memory store
+});
+
+// Slow down rapid requests (before they hit rate limit)
+export const messageSlowDown = slowDown({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  delayAfter: 10, // Allow 10 requests per 15 minutes at full speed
+  delayMs: 500 // After that, add 500ms delay per request
+});
+
+// Signup rate limiting (prevent bot signups)
+export const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // 3 signups per hour per IP
+  message: {
+    error: 'Too many signup attempts',
+    message: 'Please wait before trying again.'
+  }
+});
+
+// General API rate limiting (catch-all)
+export const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+```
+
+TASK 2.3: APPLY RATE LIMITING TO ROUTES
+
+Find your routes file (likely server/routes.ts or server/index.ts).
+
+Add rate limiting to these endpoints:
+
+```typescript
+import { 
+  messageLimiter, 
+  messageSlowDown, 
+  signupLimiter, 
+  generalLimiter 
+} from './middleware/rateLimiter';
+
+// Apply to Professor OS chat endpoint
+app.post('/api/professor-os/chat', 
+  messageSlowDown,      // Slow down rapid requests first
+  messageLimiter,       // Then enforce hard limit
+  async (req, res) => {
+    // existing chat logic
+  }
+);
+
+// Apply to signup endpoint
+app.post('/api/signup', 
+  signupLimiter,
+  async (req, res) => {
+    // existing signup logic
+  }
+);
+
+// Apply to all API routes as catch-all (do this AFTER specific limiters)
+app.use('/api', generalLimiter);
+```
+
+VERIFICATION:
+Test rate limiting:
+
+1. Send 11 messages as free user → should block on 11th
+1. Send 101 messages as paid user → should block on 101st
+1. Send 4 signup requests in 1 hour → should block on 4th
+1. Send 15 rapid requests → should slow down after 10th
+
+Log all rate limit hits to console for monitoring.
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 3: REDIS CACHING (CRITICAL - REDUCES COSTS 50%+)
+═══════════════════════════════════════════════════════════════════════════════
+
+TASK 3.1: SET UP UPSTASH REDIS (FREE TIER)
+
+Go to: <https://upstash.com>
+
+1. Create free account
+1. Create new Redis database
+1. Copy the REST API URL and Token
+1. Add to Replit Secrets:
+
+- UPSTASH_REDIS_REST_URL
+- UPSTASH_REDIS_REST_TOKEN
+
+TASK 3.2: INSTALL UPSTASH REDIS CLIENT
+
+```bash
+npm install @upstash/redis
+```
+
+TASK 3.3: CREATE CACHE SERVICE
+
+Create new file: server/services/cache.ts
+
+```typescript
+import { Redis } from '@upstash/redis';
+
+// Initialize Redis client
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+// Cache service with intelligent TTLs
+export class CacheService {
+  
+  // Generate cache key from query and context
+  private static generateKey(prefix: string, data: any): string {
+    const hash = require('crypto')
+      .createHash('md5')
+      .update(JSON.stringify(data))
+      .digest('hex');
+    return `${prefix}:${hash}`;
+  }
+
+  // Get from cache or execute function
+  static async getOrSet<T>(
+    key: string,
+    fetchFunction: () => Promise<T>,
+    ttlSeconds: number = 3600
+  ): Promise<T> {
+    try {
+      // Try to get from cache
+      const cached = await redis.get(key);
+      
+      if (cached !== null) {
+        console.log(`Cache HIT: ${key}`);
+        return cached as T;
+      }
+
+      console.log(`Cache MISS: ${key}`);
+      
+      // Cache miss - fetch fresh data
+      const freshData = await fetchFunction();
+      
+      // Store in cache
+      await redis.setex(key, ttlSeconds, JSON.stringify(freshData));
+      
+      return freshData;
+    } catch (error) {
+      console.error('Cache error, falling back to direct fetch:', error);
+      // If cache fails, still return data (graceful degradation)
+      return await fetchFunction();
+    }
+  }
+
+  // Cache Professor OS responses (deduplication)
+  static async cacheProfessorOSResponse(
+    userQuery: string,
+    userContext: any,
+    response: string
+  ): Promise<void> {
+    const key = this.generateKey('prof-os', { userQuery, userContext });
+    await redis.setex(key, 30 * 24 * 60 * 60, response); // 30 days
+  }
+
+  static async getCachedProfessorOSResponse(
+    userQuery: string,
+    userContext: any
+  ): Promise<string | null> {
+    const key = this.generateKey('prof-os', { userQuery, userContext });
+    return await redis.get(key);
+  }
+
+  // Cache video searches (high frequency)
+  static async cacheVideoSearch(
+    technique: string,
+    filters: any,
+    results: any[]
+  ): Promise<void> {
+    const key = this.generateKey('videos', { technique, filters });
+    await redis.setex(key, 24 * 60 * 60, JSON.stringify(results)); // 24 hours
+  }
+
+  static async getCachedVideoSearch(
+    technique: string,
+    filters: any
+  ): Promise<any[] | null> {
+    const key = this.generateKey('videos', { technique, filters });
+    const cached = await redis.get(key);
+    return cached ? JSON.parse(cached as string) : null;
+  }
+
+  // Invalidate video cache (when new videos added)
+  static async invalidateVideoCache(): Promise<void> {
+    // Upstash doesn't support SCAN, so we'll use a timestamp marker
+    await redis.set('video-cache-invalidated-at', Date.now());
+  }
+
+  // Get cache stats
+  static async getStats(): Promise<any> {
+    try {
+      const info = await redis.info();
+      return {
+        connected: true,
+        info: info
+      };
+    } catch (error) {
+      return {
+        connected: false,
+        error: error.message
+      };
+    }
+  }
+}
+```
+
+TASK 3.4: APPLY CACHING TO PROFESSOR OS
+
+Find your Professor OS endpoint and wrap it with caching:
+
+```typescript
+import { CacheService } from './services/cache';
+
+app.post('/api/professor-os/chat', async (req, res) => {
+  const { message, userContext } = req.body;
+  const userId = req.user.id;
+
+  try {
+    // Check cache first (for common questions)
+    const cached = await CacheService.getCachedProfessorOSResponse(
+      message,
+      userContext
+    );
+
+    if (cached) {
+      return res.json({
+        response: cached,
+        cached: true,
+        cachedAt: new Date().toISOString()
+      });
+    }
+
+    // Cache miss - call Claude API
+    const response = await anthropic.messages.create({
+      // ... existing Claude API call
+    });
+
+    const responseText = response.content[0].text;
+
+    // Cache the response for future identical queries
+    await CacheService.cacheProfessorOSResponse(
+      message,
+      userContext,
+      responseText
+    );
+
+    return res.json({
+      response: responseText,
+      cached: false
+    });
+
+  } catch (error) {
+    console.error('Professor OS error:', error);
+    return res.status(500).json({ error: 'Failed to get response' });
+  }
+});
+```
+
+TASK 3.5: APPLY CACHING TO VIDEO SEARCHES
+
+Find your video search endpoint:
+
+```typescript
+app.get('/api/videos/search', async (req, res) => {
+  const { technique, instructor, limit } = req.query;
+
+  try {
+    // Check cache first
+    const cached = await CacheService.getCachedVideoSearch(
+      technique as string,
+      { instructor, limit }
+    );
+
+    if (cached) {
+      return res.json({
+        videos: cached,
+        cached: true
+      });
+    }
+
+    // Cache miss - query database
+    const videos = await db.query.videos.findMany({
+      where: and(
+        eq(videos.technique_category, technique),
+        instructor ? eq(videos.instructor_name, instructor) : undefined
+      ),
+      limit: parseInt(limit as string) || 20,
+      orderBy: desc(videos.instructor_credibility)
+    });
+
+    // Cache results
+    await CacheService.cacheVideoSearch(
+      technique as string,
+      { instructor, limit },
+      videos
+    );
+
+    return res.json({
+      videos,
+      cached: false
+    });
+
+  } catch (error) {
+    console.error('Video search error:', error);
+    return res.status(500).json({ error: 'Search failed' });
+  }
+});
+```
+
+VERIFICATION:
+
+1. First video search: Should be slow (cache miss)
+1. Second identical search: Should be instant (cache hit)
+1. First Professor OS query: Calls Claude API
+1. Identical query from different user: Returns cached response
+1. Check cache hit rate after 100 requests: Should be >40%
+
+Log cache hits/misses to console.
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 4: SQL INJECTION PREVENTION (SECURITY - CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+TASK 4.1: AUDIT ALL DATABASE QUERIES
+
+Search the entire codebase for database queries.
+Find patterns like:
+
+- `db.query(`
+- `db.execute(`
+- String concatenation with variables in SQL
+- Template literals in SQL (backticks with ${})
+
+TASK 4.2: FIX VULNERABLE QUERIES
+
+For each query found, ensure it uses parameterized queries:
+
+❌ VULNERABLE:
+
+```typescript
+db.query(`SELECT * FROM users WHERE email = '${userEmail}'`);
+db.query(`SELECT * FROM videos WHERE technique = '${technique}'`);
+```
+
+✅ SAFE:
+
+```typescript
+db.query('SELECT * FROM users WHERE email = $1', [userEmail]);
+db.query('SELECT * FROM videos WHERE technique = $1', [technique]);
+```
+
+If using Drizzle ORM (recommended), all queries are automatically safe:
+
+```typescript
+await db.select().from(users).where(eq(users.email, userEmail));
+```
+
+TASK 4.3: ADD INPUT VALIDATION
+
+Create validation middleware: server/middleware/validation.ts
+
+```typescript
+import { z } from 'zod';
+
+// Email validation
+export const emailSchema = z.string().email().max(255);
+
+// Password validation
+export const passwordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters')
+  .max(128)
+  .regex(/[0-9]/, 'Password must contain at least one number')
+  .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character');
+
+// Message validation
+export const messageSchema = z.string()
+  .min(1)
+  .max(10000); // Prevent huge messages
+
+// Technique search validation
+export const techniqueSchema = z.string()
+  .min(1)
+  .max(100)
+  .regex(/^[a-zA-Z0-9\s-]+$/, 'Invalid technique name');
+
+// Validation middleware factory
+export function validate(schema: z.ZodSchema) {
+  return (req: any, res: any, next: any) => {
+    try {
+      schema.parse(req.body);
+      next();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: error.errors
+        });
+      }
+      next(error);
+    }
+  };
+}
+```
+
+Apply validation to endpoints:
+
+```typescript
+import { validate, messageSchema, emailSchema } from './middleware/validation';
+
+app.post('/api/professor-os/chat', 
+  validate(z.object({ message: messageSchema })),
+  async (req, res) => {
+    // message is now validated
+  }
+);
+
+app.post('/api/signup',
+  validate(z.object({ 
+    email: emailSchema,
+    password: passwordSchema 
+  })),
+  async (req, res) => {
+    // inputs are validated
+  }
+);
+```
+
+VERIFICATION:
+
+1. Try SQL injection in search: `' OR '1'='1` → Should be rejected or safely escaped
+1. Test invalid email: `notanemail` → Should return 400 error
+1. Test weak password: `12345` → Should be rejected
+1. Test huge message: 50,000 characters → Should be rejected
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 5: ERROR MONITORING (VISIBILITY - CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+TASK 5.1: INSTALL SENTRY
+
+```bash
+npm install @sentry/node @sentry/profiling-node
+```
+
+TASK 5.2: INITIALIZE SENTRY
+
+Add to the VERY TOP of server/index.ts (before any other imports):
+
+```typescript
+import * as Sentry from "@sentry/node";
+import { ProfilingIntegration } from "@sentry/profiling-node";
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN, // Get this from sentry.io (free account)
+  environment: process.env.NODE_ENV || 'development',
+  integrations: [
+    new ProfilingIntegration(),
+  ],
+  // Performance Monitoring
+  tracesSampleRate: 0.1, // 10% of requests
+  // Profiling
+  profilesSampleRate: 0.1, // 10% of requests
+});
+```
+
+TASK 5.3: ADD ERROR HANDLING MIDDLEWARE
+
+Add at the END of your middleware chain (after all routes):
+
+```typescript
+// Catch all errors
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error('Error caught:', err);
+  
+  // Send to Sentry
+  Sentry.captureException(err);
+  
+  // Don't leak error details to user
+  res.status(500).json({
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not found',
+    path: req.path
+  });
+});
+```
+
+TASK 5.4: ADD PERFORMANCE MONITORING
+
+Wrap critical operations:
+
+```typescript
+app.post('/api/professor-os/chat', async (req, res) => {
+  const transaction = Sentry.startTransaction({
+    op: "professor-os-chat",
+    name: "Professor OS Chat Request"
+  });
+
+  try {
+    // Your existing code
+    const response = await getChatResponse();
+    
+    transaction.finish();
+    return res.json(response);
+  } catch (error) {
+    Sentry.captureException(error);
+    transaction.finish();
+    throw error;
+  }
+});
+```
+
+TASK 5.5: SET UP SENTRY ACCOUNT
+
+If you don’t have one:
+
+1. Go to [sentry.io](http://sentry.io)
+1. Sign up (free tier)
+1. Create new Node.js project
+1. Copy DSN
+1. Add to Replit Secrets: SENTRY_DSN
+
+VERIFICATION:
+
+1. Throw test error → Should appear in Sentry dashboard
+1. Check performance → Should see request timings
+1. Verify alerts configured → Email on errors
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 6: PERFORMANCE OPTIMIZATION
+═══════════════════════════════════════════════════════════════════════════════
+
+TASK 6.1: ADD RESPONSE COMPRESSION
+
+```bash
+npm install compression
+```
+
+Add to server/index.ts:
+
+```typescript
+import compression from 'compression';
+
+// Add near top of middleware chain
+app.use(compression());
+```
+
+TASK 6.2: OPTIMIZE CLAUDE API CALLS
+
+Find your Professor OS system prompt and compress it:
+
+BEFORE:
+
+```typescript
+const systemPrompt = `You are Professor OS, an elite BJJ coach...
+[3,000 words of prompt]
+`;
+```
+
+AFTER:
+
+```typescript
+// Load prompt once at startup, not per request
+const PROFESSOR_OS_PROMPT = loadPromptFromFile();
+
+function loadPromptFromFile() {
+  // Store prompt in separate file
+  const prompt = fs.readFileSync('./prompts/professor-os.txt', 'utf-8');
+  // Remove unnecessary whitespace
+  return prompt.replace(/\s+/g, ' ').trim();
+}
+```
+
+TASK 6.3: ADD DATABASE CONNECTION POOLING
+
+If not already configured, set connection pool limits:
+
+```typescript
+// In database configuration
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20, // Maximum 20 connections
+  min: 2,  // Minimum 2 connections
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+```
+
+TASK 6.4: OPTIMIZE VIDEO CURATION
+
+If auto-curation runs during peak hours, add scheduling:
+
+```typescript
+// Only run curation during off-peak (2-6 AM EST)
+function shouldRunCuration() {
+  const hour = new Date().getHours();
+  return hour >= 2 && hour < 6;
+}
+
+// Add check before starting curation
+if (shouldRunCuration()) {
+  await runAutoCuration();
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 7: LOAD TESTING (VERIFICATION)
+═══════════════════════════════════════════════════════════════════════════════
+
+TASK 7.1: CREATE LOAD TEST SCRIPT
+
+Create file: tests/load-test.yml
+
+```yaml
+config:
+  target: "https://YOUR-REPL-URL.replit.app"
+  phases:
+    # Warm up
+    - duration: 60
+      arrivalRate: 1
+      name: "Warm up"
+    
+    # Ramp up
+    - duration: 120
+      arrivalRate: 5
+      rampTo: 20
+      name: "Ramp up load"
+    
+    # Sustained load (simulates viral traffic)
+    - duration: 300
+      arrivalRate: 20
+      name: "Sustained load"
+    
+    # Spike test
+    - duration: 60
+      arrivalRate: 50
+      name: "Traffic spike"
+
+scenarios:
+  - name: "User signup and first message"
+    flow:
+      # Signup
+      - post:
+          url: "/api/signup"
+          json:
+            email: "test{{ $randomNumber() }}@loadtest.com"
+            password: "LoadTest123!"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      # Send message to Professor OS
+      - post:
+          url: "/api/professor-os/chat"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            message: "What's the best way to pass guard?"
+      
+      # Search videos
+      - get:
+          url: "/api/videos/search?technique=guard-passing&limit=10"
+
+  - name: "Video browsing"
+    flow:
+      # Search videos
+      - get:
+          url: "/api/videos/search?technique={{ $randomString() }}&limit=20"
+      
+      - think: 2
+      
+      # Get specific video
+      - get:
+          url: "/api/videos/{{ $randomNumber() }}"
+```
+
+TASK 7.2: RUN LOAD TEST
+
+If Artillery not installed:
+
+```bash
+npm install -g artillery
+```
+
+Run the test:
+
+```bash
+artillery run tests/load-test.yml
+```
+
+TASK 7.3: ANALYZE RESULTS
+
+The test should show:
+
+- ✅ Response times: p95 < 2 seconds, p99 < 5 seconds
+- ✅ Error rate: < 1%
+- ✅ Successful requests: > 99%
+- ✅ HTTP 429 (rate limited): Some expected (shows rate limiting works)
+
+If test fails:
+
+1. Check error logs in Sentry
+1. Check database slow queries
+1. Check cache hit rate
+1. Identify bottleneck
+1. Fix and retest
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 8: PRODUCTION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+TASK 8.1: SECURITY VERIFICATION
+
+Run through this checklist:
+
+☐ All API keys in environment variables (not in code)
+☐ .env file in .gitignore
+☐ No secrets committed to git
+☐ SQL injection prevention verified
+☐ Rate limiting active on all endpoints
+☐ Input validation on all user inputs
+☐ CORS configured (only bjjos.app allowed)
+☐ Helmet.js installed for security headers
+☐ HTTPS enabled (should be automatic on Replit)
+☐ Session cookies httpOnly and secure
+
+TASK 8.2: PERFORMANCE VERIFICATION
+
+☐ All database indexes created
+☐ Cache hit rate > 40%
+☐ API response times < 500ms (p95)
+☐ Database queries < 100ms
+☐ No N+1 queries
+☐ Compression enabled
+☐ Connection pooling configured
+
+TASK 8.3: MONITORING VERIFICATION
+
+☐ Sentry catching errors
+☐ Sentry performance monitoring active
+☐ Cache stats being logged
+☐ Rate limit hits being logged
+☐ Slow query logging enabled
+☐ Can view logs in real-time
+
+TASK 8.4: FUNCTIONALITY VERIFICATION
+
+Test these critical flows:
+
+☐ New user signup
+☐ Payment processing (test mode)
+☐ First Professor OS message
+☐ Video search
+☐ Video recommendation quality
+☐ User authentication
+☐ Subscription management
+☐ Auto-curation running
+
+═══════════════════════════════════════════════════════════════════════════════
+DEPLOYMENT & TESTING PROTOCOL
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL RULES:
+
+1. Deploy each phase incrementally
+1. Test each phase before moving to next
+1. If anything breaks, rollback immediately
+1. Keep production running at all times
+1. Test with real user accounts
+1. Monitor error rates during deployment
+
+DEPLOYMENT SEQUENCE:
+
+1. Deploy Phase 1 (indexes) → Test queries
+1. Deploy Phase 2 (rate limiting) → Test limits
+1. Deploy Phase 3 (caching) → Test cache hits
+1. Deploy Phase 4 (security) → Test injection prevention
+1. Deploy Phase 5 (monitoring) → Verify Sentry working
+1. Deploy Phase 6 (performance) → Test response times
+1. Run Phase 7 (load test) → Verify system handles load
+1. Complete Phase 8 (checklist) → Final verification
+
+After EACH deployment:
+
+- Wait 5 minutes
+- Check error logs
+- Test critical functionality
+- If errors spike, rollback immediately
+
+ROLLBACK PROCEDURE:
+
+1. Replit: History → Rewind to last working version
+1. Or: Git revert to previous commit
+1. Verify system working again
+1. Investigate issue before retrying
+
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════════════════
+
+System is ready for launch when ALL these are true:
+
+☑ Database indexes created and verified
+☑ Rate limiting active (tested with 11 messages as free user)
+☑ Redis caching working (40%+ hit rate)
+☑ SQL injection prevented (tested malicious inputs)
+☑ Sentry monitoring active (test error captured)
+☑ Load test passed (1000 users, <1% errors)
+☑ API costs projected <$0.50/user/month
+☑ Response times <500ms under load
+☑ All security checklist items completed
+☑ All functionality verified working
+
+When complete, provide summary:
+
+- What was optimized
+- Test results
+- Performance improvements
+- Any issues encountered
+- System ready for launch: YES/NO
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL NOTES
+═══════════════════════════════════════════════════════════════════════════════
+
+This is production code. Users will rely on this system.
+Take your time. Test thoroughly. No shortcuts.
+
+Excellence is the pillar.
+
+If you encounter any errors:
+
+1. Log the full error
+1. Attempt to fix
+1. If unsure, stop and ask for guidance
+1. Never deploy broken code
+
+Good luck. Build something excellent.
+═══════════════════════════════════════════════════════════════════════════════
+
+```
+---
+
+# **INSTRUCTIONS FOR YOU:**
+
+1. **Copy the entire prompt above** (everything between the code block)
+
+2. **Paste into Replit Agent** in ONE message
+
+3. **Let it run overnight** - It will:
+   - Optimize database
+   - Add rate limiting
+   - Implement caching
+   - Fix security issues
+   - Add monitoring
+   - Run load tests
+   - Give you a full report
+
+4. **When you wake up:**
+   - Check Replit Agent's final report
+   - Review what it did
+   - Test the system yourself
+   - If everything passes → Ready for JT launch
+   - If issues → I'll help debug
+
+---
+
+**This prompt is designed to be comprehensive and safe. Replit Agent will work through it methodically.**
+
+**Sleep well. The system will be hardened by morning.** 🚀​​​​​​​​​​​​​​​​
+```

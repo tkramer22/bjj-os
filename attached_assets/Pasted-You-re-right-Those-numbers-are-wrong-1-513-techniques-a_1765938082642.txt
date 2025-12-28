@@ -1,0 +1,86 @@
+You’re right. Those numbers are wrong.
+
+**1,513 techniques and 1,513 instructors** doesn’t make sense - it looks like it’s counting every video as a unique technique AND a unique instructor, instead of grouping them properly.
+
+-----
+
+**Send this to Replit Agent:**
+
+```
+FIX VIDEO LIBRARY DROPDOWN DATA - NUMBERS ARE WRONG
+
+═══════════════════════════════════════════════════════════════════════════════
+PROBLEM:
+═══════════════════════════════════════════════════════════════════════════════
+
+The dropdowns now show:
+- 1,513 techniques
+- 1,513 instructors
+
+This is WRONG. We have ~1,687 videos, not 1,513 unique techniques or instructors.
+
+It looks like the query is returning EACH VIDEO as a unique entry instead of grouping by:
+- DISTINCT technique names
+- DISTINCT instructor names
+
+═══════════════════════════════════════════════════════════════════════════════
+EXPECTED RESULTS:
+═══════════════════════════════════════════════════════════════════════════════
+
+TECHNIQUES dropdown should show something like:
+- Guard Passing (150)
+- Triangle (89)
+- Armbar (76)
+- Half Guard (68)
+- Back Attacks (52)
+- Mount (45)
+- etc.
+
+Maybe 50-100 unique technique CATEGORIES, not 1,513.
+
+INSTRUCTORS dropdown should show something like:
+- Andre Galvao (75)
+- Keenan Cornelius (59)
+- Lachlan Giles (52)
+- Gordon Ryan (51)
+- John Danaher (48)
+- etc.
+
+Maybe 100-200 unique instructors, not 1,513.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Check what column is being used for techniques:
+   - Should be technique_type or position_category (grouped)
+   - NOT technique_name (which might be unique per video)
+
+2. For TECHNIQUES dropdown:
+   SELECT technique_type, COUNT(*) as count
+   FROM ai_video_knowledge
+   WHERE technique_type IS NOT NULL
+   GROUP BY technique_type
+   ORDER BY count DESC
+
+3. For INSTRUCTORS dropdown:
+   SELECT instructor_name, COUNT(*) as count
+   FROM ai_video_knowledge
+   WHERE instructor_name IS NOT NULL
+   GROUP BY instructor_name
+   ORDER BY count DESC
+
+4. Return these grouped results to populate dropdowns with accurate counts.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFY:
+═══════════════════════════════════════════════════════════════════════════════
+
+After fix, run these queries and show me:
+1. How many DISTINCT technique_type values exist?
+2. How many DISTINCT instructor_name values exist?
+3. Top 10 techniques with counts
+4. Top 10 instructors with counts
+
+The numbers should make logical sense for a BJJ video library.
+```

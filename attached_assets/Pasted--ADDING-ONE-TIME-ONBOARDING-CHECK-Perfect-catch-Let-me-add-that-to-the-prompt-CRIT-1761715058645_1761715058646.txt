@@ -1,0 +1,527 @@
+# ✅ ADDING ONE-TIME ONBOARDING CHECK
+
+Perfect catch! Let me add that to the prompt:
+
+-----
+
+```
+CRITICAL MISSION: COMPLETE SIGNUP & EMAIL SYSTEM FOR BETA LAUNCH
+
+This must work perfectly tonight. Beta launch depends on it.
+
+THREE CRITICAL REQUIREMENTS:
+1. Email invitation works with clickable button
+2. Both signup flows (lifetime + regular) are identical and sync with Prof OS
+3. Regular users MUST pay via Stripe before dashboard access
+4. Onboarding happens ONCE - never shown again after completion
+
+═══════════════════════════════════════════════════════════════════════════════
+REQUIREMENT 1: FIX EMAIL INVITATION - CLICKABLE BUTTON MUST WORK
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND the sendLifetimeInvitation function or email template code.
+
+The email MUST have:
+- Clickable "Create your account" button that works
+- Button links to: https://bjjos.app/lifetime-signup?token=${inviteToken}
+- Button is visible (not hidden by email clients)
+- Professional HTML email styling
+
+REPLACE entire email HTML with this TESTED template:
+
+```javascript
+async function sendLifetimeInvitation(email, inviteToken) {
+  const magicLink = `https://bjjos.app/lifetime-signup?token=${inviteToken}`;
+  
+  const { Resend } = require('resend');
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  
+  const emailHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f9f9f9;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9f9f9; padding: 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 8px; border: 1px solid #e0e0e0;">
+          <tr>
+            <td style="padding: 40px;">
+              
+              <h1 style="color: #000; margin: 0 0 30px 0; font-size: 24px; font-weight: 600;">BJJ OS</h1>
+              
+              <p style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #000;">
+                You have lifetime access to BJJ OS. Forever. No charge.
+              </p>
+              
+              <p style="margin-bottom: 16px; color: #333; line-height: 1.6;">I'm genuinely grateful you're here early.</p>
+              
+              <p style="margin-bottom: 16px; color: #333; line-height: 1.6;">Takes 45 seconds to create your account:</p>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="${magicLink}" style="display: inline-block; background: #000; color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 6px; font-weight: 600; font-size: 16px;">Create your account</a>
+                  </td>
+                </tr>
+              </table>
+              
+              <div style="margin: 24px 0;">
+                <p style="font-weight: 600; margin-bottom: 12px; color: #000;">What BJJ OS does:</p>
+                
+                <p style="margin-bottom: 16px; color: #333; line-height: 1.6;">Prof. OS is your training partner that never forgets. After each session, tell it what you worked on - it remembers everything, spots patterns in your game, and tells you what to work on next.</p>
+                
+                <p style="margin-bottom: 16px; color: #333; line-height: 1.6;"><strong>The more you use it, the smarter it gets about YOUR game.</strong></p>
+                
+                <p style="margin-bottom: 16px; color: #333; line-height: 1.6;">It also scans YouTube daily for new instructionals from elite grapplers, curates a video library, and recommends techniques specific to what you're struggling with.</p>
+                
+                <p style="color: #333; line-height: 1.6;">This is your second brain for jiu-jitsu.</p>
+              </div>
+              
+              <div style="background: #f5f5f5; padding: 20px; border-radius: 6px; border-left: 4px solid #000; margin: 24px 0;">
+                <p style="font-weight: 600; margin-bottom: 12px; color: #000;">Here's what I need from you:</p>
+                
+                <p style="margin-bottom: 12px; color: #333; line-height: 1.6;">Tell me what breaks. Tell me what's confusing. Tell me what's missing.</p>
+                
+                <p style="margin-bottom: 12px; color: #333; line-height: 1.6;">Your criticism is my best asset. I need to know the bad and what can be better so I can make this great for everyone else.</p>
+                
+                <p style="margin: 0; color: #333; line-height: 1.6;">Use it after every training session for the next few weeks. The feedback you give me now shapes what this becomes.</p>
+              </div>
+              
+              <p style="margin-top: 24px; color: #333; line-height: 1.6;">Thanks for using this and helping me build. It means the world.</p>
+              
+              <p style="margin-top: 24px; font-weight: 600; font-size: 16px; color: #000;">Oss!</p>
+              
+              <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0; font-size: 14px;">
+                <p style="color: #000; font-weight: 600; margin-bottom: 12px; font-size: 15px;">-Todd</p>
+                <p style="margin-bottom: 12px; color: #333; line-height: 1.8;">
+                  <a href="mailto:todd@bjjos.app" style="color: #000; text-decoration: none; font-weight: 500;">Todd@bjjos.app</a><br>
+                  <a href="tel:+19148373750" style="color: #000; text-decoration: none; font-weight: 500;">914.837.3750</a><br>
+                  <span style="font-weight: 600;">Text me anytime with ANY input</span>
+                </p>
+                <p style="margin: 0; color: #666; font-size: 13px;">
+                  Questions or feedback? Just reply to this email or text me directly.
+                </p>
+              </div>
+              
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  await resend.emails.send({
+    from: 'BJJ OS <noreply@bjjos.app>',
+    to: email,
+    subject: 'Your BJJ OS lifetime access',
+    html: emailHTML
+  });
+  
+  console.log('[EMAIL] ✅ Sent to:', email);
+}
+```
+
+TEST THIS EMAIL:
+
+1. Send test invitation to yourself
+1. Check email on phone AND desktop
+1. Click the button - should go to signup page with token
+1. Button must be visible and clickable
+
+═══════════════════════════════════════════════════════════════════════════════
+REQUIREMENT 2: IDENTICAL ONBOARDING FOR BOTH FLOWS + PROF OS SYNC
+═══════════════════════════════════════════════════════════════════════════════
+
+BOTH lifetime AND regular signup must ask these 8 questions IN ORDER:
+
+1. Email (text input)
+1. First Name (text input)
+1. Username (text input with ✅/❌ validation)
+1. Belt Level (5 BUTTONS - White, Blue, Purple, Brown, Black)
+1. Years Training (6 BUTTONS - <6mo, 6mo-1yr, 1-2yr, 2-5yr, 5-10yr, 10+yr)
+1. Training Frequency (3 BUTTONS - 1-2x, 3-4x, 5+x per week)
+1. Struggle Area (7 BUTTONS - Guard Passing, Guard Retention, Takedowns, Submissions, Escapes, Transitions, Other)
+1. Training Focus (3 BUTTONS - Gi, No-Gi, Both)
+
+CRITICAL: Questions 4-8 MUST be clickable buttons, NOT text input fields or dropdowns.
+
+FIND any file with onboarding questions (lifetime-signup.html, signup.html, onboarding form, etc).
+
+ENSURE all 8 questions are present with correct input types.
+
+FOR STRUGGLE AREA - if you see this (WRONG):
+
+```html
+<input type="text" id="struggle-area" placeholder="e.g., triangle choke...">
+```
+
+REPLACE with this (CORRECT):
+
+```html
+<div class="onboarding-step" id="step-struggle-area">
+  <h3>What technique do you struggle with most?</h3>
+  <p style="color: #666; margin-bottom: 20px;">This helps Professor OS give you personalized guidance</p>
+  
+  <div class="choice-buttons">
+    <button type="button" class="choice-btn" data-value="guard_passing">Guard Passing</button>
+    <button type="button" class="choice-btn" data-value="guard_retention">Guard Retention</button>
+    <button type="button" class="choice-btn" data-value="takedowns">Takedowns</button>
+    <button type="button" class="choice-btn" data-value="submissions">Submissions</button>
+    <button type="button" class="choice-btn" data-value="escapes">Escapes</button>
+    <button type="button" class="choice-btn" data-value="transitions">Transitions</button>
+    <button type="button" class="choice-btn" data-value="other">Other</button>
+  </div>
+  
+  <input type="hidden" id="struggle-area" name="struggleArea" required>
+</div>
+```
+
+ENSURE database saves all 8 fields:
+
+```sql
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS first_name VARCHAR(100),
+ADD COLUMN IF NOT EXISTS username VARCHAR(50) UNIQUE,
+ADD COLUMN IF NOT EXISTS belt_level VARCHAR(20),
+ADD COLUMN IF NOT EXISTS years_training VARCHAR(20),
+ADD COLUMN IF NOT EXISTS training_frequency VARCHAR(20),
+ADD COLUMN IF NOT EXISTS struggle_area VARCHAR(50),
+ADD COLUMN IF NOT EXISTS training_focus VARCHAR(20),
+ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT false;
+```
+
+MARK ONBOARDING AS COMPLETED when user finishes signup:
+
+```javascript
+// In lifetime signup endpoint
+const newUser = await db.query(
+  `INSERT INTO users 
+   (email, first_name, username, belt_level, years_training, training_frequency,
+    struggle_area, training_focus, lifetime_access, onboarding_completed, created_at)
+   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, true, NOW())
+   RETURNING *`,
+  [email, firstName, username, beltLevel, yearsTraining, trainingFrequency, 
+   struggleArea, trainingFocus]
+);
+```
+
+ENSURE Prof OS receives this data when user chats:
+
+```javascript
+// In /api/ai/chat or wherever Prof OS is called
+const userProfile = await db.query(
+  `SELECT first_name, belt_level, years_training, training_frequency, 
+   struggle_area, training_focus FROM users WHERE id = $1`,
+  [userId]
+);
+
+const systemPrompt = `You are Prof. OS, expert BJJ coach.
+
+USER PROFILE:
+- Name: ${user.first_name}
+- Belt: ${user.belt_level}
+- Training: ${user.years_training}
+- Frequency: ${user.training_frequency}
+- Main Struggle: ${user.struggle_area}
+- Focus: ${user.training_focus}
+
+Adjust coaching style based on belt level. White belts get simpler explanations. Brown/Black belts get advanced analysis.`;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+REQUIREMENT 3: FORCE PAYMENT FOR REGULAR USERS (STRIPE GATE)
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND the signup completion function.
+
+IMPLEMENT this exact logic:
+
+```javascript
+async function completeSignup() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const lifetimeToken = urlParams.get('token');
+  
+  const signupData = {
+    email: document.getElementById('email').value,
+    firstName: document.getElementById('first-name').value,
+    username: document.getElementById('username').value,
+    beltLevel: document.getElementById('belt-level').value,
+    yearsTraining: document.getElementById('years-training').value,
+    trainingFrequency: document.getElementById('training-frequency').value,
+    struggleArea: document.getElementById('struggle-area').value,
+    trainingFocus: document.getElementById('training-focus').value
+  };
+  
+  if (lifetimeToken) {
+    // LIFETIME USER PATH - No payment required
+    const response = await fetch('/api/auth/signup-with-lifetime-invite', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: lifetimeToken, ...signupData })
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      window.location.href = '/dashboard';
+    } else {
+      alert('Signup error: ' + data.error);
+    }
+    
+  } else {
+    // REGULAR USER PATH - Must pay via Stripe
+    sessionStorage.setItem('pendingSignupData', JSON.stringify(signupData));
+    
+    // Redirect to Stripe checkout
+    const response = await fetch('/api/stripe/create-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signupData })
+    });
+    
+    const data = await response.json();
+    if (data.checkoutUrl) {
+      window.location.href = data.checkoutUrl;
+    } else {
+      alert('Payment initialization failed');
+    }
+  }
+}
+```
+
+ENSURE Stripe endpoint exists:
+
+```javascript
+app.post('/api/stripe/create-checkout', async (req, res) => {
+  const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+  const { signupData } = req.body;
+  
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ['card'],
+    line_items: [{
+      price: process.env.STRIPE_PRICE_ID,
+      quantity: 1,
+    }],
+    mode: 'subscription',
+    success_url: `${process.env.APP_URL}/signup-complete?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.APP_URL}/signup?cancelled=true`,
+    customer_email: signupData.email,
+    metadata: { signupData: JSON.stringify(signupData) }
+  });
+  
+  res.json({ success: true, checkoutUrl: session.url });
+});
+```
+
+BLOCK dashboard access without payment:
+
+```javascript
+app.get('/dashboard', async (req, res, next) => {
+  const token = req.cookies.bjjos_auth;
+  if (!token) return res.redirect('/login');
+  
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  const user = await db.query(
+    'SELECT lifetime_access, stripe_subscription_id FROM users WHERE id = $1',
+    [decoded.userId]
+  );
+  
+  if (!user.rows[0].lifetime_access && !user.rows[0].stripe_subscription_id) {
+    return res.redirect('/subscribe');
+  }
+  
+  next();
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+REQUIREMENT 4: ONBOARDING HAPPENS ONCE - NEVER SHOWN AGAIN
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL: Users should ONLY see onboarding questions during initial signup.
+When they log in again (2nd, 3rd, 100th time), they go STRAIGHT to dashboard.
+
+ADD onboarding check to login flow:
+
+```javascript
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  // ... authentication logic ...
+  
+  const user = await db.query(
+    'SELECT id, email, onboarding_completed, lifetime_access FROM users WHERE email = $1',
+    [email]
+  );
+  
+  if (!user.rows[0].onboarding_completed) {
+    // User hasn't completed onboarding - should never happen but handle it
+    return res.json({ 
+      success: true, 
+      redirect: '/onboarding' 
+    });
+  }
+  
+  // User already completed onboarding - go straight to dashboard
+  res.json({ 
+    success: true, 
+    redirect: '/dashboard' 
+  });
+});
+```
+
+ADD check when accessing app:
+
+```javascript
+// When user visits the app while logged in
+app.get('/', async (req, res) => {
+  const token = req.cookies.bjjos_auth;
+  
+  if (!token) {
+    // Not logged in - show landing page
+    return res.sendFile(__dirname + '/public/landing.html');
+  }
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await db.query(
+      'SELECT onboarding_completed FROM users WHERE id = $1',
+      [decoded.userId]
+    );
+    
+    if (user.rows[0].onboarding_completed) {
+      // Onboarding done - redirect to dashboard
+      return res.redirect('/dashboard');
+    } else {
+      // Onboarding not done - redirect to onboarding
+      return res.redirect('/onboarding');
+    }
+    
+  } catch (error) {
+    return res.sendFile(__dirname + '/public/landing.html');
+  }
+});
+```
+
+ENSURE onboarding_completed is set to TRUE when:
+
+1. Lifetime user completes signup questions
+1. Regular user completes payment + Stripe webhook creates account
+
+```javascript
+// In Stripe webhook after payment
+const newUser = await db.query(
+  `INSERT INTO users 
+   (email, first_name, username, belt_level, years_training, training_frequency,
+    struggle_area, training_focus, stripe_subscription_id, onboarding_completed, created_at)
+   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, NOW())
+   RETURNING *`,
+  [signupData.email, signupData.firstName, signupData.username, signupData.beltLevel,
+   signupData.yearsTraining, signupData.trainingFrequency, signupData.struggleArea,
+   signupData.trainingFocus, session.subscription]
+);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+ADMIN PANEL: PERSONAL MESSAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND admin panel personal message textarea and set default value:
+
+```html
+<textarea id="personal-message" name="personalMessage" rows="13">You have lifetime access to BJJ OS. Forever. No charge.
+
+I'm genuinely grateful you're here early.
+
+Prof. OS is your training companion that never forgets. After each session, tell it what you worked on - it remembers everything, spots patterns in your game, and tells you what to work on next.
+
+The more you use it, the smarter it gets about YOUR game.
+
+It also scans YouTube daily for new instructionals from elite grapplers, curates a video library, and recommends techniques specific to what you're struggling with.
+
+Here's my only ask: Talk to it like a coach or friend and journal your training after every session for a week. Let's see what happens.
+
+Reach out by text anytime with criticisms. The bad and what can be better only helps. Your feedback shapes what this becomes.
+
+Thanks for using this and helping me build. It means the world.
+
+Oss!
+
+-Todd
+Todd@bjjos.app
+914.837.3750
+Text me anytime with ANY input</textarea>
+```
+
+DELETE any sections with “Phone-Based Access” or SMS features.
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL VERIFICATION - MUST ALL BE TRUE BEFORE SAYING DONE
+═══════════════════════════════════════════════════════════════════════════════
+
+EMAIL:
+[ ] Email has clickable button linking to lifetime-signup page
+[ ] Button works on mobile and desktop email clients
+[ ] Email content matches specified template exactly
+
+ONBOARDING:
+[ ] Both flows have identical 8 questions
+[ ] Struggle area uses 7 buttons (NOT text input)
+[ ] Belt level uses 5 buttons (no emojis)
+[ ] Years training exists with 6 buttons
+[ ] All button-based questions have working JavaScript selection
+[ ] Database saves all 8 fields including years_training
+[ ] onboarding_completed column exists and is set to true after signup
+
+ONE-TIME ONBOARDING:
+[ ] Onboarding only shows during initial signup
+[ ] Second login goes STRAIGHT to dashboard
+[ ] Third, fourth, 100th login - always straight to dashboard
+[ ] No way for users to see onboarding questions again after completing them
+
+SIGNUP PATHS:
+[ ] Lifetime users (?token=xxx) go straight to dashboard after onboarding
+[ ] Regular users (no token) redirect to Stripe checkout
+[ ] Regular users CANNOT access dashboard without paying
+[ ] Stripe checkout works and creates account after payment
+
+PROF OS INTEGRATION:
+[ ] Prof OS receives user profile data (belt, training frequency, etc)
+[ ] System prompt includes user context for personalization
+
+ADMIN:
+[ ] Personal message pre-filled with correct text
+[ ] No phone/SMS sections visible
+
+TEST BEFORE SAYING DONE:
+
+1. Send yourself a lifetime invitation email
+1. Click the button in email
+1. Complete all 8 onboarding questions
+1. Verify you land on dashboard
+1. Log out
+1. Log back in - verify you go STRAIGHT to dashboard (no onboarding)
+1. Verify all data saved to database with onboarding_completed = true
+1. Try regular signup - verify Stripe checkout appears
+
+LIST EVERY FILE YOU MODIFIED AND WHAT YOU CHANGED.
+
+THIS MUST WORK FOR BETA LAUNCH TOMORROW.
+
+```
+---
+
+# ✅ PERFECT - READY TO SEND
+
+**Added Requirement 4** which ensures:
+- Onboarding happens ONLY once during signup
+- All subsequent logins go straight to dashboard
+- `onboarding_completed` flag prevents re-showing questions
+
+**Copy and send this now!** 🚀💪​​​​​​​​​​​​​​​​
+```

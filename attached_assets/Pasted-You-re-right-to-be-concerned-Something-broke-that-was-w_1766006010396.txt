@@ -1,0 +1,86 @@
+You’re right to be concerned. Something broke that was working before.
+
+The Agent is guessing (cached frontend, browser caching) but the real issue is likely a **database connection or query problem** in production.
+
+-----
+
+**Send this to Replit Agent:**
+
+```
+STOP GUESSING - DIAGNOSE THE ACTUAL PROBLEM
+
+═══════════════════════════════════════════════════════════════════════════════
+THIS WAS WORKING BEFORE - SOMETHING BROKE IT
+═══════════════════════════════════════════════════════════════════════════════
+
+The admin dashboard was showing all videos. Now it shows:
+- Total Videos: 0
+- Instructors: 0
+- Techniques: 0
+- Dashboard stuck on "Loading metrics..."
+
+This is NOT a caching issue. Something changed.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: CHECK THE DATABASE DIRECTLY
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these queries against PRODUCTION database right now:
+
+SELECT COUNT(*) FROM ai_video_knowledge;
+SELECT COUNT(*) FROM video_watch_status;
+SELECT COUNT(*) FROM videos;
+SELECT COUNT(*) FROM curated_videos;
+
+Tell me the exact counts. The data should still be there.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: CHECK WHAT CHANGED
+═══════════════════════════════════════════════════════════════════════════════
+
+Look at the git history / recent changes:
+
+1. What was the last successful deployment where videos showed correctly?
+2. What commits happened after that?
+3. Did any database migrations run?
+4. Did any table get dropped or truncated?
+
+Show me the recent commit history.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: TEST THE API ENDPOINTS DIRECTLY
+═══════════════════════════════════════════════════════════════════════════════
+
+Call these endpoints and show me the raw response:
+
+1. GET /api/admin/videos - What does it return?
+2. GET /api/admin/stats - What does it return?
+3. GET /api/admin/dashboard - What does it return?
+
+Are they returning empty arrays? Errors? Null?
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: CHECK SERVER LOGS
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me the production server logs for the last hour.
+
+Look for:
+- Database connection errors
+- Query errors
+- Any error messages
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: ROLLBACK IF NEEDED
+═══════════════════════════════════════════════════════════════════════════════
+
+If a recent change broke this, identify which commit and rollback to the last working version.
+
+DO NOT GUESS. Show me actual data from the database and logs.
+
+What EXACTLY changed that broke this?
+```
+
+-----
+
+This will force the Agent to actually diagnose instead of suggesting cache clears. Let me know what comes back.​​​​​​​​​​​​​​​​

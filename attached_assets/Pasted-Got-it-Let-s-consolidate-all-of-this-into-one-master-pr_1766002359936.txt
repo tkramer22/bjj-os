@@ -1,0 +1,130 @@
+Got it. Let’s consolidate all of this into one master prompt:
+
+-----
+
+**Send this to Replit Agent:**
+
+```
+MULTIPLE FIXES NEEDED - PRIORITY ORDER
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX #1: HEIGHT INPUT - ALLOW FEET + INCHES
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+Height only saves when entered in inches. Users think in feet.
+
+SOLUTION:
+Change height input to TWO fields:
+
+┌─────────────────────────────────────┐
+│ Height                              │
+│ [  5  ] ft  [  10  ] in             │
+└─────────────────────────────────────┘
+
+IMPLEMENTATION:
+1. Replace single height input with two fields: feet (number) + inches (number)
+2. On save: totalInches = (feet * 12) + inches
+3. Store totalInches in database
+4. When displaying: feet = Math.floor(totalInches / 12), inches = totalInches % 12
+5. Show as "5'10"" format in profile/settings
+
+Apply to:
+- Onboarding flow
+- Settings/profile edit page
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX #2: VIDEO THUMBNAILS NOT LOADING
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+Video recommendations show but thumbnails are not displaying (blank/loading state).
+
+Screenshot shows: Roger Gracie video card with no thumbnail image.
+
+FIX:
+1. Check how thumbnails are being fetched/stored
+2. Are we storing YouTube thumbnail URLs in ai_video_knowledge?
+3. Is the thumbnail URL being passed to the video card component?
+4. Check if it's a CORS issue or missing data issue
+
+VERIFY:
+- Query a few videos and show me if thumbnail_url exists
+- Check the video card component - is it receiving the thumbnail prop?
+- Check network tab for failed image requests
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX #3: GEMINI PROCESSING STATUS - CLEAR THE BACKLOG
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+We had 364 videos pending Gemini processing earlier. Need confirmation it's complete.
+
+CHECK:
+1. SELECT COUNT(*) FROM video_watch_status WHERE processed = false;
+2. SELECT COUNT(*) FROM video_watch_status WHERE processed = true;
+3. Is the Gemini batch job running?
+4. Any errors in processing?
+
+GOAL: Pending should be 0 or near 0.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX #4: VERIFY PROFESSOR OS IS USING VIDEO KNOWLEDGE
+═══════════════════════════════════════════════════════════════════════════════
+
+Need to confirm the full pipeline is connected:
+
+1. VIDEO KNOWLEDGE CHECK:
+   - When Professor OS responds, is it querying the Gemini-extracted knowledge?
+   - Show me the code path: User question → Video search → Knowledge retrieval → Response
+
+2. SHOW ME THE FLOW:
+   - User asks "How do I do an armbar from mount?"
+   - What query runs against video_watch_status or ai_video_knowledge?
+   - What extracted knowledge is retrieved?
+   - How is it injected into the system prompt?
+
+3. VERIFY WITH LOGS:
+   - Add temporary logging to show what video knowledge is being retrieved
+   - Show me an example of knowledge being used in a response
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX #5: PROFESSOR OS 6.0 PROMPT VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me proof that Professor OS 6.0 is actually running:
+
+1. Show first 50 lines of buildSystemPrompt.ts
+2. Confirm these sections exist:
+   - "black belt best friend" personality
+   - Banned phrases ("Great question!", "I'd be happy to help")
+   - Multi-instructor synthesis
+   - Video recommendation rules
+3. Is the prompt being used for EVERY Professor OS response?
+
+═══════════════════════════════════════════════════════════════════════════════
+REPORT BACK:
+═══════════════════════════════════════════════════════════════════════════════
+
+After investigating, give me:
+
+1. Height fix: DONE / IN PROGRESS
+2. Thumbnails: Root cause identified + fix status
+3. Gemini backlog: X videos pending (should be 0)
+4. Video knowledge pipeline: CONNECTED / BROKEN (with details)
+5. Professor OS 6.0: VERIFIED LIVE / NOT LIVE
+
+Fix all issues found.
+```
+
+-----
+
+This covers everything:
+
+- ✅ Height input (feet + inches)
+- ✅ Missing thumbnails
+- ✅ Gemini processing status
+- ✅ Video knowledge → Professor OS connection
+- ✅ Prompt verification
+
+Let me know what comes back!​​​​​​​​​​​​​​​​

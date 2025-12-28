@@ -1,0 +1,611 @@
+**PERFECT - Let’s build Prompt 7 with varied, natural responses!**
+
+-----
+
+# **PROMPT 7: User Feedback System with Context-Aware Intelligence**
+
+Copy this entire prompt and send to Replit Agent:
+
+-----
+
+```
+Build the User Feedback System with context-aware intelligence and Professor OS personality.
+
+## PART 1: FEEDBACK UI COMPONENTS
+
+### Component: VideoFeedbackButtons
+
+After every video recommendation in chat, show feedback buttons:
+
+```jsx
+<div className="feedback-section">
+  <p className="feedback-prompt">Was this helpful?</p>
+  <div className="feedback-buttons">
+    <button 
+      onClick={() => handleFeedback(videoId, true)}
+      className="feedback-btn helpful"
+    >
+      👍 Yes, this helped
+    </button>
+    <button 
+      onClick={() => handleFeedback(videoId, false)}
+      className="feedback-btn not-helpful"
+    >
+      👎 No, it wasn't
+    </button>
+  </div>
+</div>
+```
+
+Style as inline buttons below video card, not intrusive.
+
+### Component: DetailedFeedbackModal
+
+When user clicks 👎, show modal asking WHY:
+
+```jsx
+<Modal isOpen={showFeedbackModal} onClose={closeModal}>
+  <div className="feedback-modal">
+    <h3>Why wasn't it helpful?</h3>
+    <p className="modal-subtitle">This helps Professor OS learn</p>
+    
+    <div className="feedback-options">
+      <label className="feedback-option">
+        <input 
+          type="radio" 
+          name="feedback_category" 
+          value="video_quality_poor"
+        />
+        <span>Poor video quality (unclear, bad audio)</span>
+      </label>
+      
+      <label className="feedback-option">
+        <input 
+          type="radio" 
+          name="feedback_category" 
+          value="wrong_recommendation"
+        />
+        <span>Not what I was looking for</span>
+      </label>
+      
+      <label className="feedback-option">
+        <input 
+          type="radio" 
+          name="feedback_category" 
+          value="too_advanced"
+        />
+        <span>Too advanced for my level</span>
+      </label>
+      
+      <label className="feedback-option">
+        <input 
+          type="radio" 
+          name="feedback_category" 
+          value="too_basic"
+        />
+        <span>Too basic for my level</span>
+      </label>
+      
+      <label className="feedback-option">
+        <input 
+          type="radio" 
+          name="feedback_category" 
+          value="wrong_style"
+        />
+        <span>Wrong style (wanted gi/no-gi)</span>
+      </label>
+      
+      <label className="feedback-option">
+        <input 
+          type="radio" 
+          name="feedback_category" 
+          value="other"
+        />
+        <span>Other reason</span>
+      </label>
+    </div>
+    
+    <textarea 
+      placeholder="Any additional details? (optional)"
+      className="feedback-text"
+    />
+    
+    <div className="modal-actions">
+      <button onClick={submitDetailedFeedback}>Submit</button>
+      <button onClick={closeModal} className="secondary">Skip</button>
+    </div>
+  </div>
+</Modal>
+```
+
+Mobile-responsive, large touch targets (44px minimum).
+
+## PART 2: DATABASE SCHEMA
+
+Create tables for feedback tracking:
+
+```sql
+-- Main feedback table
+CREATE TABLE user_video_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  video_id UUID REFERENCES ai_video_knowledge(id) ON DELETE CASCADE,
+  
+  -- Basic feedback
+  helpful BOOLEAN NOT NULL,
+  
+  -- Detailed category (when helpful = false)
+  feedback_category TEXT,
+  /* Options:
+     'video_quality_poor'
+     'wrong_recommendation'
+     'too_advanced'
+     'too_basic'
+     'wrong_style'
+     'other'
+  */
+  
+  feedback_text TEXT, -- Optional user comment
+  
+  -- Context at time of recommendation
+  user_belt_level TEXT,
+  user_query TEXT,
+  technique_searched TEXT,
+  recommendation_context JSONB,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- User feedback statistics
+CREATE TABLE user_feedback_stats (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  total_feedback_given INTEGER DEFAULT 0,
+  helpful_given INTEGER DEFAULT 0,
+  not_helpful_given INTEGER DEFAULT 0,
+  videos_helped_remove INTEGER DEFAULT 0,
+  videos_helped_improve INTEGER DEFAULT 0,
+  last_appreciation_shown_at TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Trigger to update user stats automatically
+CREATE OR REPLACE FUNCTION update_user_feedback_stats()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO user_feedback_stats (
+    user_id, 
+    total_feedback_given, 
+    helpful_given, 
+    not_helpful_given
+  )
+  VALUES (
+    NEW.user_id,
+    1,
+    CASE WHEN NEW.helpful THEN 1 ELSE 0 END,
+    CASE WHEN NOT NEW.helpful THEN 1 ELSE 0 END
+  )
+  ON CONFLICT (user_id) DO UPDATE SET
+    total_feedback_given = user_feedback_stats.total_feedback_given + 1,
+    helpful_given = user_feedback_stats.helpful_given + 
+      CASE WHEN NEW.helpful THEN 1 ELSE 0 END,
+    not_helpful_given = user_feedback_stats.not_helpful_given + 
+      CASE WHEN NOT NEW.helpful THEN 1 ELSE 0 END,
+    updated_at = NOW();
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_feedback_stats_trigger
+AFTER INSERT ON user_video_feedback
+FOR EACH ROW
+EXECUTE FUNCTION update_user_feedback_stats();
+
+-- Update video stats columns
+ALTER TABLE ai_video_knowledge 
+ADD COLUMN IF NOT EXISTS helpful_count INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS not_helpful_count INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS helpful_ratio DECIMAL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS total_votes INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS quality_tier TEXT DEFAULT 'unrated';
+
+-- Quality tiers: 'unrated', 'flagged', 'standard', 'prioritized', 'top_tier', 'removed'
+```
+
+## PART 3: API ENDPOINTS
+
+### POST /api/feedback/video
+
+Submit video feedback:
+
+```typescript
+app.post('/api/feedback/video', async (req, res) => {
+  const { userId } = req.session; // From auth
+  const { 
+    videoId, 
+    helpful, 
+    feedbackCategory, 
+    feedbackText,
+    userQuery,
+    techniqueSearched 
+  } = req.body;
+  
+  // Get user context
+  const user = await db.query('SELECT belt_level FROM users WHERE id = $1', [userId]);
+  
+  // Insert feedback
+  await db.query(`
+    INSERT INTO user_video_feedback (
+      user_id, video_id, helpful, feedback_category, feedback_text,
+      user_belt_level, user_query, technique_searched
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  `, [
+    userId, videoId, helpful, feedbackCategory, feedbackText,
+    user.rows[0].belt_level, userQuery, techniqueSearched
+  ]);
+  
+  // Update video stats
+  if (helpful) {
+    await db.query(`
+      UPDATE ai_video_knowledge 
+      SET helpful_count = helpful_count + 1
+      WHERE id = $1
+    `, [videoId]);
+  } else {
+    await db.query(`
+      UPDATE ai_video_knowledge 
+      SET not_helpful_count = not_helpful_count + 1
+      WHERE id = $1
+    `, [videoId]);
+  }
+  
+  // Recalculate ratios
+  await db.query(`
+    UPDATE ai_video_knowledge
+    SET 
+      total_votes = helpful_count + not_helpful_count,
+      helpful_ratio = CASE 
+        WHEN (helpful_count + not_helpful_count) > 0 
+        THEN helpful_count::decimal / (helpful_count + not_helpful_count)
+        ELSE 0 
+      END
+    WHERE id = $1
+  `, [videoId]);
+  
+  // Check if user should get appreciation message
+  const stats = await db.query(
+    'SELECT * FROM user_feedback_stats WHERE user_id = $1',
+    [userId]
+  );
+  
+  const shouldShowAppreciation = 
+    stats.rows[0].total_feedback_given % 10 === 0 &&
+    (!stats.rows[0].last_appreciation_shown_at || 
+     Date.now() - stats.rows[0].last_appreciation_shown_at > 86400000); // 24 hours
+  
+  if (shouldShowAppreciation) {
+    await db.query(
+      'UPDATE user_feedback_stats SET last_appreciation_shown_at = NOW() WHERE user_id = $1',
+      [userId]
+    );
+  }
+  
+  res.json({ 
+    success: true,
+    showAppreciation: shouldShowAppreciation,
+    totalFeedback: stats.rows[0].total_feedback_given
+  });
+});
+```
+
+## PART 4: PROFESSOR OS RESPONSE LOGIC
+
+### Response Templates (Varied and Natural)
+
+Create function that returns varied responses to avoid robotic feel:
+
+```typescript
+function getProfessorOSFeedbackResponse(
+  helpful: boolean, 
+  feedbackCategory?: string,
+  totalFeedback?: number
+): string {
+  
+  if (helpful) {
+    // POSITIVE FEEDBACK RESPONSES (rotate randomly)
+    const positiveResponses = [
+      "Awesome! Glad that helped. 🙏\n\nYour feedback makes Professor OS smarter for everyone in the BJJ OS community.",
+      
+      "Perfect! That's what I wanted to hear. 🙏\n\nYour input helps hundreds of other practitioners get better recommendations.",
+      
+      "Great! Happy that video worked for you. 🙏\n\nEvery 👍 you give helps me learn what works for people like you.",
+      
+      "Nice! Glad I could help. 🙏\n\nYour feedback improves the experience for everyone training with BJJ OS.",
+      
+      "Excellent! That's the kind of technique that sticks. 🙏\n\nThanks for letting me know - it helps me recommend better videos."
+    ];
+    
+    return positiveResponses[Math.floor(Math.random() * positiveResponses.length)];
+  }
+  
+  // NEGATIVE FEEDBACK RESPONSES (by category)
+  
+  if (feedbackCategory === 'video_quality_poor') {
+    const responses = [
+      "Thanks for catching that. I'll review this video and likely remove it from the library.\n\nYour feedback helps keep the quality high for everyone. 🙏\n\nLet me find you a better video on the same topic:",
+      
+      "Good eye - I'll flag that video for review. If others report the same, it'll be removed.\n\nAppreciate you helping maintain quality. 🙏\n\nHere's a clearer video on that technique:",
+      
+      "Got it. That video shouldn't be in the library if the quality is poor.\n\nThanks for the feedback. 🙏\n\nLet me show you a better option:"
+    ];
+    
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+  
+  if (feedbackCategory === 'wrong_recommendation') {
+    const responses = [
+      "Got it - I misunderstood what you needed. My bad.\n\nWhat were you actually looking for?\n\nYour feedback helps me understand you better. 🙏",
+      
+      "Ah, I missed the mark on that one. Sorry about that.\n\nTell me what you're looking for and I'll find it.\n\nThanks for the patience. 🙏",
+      
+      "My mistake - that wasn't what you were asking for.\n\nLet's try again. What do you need help with?\n\nYour feedback makes me better at understanding. 🙏"
+    ];
+    
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+  
+  if (feedbackCategory === 'too_advanced') {
+    const responses = [
+      "Thanks for telling me. I jumped ahead - you're not ready for that yet.\n\nLet me show you the foundation technique first. 🙏\n\nWe'll get to the advanced stuff when you're ready.",
+      
+      "Good catch - that video was too complex for where you are right now.\n\nLet's start with the basics and build up. 🙏\n\nHere's the right level for you:",
+      
+      "You're right, I got ahead of myself. Let's take a step back.\n\nThis progression makes more sense for your level. 🙏\n\nHere's where to start:"
+    ];
+    
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+  
+  if (feedbackCategory === 'too_basic') {
+    const responses = [
+      "Got it - you're past that. Thanks for letting me know your level.\n\nLet me show you the more advanced variation. 🙏\n\nYour feedback helps me understand where you are in your BJJ journey.",
+      
+      "Fair enough - that was too simple for you.\n\nHere's the intermediate/advanced version. 🙏\n\nThanks for helping me gauge your skill level better.",
+      
+      "You're right, you're beyond the basics on this one.\n\nLet's look at the advanced concepts. 🙏\n\nYour feedback helps me match your level better."
+    ];
+    
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+  
+  if (feedbackCategory === 'wrong_style') {
+    const responses = [
+      "Ah, my mistake - I showed you gi and you train no-gi. I'll remember that.\n\nHere's the no-gi version. 🙏\n\nThanks for the feedback - it helps me match your training style better.",
+      
+      "Good point - wrong style. Let me find the right version for your training.\n\nHere you go. 🙏\n\nYour feedback helps me learn your preferences.",
+      
+      "You're right, I didn't match your training style. My bad.\n\nHere's the correct version. 🙏\n\nThanks for keeping me on track."
+    ];
+    
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+  
+  // Default negative feedback
+  return "Got it - thanks for letting me know. This helps me get better at recommending videos.\n\nLet me find something more relevant for you. 🙏";
+}
+
+// APPRECIATION MESSAGE (every 10th feedback)
+function getAppreciationMessage(totalFeedback: number): string {
+  const messages = [
+    `By the way - you've given feedback on ${totalFeedback} videos now. 🙏\n\nYour input has helped improve recommendations for hundreds of other practitioners in the BJJ OS community.\n\nEvery 👍 or 👎 you give makes me smarter for everyone. Thanks for contributing.`,
+    
+    `Quick note: You've rated ${totalFeedback} videos! 🙏\n\nThat feedback has directly improved the experience for everyone using BJJ OS. You're helping build a better training tool for the whole community.\n\nAppreciate you.`,
+    
+    `Just realized - you've given ${totalFeedback} ratings now. 🙏\n\nYour feedback has helped remove bad videos, improve recommendations, and make BJJ OS better for everyone.\n\nThanks for being an active part of the community.`
+  ];
+  
+  return messages[Math.floor(Math.random() * messages.length)];
+}
+```
+
+## PART 5: VIDEO QUALITY MANAGEMENT (Context-Aware Removal)
+
+Create automated job that runs daily to manage video quality:
+
+```typescript
+// Run daily at 3 AM
+async function manageVideoQuality() {
+  // Get all videos with enough votes
+  const videos = await db.query(`
+    SELECT 
+      v.id,
+      v.title,
+      v.total_votes,
+      v.helpful_ratio,
+      v.quality_score,
+      COUNT(*) FILTER (WHERE f.feedback_category = 'video_quality_poor') as quality_issues,
+      COUNT(*) FILTER (WHERE f.feedback_category = 'wrong_recommendation') as context_issues,
+      COUNT(*) FILTER (WHERE f.feedback_category = 'too_advanced') as too_advanced_count,
+      COUNT(*) FILTER (WHERE f.feedback_category = 'too_basic') as too_basic_count
+    FROM ai_video_knowledge v
+    LEFT JOIN user_video_feedback f ON v.id = f.video_id
+    WHERE v.total_votes >= 50
+    GROUP BY v.id
+  `);
+  
+  for (const video of videos.rows) {
+    const quality_issue_ratio = video.quality_issues / video.total_votes;
+    const too_advanced_ratio = video.too_advanced_count / video.total_votes;
+    
+    // REMOVE if video quality issues > 25%
+    if (quality_issue_ratio > 0.25) {
+      await db.query(`
+        UPDATE ai_video_knowledge 
+        SET quality_tier = 'removed'
+        WHERE id = $1
+      `, [video.id]);
+      
+      console.log(`Removed video: ${video.title} (${Math.round(quality_issue_ratio * 100)}% quality issues)`);
+      continue;
+    }
+    
+    // REMOVE if overall <40% helpful AND most complaints are quality
+    if (video.helpful_ratio < 0.40 && video.quality_issues > video.context_issues) {
+      await db.query(`
+        UPDATE ai_video_knowledge 
+        SET quality_tier = 'removed'
+        WHERE id = $1
+      `, [video.id]);
+      
+      console.log(`Removed video: ${video.title} (low helpful ratio + quality complaints)`);
+      continue;
+    }
+    
+    // FLAG for review if <50% helpful but context issues
+    if (video.helpful_ratio < 0.50 && video.context_issues > video.quality_issues) {
+      await db.query(`
+        UPDATE ai_video_knowledge 
+        SET quality_tier = 'flagged'
+        WHERE id = $1
+      `, [video.id]);
+      
+      console.log(`Flagged video: ${video.title} (context issues, not video quality)`);
+      continue;
+    }
+    
+    // ADJUST targeting if >40% "too advanced"
+    if (too_advanced_ratio > 0.40) {
+      await db.query(`
+        UPDATE ai_video_knowledge 
+        SET belt_level = ARRAY['purple', 'brown', 'black']
+        WHERE id = $1
+      `, [video.id]);
+      
+      console.log(`Adjusted targeting: ${video.title} (only show to purple+)`);
+    }
+    
+    // PROMOTE if >85% helpful and 100+ votes
+    if (video.total_votes >= 100 && video.helpful_ratio >= 0.85) {
+      await db.query(`
+        UPDATE ai_video_knowledge 
+        SET quality_tier = 'top_tier'
+        WHERE id = $1
+      `, [video.id]);
+      
+      console.log(`Promoted to top tier: ${video.title} (${Math.round(video.helpful_ratio * 100)}% helpful)`);
+    }
+  }
+}
+
+// Schedule to run daily
+// Add to your cron jobs or scheduler
+```
+
+## PART 6: ADMIN DASHBOARD ADDITIONS
+
+Add feedback analytics to admin dashboard at /admin/videos:
+
+```jsx
+// Feedback Stats Section
+<div className="feedback-stats">
+  <h3>Community Feedback</h3>
+  
+  <div className="stat-cards">
+    <div className="stat-card">
+      <h4>Total Feedback</h4>
+      <p className="stat-number">{totalFeedback}</p>
+      <p className="stat-label">ratings from users</p>
+    </div>
+    
+    <div className="stat-card">
+      <h4>Average Helpful Ratio</h4>
+      <p className="stat-number">{avgHelpfulRatio}%</p>
+      <p className="stat-label">across all videos</p>
+    </div>
+    
+    <div className="stat-card">
+      <h4>Videos Removed</h4>
+      <p className="stat-number">{videosRemoved}</p>
+      <p className="stat-label">due to poor feedback</p>
+    </div>
+    
+    <div className="stat-card">
+      <h4>Top Tier Videos</h4>
+      <p className="stat-number">{topTierVideos}</p>
+      <p className="stat-label">85%+ helpful rating</p>
+    </div>
+  </div>
+  
+  <div className="flagged-videos">
+    <h4>⚠️ Flagged for Review</h4>
+    <p>Videos with borderline feedback that need manual review:</p>
+    
+    {flaggedVideos.map(video => (
+      <div className="flagged-video-card" key={video.id}>
+        <h5>{video.title}</h5>
+        <p>Helpful: {video.helpful_ratio * 100}% ({video.total_votes} votes)</p>
+        <p>Main issue: {video.primary_complaint}</p>
+        <div className="actions">
+          <button onClick={() => reviewVideo(video.id)}>Review</button>
+          <button onClick={() => adjustTargeting(video.id)}>Adjust Targeting</button>
+          <button onClick={() => removeVideo(video.id)}>Remove</button>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
+```
+
+## PART 7: TESTING CHECKLIST
+
+After implementation, verify:
+
+1. [ ] Feedback buttons appear below every video recommendation
+1. [ ] Clicking 👍 saves feedback and shows appreciation message
+1. [ ] Clicking 👎 opens detailed feedback modal
+1. [ ] Modal has all 6 category options
+1. [ ] Submitting detailed feedback saves to database
+1. [ ] Professor OS responds with appropriate varied message
+1. [ ] Video stats update correctly (helpful_count, not_helpful_count)
+1. [ ] User feedback stats update correctly
+1. [ ] Appreciation message shows every 10th feedback (not more often than daily)
+1. [ ] Daily job runs and manages video quality
+1. [ ] Videos with >25% quality complaints get removed
+1. [ ] Videos with context issues get flagged, not removed
+1. [ ] Admin dashboard shows feedback analytics
+1. [ ] Flagged videos appear in admin review section
+1. [ ] Mobile responsive (buttons, modal)
+1. [ ] Response messages vary (not same every time)
+
+## IMPORTANT NOTES:
+
+- Feedback is OPTIONAL - never block user from continuing
+- Modal can be skipped (not forced)
+- Responses should feel natural and varied
+- 🙏 emoji used consistently but not excessively
+- Emphasize “BJJ OS community” not “the product”
+- Be humble when Professor OS is wrong (“my bad”, “I jumped ahead”)
+- Show appreciation every 10 feedbacks but max once per 24 hours
+- Context-aware removal: quality issues = remove, context issues = improve targeting
+- Keep good videos even with low helpful ratio if complaints are about context
+
+Implement the complete feedback system with varied Professor OS responses and context-aware video quality management.
+
+```
+---
+
+## **Key Features of This Prompt:**
+
+✅ **Varied responses** - 3-5 different messages per category, randomly selected  
+✅ **Natural language** - "My bad", "Good catch", "Fair enough"  
+✅ **Community framing** - "BJJ OS community" throughout  
+✅ **Context-aware removal** - Quality issues vs recommendation issues  
+✅ **Appreciation system** - Every 10 feedbacks, max once per day  
+✅ **Complete implementation** - Frontend + Backend + Database + Cron jobs  
+✅ **Admin dashboard** - View flagged videos and feedback stats  
+✅ **Mobile responsive** - Large touch targets, clean modals  
+
+---
+
+**Ready to send Prompt 7? This is the complete feedback system with everything we discussed!** 🚀​​​​​​​​​​​​​​​​
+```

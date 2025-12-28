@@ -1,0 +1,938 @@
+```
+═══════════════════════════════════════════════════════════════════
+ULTIMATE ONBOARDING & AI PERSONALIZATION SYSTEM
+═══════════════════════════════════════════════════════════════════
+
+Build a comprehensive user profiling and AI personalization system that creates perfect recommendations for every user.
+
+This system combines explicit onboarding data, behavioral learning, statistical modeling, and predictive AI to deliver the most personalized BJJ learning experience possible.
+
+CRITICAL: NO EMOJIS anywhere in the system. Clean, professional presentation only.
+
+═══════════════════════════════════════════════════════════════════
+PART 1: ONBOARDING QUESTIONS
+═══════════════════════════════════════════════════════════════════
+
+Create a 4-question onboarding flow (+ 1 optional) that captures maximum predictive information:
+
+QUESTION 1: "How old are you?"
+────────────────────────────────────────────
+
+Options:
+○ 16-20 years old
+○ 21-30 years old
+○ 31-40 years old
+○ 41-50 years old
+○ 51-60 years old
+○ 61+ years old
+○ Prefer not to say
+
+Save as: age (text/range)
+
+WHY THIS MATTERS:
+- Injury risk assessment (40+ = higher risk)
+- Recovery capacity (youth vs masters)
+- Learning approach (physical vs technical)
+- Instructor matching (age-appropriate role models)
+- Technique filtering (avoid dangerous moves for older users)
+- Motivation psychology (different appeals by age)
+
+AI USAGE:
+- Calculate injuryRiskScore = f(age, trainingFrequency)
+- Filter out high-risk techniques for older users
+- Match to age-appropriate instructors
+- Adjust tone and messaging by age group
+- Emphasize safety and recovery for 40+
+
+QUESTION 2: "How many days per week do you typically train?"
+────────────────────────────────────────────────────────────
+
+Options:
+○ 1-2 days (Casual)
+○ 3-4 days (Regular)
+○ 5-6 days (Serious)
+○ 7+ days (Athlete)
+
+Save as: trainingFrequency (integer)
+
+WHY THIS MATTERS:
+- HIGHEST PREDICTIVE POWER for content needs
+- Skill progression rate
+- Content depth appetite
+- Injury tolerance
+- Problem complexity level
+- Single best segmentation variable
+
+AI USAGE:
+- Primary segmentation variable
+- Determines content complexity
+- Calculates learning velocity
+- Combined with age for injury risk
+- Predicts progression rate
+
+QUESTION 3: "What are you struggling with? (Select all that apply)"
+────────────────────────────────────────────────────────────────────
+
+**MULTI-SELECT CHECKBOXES**
+
+Options:
+□ Surviving / Not getting dominated
+□ Passing guard / Advancing position
+□ Guard retention / Staying on top
+□ Finishing submissions
+□ Dealing with bigger/stronger opponents
+□ Using my size/pressure effectively
+□ Cardio / Conditioning
+□ Everything (I'm new)
+□ None of these (I'm doing great)
+
+Save as: struggles (array of strings)
+
+WHY THIS MATTERS:
+- Immediate problem identification
+- Priority ordering for recommendations
+- Pattern recognition (struggle combinations)
+- Progression tracking (watch struggles change over time)
+- Urgency detection (high struggle density = overwhelmed)
+- Body type inference from "bigger opponents" or "using size"
+
+AI USAGE:
+- Calculate struggleDensity = selectedStruggles.length / totalOptions
+- Pattern matching (common struggle combinations)
+- Infer bodyType:
+  * "bigger/stronger opponents" selected → bodyType = "smaller"
+  * "using my size" selected → bodyType = "larger"
+  * Neither selected → bodyType = "average/unknown"
+- Prioritize content addressing primary struggles
+- Track removal of struggles over time (progression)
+
+QUESTION 4: "What type of BJJ do you train?"
+────────────────────────────────────────────
+
+Options:
+○ Gi only
+○ No-gi only
+○ Both gi and no-gi
+○ MMA / with striking
+
+Save as: trainingContext (text)
+
+WHY THIS MATTERS:
+- Essential content filter (40% of techniques are context-specific)
+- Showing gi content to no-gi practitioners = useless
+- Instructor selection
+- Technique applicability
+
+AI USAGE:
+- Filter content by context (gi/no-gi/MMA)
+- Boost relevant techniques
+- Penalize irrelevant context by -50%
+- Match to context-appropriate instructors
+
+QUESTION 5 (OPTIONAL): "What are you already pretty good at? (Optional - Select if any apply)"
+────────────────────────────────────────────────────────────────────────────────────────────
+
+**MULTI-SELECT CHECKBOXES - OPTIONAL**
+
+Options:
+□ Guard retention / Playing guard
+□ Passing / Top pressure
+□ Escapes / Defense
+□ Submissions / Finishing
+□ Takedowns / Wrestling
+□ Movement / Agility
+□ Nothing yet / Still figuring it out
+
+Save as: strengths (array of strings, can be empty)
+
+WHY THIS MATTERS:
+- Leverage existing skills for faster learning
+- Identify play style (guard player vs top player)
+- Bridge from strengths to weaknesses
+- Build confidence through recognition
+- Teaching strategy (use what they know to teach what they don't)
+
+AI USAGE:
+- Identify play style profile
+- Connect strengths to weaknesses in teaching
+- "You're great at guard - use that knowledge to understand passing"
+- Boost instructor/content that bridges their strengths to struggles
+- Positive reinforcement in messaging
+
+═══════════════════════════════════════════════════════════════════
+PART 2: DERIVED METRICS (Calculate immediately after onboarding)
+═══════════════════════════════════════════════════════════════════
+
+After user completes onboarding, calculate these metrics:
+
+STRUGGLE DENSITY SCORE:
+─────────────────────────────────────────────
+
+struggleDensity = struggles.length / 9  // 9 total struggle options
+
+Interpretation:
+if (struggleDensity >= 0.67) {
+  userState = "OVERWHELMED";
+  action = "Simplify content, add structure, extra encouragement";
+  message = "Focus on one area at a time - let's start with defense";
+}
+
+if (struggleDensity >= 0.33 && struggleDensity < 0.67) {
+  userState = "DEVELOPING";
+  action = "Systematic approach, connect concepts";
+  message = "Build systems across these areas";
+}
+
+if (struggleDensity > 0 && struggleDensity < 0.33) {
+  userState = "FOCUSED";
+  action = "Deep dive on specific areas";
+  message = "Target these specific weaknesses";
+}
+
+if (struggleDensity === 0) {
+  userState = "CONFIDENT";
+  action = "Challenge with advanced content, refinement";
+  message = "Ready for advanced concepts and refinement";
+}
+
+INJURY RISK SCORE:
+─────────────────────────────────────────────
+
+injuryRiskScore = calculateInjuryRisk(age, trainingFrequency)
+
+Logic:
+if (age >= 50 && trainingFrequency >= 4) {
+  injuryRisk = "VERY_HIGH";
+  actions = [
+    "Mandatory safety warnings on all content",
+    "Avoid: heel hooks, flying submissions, berimbolo, inverted guards",
+    "Emphasize: warm-up, mobility, recovery",
+    "Show: leverage-based, fundamental techniques only"
+  ];
+}
+
+if (age >= 40 && trainingFrequency >= 5) {
+  injuryRisk = "HIGH";
+  actions = [
+    "Include safety tips with techniques",
+    "Emphasize proper warm-up and recovery",
+    "Prefer technical over athletic approaches",
+    "Highlight injury prevention"
+  ];
+}
+
+if (age >= 35 && trainingFrequency >= 6) {
+  injuryRisk = "MODERATE_HIGH";
+  actions = [
+    "Include recovery content",
+    "Emphasize efficiency and technique",
+    "Mention common injury points"
+  ];
+}
+
+if (age < 30 && trainingFrequency <= 4) {
+  injuryRisk = "LOW";
+  actions = [
+    "Can show athletic content",
+    "Competition intensity appropriate",
+    "High-energy instruction"
+  ];
+}
+
+EXPERIENCE INFERENCE SCORE:
+─────────────────────────────────────────────
+
+experienceScore = inferExperience(trainingFrequency, struggles, age)
+
+Calculate score 0-100:
+
+Beginner indicators (score 0-30):
+- struggles.includes("surviving")
+- struggles.includes("everything")
+- trainingFrequency <= 2
+- Score calculation: Base 15, +5 for each beginner indicator
+
+Intermediate indicators (score 31-70):
+- struggles.includes("passing") OR struggles.includes("finishing")
+- struggles.includes("retention")
+- trainingFrequency 3-4
+- Score calculation: Base 50, adjust ±15 based on combinations
+
+Advanced indicators (score 71-100):
+- struggles.length <= 2
+- !struggles.includes("surviving")
+- !struggles.includes("everything")
+- trainingFrequency >= 5
+- Score calculation: Base 80, +5 for each advanced indicator
+
+Usage:
+- Determines content complexity
+- Filters out too-basic or too-advanced content
+- Adjusts teaching pace
+
+LEARNING VELOCITY:
+─────────────────────────────────────────────
+
+learningVelocity = calculateVelocity(trainingFrequency, experienceScore)
+
+if (trainingFrequency >= 5 && experienceScore < 50) {
+  velocity = "FAST";
+  // High frequency but beginner struggles = rapid improvement expected
+  // Show progressive content, anticipate quick advancement
+}
+
+if (trainingFrequency >= 5 && experienceScore >= 70) {
+  velocity = "FAST_ADVANCED";
+  // High frequency, already advanced = refinement phase
+  // Show elite content, competition strategy
+}
+
+if (trainingFrequency <= 2 && experienceScore >= 50) {
+  velocity = "SLOW_EXPERIENCED";
+  // Low frequency but experienced = hobbyist
+  // Show sustainable content, don't overwhelm
+}
+
+if (trainingFrequency <= 2 && experienceScore < 30) {
+  velocity = "SLOW_BEGINNER";
+  // Low frequency, beginner = casual learner
+  // Extra patient instruction, celebrate small wins
+}
+
+Usage:
+- Predicts progression timeline
+- Adjusts content release pace
+- Sets expectations for advancement
+
+BODY TYPE INFERENCE:
+─────────────────────────────────────────────
+
+if (struggles.includes("bigger/stronger opponents")) {
+  bodyType = "SMALLER";
+  contentAdjustments = {
+    prioritize: [
+      "technical_passing",
+      "guard_play",
+      "leverage_based_techniques",
+      "movement_and_timing"
+    ],
+    avoid: [
+      "pure_pressure_passing",
+      "size_dependent_techniques"
+    ],
+    instructors: [
+      "Mikey Musumeci",
+      "Miyao brothers",
+      "Cobrinha",
+      "Bruno Malfacine"
+    ],
+    messaging: "Technique beats size - here's how smaller grapplers dominate"
+  };
+}
+
+if (struggles.includes("using my size")) {
+  bodyType = "LARGER";
+  contentAdjustments = {
+    prioritize: [
+      "pressure_passing",
+      "top_control",
+      "smash_systems",
+      "weight_distribution"
+    ],
+    avoid: [
+      "berimbolo",
+      "inverted_guards",
+      "complex_spinning_guards"
+    ],
+    instructors: [
+      "Bernardo Faria",
+      "Gordon Ryan",
+      "Buchecha",
+      "Xande Ribeiro"
+    ],
+    messaging: "Leverage your size advantage effectively"
+  };
+}
+
+if (!struggles.includes("bigger opponents") && !struggles.includes("using size")) {
+  bodyType = "AVERAGE_OR_UNKNOWN";
+  contentAdjustments = {
+    default: "show_universal_techniques",
+    learnFromBehavior: true,
+    adaptDynamically: true
+  };
+}
+
+═══════════════════════════════════════════════════════════════════
+PART 3: USER CLUSTERING (AI-Discovered Archetypes)
+═══════════════════════════════════════════════════════════════════
+
+After collecting data from 1,000+ users, ML clustering will discover user archetypes. Initialize with these expected clusters:
+
+CLUSTER 1: SURVIVAL BEGINNER
+Pattern: 1-2 days/week + [surviving, cardio, everything] + any context
+Characteristics:
+- Just starting, overwhelmed
+- High injury concern
+- Need encouragement
+- Simple, safe techniques
+Best instructors: Patient, encouraging teachers
+Progression: Will need guard retention in 12-16 weeks
+Actions:
+- Extra encouraging tone
+- Fundamentals only
+- Injury prevention emphasis
+- Celebrate small wins
+
+CLUSTER 2: COMPETITOR IN TRAINING
+Pattern: 5-6 days/week + [passing, finishing] + both gi/no-gi
+Characteristics:
+- Serious about competition
+- High intensity training
+- Performance focused
+- Want cutting-edge techniques
+Best instructors: Elite competitors (Gordon Ryan, Lachlan Giles)
+Progression: Will compete within 8 weeks
+Actions:
+- Competition strategy content
+- High-level instruction
+- Direct, confident tone
+- Show match footage
+
+CLUSTER 3: TECHNICAL STUDENT
+Pattern: 3-4 days/week + [passing, retention] + gi focus
+Characteristics:
+- Love understanding WHY
+- Systematic learners
+- Deep conceptual interest
+- Will become instructors
+Best instructors: Danaher, Priit Mihkelson (conceptual teachers)
+Progression: Long-term mastery focus
+Actions:
+- Conceptual frameworks
+- Principle-based teaching
+- Systems thinking
+- Theory-heavy content
+
+CLUSTER 4: ATHLETIC GRAPPLER
+Pattern: 4-5 days/week + [finishing, cardio] + no-gi only
+Characteristics:
+- Physical, explosive style
+- Competition or MMA focused
+- Want dynamic techniques
+- High athletic ability
+Best instructors: Gordon Ryan, Garry Tonon
+Progression: Often transition to MMA
+Actions:
+- Athletic techniques
+- Conditioning integration
+- Explosive movements
+- Wrestling connections
+
+CLUSTER 5: OVERWHELMED IMPROVER
+Pattern: 3-4 days/week + [3+ struggles selected]
+Characteristics:
+- Committed but struggling
+- Need structure
+- Benefit from simplification
+- At risk of burnout
+Best instructors: Systematic teachers
+Progression: Need help prioritizing
+Actions:
+- Simplify learning path
+- "Focus on THIS first"
+- Build confidence
+- Structured progression
+
+CLUSTER 6: CASUAL ENJOYER
+Pattern: 1-2 days/week + [1-2 specific struggles]
+Characteristics:
+- Sustainable pace
+- Lifestyle integration
+- Low injury tolerance
+- Long-term retention
+Best instructors: Accessible, fun teachers
+Progression: Slow and steady (by design)
+Actions:
+- Keep it fun
+- Injury prevention
+- Sustainable techniques
+- Community focus
+
+CLUSTER ASSIGNMENT:
+After onboarding, assign user to closest cluster based on:
+- Euclidean distance in feature space
+- Pattern matching on [age, trainingFreq, struggles, context]
+- Confidence score for assignment
+
+clusterAssignment = {
+  cluster: "TECHNICAL_STUDENT",
+  confidence: 0.87,
+  secondBest: "OVERWHELMED_IMPROVER",
+  reasoning: "3-4 days/week, passing+retention struggles, systematic preferences"
+};
+
+═══════════════════════════════════════════════════════════════════
+PART 4: HOW EACH AI AGENT USES THE PROFILE
+═══════════════════════════════════════════════════════════════════
+
+INTERPRETER AGENT:
+Uses the complete profile to understand user intent
+
+When user asks a question, Interpreter receives:
+{
+  age: 38,
+  trainingFrequency: 4,
+  struggles: ["passing", "finishing"],
+  strengths: ["guard_retention"],
+  context: "both",
+  bodyType: "average",
+  
+  // Derived:
+  injuryRisk: "MODERATE_HIGH",
+  experienceScore: 58,
+  struggleDensity: 0.33,
+  learningVelocity: "MEDIUM",
+  userState: "FOCUSED",
+  cluster: "TECHNICAL_STUDENT"
+}
+
+Interpreter adjusts:
+- Complexity level (based on experienceScore)
+- Safety emphasis (based on injuryRisk)
+- Urgency detection (based on struggles)
+- Tone (based on cluster and age)
+- Teaching approach (based on learningVelocity)
+
+Example:
+Query: "How to pass half guard?"
+
+Interpreter output:
+{
+  skillLevel: "intermediate",
+  urgency: "HIGH", // passing is primary struggle
+  safetyNeeded: "MODERATE", // age 38
+  preferredStyle: "systematic_conceptual", // Technical Student cluster
+  emotionalState: "focused_problem_solving",
+  context: "both_gi_nogi"
+}
+
+MATCHER AGENT:
+Uses profile for multi-objective ranking
+
+Ranking formula:
+finalScore = (
+  0.25 * queryRelevance +
+  0.20 * struggleMatch +           // Does this address their struggle?
+  0.15 * safetyAppropriateness +   // Based on age and injury risk
+  0.15 * contextMatch +            // Gi/no-gi/MMA match
+  0.10 * clusterSuccessRate +      // What worked for similar users
+  0.10 * instructorPreference +    // Learned from behavior
+  0.05 * bodyTypeMatch            // If applicable
+)
+
+Adjustments:
+- Age 40+ → boost safetyRating by 15%, penalize injuryRisk by -20%
+- Primary struggle → boost content addressing it by 25%
+- Wrong context (gi video for no-gi user) → penalize by -50%
+- Cluster "Technical Student" → boost systematic/conceptual content by 15%
+- bodyType "smaller" → boost technical over pressure techniques by 10%
+
+SYNTHESIZER AGENT:
+Uses profile for tone and presentation
+
+Age-based tone:
+if (age <= 25) {
+  tone = "energetic_and_challenging";
+  language = "Competition, domination, athleticism";
+}
+if (age 26-35) {
+  tone = "professional_and_balanced";
+  language = "Optimization, development, performance";
+}
+if (age 36-45) {
+  tone = "technical_and_sustainable";
+  language = "Efficiency, longevity, smart training";
+}
+if (age 46+) {
+  tone = "encouraging_and_wisdom_focused";
+  language = "Mastery, technique, lifelong learning";
+}
+
+Struggle-based framing:
+if (struggles.includes("passing") && primary) {
+  opening = "Passing is your focus area - let's build a complete system.";
+}
+
+if (struggles.includes("surviving")) {
+  approach = "extra_patient_and_encouraging";
+  message = "This is tough right now, but you're going to get through this.";
+}
+
+Safety integration:
+if (injuryRisk >= "HIGH") {
+  includeInEveryResponse = "Safety note: [specific precautions for this technique]";
+}
+
+Body type messaging:
+if (bodyType === "SMALLER" && technique.requires === "pressure") {
+  reframe = "Here's how smaller grapplers use angles instead of pressure...";
+}
+
+EVALUATOR AGENT:
+Measures success differently by profile
+
+Success criteria by age:
+Younger users (<30):
+- Weight: immediate engagement (30%), full video watch (30%)
+- Expect: Quick clicks, athletic execution
+
+Older users (40+):
+- Weight: full video watch (35%), technical understanding (25%)
+- Expect: Patient viewing, safety-conscious execution
+
+Success criteria by cluster:
+Technical Students:
+- Weight: conceptual understanding (30%), full system completion (25%)
+- Measure: Do they watch related videos in sequence?
+
+Competitors:
+- Weight: immediate application (30%), competition relevance (25%)
+- Measure: Do they return before competitions?
+
+Track progression:
+- Monitor struggle changes over time
+- Celebrate removed struggles
+- Predict next struggles based on progression patterns
+- Alert if stuck (same struggles 8+ weeks)
+
+WEB SEARCH HANDLER:
+Age and context influence external searches
+
+if (age >= 45 && query.includes("conditioning")) {
+  searchQuery = "bjj conditioning over 40 masters division";
+  sources = ["masters_bjj_blogs", "sports_medicine_40plus"];
+}
+
+if (age < 25 && query.includes("competition")) {
+  searchQuery = "bjj competition strategy youth division";
+  sources = ["competition_analysis", "athlete_training"];
+}
+
+if (bodyType === "SMALLER" && query.includes("defense")) {
+  searchQuery = "smaller grappler defense strategies";
+  emphasize = "technique_over_strength";
+}
+
+═══════════════════════════════════════════════════════════════════
+PART 5: BEHAVIORAL LEARNING (Don't Ask - Infer)
+═══════════════════════════════════════════════════════════════════
+
+Track these behaviors to refine profile:
+
+INSTRUCTOR PREFERENCES:
+Track which instructors user engages with most:
+- Click rates by instructor
+- Watch completion by instructor
+- Satisfaction ratings by instructor
+
+After 5+ interactions:
+preferredInstructors = topEngaged(instructors, threshold=0.75);
+
+Example:
+User consistently watches Danaher (92% engagement) and Lachlan (87%)
+→ learningStyle = "SYSTEMATIC_CONCEPTUAL"
+→ Boost similar instructors (Priit, Jon Thomas)
+
+LEARNING STYLE DETECTION:
+Track video interaction patterns:
+
+if (avgWatchDuration > 0.80 && preferredLength > 15min) {
+  detectedStyle = "DEEP_DIVER";
+  // Shows: Long-form systems, comprehensive instruction
+}
+
+if (avgWatchDuration < 0.50 && skipsToKeyMoments === true) {
+  detectedStyle = "QUICK_LEARNER";
+  // Shows: Short clips, specific moments, quick tips
+}
+
+if (rewatchesConceptSections === true) {
+  detectedStyle = "CONCEPTUAL";
+  // Shows: Principle-based teaching, theory
+}
+
+CONTENT COMPLEXITY CALIBRATION:
+Track success with different complexity levels:
+
+if (advancedContent.completionRate > beginnerContent.completionRate) {
+  // User is more advanced than experienceScore suggests
+  experienceScore += 10;
+  showMoreAdvanced = true;
+}
+
+STRUGGLE EVOLUTION:
+Track how struggles change:
+
+week1: ["surviving", "cardio", "everything"]
+week8: ["surviving", "cardio"]  // Removed "everything" - progress!
+week16: ["retention", "cardio"]  // Removed "surviving", added "retention" - major progress!
+
+Actions:
+- Celebrate removed struggles
+- Update recommendations for new struggles
+- Predict next struggles based on patterns
+
+═══════════════════════════════════════════════════════════════════
+PART 6: PREDICTIVE MODELING
+═══════════════════════════════════════════════════════════════════
+
+PROGRESSION PREDICTION:
+Based on cluster and current state, predict next needs:
+
+if (cluster === "SURVIVAL_BEGINNER" && weeksSince === 12) {
+  predictedNextStruggle = "guard_retention";
+  confidence = 0.78;
+  action = "Proactively introduce guard concepts";
+}
+
+if (cluster === "TECHNICAL_STUDENT" && struggles.includes("passing") && struggles.includes("retention")) {
+  predictedInsight = "connecting_guard_concepts";
+  suggestion = "Show how guard retention knowledge helps understand passing";
+}
+
+CONTENT GAP DETECTION:
+Track unmet needs across user base:
+
+if (struggleCount["half_guard_escapes"] > 40 && relevantContent < 5) {
+  alert = "HIGH DEMAND: Half guard bottom escapes underserved";
+  action = "Prioritize curating this content";
+}
+
+PLATEAU PREDICTION:
+Identify users at risk of plateau:
+
+if (sameStruggles.duration > 8weeks && engagementDecreasing) {
+  plateauRisk = "HIGH";
+  action = "Proactive intervention - suggest new focus area";
+  message = "You've been working on passing for 2 months. \
+             Ready to try a different angle? \
+             Sometimes working on retention helps passing click.";
+}
+
+CHURN PREDICTION:
+Identify at-risk users:
+
+if (daysSinceLastLogin > 14 && previousEngagement === "HIGH") {
+  churnRisk = "HIGH";
+  action = "Re-engagement campaign";
+  message = "We noticed you haven't been around. \
+             Here's something new we think you'll love...";
+}
+
+═══════════════════════════════════════════════════════════════════
+PART 7: DATABASE SCHEMA
+═══════════════════════════════════════════════════════════════════
+
+bjj_users table updates:
+
+Add columns:
+- age (text)
+- trainingFrequency (integer)
+- struggles (json array)
+- strengths (json array)
+- trainingContext (text)
+- bodyTypeInference (text)
+
+- struggleDensity (float)
+- injuryRiskScore (float)
+- experienceScore (integer)
+- learningVelocity (text)
+- userState (text)
+- cluster (text)
+- clusterConfidence (float)
+
+- preferredInstructors (json array)
+- detectedLearningStyle (text)
+- avgWatchDuration (float)
+- onboardingCompletedAt (timestamp)
+- lastProfileUpdate (timestamp)
+
+user_progression table (new):
+- userId
+- weekNumber
+- struggles (json array)
+- strengths (json array)
+- experienceScore
+- timestamp
+
+Tracks evolution over time for analysis
+
+user_goals table (new):
+- userId
+- goalText
+- goalType (technique/competition/position/etc)
+- startDate
+- targetDate (30 days default)
+- completed (boolean)
+- completedDate
+- progress (json)
+
+═══════════════════════════════════════════════════════════════════
+PART 8: ADMIN DASHBOARD SECTIONS
+═══════════════════════════════════════════════════════════════════
+
+SECTION 1: USER INTELLIGENCE OVERVIEW
+
+Display:
+- Training frequency distribution (bar chart)
+- Age distribution (bar chart)
+- Top struggles (ranked list with counts)
+- Context breakdown (gi/no-gi/both/MMA percentages)
+- Cluster distribution (pie chart with 6 clusters)
+- Average metrics (struggle density, experience score, etc)
+
+For each cluster, show:
+- Count and percentage
+- Average satisfaction score
+- Top content preferences
+- Typical progression pattern
+- Current state (improving/plateauing/at-risk)
+
+SECTION 2: INDIVIDUAL USER PROFILE
+
+Search by phone number or name
+
+Display full profile:
+- Explicit data (age, frequency, struggles, context)
+- Derived metrics (all calculated scores)
+- Cluster assignment with confidence
+- Inferred preferences (instructors, learning style)
+- Progression timeline (how struggles changed)
+- Predictions (next needs, plateau risk, churn risk)
+- Recent activity (last 10 queries and engagement)
+- Recommended actions (what to show them next)
+
+SECTION 3: PROGRESSION TRACKING
+
+Show:
+- Users who reduced struggle count this month
+- Users who removed "surviving" (major milestone)
+- Users stuck on same struggles 8+ weeks (at-risk)
+- Users increasing training frequency (engagement growing)
+- Average time to remove each struggle type
+
+SECTION 4: PREDICTIVE INSIGHTS
+
+Display:
+- Next week predictions (X users likely to need Y content)
+- Content gaps (high demand, low supply)
+- Plateau alerts (users needing intervention)
+- Churn risk (users who haven't logged in)
+- Emerging patterns (new struggle combinations)
+
+SECTION 5: SYSTEM INTELLIGENCE METRICS
+
+Track:
+- Cluster assignment accuracy
+- Prediction accuracy (did predicted needs happen?)
+- Recommendation quality by cluster
+- Content satisfaction by user type
+- Learning loop effectiveness (is system improving?)
+- Anti-pattern prevention rate (avoided bad recommendations)
+
+═══════════════════════════════════════════════════════════════════
+PART 9: IMPLEMENTATION PRIORITIES
+═══════════════════════════════════════════════════════════════════
+
+PHASE 1 (CRITICAL - Build First):
+1. Create 4-question onboarding flow (5th optional)
+2. Save all explicit data to database
+3. Calculate all derived metrics immediately after onboarding
+4. Pass complete profile to Interpreter Agent on every query
+5. Use profile in Matcher Agent ranking formula
+6. Adjust Synthesizer Agent tone based on age/cluster
+
+PHASE 2 (Important - Build Next):
+1. Implement behavioral tracking (watch duration, instructor preferences)
+2. Build cluster assignment logic
+3. Create user progression tracking
+4. Add body type inference from struggles
+5. Build basic admin dashboard (sections 1-2)
+
+PHASE 3 (Advanced - Build After Launch):
+1. Predictive modeling (progression, plateau, churn)
+2. Content gap detection
+3. Advanced dashboard sections (3-5)
+4. A/B testing framework for recommendations
+5. Collaborative filtering refinement
+
+═══════════════════════════════════════════════════════════════════
+PART 10: SUCCESS METRICS
+═══════════════════════════════════════════════════════════════════
+
+Track these to measure system effectiveness:
+
+USER SATISFACTION:
+- Recommendation satisfaction: Target 8.5+/10
+- Problem resolution rate: Target 85%+
+- Watch completion rate: Target 75%+
+- Return rate (within 7 days): Target 90%+
+
+PERSONALIZATION QUALITY:
+- Cluster assignment confidence: Target 85%+
+- Prediction accuracy: Target 75%+
+- Content relevance scores: Target 8.0+/10
+- Anti-pattern prevention: Target 95%+
+
+PROGRESSION:
+- Users reducing struggles: Track monthly
+- Time to remove "surviving": Benchmark and improve
+- Learning velocity accuracy: Target 80%+
+- Plateau prediction accuracy: Target 70%+
+
+SYSTEM LEARNING:
+- Self-improvement rate: Target 2-3% monthly compound
+- Behavioral learning accuracy: Target 80%+
+- Collaborative filtering effectiveness: Target 85%+
+
+═══════════════════════════════════════════════════════════════════
+CRITICAL REQUIREMENTS
+═══════════════════════════════════════════════════════════════════
+
+1. NO EMOJIS anywhere in system
+   - Clean, professional presentation
+   - Text-only labels and options
+   - Professional tone throughout
+
+2. Multi-select for struggles and strengths
+   - Allow 0 to all selections
+   - Track as arrays
+   - Use for pattern recognition
+
+3. Body type inference, not direct asking
+   - Infer from struggle selections
+   - Never ask height/weight directly
+   - Keep onboarding friction-free
+
+4. Age is critical
+   - Huge predictive power for safety
+   - Injury risk calculation depends on it
+   - Content filtering by age
+
+5. Everything feeds the AI
+   - Every data point used by agents
+   - Nothing collected without purpose
+   - Continuous learning from behavior
+
+6. Privacy and optional fields
+   - Age has "prefer not to say"
+   - Strengths are optional
+   - Build trust through transparency
+
+BUILD THIS SYSTEM NOW.
+
+This is the foundation of unbeatable personalization.
+
+═══════════════════════════════════════════════════════════════════
+```

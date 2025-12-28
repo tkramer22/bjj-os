@@ -1,0 +1,122 @@
+**GREAT CATCH. That’s important for user experience.**
+
+-----
+
+# **VIDEO PLAYBACK: KEEP USERS IN-APP**
+
+**You’re right - we DON’T want videos to open YouTube app/website.**
+
+**We want embedded playback within BJJ OS.**
+
+-----
+
+## **THE ISSUE:**
+
+**Bad UX:**
+
+- User taps video → opens YouTube app (mobile) or [YouTube.com](http://YouTube.com) (desktop)
+- User leaves BJJ OS
+- Breaks flow
+- Hard to get back to chat
+
+**Good UX:**
+
+- User taps video → plays inline within BJJ OS
+- User stays in app
+- Can close video and continue chatting
+- Seamless experience
+
+-----
+
+## **THE SOLUTION:**
+
+**Use YouTube’s Embed API with these settings:**
+
+```javascript
+// Correct YouTube embed configuration
+<iframe
+  src={`https://www.youtube.com/embed/${videoId}?modestbranding=1&rel=0&playsinline=1`}
+  frameBorder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowFullScreen
+  style={{
+    width: '100%',
+    height: '100%',
+    border: 'none'
+  }}
+/>
+```
+
+**Key parameters:**
+
+- `?modestbranding=1` - removes YouTube logo
+- `&rel=0` - doesn’t show related videos at end
+- `&playsinline=1` - plays inline on mobile (doesn’t fullscreen automatically)
+
+-----
+
+## **MOBILE CONSIDERATIONS:**
+
+**iPhone Safari:**
+
+- Use `playsinline` attribute
+- Video plays inline by default (no YouTube app redirect)
+- User can tap fullscreen button if they want
+
+**Android Chrome:**
+
+- Same behavior with proper embed settings
+- Stays in webview
+
+-----
+
+## **ADD THIS TO THE REPLIT POLISH PROMPT:**
+
+**Tell Replit Agent:**
+
+```
+CRITICAL UX FIX: Video Playback Must Stay In-App
+
+PROBLEM: Videos might be opening YouTube app/website instead of playing inline.
+
+REQUIREMENT:
+- Videos must play embedded within BJJ OS (not redirect to YouTube)
+- Mobile: Use iframe with playsinline=1 parameter
+- Desktop: Use iframe embed (not links)
+- User stays in BJJ OS the entire time
+- Can close video and return to chat seamlessly
+
+IMPLEMENTATION:
+1. Find where videos are rendered (video cards in chat)
+2. Ensure using YouTube iframe embed (not links)
+3. Add correct parameters:
+   - modestbranding=1 (remove YouTube branding)
+   - rel=0 (no related videos)
+   - playsinline=1 (inline playback on mobile)
+4. Test on mobile:
+   - Tap video → should play inline
+   - Should NOT open YouTube app
+   - Should NOT leave BJJ OS
+5. Add "close" or "back" button if video goes fullscreen
+6. Test on desktop:
+   - Click video → plays in modal or inline
+   - Doesn't navigate away from BJJ OS
+
+DONE WHEN:
+- ✅ Videos play inline on mobile (iOS Safari + Android Chrome)
+- ✅ Videos play embedded on desktop
+- ✅ Never redirects to YouTube app or YouTube.com
+- ✅ User can easily return to chat after watching
+
+Add this to Phase 1 (Priority 1) of the polish work.
+```
+
+-----
+
+## **PASTE THAT INTO REPLIT** (in a new message while it’s working)
+
+**This will ensure videos stay in-app.** 📺
+
+-----
+
+**While we wait for polish to finish, any other UX concerns you want to address?** 🤔​​​​​​​​​​​​​​​​

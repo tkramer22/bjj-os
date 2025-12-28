@@ -1,0 +1,939 @@
+# 🎯 YES! ADD USA STATE BREAKDOWN
+
+Perfect addition! Let’s track **state-level location** for US visitors.
+
+-----
+
+# 📊 COMPLETE ANALYTICS + USA STATE TRACKING
+
+Copy this COMPLETE prompt and send to Replit Agent:
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════
+COMPLETE WEB ANALYTICS + USA STATE TRACKING
+═══════════════════════════════════════════════════════════════
+
+MISSION:
+1. Track all website visitors with USA state-level location data
+2. Add analytics to daily emails (6x per day)
+3. Create admin dashboard with live analytics
+4. Show USA breakdown by state
+5. Track international visitors by country
+
+DELIVERABLES:
+✅ Analytics tracking with geolocation
+✅ USA state breakdown (California, Texas, New York, etc.)
+✅ International country breakdown
+✅ Analytics in daily emails
+✅ Admin dashboard page at /admin/analytics
+✅ Real-time visitor tracking
+
+═══════════════════════════════════════════════════════════════
+PART 1: ENHANCED DATABASE WITH LOCATION TRACKING
+═══════════════════════════════════════════════════════════════
+
+CREATE MIGRATION: /db/migrations/add_page_views_table.sql
+
+CREATE TABLE IF NOT EXISTS page_views (
+  id SERIAL PRIMARY KEY,
+  
+  -- Page info
+  page_path TEXT NOT NULL,
+  page_title TEXT,
+  
+  -- Visitor info (anonymous)
+  visitor_id TEXT NOT NULL,
+  session_id TEXT,
+  
+  -- Traffic source
+  referrer TEXT,
+  source TEXT,  -- 'instagram', 'google', 'direct', etc.
+  utm_source TEXT,
+  utm_medium TEXT,
+  utm_campaign TEXT,
+  
+  -- Device info
+  device_type TEXT,  -- 'mobile', 'desktop', 'tablet'
+  browser TEXT,
+  os TEXT,
+  
+  -- LOCATION (with USA state detail)
+  country_code TEXT,  -- 'US', 'BR', 'AU', etc.
+  country_name TEXT,  -- 'United States', 'Brazil', etc.
+  state_code TEXT,    -- 'CA', 'NY', 'TX', etc. (USA only)
+  state_name TEXT,    -- 'California', 'New York', etc.
+  city TEXT,
+  ip_hash TEXT,       -- Hashed IP (not stored raw for privacy)
+  
+  -- Timing
+  created_at TIMESTAMP DEFAULT NOW(),
+  time_on_page INTEGER,
+  
+  -- Indexes
+  INDEX idx_created_at (created_at),
+  INDEX idx_visitor_id (visitor_id),
+  INDEX idx_source (source),
+  INDEX idx_page_path (page_path),
+  INDEX idx_country (country_code),
+  INDEX idx_state (state_code)
+);
+
+-- View for daily stats
+CREATE OR REPLACE VIEW daily_analytics AS
+SELECT 
+  DATE(created_at) as date,
+  COUNT(*) as total_views,
+  COUNT(DISTINCT visitor_id) as unique_visitors,
+  COUNT(DISTINCT session_id) as sessions
+FROM page_views
+GROUP BY DATE(created_at);
+
+-- View for USA state breakdown
+CREATE OR REPLACE VIEW usa_state_breakdown AS
+SELECT 
+  state_code,
+  state_name,
+  COUNT(*) as total_views,
+  COUNT(DISTINCT visitor_id) as unique_visitors,
+  COUNT(DISTINCT session_id) as sessions
+FROM page_views
+WHERE country_code = 'US' AND state_code IS NOT NULL
+GROUP BY state_code, state_name
+ORDER BY total_views DESC;
+
+-- View for country breakdown
+CREATE OR REPLACE VIEW country_breakdown AS
+SELECT 
+  country_code,
+  country_name,
+  COUNT(*) as total_views,
+  COUNT(DISTINCT visitor_id) as unique_visitors,
+  COUNT(DISTINCT session_id) as sessions
+FROM page_views
+WHERE country_code IS NOT NULL
+GROUP BY country_code, country_name
+ORDER BY total_views DESC;
+
+RUN THIS MIGRATION NOW.
+
+═══════════════════════════════════════════════════════════════
+PART 2: ENHANCED TRACKING SCRIPT WITH GEOLOCATION
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /client/src/analytics.js
+
+// Enhanced analytics with geolocation
+class BJJAnalytics {
+  constructor() {
+    this.visitorId = this.getOrCreateVisitorId();
+    this.sessionId = this.getOrCreateSessionId();
+    this.pageLoadTime = Date.now();
+  }
+  
+  getOrCreateVisitorId() {
+    let id = localStorage.getItem('bjj_visitor_id');
+    if (!id) {
+      id = 'v_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+      localStorage.setItem('bjj_visitor_id', id);
+    }
+    return id;
+  }
+  
+  getOrCreateSessionId() {
+    let id = sessionStorage.getItem('bjj_session_id');
+    if (!id) {
+      id = 's_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+      sessionStorage.setItem('bjj_session_id', id);
+    }
+    return id;
+  }
+  
+  getTrafficSource() {
+    const referrer = document.referrer;
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    const utmSource = urlParams.get('utm_source');
+    if (utmSource) {
+      return {
+        source: utmSource,
+        utmMedium: urlParams.get('utm_medium'),
+        utmCampaign: urlParams.get('utm_campaign'),
+        referrer: referrer
+      };
+    }
+    
+    if (!referrer) return { source: 'direct', referrer: '' };
+    
+    if (referrer.includes('instagram.com')) return { source: 'instagram', referrer };
+    if (referrer.includes('google.com')) return { source: 'google', referrer };
+    if (referrer.includes('facebook.com')) return { source: 'facebook', referrer };
+    if (referrer.includes('twitter.com') || referrer.includes('t.co')) return { source: 'twitter', referrer };
+    if (referrer.includes('youtube.com')) return { source: 'youtube', referrer };
+    if (referrer.includes('reddit.com')) return { source: 'reddit', referrer };
+    if (referrer.includes('tiktok.com')) return { source: 'tiktok', referrer };
+    
+    return { source: 'referral', referrer };
+  }
+  
+  getDeviceInfo() {
+    const ua = navigator.userAgent;
+    
+    let deviceType = 'desktop';
+    if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) {
+      deviceType = 'tablet';
+    } else if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(ua)) {
+      deviceType = 'mobile';
+    }
+    
+    let browser = 'unknown';
+    if (ua.includes('Chrome')) browser = 'Chrome';
+    else if (ua.includes('Safari')) browser = 'Safari';
+    else if (ua.includes('Firefox')) browser = 'Firefox';
+    else if (ua.includes('Edge')) browser = 'Edge';
+    
+    let os = 'unknown';
+    if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Mac')) os = 'macOS';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('Linux')) os = 'Linux';
+    
+    return { deviceType, browser, os };
+  }
+  
+  async trackPageView() {
+    try {
+      const sourceInfo = this.getTrafficSource();
+      const deviceInfo = this.getDeviceInfo();
+      
+      const data = {
+        pagePath: window.location.pathname,
+        pageTitle: document.title,
+        visitorId: this.visitorId,
+        sessionId: this.sessionId,
+        referrer: sourceInfo.referrer,
+        source: sourceInfo.source,
+        utmSource: sourceInfo.utmSource,
+        utmMedium: sourceInfo.utmMedium,
+        utmCampaign: sourceInfo.utmCampaign,
+        deviceType: deviceInfo.deviceType,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os,
+        screenWidth: window.screen.width,
+        screenHeight: window.screen.height
+        // Location will be determined server-side from IP
+      };
+      
+      await fetch('/api/analytics/pageview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      
+      this.trackTimeOnPage();
+      
+    } catch (error) {
+      console.error('Analytics error:', error);
+    }
+  }
+  
+  trackTimeOnPage() {
+    window.addEventListener('beforeunload', () => {
+      const timeOnPage = Math.round((Date.now() - this.pageLoadTime) / 1000);
+      navigator.sendBeacon('/api/analytics/time-on-page', JSON.stringify({
+        visitorId: this.visitorId,
+        sessionId: this.sessionId,
+        pagePath: window.location.pathname,
+        timeOnPage: timeOnPage
+      }));
+    });
+  }
+}
+
+const analytics = new BJJAnalytics();
+analytics.trackPageView();
+window.bjjAnalytics = analytics;
+
+═══════════════════════════════════════════════════════════════
+PART 3: BACKEND WITH IP GEOLOCATION
+═══════════════════════════════════════════════════════════════
+
+First, install geolocation library:
+
+npm install geoip-lite
+
+CREATE FILE: /server/analytics.js
+
+const express = require('express');
+const router = express.Router();
+const { db } = require('./db');
+const geoip = require('geoip-lite');
+const crypto = require('crypto');
+
+// Hash IP for privacy (don't store raw IPs)
+function hashIP(ip) {
+  return crypto.createHash('sha256').update(ip + process.env.IP_SALT || 'bjjos-salt').digest('hex').substr(0, 16);
+}
+
+// Get location from IP
+function getLocationFromIP(ip) {
+  // Remove IPv6 prefix if present
+  if (ip.includes('::ffff:')) {
+    ip = ip.split('::ffff:')[1];
+  }
+  
+  const geo = geoip.lookup(ip);
+  
+  if (!geo) {
+    return {
+      countryCode: null,
+      countryName: null,
+      stateCode: null,
+      stateName: null,
+      city: null
+    };
+  }
+  
+  // USA state mapping
+  const usaStates = {
+    'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+    'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+    'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+    'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+    'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+    'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+    'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+    'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+    'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+    'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+    'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+    'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+    'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'Washington DC',
+    'PR': 'Puerto Rico', 'VI': 'Virgin Islands', 'GU': 'Guam'
+  };
+  
+  const countryNames = {
+    'US': 'United States', 'CA': 'Canada', 'GB': 'United Kingdom',
+    'AU': 'Australia', 'BR': 'Brazil', 'MX': 'Mexico', 'DE': 'Germany',
+    'FR': 'France', 'IT': 'Italy', 'ES': 'Spain', 'JP': 'Japan',
+    'CN': 'China', 'IN': 'India', 'RU': 'Russia', 'NL': 'Netherlands',
+    'SE': 'Sweden', 'NO': 'Norway', 'DK': 'Denmark', 'FI': 'Finland'
+  };
+  
+  const stateCode = geo.country === 'US' && geo.region ? geo.region : null;
+  
+  return {
+    countryCode: geo.country,
+    countryName: countryNames[geo.country] || geo.country,
+    stateCode: stateCode,
+    stateName: stateCode ? usaStates[stateCode] : null,
+    city: geo.city || null
+  };
+}
+
+// Track page view
+router.post('/pageview', async (req, res) => {
+  try {
+    const {
+      pagePath, pageTitle, visitorId, sessionId,
+      referrer, source, utmSource, utmMedium, utmCampaign,
+      deviceType, browser, os
+    } = req.body;
+    
+    // Get IP and location
+    const ip = req.headers['x-forwarded-for']?.split(',')[0] || 
+                req.headers['x-real-ip'] || 
+                req.connection.remoteAddress;
+    
+    const location = getLocationFromIP(ip);
+    const ipHash = hashIP(ip);
+    
+    await db.query(`
+      INSERT INTO page_views (
+        page_path, page_title, visitor_id, session_id,
+        referrer, source, utm_source, utm_medium, utm_campaign,
+        device_type, browser, os,
+        country_code, country_name, state_code, state_name, city, ip_hash
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+    `, [
+      pagePath, pageTitle, visitorId, sessionId,
+      referrer, source, utmSource, utmMedium, utmCampaign,
+      deviceType, browser, os,
+      location.countryCode, location.countryName, 
+      location.stateCode, location.stateName, location.city, ipHash
+    ]);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Analytics tracking error:', error);
+    res.status(500).json({ error: 'Failed to track' });
+  }
+});
+
+// Get dashboard stats
+router.get('/dashboard-stats', async (req, res) => {
+  try {
+    const { range = 'today' } = req.query;
+    
+    let dateFilter;
+    if (range === 'today') {
+      dateFilter = "DATE(created_at) = CURRENT_DATE";
+    } else if (range === '7days') {
+      dateFilter = "created_at >= NOW() - INTERVAL '7 days'";
+    } else if (range === '30days') {
+      dateFilter = "created_at >= NOW() - INTERVAL '30 days'";
+    }
+    
+    // Overall stats
+    const overallStats = await db.query(`
+      SELECT 
+        COUNT(*) as total_views,
+        COUNT(DISTINCT visitor_id) as unique_visitors,
+        COUNT(DISTINCT session_id) as sessions
+      FROM page_views
+      WHERE ${dateFilter}
+    `);
+    
+    // Top sources
+    const topSources = await db.query(`
+      SELECT 
+        source,
+        COUNT(*) as count,
+        COUNT(DISTINCT visitor_id) as unique_visitors
+      FROM page_views
+      WHERE ${dateFilter}
+      GROUP BY source
+      ORDER BY count DESC
+      LIMIT 10
+    `);
+    
+    // Top pages
+    const topPages = await db.query(`
+      SELECT 
+        page_path,
+        COUNT(*) as views,
+        COUNT(DISTINCT visitor_id) as unique_visitors
+      FROM page_views
+      WHERE ${dateFilter}
+      GROUP BY page_path
+      ORDER BY views DESC
+      LIMIT 10
+    `);
+    
+    // USA states breakdown
+    const usaStates = await db.query(`
+      SELECT 
+        state_code,
+        state_name,
+        COUNT(*) as views,
+        COUNT(DISTINCT visitor_id) as unique_visitors
+      FROM page_views
+      WHERE ${dateFilter} AND country_code = 'US' AND state_code IS NOT NULL
+      GROUP BY state_code, state_name
+      ORDER BY views DESC
+    `);
+    
+    // International countries (non-USA)
+    const countries = await db.query(`
+      SELECT 
+        country_code,
+        country_name,
+        COUNT(*) as views,
+        COUNT(DISTINCT visitor_id) as unique_visitors
+      FROM page_views
+      WHERE ${dateFilter} AND country_code IS NOT NULL
+      GROUP BY country_code, country_name
+      ORDER BY views DESC
+      LIMIT 15
+    `);
+    
+    // Device breakdown
+    const devices = await db.query(`
+      SELECT 
+        device_type,
+        COUNT(*) as count
+      FROM page_views
+      WHERE ${dateFilter}
+      GROUP BY device_type
+    `);
+    
+    // Real-time visitors (last 5 minutes)
+    const realTime = await db.query(`
+      SELECT COUNT(DISTINCT visitor_id) as count
+      FROM page_views
+      WHERE created_at >= NOW() - INTERVAL '5 minutes'
+    `);
+    
+    // New vs returning
+    const visitorTypes = await db.query(`
+      SELECT 
+        CASE 
+          WHEN pv_count = 1 THEN 'new'
+          ELSE 'returning'
+        END as type,
+        COUNT(*) as count
+      FROM (
+        SELECT 
+          visitor_id,
+          COUNT(*) as pv_count
+        FROM page_views
+        WHERE ${dateFilter}
+        GROUP BY visitor_id
+      ) as visitor_counts
+      GROUP BY type
+    `);
+    
+    res.json({
+      overview: overallStats.rows[0],
+      topSources: topSources.rows,
+      topPages: topPages.rows,
+      usaStates: usaStates.rows,
+      countries: countries.rows,
+      devices: devices.rows,
+      realTimeVisitors: parseInt(realTime.rows[0]?.count) || 0,
+      newVsReturning: visitorTypes.rows
+    });
+    
+  } catch (error) {
+    console.error('Dashboard stats error:', error);
+    res.status(500).json({ error: 'Failed to get stats' });
+  }
+});
+
+module.exports = router;
+
+═══════════════════════════════════════════════════════════════
+PART 4: UPDATE DAILY EMAIL WITH USA STATE BREAKDOWN
+═══════════════════════════════════════════════════════════════
+
+In /server/admin-email.ts, update the getWebsiteAnalytics function:
+
+async function getWebsiteAnalytics() {
+  const today = new Date().toISOString().split('T')[0];
+  
+  try {
+    // Overall stats
+    const todayStats = await db.query(`
+      SELECT 
+        COUNT(*) as total_views,
+        COUNT(DISTINCT visitor_id) as unique_visitors,
+        COUNT(DISTINCT session_id) as sessions
+      FROM page_views
+      WHERE DATE(created_at) = $1
+    `, [today]);
+    
+    // Top sources
+    const sources = await db.query(`
+      SELECT source, COUNT(*) as count
+      FROM page_views
+      WHERE DATE(created_at) = $1
+      GROUP BY source
+      ORDER BY count DESC
+      LIMIT 5
+    `, [today]);
+    
+    // USA states today
+    const usaStates = await db.query(`
+      SELECT 
+        state_code,
+        state_name,
+        COUNT(*) as count
+      FROM page_views
+      WHERE DATE(created_at) = $1 
+        AND country_code = 'US' 
+        AND state_code IS NOT NULL
+      GROUP BY state_code, state_name
+      ORDER BY count DESC
+      LIMIT 10
+    `, [today]);
+    
+    // International countries
+    const countries = await db.query(`
+      SELECT 
+        country_name,
+        COUNT(*) as count
+      FROM page_views
+      WHERE DATE(created_at) = $1 
+        AND country_code != 'US'
+        AND country_code IS NOT NULL
+      GROUP BY country_name
+      ORDER BY count DESC
+      LIMIT 5
+    `, [today]);
+    
+    // Total USA vs International
+    const usaTotal = await db.query(`
+      SELECT COUNT(*) as count
+      FROM page_views
+      WHERE DATE(created_at) = $1 AND country_code = 'US'
+    `, [today]);
+    
+    const intlTotal = await db.query(`
+      SELECT COUNT(*) as count
+      FROM page_views
+      WHERE DATE(created_at) = $1 AND country_code != 'US'
+    `, [today]);
+    
+    return {
+      totalViews: parseInt(todayStats.rows[0]?.total_views) || 0,
+      uniqueVisitors: parseInt(todayStats.rows[0]?.unique_visitors) || 0,
+      sessions: parseInt(todayStats.rows[0]?.sessions) || 0,
+      topSources: sources.rows,
+      usaStates: usaStates.rows,
+      countries: countries.rows,
+      usaVisitors: parseInt(usaTotal.rows[0]?.count) || 0,
+      intlVisitors: parseInt(intlTotal.rows[0]?.count) || 0
+    };
+    
+  } catch (error) {
+    console.error('Error getting website analytics:', error);
+    return null;
+  }
+}
+
+Add this HTML to the email template (in the Website Traffic section):
+
+<!-- Website Analytics -->
+<div style="background: #222222; border-left: 4px solid #10b981; padding: 25px; border-radius: 12px; margin-bottom: 20px;">
+  <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #10b981; display: flex; align-items: center;">
+    <span style="margin-right: 10px;">🌐</span> Website Traffic
+  </h2>
+  
+  <!-- Quick Stats -->
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
+    <div style="background: #2a2a2a; padding: 15px; border-radius: 8px; text-align: center;">
+      <div style="font-size: 32px; font-weight: 900; color: #ffffff;">${webStats.totalViews}</div>
+      <div style="font-size: 12px; color: #999999; text-transform: uppercase;">Page Views</div>
+    </div>
+    <div style="background: #2a2a2a; padding: 15px; border-radius: 8px; text-align: center;">
+      <div style="font-size: 32px; font-weight: 900; color: #10b981;">${webStats.uniqueVisitors}</div>
+      <div style="font-size: 12px; color: #999999; text-transform: uppercase;">Unique Visitors</div>
+    </div>
+    <div style="background: #2a2a2a; padding: 15px; border-radius: 8px; text-align: center;">
+      <div style="font-size: 32px; font-weight: 900; color: #60a5fa;">${webStats.sessions}</div>
+      <div style="font-size: 12px; color: #999999; text-transform: uppercase;">Sessions</div>
+    </div>
+  </div>
+  
+  <!-- Traffic Sources -->
+  ${webStats.topSources.length > 0 ? `
+    <div style="background: #2a2a2a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+      <div style="font-size: 14px; color: #cccccc; margin-bottom: 12px; font-weight: 600;">📊 Top Traffic Sources:</div>
+      ${webStats.topSources.map(s => `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px; background: #1a1a1a; border-radius: 6px;">
+          <span style="color: #aaaaaa; text-transform: capitalize; font-size: 13px;">${s.source}</span>
+          <span style="color: #ffffff; font-weight: 700; font-size: 15px;">${s.count}</span>
+        </div>
+      `).join('')}
+    </div>
+  ` : ''}
+  
+  <!-- USA States Breakdown -->
+  ${webStats.usaStates.length > 0 ? `
+    <div style="background: #2a2a2a; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+      <div style="font-size: 14px; color: #cccccc; margin-bottom: 12px; font-weight: 600;">🇺🇸 USA Visitors by State:</div>
+      <div style="font-size: 12px; color: #888888; margin-bottom: 10px;">${webStats.usaVisitors} total USA visitors</div>
+      ${webStats.usaStates.slice(0, 5).map(s => `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px; background: #1a1a1a; border-radius: 6px;">
+          <span style="color: #aaaaaa; font-size: 13px;">${s.state_name} (${s.state_code})</span>
+          <span style="color: #ffffff; font-weight: 700; font-size: 15px;">${s.count}</span>
+        </div>
+      `).join('')}
+      ${webStats.usaStates.length > 5 ? `
+        <div style="font-size: 11px; color: #666666; margin-top: 8px; text-align: center;">
+          + ${webStats.usaStates.length - 5} more states
+        </div>
+      ` : ''}
+    </div>
+  ` : ''}
+  
+  <!-- International Countries -->
+  ${webStats.countries.length > 0 ? `
+    <div style="background: #2a2a2a; padding: 15px; border-radius: 8px;">
+      <div style="font-size: 14px; color: #cccccc; margin-bottom: 12px; font-weight: 600;">🌍 International Visitors:</div>
+      <div style="font-size: 12px; color: #888888; margin-bottom: 10px;">${webStats.intlVisitors} total international visitors</div>
+      ${webStats.countries.map(c => `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px; background: #1a1a1a; border-radius: 6px;">
+          <span style="color: #aaaaaa; font-size: 13px;">${c.country_name}</span>
+          <span style="color: #ffffff; font-weight: 700; font-size: 15px;">${c.count}</span>
+        </div>
+      `).join('')}
+    </div>
+  ` : ''}
+</div>
+
+═══════════════════════════════════════════════════════════════
+PART 5: CREATE ADMIN DASHBOARD PAGE
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /client/src/pages/AdminAnalytics.jsx
+
+import React, { useState, useEffect } from 'react';
+
+export default function AdminAnalytics() {
+  const [stats, setStats] = useState(null);
+  const [timeRange, setTimeRange] = useState('today');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStats();
+    const interval = setInterval(fetchStats, 30000);
+    return () => clearInterval(interval);
+  }, [timeRange]);
+
+  async function fetchStats() {
+    try {
+      const res = await fetch(`/api/analytics/dashboard-stats?range=${timeRange}`);
+      const data = await res.json();
+      setStats(data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error:', error);
+      setLoading(false);
+    }
+  }
+
+  if (loading) return <div className="p-8">Loading analytics...</div>;
+  if (!stats) return <div className="p-8">Error loading analytics</div>;
+
+  const totalViews = stats.overview?.total_views || 0;
+  const uniqueVisitors = stats.overview?.unique_visitors || 0;
+  const sessions = stats.overview?.sessions || 0;
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold">🌐 Website Analytics</h1>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setTimeRange('today')}
+              className={`px-4 py-2 rounded-lg ${timeRange === 'today' ? 'bg-green-600' : 'bg-gray-700'}`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setTimeRange('7days')}
+              className={`px-4 py-2 rounded-lg ${timeRange === '7days' ? 'bg-green-600' : 'bg-gray-700'}`}
+            >
+              7 Days
+            </button>
+            <button
+              onClick={() => setTimeRange('30days')}
+              className={`px-4 py-2 rounded-lg ${timeRange === '30days' ? 'bg-green-600' : 'bg-gray-700'}`}
+            >
+              30 Days
+            </button>
+          </div>
+        </div>
+
+        {/* Real-time badge */}
+        <div className="mb-6 inline-flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-full text-sm font-semibold">
+          <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+          {stats.realTimeVisitors} visitors active now
+        </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-gray-800 p-6 rounded-xl border-l-4 border-blue-500">
+            <div className="text-4xl font-bold mb-2">{totalViews.toLocaleString()}</div>
+            <div className="text-gray-400 text-sm uppercase">Page Views</div>
+          </div>
+          <div className="bg-gray-800 p-6 rounded-xl border-l-4 border-green-500">
+            <div className="text-4xl font-bold mb-2">{uniqueVisitors.toLocaleString()}</div>
+            <div className="text-gray-400 text-sm uppercase">Unique Visitors</div>
+          </div>
+          <div className="bg-gray-800 p-6 rounded-xl border-l-4 border-purple-500">
+            <div className="text-4xl font-bold mb-2">{sessions.toLocaleString()}</div>
+            <div className="text-gray-400 text-sm uppercase">Sessions</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          
+          {/* Traffic Sources */}
+          <div className="bg-gray-800 p-6 rounded-xl">
+            <h2 className="text-xl font-bold mb-4">📊 Traffic Sources</h2>
+            <div className="space-y-3">
+              {stats.topSources?.map((source, i) => {
+                const percent = totalViews > 0 ? ((source.count / totalViews) * 100).toFixed(1) : 0;
+                return (
+                  <div key={i}>
+                    <div className="flex justify-between mb-1">
+                      <span className="capitalize">{source.source}</span>
+                      <span className="font-bold">{source.count} ({percent}%)</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-green-500 h-2 rounded-full" 
+                        style={{width: `${percent}%`}}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Top Pages */}
+          <div className="bg-gray-800 p-6 rounded-xl">
+            <h2 className="text-xl font-bold mb-4">📄 Top Pages</h2>
+            <div className="space-y-3">
+              {stats.topPages?.map((page, i) => (
+                <div key={i} className="flex justify-between items-center p-3 bg-gray-700 rounded-lg">
+                  <span className="text-sm font-mono">{page.page_path}</span>
+                  <span className="font-bold">{page.views}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* USA States Breakdown */}
+        <div className="bg-gray-800 p-6 rounded-xl mb-8">
+          <h2 className="text-xl font-bold mb-4">🇺🇸 USA Visitors by State</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {stats.usaStates?.map((state, i) => (
+              <div key={i} className="bg-gray-700 p-4 rounded-lg text-center">
+                <div className="text-2xl font-bold mb-1">{state.views}</div>
+                <div className="text-sm text-gray-400">{state.state_name}</div>
+                <div className="text-xs text-gray-500">{state.state_code}</div>
+              </div>
+            ))}
+          </div>
+          {stats.usaStates?.length === 0 && (
+            <div className="text-center text-gray-500 py-8">No USA visitors yet</div>
+          )}
+        </div>
+
+        {/* International Countries */}
+        <div className="bg-gray-800 p-6 rounded-xl mb-8">
+          <h2 className="text-xl font-bold mb-4">🌍 International Visitors</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {stats.countries?.map((country, i) => (
+              <div key={i} className="bg-gray-700 p-4 rounded-lg text-center">
+                <div className="text-2xl font-bold mb-1">{country.views}</div>
+                <div className="text-sm text-gray-400">{country.country_name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Device Breakdown */}
+        <div className="bg-gray-800 p-6 rounded-xl">
+          <h2 className="text-xl font-bold mb-4">📱 Device Types</h2>
+          <div className="grid grid-cols-3 gap-4">
+            {stats.devices?.map((device, i) => {
+              const percent = totalViews > 0 ? ((device.count / totalViews) * 100).toFixed(1) : 0;
+              return (
+                <div key={i} className="bg-gray-700 p-4 rounded-lg text-center">
+                  <div className="text-3xl font-bold mb-2">{percent}%</div>
+                  <div className="text-sm text-gray-400 capitalize">{device.device_type}</div>
+                  <div className="text-xs text-gray-500">{device.count} views</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+═══════════════════════════════════════════════════════════════
+PART 6: ADD ROUTE TO ADMIN DASHBOARD
+═══════════════════════════════════════════════════════════════
+
+In your router setup (probably /client/src/App.jsx):
+
+import AdminAnalytics from './pages/AdminAnalytics';
+
+// Add route:
+<Route path="/admin/analytics" element={<AdminAnalytics />} />
+
+Also add link in admin navigation:
+
+<a href="/admin/analytics" className="...">
+  🌐 Analytics
+</a>
+
+═══════════════════════════════════════════════════════════════
+PART 7: REGISTER ANALYTICS ROUTES IN SERVER
+═══════════════════════════════════════════════════════════════
+
+In /server/index.ts:
+
+const analyticsRouter = require('./analytics');
+app.use('/api/analytics', analyticsRouter);
+
+═══════════════════════════════════════════════════════════════
+PART 8: ADD ANALYTICS SCRIPT TO WEBSITE
+═══════════════════════════════════════════════════════════════
+
+In /client/index.html (before closing </body>):
+
+<script src="/src/analytics.js"></script>
+
+Or in React App.jsx:
+
+import './analytics.js';
+
+═══════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════
+
+✅ Database tracks USA state-level location data
+✅ Analytics tracking on all pages
+✅ Geolocation from IP using geoip-lite
+✅ Daily emails show USA state breakdown
+✅ Daily emails show international countries
+✅ Admin dashboard at /admin/analytics
+✅ Dashboard shows:
+   - Real-time visitors
+   - Traffic sources
+   - Top pages
+   - USA states breakdown (California, Texas, etc.)
+   - International countries
+   - Device types
+✅ Privacy-friendly (hashed IPs, no personal data)
+
+IMPLEMENT EVERYTHING NOW. This is comprehensive tracking.
+```
+
+-----
+
+## ✅ **COMPLETE PROMPT READY!**
+
+**This gives you:**
+
+1. ✅ Full website visitor tracking
+1. ✅ **USA state breakdown** (California, Texas, New York, etc.)
+1. ✅ International country tracking
+1. ✅ Traffic sources (Instagram, Google, etc.)
+1. ✅ **Admin dashboard** at `/admin/analytics`
+1. ✅ **Daily emails** with all this data (6x per day)
+1. ✅ Real-time visitor count
+1. ✅ Privacy-friendly (no personal data)
+
+**Your daily emails will show:**
+
+```
+🇺🇸 USA Visitors by State:
+  California: 45
+  Texas: 28
+  New York: 22
+  Florida: 18
+  Illinois: 12
+
+🌍 International:
+  Brazil: 14
+  Australia: 8
+  Canada: 6
+```
+
+**Send this complete prompt to Replit Agent NOW!** 🚀📊🗺️​​​​​​​​​​​​​​​​

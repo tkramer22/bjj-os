@@ -1,0 +1,123 @@
+Good. Let’s verify the entire Professor OS 6.0 pipeline is actually connected and using the Gemini-extracted video knowledge.
+
+-----
+
+**Send this to Replit Agent:**
+
+```
+PROFESSOR OS 6.0 - FULL PIPELINE VERIFICATION
+
+I need to see EXACTLY how video knowledge flows from Gemini extraction to Professor OS responses. Show me the complete data flow.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: SHOW ME THE STORED VIDEO KNOWLEDGE
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these queries and show me ACTUAL data (not just counts):
+
+1. Show me 3 example videos with their extracted knowledge:
+
+SELECT 
+  video_id,
+  title,
+  instructor_name,
+  youtube_url,
+  extracted_knowledge,
+  techniques_covered,
+  key_concepts,
+  instructor_quotes
+FROM ai_video_knowledge 
+LIMIT 3;
+
+2. Show me the structure of extracted_knowledge field:
+   - Is it JSON?
+   - What fields are inside?
+   - Show me one complete example
+
+3. How many videos have full knowledge extracted vs partial vs none?
+
+SELECT 
+  CASE 
+    WHEN extracted_knowledge IS NOT NULL AND extracted_knowledge != '' THEN 'complete'
+    ELSE 'empty'
+  END as status,
+  COUNT(*)
+FROM ai_video_knowledge
+GROUP BY status;
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: SHOW ME THE PROFESSOR OS PROMPT CONSTRUCTION
+═══════════════════════════════════════════════════════════════════════════════
+
+When a user asks Professor OS a question like "How do I escape side control?":
+
+1. Show me the EXACT code path:
+   - User sends message
+   - Where does it search for relevant videos?
+   - What query runs against ai_video_knowledge?
+   - How are results ranked/selected?
+
+2. Show me the function that retrieves video knowledge:
+   - File name and function name
+   - The actual query/search logic
+   - How many videos does it retrieve per question?
+
+3. Show me how knowledge is injected into the prompt:
+   - Where in buildSystemPrompt.ts does video knowledge get added?
+   - What format is it in when sent to Claude?
+   - Show me an example of the injected knowledge block
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: TRACE A REAL QUESTION END-TO-END
+═══════════════════════════════════════════════════════════════════════════════
+
+Simulate this question: "How do I do an armbar from mount?"
+
+1. What search query runs against the video database?
+2. Which videos are returned? (show video IDs and titles)
+3. What knowledge from those videos is extracted?
+4. Show me the EXACT text that gets injected into the system prompt
+5. How does Professor OS know to recommend these specific videos?
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: VERIFY THE CONNECTION IS ACTUALLY LIVE
+═══════════════════════════════════════════════════════════════════════════════
+
+Add temporary logging to confirm knowledge retrieval is happening:
+
+In the chat endpoint, add:
+console.log("[PROF OS] User question:", userMessage);
+console.log("[PROF OS] Videos found:", videos.length);
+console.log("[PROF OS] Knowledge injected:", knowledgeSnippet.substring(0, 500));
+
+Then show me a test run with these logs.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: IDENTIFY ANY GAPS
+═══════════════════════════════════════════════════════════════════════════════
+
+After reviewing the above, tell me:
+
+1. Is Professor OS ACTUALLY using the Gemini-extracted knowledge? YES/NO
+2. If NO - what's broken in the connection?
+3. If YES - show me proof (the actual injected knowledge in a prompt)
+
+4. Are video recommendations coming from the database or is Claude hallucinating titles?
+5. Is there a constraint that says "only recommend videos from this list"?
+
+═══════════════════════════════════════════════════════════════════════════════
+DELIVERABLE:
+═══════════════════════════════════════════════════════════════════════════════
+
+I want to SEE:
+1. Actual extracted knowledge from 3 videos (full JSON)
+2. The code that retrieves and injects this knowledge
+3. A traced example showing knowledge flowing into a response
+4. Confirmation the pipeline is connected
+
+Do not summarize. Show me the actual data and code.
+```
+
+-----
+
+This will reveal exactly what’s stored, how it flows, and whether the connection is real or broken. Let me know what comes back!​​​​​​​​​​​​​​​​

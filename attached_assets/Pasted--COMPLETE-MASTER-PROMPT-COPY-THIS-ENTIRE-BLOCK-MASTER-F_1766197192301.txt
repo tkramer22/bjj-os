@@ -1,0 +1,415 @@
+## 📋 COMPLETE MASTER PROMPT - COPY THIS ENTIRE BLOCK:
+
+```
+MASTER FIX: iOS APP + WEB APP - COMPLETE OVERHAUL
+
+Fix ALL of these issues for BOTH the iOS app AND the web app.
+Password is stored in the DATABASE - works for both iOS and web login.
+
+═══════════════════════════════════════════════════════════════════════════════
+1. FORGOT PASSWORD - STAY IN APP (iOS APP)
+═══════════════════════════════════════════════════════════════════════════════
+
+NEVER open Safari or any browser. Everything stays within the app.
+
+When user taps "Forgot password?" on /ios-login:
+1. Navigate to /ios-forgot-password screen (same style as /ios-login)
+2. User enters email
+3. App calls API to send reset code to email
+4. Navigate to /ios-verify-reset screen
+5. User enters the code from their email
+6. Navigate to /ios-reset-password screen
+7. User enters new password + confirm password
+8. App calls API to save new password to DATABASE
+9. Show success message
+10. Navigate back to /ios-login
+11. User logs in with new password
+
+PASSWORD IS SAVED TO DATABASE - works for BOTH iOS app AND web app login.
+
+SCREENS NEEDED (all styled like /ios-login - dark theme, BJJ OS logo):
+
+SCREEN 1 - /ios-forgot-password:
+┌─────────────────────────────────────────┐
+│                                         │
+│            [BJJ OS LOGO]                │
+│                                         │
+│         Reset Password                  │
+│                                         │
+│   Enter your email and we'll send       │
+│   you a code to reset your password.    │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ Email                           │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│         [ Send Reset Code ]             │
+│                                         │
+│   ← Back to Sign In                     │
+│                                         │
+└─────────────────────────────────────────┘
+
+SCREEN 2 - /ios-verify-reset:
+┌─────────────────────────────────────────┐
+│                                         │
+│            [BJJ OS LOGO]                │
+│                                         │
+│         Enter Code                      │
+│                                         │
+│   We sent a 6-digit code to             │
+│   your email.                           │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ 0 0 0 0 0 0                     │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│         [ Verify Code ]                 │
+│                                         │
+│   Didn't receive it? Send again         │
+│                                         │
+│   ← Back                                │
+│                                         │
+└─────────────────────────────────────────┘
+
+SCREEN 3 - /ios-reset-password:
+┌─────────────────────────────────────────┐
+│                                         │
+│            [BJJ OS LOGO]                │
+│                                         │
+│         Set New Password                │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ New Password                  👁 │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ Confirm Password              👁 │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│         [ Save Password ]               │
+│                                         │
+└─────────────────────────────────────────┘
+
+SCREEN 4 - Success (or modal):
+┌─────────────────────────────────────────┐
+│                                         │
+│            ✓ Success!                   │
+│                                         │
+│   Your password has been reset.         │
+│   You can now sign in.                  │
+│                                         │
+│         [ Back to Sign In ]             │
+│                                         │
+└─────────────────────────────────────────┘
+
+API ENDPOINTS NEEDED:
+
+POST /api/auth/forgot-password
+- Input: { email }
+- Action: Generate 6-digit code, save to database with expiry (15 min), send email
+- Response: { success: true }
+
+POST /api/auth/verify-reset-code
+- Input: { email, code }
+- Action: Verify code matches and not expired
+- Response: { success: true, resetToken: "xxx" }
+
+POST /api/auth/reset-password
+- Input: { resetToken, newPassword }
+- Action: Hash password, save to users table in DATABASE
+- Response: { success: true }
+
+CRITICAL: Password is saved to the DATABASE so it works for BOTH iOS and web.
+
+═══════════════════════════════════════════════════════════════════════════════
+2. FORGOT PASSWORD FLOW (WEB APP)
+═══════════════════════════════════════════════════════════════════════════════
+
+Web app needs the same password reset flow:
+
+/forgot-password page:
+┌─────────────────────────────────────────┐
+│                                         │
+│            [BJJ OS LOGO]                │
+│                                         │
+│         Reset Password                  │
+│                                         │
+│   Enter your email and we'll send       │
+│   you a code to reset your password.    │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ Email                           │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│         [ Send Reset Code ]             │
+│                                         │
+│   Remember your password? Sign in       │
+│                                         │
+└─────────────────────────────────────────┘
+
+/verify-reset page → /reset-password page → Success
+
+Uses the SAME API endpoints as iOS app.
+Password saved to DATABASE works for both platforms.
+
+═══════════════════════════════════════════════════════════════════════════════
+3. PERSISTENT LOGIN - iOS APP (FOREVER)
+═══════════════════════════════════════════════════════════════════════════════
+
+Once user logs in successfully on iOS app:
+- Save auth token using Capacitor Preferences (NOT localStorage)
+- Token should NEVER expire (or 1+ year expiry)
+- User stays logged in forever until they manually log out
+
+import { Preferences } from '@capacitor/preferences';
+
+// After successful login:
+await Preferences.set({
+  key: 'auth_token',
+  value: token
+});
+
+// On app load, check for existing token:
+const { value } = await Preferences.get({ key: 'auth_token' });
+if (value) {
+  // User is logged in, skip login screen, go to dashboard
+}
+
+// On logout:
+await Preferences.remove({ key: 'auth_token' });
+
+═══════════════════════════════════════════════════════════════════════════════
+4. PERSISTENT LOGIN - WEB APP (1 YEAR)
+═══════════════════════════════════════════════════════════════════════════════
+
+Web app login should also be persistent:
+- "Keep me signed in" should be checked by DEFAULT
+- Session should last 1 YEAR (not 30 days)
+- User rarely has to log in again
+- Store in httpOnly cookie or localStorage with long expiry
+
+═══════════════════════════════════════════════════════════════════════════════
+5. PASSWORD LOGIN ON WEB APP
+═══════════════════════════════════════════════════════════════════════════════
+
+Web login currently only supports verification codes.
+
+ADD password login option to web:
+
+┌─────────────────────────────────────────┐
+│                                         │
+│            [BJJ OS LOGO]                │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ Email                           │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │ Password                        │   │
+│   └─────────────────────────────────┘   │
+│                                         │
+│   ☑ Keep me signed in                   │
+│                                         │
+│         [ Sign In ]                     │
+│                                         │
+│   Forgot password?                      │
+│                                         │
+│   ─────── OR ───────                    │
+│                                         │
+│   [ Sign in with verification code ]    │
+│                                         │
+│   Don't have an account? Sign up        │
+│                                         │
+└─────────────────────────────────────────┘
+
+Users can choose:
+- Email + Password (primary method)
+- OR verification code (backup method)
+
+Both methods work because password is in DATABASE.
+
+═══════════════════════════════════════════════════════════════════════════════
+6. BRANDING - REPLACE BLUE BELT WITH BJJ OS LOGO (WEB APP)
+═══════════════════════════════════════════════════════════════════════════════
+
+The website header shows a blue belt icon. This is WRONG.
+
+Replace with the BJJ OS logo (with gradient bar) on ALL pages:
+- /forgot-password
+- /reset-password
+- /login
+- /settings
+- /dashboard
+- /chat
+- EVERY page
+
+The blue belt icon should be completely removed from the website.
+Use the same BJJ OS logo that appears on the iOS login screen.
+
+═══════════════════════════════════════════════════════════════════════════════
+7. SUBSCRIPTION MANAGEMENT (iOS APP + WEB APP)
+═══════════════════════════════════════════════════════════════════════════════
+
+Users need to see and manage their subscription in Settings/Profile.
+
+Show this on BOTH iOS app AND web app:
+
+┌─────────────────────────────────────────┐
+│  📦 Subscription                        │
+│                                         │
+│  Plan: BJJ OS Pro                       │
+│  Status: Active                         │
+│  Renews: January 19, 2026               │
+│  Price: $14.99/month                    │
+│                                         │
+│  [ Manage Subscription ]                │
+│                                         │
+└─────────────────────────────────────────┘
+
+BEHAVIOR FOR iOS APP:
+- "Manage Subscription" navigates to an in-app subscription management screen
+- Shows billing info, cancel option
+- Everything stays IN THE APP - never opens Safari
+- API calls to Stripe happen in backend
+
+BEHAVIOR FOR WEB APP:
+- "Manage Subscription" opens Stripe Customer Portal
+- User can view invoices, update payment, cancel, resubscribe
+
+SUBSCRIPTION STATES:
+
+1. ACTIVE:
+   Status: Active ✓
+   Renews: [date]
+
+2. CANCELLED (still has access):
+   Status: Cancelled
+   Access until: [date]
+   [ Resubscribe ] ← Web only, or in-app screen for iOS
+
+3. EXPIRED:
+   Status: Expired
+   "Visit bjjos.app to subscribe" ← Plain text on iOS (App Store compliant)
+   [ Subscribe ] ← Button on web
+
+4. FREE TRIAL:
+   Status: Trial
+   Trial ends: [date]
+
+Pull renewal date and status from Stripe API.
+
+═══════════════════════════════════════════════════════════════════════════════
+8. SPLASH SCREEN LOGO - MAKE IT SMALLER (iOS APP)
+═══════════════════════════════════════════════════════════════════════════════
+
+The splash screen logo is still too large/cut off.
+
+You already use the logo SMALLER on the iOS login screen and it looks perfect.
+Use the SAME SIZE on the splash screen.
+
+In LaunchScreen.storyboard:
+- Find the logo image constraint
+- Change multiplier to 0.4 (40% of screen width)
+- OR set a fixed width of 150-200 points
+- Center it horizontally and vertically
+- Add proper padding on all sides
+
+The logo should:
+- Be centered on screen
+- Be approximately the same size as on login screen
+- Have plenty of space around it
+- NOT be cut off on any device
+
+This is a constraint/sizing issue, not a design asset issue.
+
+═══════════════════════════════════════════════════════════════════════════════
+9. INSTALL REQUIRED CAPACITOR PLUGINS
+═══════════════════════════════════════════════════════════════════════════════
+
+npm install @capacitor/preferences
+
+(Browser plugin NOT needed - we stay in app)
+
+═══════════════════════════════════════════════════════════════════════════════
+10. STRIPE CUSTOMER PORTAL INTEGRATION (WEB APP)
+═══════════════════════════════════════════════════════════════════════════════
+
+Create API endpoint for Stripe Customer Portal:
+
+POST /api/create-portal-session
+
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+app.post('/api/create-portal-session', async (req, res) => {
+  const { customerId } = req.body; // Get from logged-in user
+  
+  const session = await stripe.billingPortal.sessions.create({
+    customer: customerId,
+    return_url: 'https://bjjos.app/settings',
+  });
+  
+  res.json({ url: session.url });
+});
+
+Frontend calls this, then redirects user to the Stripe portal URL.
+
+═══════════════════════════════════════════════════════════════════════════════
+11. DATABASE - PASSWORD STORAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+Make sure the users table has a password column:
+
+ALTER TABLE users ADD COLUMN password_hash VARCHAR(255);
+
+When user sets/resets password:
+- Hash password using bcrypt
+- Save to password_hash column
+- This password works for BOTH iOS app and web app login
+
+Password verification:
+- User enters email + password
+- Look up user by email
+- Compare entered password with stored hash using bcrypt
+- If match → generate auth token → log in
+
+═══════════════════════════════════════════════════════════════════════════════
+SUMMARY - WHAT CHANGES WHERE:
+═══════════════════════════════════════════════════════════════════════════════
+
+iOS APP CHANGES:
+- Forgot password flow stays IN APP (3 new screens)
+- Persistent login with Capacitor Preferences (forever)
+- Subscription info in Profile (manage stays in app)
+- Splash screen logo smaller
+- Install @capacitor/preferences
+- Password saved to DATABASE
+
+WEB APP CHANGES:
+- Forgot password flow (uses same API endpoints)
+- Add password login option (not just verification codes)
+- Persistent login 1 year (Keep me signed in default ON)
+- Replace blue belt icon with BJJ OS logo everywhere
+- Subscription info in Settings
+- Stripe Customer Portal integration
+- Password saved to DATABASE
+
+SHARED/BACKEND:
+- Password stored in DATABASE (works for both platforms)
+- API endpoints for forgot/reset password
+- Stripe API for subscription status
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER ALL FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+
+VERIFY each fix is complete before telling me you're done.
+Show me the actual code changes for each section.
+Do NOT say something is done unless you've actually changed the code.
+```
+
+-----
+
+**Send this entire prompt to Replit. Everything stays in-app, and passwords sync across iOS and web through the database!**

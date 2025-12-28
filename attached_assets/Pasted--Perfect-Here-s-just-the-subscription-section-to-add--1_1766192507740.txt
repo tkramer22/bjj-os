@@ -1,0 +1,79 @@
+**Perfect.** Here’s just the subscription section to add:
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+10. SUBSCRIPTION MANAGEMENT - iOS APP & WEB
+═══════════════════════════════════════════════════════════════════════════════
+
+Users need to see their subscription status and manage it.
+
+IN PROFILE/SETTINGS - SHOW SUBSCRIPTION INFO:
+
+┌─────────────────────────────────────────┐
+│  📦 Subscription                        │
+│                                         │
+│  Plan: BJJ OS Pro                       │
+│  Status: Active                         │
+│  Renews: January 19, 2026               │
+│  Price: $14.99/month                    │
+│                                         │
+│  [ Manage Subscription ]                │
+│                                         │
+└─────────────────────────────────────────┘
+
+BEHAVIOR FOR iOS APP (App Store Compliant):
+- "Manage Subscription" button opens Safari to bjjos.app/settings/subscription
+- This is ALLOWED because it's managing an existing subscription, not purchasing
+- Plain text showing renewal date and status is fine
+- Do NOT show "Upgrade" or pricing options in the app
+
+BEHAVIOR FOR WEB APP:
+- "Manage Subscription" opens Stripe Customer Portal
+- User can:
+  - View billing history
+  - Update payment method
+  - Cancel subscription
+  - Resubscribe if cancelled
+
+SUBSCRIPTION STATES TO HANDLE:
+
+1. ACTIVE:
+   Plan: BJJ OS Pro
+   Status: Active ✓
+   Renews: January 19, 2026
+
+2. CANCELLED (but still active until period end):
+   Plan: BJJ OS Pro
+   Status: Cancelled
+   Access until: January 19, 2026
+   [ Resubscribe ] ← Web only, not in iOS app
+
+3. EXPIRED:
+   Plan: None
+   Status: Expired
+   "Visit bjjos.app to resubscribe" ← Plain text, not clickable (iOS)
+   [ Resubscribe ] ← Button on web only
+
+4. FREE TRIAL:
+   Plan: BJJ OS Pro (Trial)
+   Status: Trial
+   Trial ends: January 26, 2026
+   "Your card will be charged $14.99/month after trial"
+
+═══════════════════════════════════════════════════════════════════════════════
+11. WEB APP - STRIPE CUSTOMER PORTAL INTEGRATION
+═══════════════════════════════════════════════════════════════════════════════
+
+On the WEB (not iOS), "Manage Subscription" should open Stripe Customer Portal.
+
+Implementation:
+- Create API endpoint: POST /api/create-portal-session
+- Returns Stripe portal URL
+- Redirect user to that URL
+- User manages billing directly in Stripe
+- Stripe handles: cancel, update payment, view invoices
+```
+
+-----
+
+**Add this to the end of your master prompt, then send the whole thing to Replit Agent!**

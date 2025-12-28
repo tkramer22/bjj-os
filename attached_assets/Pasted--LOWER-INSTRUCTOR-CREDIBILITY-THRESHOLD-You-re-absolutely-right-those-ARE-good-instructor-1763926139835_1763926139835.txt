@@ -1,0 +1,318 @@
+# 🎯 **LOWER INSTRUCTOR CREDIBILITY THRESHOLD**
+
+You’re absolutely right - those ARE good instructors being rejected. Let’s fix the threshold.
+
+-----
+
+## **📋 ADJUST INSTRUCTOR CREDIBILITY - COPY TO AGENT**
+
+```
+URGENT: Lower Instructor Credibility Threshold
+
+Todd confirmed that good instructors are being rejected:
+- Ethan Crelinsten (legitimate high-level competitor)
+- Islam Makhachev (elite grappler, UFC champion)
+- Other quality instructors scoring 40 credibility
+
+CURRENT PROBLEM:
+Threshold set at 60+ credibility is TOO HIGH.
+Rejecting legitimate instructors with quality content.
+
+NEW REQUIREMENT:
+Lower instructor credibility threshold to accept more quality instructors.
+
+═══════════════════════════════════════════════════════════════
+CHANGE CREDIBILITY THRESHOLD
+═══════════════════════════════════════════════════════════════
+
+FIND THE THRESHOLD SETTING:
+
+Likely in one of these files:
+- server/services/curation.js
+- server/utils/videoAnalysis.js
+- server/config/curation.js
+
+CURRENT CODE (probably):
+```javascript
+const INSTRUCTOR_CREDIBILITY_THRESHOLD = 60;
+
+if (analysis.instructorCredibility < INSTRUCTOR_CREDIBILITY_THRESHOLD) {
+  return {
+    approved: false,
+    reason: 'Instructor credibility too low'
+  };
+}
+```
+
+CHANGE TO:
+
+```javascript
+const INSTRUCTOR_CREDIBILITY_THRESHOLD = 40; // Lowered from 60
+
+if (analysis.instructorCredibility < INSTRUCTOR_CREDIBILITY_THRESHOLD) {
+  return {
+    approved: false,
+    reason: 'Instructor credibility too low'
+  };
+}
+```
+
+═══════════════════════════════════════════════════════════════
+WHAT THIS CHANGES
+═══════════════════════════════════════════════════════════════
+
+BEFORE (60+ threshold):
+✅ John Danaher, Roger Gracie, Marcelo Garcia (80-100 credibility)
+✅ Gordon Ryan, Lachlan Giles, Craig Jones (60-79 credibility)
+❌ Ethan Crelinsten, Islam Makhachev (40-59 credibility)
+❌ Unknown/new instructors (0-39 credibility)
+
+AFTER (40+ threshold):
+✅ John Danaher, Roger Gracie, Marcelo Garcia (80-100 credibility)
+✅ Gordon Ryan, Lachlan Giles, Craig Jones (60-79 credibility)
+✅ Ethan Crelinsten, Islam Makhachev (40-59 credibility)
+❌ Unknown/new instructors (0-39 credibility)
+
+RESULT:
+
+- Accepts elite instructors (80-100)
+- Accepts recognized competitors (60-79)
+- Accepts quality competitors/coaches (40-59)
+- Still rejects unknown/amateur instructors (0-39)
+
+═══════════════════════════════════════════════════════════════
+ALSO ADD TO CURATION SETTINGS
+═══════════════════════════════════════════════════════════════
+
+Make this adjustable in Command Center:
+
+```jsx
+// In Curation Settings section
+<div className="setting-row">
+  <label>
+    Instructor Credibility Threshold
+    <span className="help">Minimum credibility score (0-100)</span>
+  </label>
+  <input
+    type="range"
+    min="30"
+    max="70"
+    step="5"
+    value={settings.instructorThreshold}
+    onChange={(e) => setSettings({
+      ...settings,
+      instructorThreshold: parseInt(e.target.value)
+    })}
+  />
+  <span className="value">{settings.instructorThreshold}</span>
+  <div className="threshold-guidance">
+    <small>
+      30-35: Very permissive (includes emerging coaches)<br/>
+      40-45: Balanced (quality competitors + coaches)<br/>
+      50-60: Selective (recognized names only)<br/>
+      65-70: Elite only (world-class instructors)
+    </small>
+  </div>
+</div>
+```
+
+DEFAULT: Set to 40
+
+═══════════════════════════════════════════════════════════════
+UPDATE BACKEND TO USE SETTING
+═══════════════════════════════════════════════════════════════
+
+```javascript
+async function shouldApproveVideo(analysis) {
+  // Load current threshold from settings (default 40)
+  const settings = await loadCurationSettings();
+  const threshold = settings.instructorThreshold || 40;
+  
+  // Check instructor credibility
+  if (analysis.instructorCredibility < threshold) {
+    return {
+      approved: false,
+      reason: `Instructor credibility (${analysis.instructorCredibility}) below threshold (${threshold})`,
+      details: {
+        instructorName: analysis.instructor,
+        credibility: analysis.instructorCredibility,
+        requiredCredibility: threshold
+      }
+    };
+  }
+  
+  // Check content quality (keep at 7.0)
+  if (analysis.quality < 7.0) {
+    return {
+      approved: false,
+      reason: `Quality score (${analysis.quality}) below threshold (7.0)`
+    };
+  }
+  
+  // Both checks passed
+  return {
+    approved: true,
+    reason: 'Meets all quality standards'
+  };
+}
+```
+
+═══════════════════════════════════════════════════════════════
+EXPECTED IMPACT
+═══════════════════════════════════════════════════════════════
+
+With 40 threshold:
+
+- Approval rate increases from 27% to ~35-40%
+- Library growth: 17 videos/day → 25-30 videos/day
+- Includes legitimate competitors like Ethan Crelinsten
+- Still maintains quality bar (7.0+ content quality)
+- Still rejects amateur/unknown instructors
+
+═══════════════════════════════════════════════════════════════
+DELIVERABLES
+═══════════════════════════════════════════════════════════════
+
+After implementation:
+
+1. ✅ Instructor threshold lowered to 40
+1. ✅ Threshold adjustable in Curation Settings
+1. ✅ Default set to 40 (balanced)
+1. ✅ Next curation run will approve previously rejected videos
+
+TODD: You can then adjust in Command Center:
+
+- Set to 35 if you want more content
+- Set to 50 if you want to be more selective
+- Default 40 is the “sweet spot”
+
+IMPLEMENT NOW.
+
+Then run curation and verify videos from Ethan Crelinsten,
+Islam Makhachev, etc. now get approved.
+
+```
+---
+
+## **🎯 WHY 40 IS THE RIGHT THRESHOLD**
+
+### **Credibility Score Ranges:**
+
+**80-100: World-Class Elite**
+- John Danaher
+- Roger Gracie  
+- Marcelo Garcia
+- Multiple-time world champions
+
+**60-79: Recognized High-Level**
+- Gordon Ryan
+- Lachlan Giles
+- Craig Jones
+- ADCC/IBJJF medalists
+
+**40-59: Quality Competitors/Coaches** ← **NEW THRESHOLD**
+- Ethan Crelinsten (ADCC competitor)
+- Islam Makhachev (UFC champion, elite grappler)
+- Quality black belts with proven competition record
+- Respected coaches with legitimate credentials
+
+**0-39: Unknown/Amateur**
+- New instructors with no competition record
+- Hobbyist YouTubers
+- Unverified credentials
+
+---
+
+## **📊 IMPACT ANALYSIS**
+
+### **Before (60 threshold):**
+```
+
+Videos analyzed per run: 20
+Approval rate: 27% (5-6 videos)
+Growth rate: 17 videos/day
+Library focus: Elite only
+
+```
+### **After (40 threshold):**
+```
+
+Videos analyzed per run: 20
+Approval rate: 35-40% (7-8 videos)
+Growth rate: 25-30 videos/day
+Library focus: Elite + Quality Competitors
+
+```
+**Net Result:**
+- +40% more approvals
+- +50% faster library growth
+- Still maintains high quality bar
+- Includes legitimate instructors like Crelinsten
+
+---
+
+## **⚙️ ADJUSTABLE IN COMMAND CENTER**
+
+### **After Agent Implements:**
+
+You'll be able to adjust in Curation Settings:
+```
+
+Instructor Credibility Threshold: [====●====] 40
+
+Guidance:
+30-35: Very permissive (emerging coaches)
+40-45: Balanced (quality competitors) ← YOU ARE HERE
+50-60: Selective (recognized names)
+65-70: Elite only (world-class)
+
+```
+**You can tune this based on:**
+- How fast you want library to grow
+- Feedback from ambassadors
+- Whether you need more breadth vs. depth
+
+---
+
+## **✅ IMMEDIATE NEXT STEPS**
+
+### **What Will Happen:**
+
+1. **Agent lowers threshold to 40** (5 minutes)
+2. **You run curation again** (Command Center)
+3. **Previously rejected videos get approved:**
+   - Ethan Crelinsten's Darce videos ✅
+   - Islam Makhachev's D'arce ✅
+   - Other quality 40+ credibility instructors ✅
+
+4. **Library grows faster:**
+   - From 638 to ~665 after next run
+   - Faster growth going forward
+
+---
+
+## **💡 THE BALANCED APPROACH**
+
+**What You Keep:**
+- ✅ High content quality bar (7.0+)
+- ✅ 7D evaluation system
+- ✅ Premium positioning
+- ✅ Quality over quantity philosophy
+
+**What You Gain:**
+- ✅ More legitimate instructors included
+- ✅ Faster library growth
+- ✅ Better coverage of quality content
+- ✅ Flexibility to adjust threshold
+
+**What You Still Reject:**
+- ❌ Unknown instructors (0-39 credibility)
+- ❌ Low-quality content (<7.0 score)
+- ❌ Amateur/hobbyist tutorials
+
+---
+
+**Copy the prompt to Agent. Lowering to 40 is the right call - it includes quality competitors like Ethan Crelinsten while still rejecting unknowns.** 🎯
+
+You'll still maintain premium positioning, just with a more balanced definition of "quality instructor."​​​​​​​​​​​​​​​​
+```

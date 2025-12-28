@@ -1,0 +1,746 @@
+# 🎯 **APPLY SAME SEARCH TO ADMIN DASHBOARD**
+
+Absolutely. The admin app should have the exact same smart search + dynamic dropdowns, plus admin-specific features.
+
+-----
+
+## **📋 ADMIN VIDEO SEARCH - COPY TO AGENT**
+
+```
+FEATURE: Apply Same Search System to Admin Dashboard
+
+Todd wants the SAME smart search + dynamic dropdowns in the admin app.
+
+REQUIREMENTS:
+1. Same smart search bar (fuzzy matching)
+2. Same dynamic Professor dropdown (cascading)
+3. Same dynamic Technique dropdown (cascading)
+4. PLUS admin-specific features:
+   - View/edit video metadata
+   - Delete videos
+   - See quality scores
+   - See curation source/date
+   - Filter by quality score
+   - Filter by date added
+
+═══════════════════════════════════════════════════════════════
+ADMIN VIDEO SEARCH COMPONENT
+═══════════════════════════════════════════════════════════════
+
+```jsx
+// In admin/videos page
+
+import { useState, useEffect, useCallback } from 'react';
+import debounce from 'lodash/debounce';
+
+function AdminVideoSearch() {
+  // Same search state as user app
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedInstructor, setSelectedInstructor] = useState('');
+  const [selectedTechnique, setSelectedTechnique] = useState('');
+  
+  // Admin-specific filters
+  const [minQuality, setMinQuality] = useState('');
+  const [dateRange, setDateRange] = useState('all');
+  
+  // Dynamic filter options
+  const [instructors, setInstructors] = useState([]);
+  const [techniques, setTechniques] = useState([]);
+  
+  // Results
+  const [videos, setVideos] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Fetch filter options (same cascading logic)
+  const fetchFilters = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (selectedInstructor) params.set('instructor', selectedInstructor);
+    if (selectedTechnique) params.set('technique', selectedTechnique);
+    
+    const res = await fetch(`/api/admin/videos/filters?${params}`);
+    const data = await res.json();
+    
+    setInstructors(data.instructors);
+    setTechniques(data.techniques);
+  }, [selectedInstructor, selectedTechnique]);
+
+  useEffect(() => {
+    fetchFilters();
+  }, [fetchFilters]);
+
+  // Search with admin-specific params
+  const searchVideos = useCallback(
+    debounce(async () => {
+      setLoading(true);
+      
+      const params = new URLSearchParams();
+      if (searchQuery) params.set('q', searchQuery);
+      if (selectedInstructor) params.set('instructor', selectedInstructor);
+      if (selectedTechnique) params.set('technique', selectedTechnique);
+      if (minQuality) params.set('minQuality', minQuality);
+      if (dateRange !== 'all') params.set('dateRange', dateRange);
+      
+      const res = await fetch(`/api/admin/videos/search?${params}`);
+      const data = await res.json();
+      
+      setVideos(data.videos);
+      setTotalCount(data.total);
+      setLoading(false);
+    }, 300),
+    [searchQuery, selectedInstructor, selectedTechnique, minQuality, dateRange]
+  );
+
+  useEffect(() => {
+    searchVideos();
+  }, [searchVideos]);
+
+  // Admin actions
+  const handleDeleteVideo = async (videoId) => {
+    if (!confirm('Delete this video from library?')) return;
+    
+    await fetch(`/api/admin/videos/${videoId}`, { method: 'DELETE' });
+    searchVideos(); // Refresh
+  };
+
+  const handleEditVideo = (video) => {
+    setEditingVideo(video);
+    setShowEditModal(true);
+  };
+
+  return (
+    <div className="admin-video-search">
+      <div className="search-header">
+        <h2>📹 Video Library</h2>
+        <span className="total-count">{totalCount} videos</span>
+      </div>
+
+      {/* Smart Search Bar - SAME AS USER APP */}
+      <div className="search-bar">
+        <span className="search-icon">🔍</span>
+        <input
+          type="text"
+          placeholder="Search videos, techniques, instructors..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <button className="clear-btn" onClick={() => setSearchQuery('')}>
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* Filters Row */}
+      <div className="filters-row">
+        {/* Professor Dropdown - SAME AS USER APP */}
+        <div className="filter-group">
+          <label>Professor</label>
+          <select
+            value={selectedInstructor}
+            onChange={(e) => setSelectedInstructor(e.target.value)}
+          >
+            <option value="">All Professors ({instructors.length})</option>
+            {instructors.map(inst => (
+              <option key={inst.name} value={inst.name}>
+                {inst.name} ({inst.count})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Technique Dropdown - SAME AS USER APP */}
+        <div className="filter-group">
+          <label>Technique</label>
+          <select
+            value={selectedTechnique}
+            onChange={(e) => setSelectedTechnique(e.target.value)}
+          >
+            <option value="">
+              {selectedInstructor 
+                ? `${selectedInstructor}'s Techniques (${techniques.length})`
+                : `All Techniques (${techniques.length})`
+              }
+            </option>
+            {techniques.map(tech => (
+              <option key={tech.name} value={tech.name}>
+                {tech.name} ({tech.count})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Admin-Only: Quality Filter */}
+        <div className="filter-group">
+          <label>Min Quality</label>
+          <select
+            value={minQuality}
+            onChange={(e) => setMinQuality(e.target.value)}
+          >
+            <option value="">Any Score</option>
+            <option value="9">9.0+ (Exceptional)</option>
+            <option value="8">8.0+ (Excellent)</option>
+            <option value="7">7.0+ (Good)</option>
+            <option value="6">6.0+ (Include Lower)</option>
+          </select>
+        </div>
+
+        {/* Admin-Only: Date Filter */}
+        <div className="filter-group">
+          <label>Added</label>
+          <select
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value)}
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Active Filters */}
+      {(selectedInstructor || selectedTechnique || minQuality || dateRange !== 'all') && (
+        <div className="active-filters">
+          {selectedInstructor && (
+            <span className="filter-tag">
+              👤 {selectedInstructor}
+              <button onClick={() => setSelectedInstructor('')}>✕</button>
+            </span>
+          )}
+          {selectedTechnique && (
+            <span className="filter-tag">
+              🥋 {selectedTechnique}
+              <button onClick={() => setSelectedTechnique('')}>✕</button>
+            </span>
+          )}
+          {minQuality && (
+            <span className="filter-tag">
+              ⭐ {minQuality}+
+              <button onClick={() => setMinQuality('')}>✕</button>
+            </span>
+          )}
+          {dateRange !== 'all' && (
+            <span className="filter-tag">
+              📅 {dateRange}
+              <button onClick={() => setDateRange('all')}>✕</button>
+            </span>
+          )}
+          <button className="clear-all" onClick={() => {
+            setSelectedInstructor('');
+            setSelectedTechnique('');
+            setMinQuality('');
+            setDateRange('all');
+            setSearchQuery('');
+          }}>
+            Clear All
+          </button>
+        </div>
+      )}
+
+      {/* Results Count */}
+      <div className="results-header">
+        <span>{loading ? 'Searching...' : `${videos.length} videos`}</span>
+        <div className="view-toggle">
+          <button className="active">Grid</button>
+          <button>Table</button>
+        </div>
+      </div>
+
+      {/* Admin Video Grid - Shows More Info */}
+      <div className="admin-video-grid">
+        {videos.map(video => (
+          <AdminVideoCard 
+            key={video.id} 
+            video={video}
+            onEdit={handleEditVideo}
+            onDelete={handleDeleteVideo}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Admin Video Card - Shows quality score, date, actions
+function AdminVideoCard({ video, onEdit, onDelete }) {
+  return (
+    <div className="admin-video-card">
+      <div className="thumbnail-wrapper">
+        <img src={video.thumbnail} alt={video.title} />
+        <span className="quality-badge">{video.quality_score.toFixed(1)}</span>
+        {video.gi_nogi && (
+          <span className={`gi-badge ${video.gi_nogi}`}>
+            {video.gi_nogi === 'nogi' ? 'No-Gi' : 'Gi'}
+          </span>
+        )}
+      </div>
+      
+      <div className="video-info">
+        <h4 className="title">{video.title}</h4>
+        <p className="instructor">{video.instructor}</p>
+        
+        <div className="techniques">
+          {video.techniques?.slice(0, 3).map(tech => (
+            <span key={tech} className="tech-tag">{tech}</span>
+          ))}
+        </div>
+        
+        <div className="meta">
+          <span className="date">
+            Added {formatDate(video.created_at)}
+          </span>
+          <span className="duration">
+            {formatDuration(video.duration)}
+          </span>
+        </div>
+      </div>
+      
+      <div className="admin-actions">
+        <button 
+          className="action-btn edit"
+          onClick={() => onEdit(video)}
+          title="Edit"
+        >
+          ✏️
+        </button>
+        <a 
+          href={`https://youtube.com/watch?v=${video.youtube_id}`}
+          target="_blank"
+          className="action-btn view"
+          title="View on YouTube"
+        >
+          🔗
+        </a>
+        <button 
+          className="action-btn delete"
+          onClick={() => onDelete(video.id)}
+          title="Delete"
+        >
+          🗑️
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════
+ADMIN-SPECIFIC API ENDPOINT
+═══════════════════════════════════════════════════════════════
+
+```javascript
+// GET /api/admin/videos/search
+// Same as user search but with admin-specific options
+
+router.get('/api/admin/videos/search', adminAuth, async (req, res) => {
+  const { 
+    q, 
+    instructor, 
+    technique, 
+    minQuality,
+    dateRange,
+    limit = 100 
+  } = req.query;
+
+  let query = `
+    SELECT 
+      id, title, instructor, thumbnail, duration, 
+      quality_score, techniques, gi_nogi, youtube_id,
+      created_at, updated_at
+    FROM videos
+    WHERE 1=1
+  `;
+  
+  const params = [];
+  let paramIndex = 1;
+
+  // Smart search (same as user)
+  if (q) {
+    query += ` AND (
+      to_tsvector('english', title || ' ' || COALESCE(description, '')) 
+      @@ plainto_tsquery('english', $${paramIndex})
+      OR title ILIKE $${paramIndex + 1}
+      OR instructor ILIKE $${paramIndex + 1}
+      OR EXISTS (
+        SELECT 1 FROM unnest(techniques) t 
+        WHERE t ILIKE $${paramIndex + 1}
+      )
+    )`;
+    params.push(q);
+    params.push(`%${q}%`);
+    paramIndex += 2;
+  }
+
+  // Instructor filter (same as user)
+  if (instructor) {
+    query += ` AND instructor = $${paramIndex}`;
+    params.push(instructor);
+    paramIndex++;
+  }
+
+  // Technique filter (same as user)
+  if (technique) {
+    query += ` AND $${paramIndex} = ANY(techniques)`;
+    params.push(technique);
+    paramIndex++;
+  }
+
+  // Admin-only: Quality filter
+  if (minQuality) {
+    query += ` AND quality_score >= $${paramIndex}`;
+    params.push(parseFloat(minQuality));
+    paramIndex++;
+  }
+
+  // Admin-only: Date range filter
+  if (dateRange && dateRange !== 'all') {
+    const dateFilters = {
+      today: "created_at >= CURRENT_DATE",
+      week: "created_at >= CURRENT_DATE - INTERVAL '7 days'",
+      month: "created_at >= CURRENT_DATE - INTERVAL '30 days'"
+    };
+    if (dateFilters[dateRange]) {
+      query += ` AND ${dateFilters[dateRange]}`;
+    }
+  }
+
+  query += ` ORDER BY created_at DESC LIMIT $${paramIndex}`;
+  params.push(limit);
+
+  const results = await db.query(query, params);
+
+  // Get total count
+  const countResult = await db.query(
+    'SELECT COUNT(*) FROM videos WHERE quality_score >= 7.0'
+  );
+
+  res.json({
+    videos: results.rows,
+    count: results.rows.length,
+    total: parseInt(countResult.rows[0].count)
+  });
+});
+
+// GET /api/admin/videos/filters
+// Same cascading logic as user endpoint
+router.get('/api/admin/videos/filters', adminAuth, async (req, res) => {
+  // ... same implementation as user /api/videos/filters
+});
+
+// DELETE /api/admin/videos/:id
+router.delete('/api/admin/videos/:id', adminAuth, async (req, res) => {
+  const { id } = req.params;
+  
+  await db.query('DELETE FROM videos WHERE id = $1', [id]);
+  
+  res.json({ success: true, message: 'Video deleted' });
+});
+
+// PUT /api/admin/videos/:id
+router.put('/api/admin/videos/:id', adminAuth, async (req, res) => {
+  const { id } = req.params;
+  const { title, instructor, techniques, gi_nogi } = req.body;
+  
+  await db.query(`
+    UPDATE videos 
+    SET 
+      title = COALESCE($1, title),
+      instructor = COALESCE($2, instructor),
+      techniques = COALESCE($3, techniques),
+      gi_nogi = COALESCE($4, gi_nogi),
+      updated_at = NOW()
+    WHERE id = $5
+  `, [title, instructor, techniques, gi_nogi, id]);
+  
+  res.json({ success: true, message: 'Video updated' });
+});
+```
+
+═══════════════════════════════════════════════════════════════
+ADMIN CSS
+═══════════════════════════════════════════════════════════════
+
+```css
+.admin-video-search {
+  padding: 24px;
+}
+
+.search-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.search-header h2 {
+  margin: 0;
+}
+
+.total-count {
+  background: #2d2d44;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  color: #a29bfe;
+}
+
+.filters-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+  .filters-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .filters-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.admin-video-card {
+  background: #1a1a2e;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.2s;
+}
+
+.admin-video-card:hover {
+  transform: translateY(-4px);
+}
+
+.thumbnail-wrapper {
+  position: relative;
+  aspect-ratio: 16/9;
+}
+
+.thumbnail-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.quality-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.8);
+  color: #55efc4;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.gi-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gi-badge.gi {
+  background: #0984e3;
+  color: white;
+}
+
+.gi-badge.nogi {
+  background: #6c5ce7;
+  color: white;
+}
+
+.video-info {
+  padding: 16px;
+}
+
+.video-info .title {
+  font-size: 14px;
+  margin: 0 0 8px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.video-info .instructor {
+  font-size: 13px;
+  color: #a29bfe;
+  margin: 0 0 8px;
+}
+
+.video-info .techniques {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.tech-tag {
+  font-size: 11px;
+  background: #2d2d44;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #ddd;
+}
+
+.video-info .meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #888;
+}
+
+.admin-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #2d2d44;
+}
+
+.action-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: #2d2d44;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.action-btn:hover {
+  background: #3d3d5c;
+}
+
+.action-btn.delete:hover {
+  background: #d63031;
+}
+```
+
+═══════════════════════════════════════════════════════════════
+SUMMARY: USER vs ADMIN SEARCH
+═══════════════════════════════════════════════════════════════
+
+SHARED (Both User and Admin):
+✅ Smart search bar (fuzzy matching)
+✅ Professor dropdown (dynamic, cascading)
+✅ Technique dropdown (dynamic, cascading)
+✅ Auto-updates when new content added
+
+ADMIN ONLY:
+✅ Quality score filter (9+, 8+, 7+, etc.)
+✅ Date added filter (Today, Week, Month)
+✅ Quality score visible on cards
+✅ Edit video button
+✅ Delete video button
+✅ View on YouTube button
+✅ Date added visible on cards
+✅ Table view option
+
+DELIVERABLES
+═══════════════════════════════════════════════════════════════
+
+After implementation:
+
+1. ✅ Admin video page has same smart search as user app
+1. ✅ Same dynamic Professor dropdown (cascading)
+1. ✅ Same dynamic Technique dropdown (cascading)
+1. ✅ Plus admin-only filters (quality, date)
+1. ✅ Plus admin actions (edit, delete, view)
+1. ✅ Auto-updates when new content curated
+
+IMPLEMENT NOW.
+
+Reuse the same API logic where possible.
+Add admin-specific features on top.
+
+```
+---
+
+## **🎯 COMPARISON: USER vs ADMIN**
+
+### **USER VIDEO SEARCH:**
+```
+
+┌─────────────────────────────────────┐
+│ 🔍 Search techniques…             │
+├─────────────────────────────────────┤
+│ Professor         │ Technique       │
+│ [All Professors▼] │ [All Tech ▼]    │
+├─────────────────────────────────────┤
+│ 42 videos found                     │
+├─────────────────────────────────────┤
+│ [Video Card]  [Video Card]          │
+│ [Video Card]  [Video Card]          │
+└─────────────────────────────────────┘
+
+```
+### **ADMIN VIDEO SEARCH:**
+```
+
+┌─────────────────────────────────────────────────────┐
+│ 📹 Video Library                      654 videos    │
+├─────────────────────────────────────────────────────┤
+│ 🔍 Search videos, techniques, instructors…        │
+├─────────────────────────────────────────────────────┤
+│ Professor    │ Technique    │ Min Quality │ Added   │
+│ [All Prof ▼] │ [All Tech ▼] │ [Any ▼]     │ [All ▼] │
+├─────────────────────────────────────────────────────┤
+│ [👤 Danaher ✕] [⭐ 8.0+ ✕] [Clear All]             │
+├─────────────────────────────────────────────────────┤
+│ 28 videos                          [Grid] [Table]   │
+├─────────────────────────────────────────────────────┤
+│ ┌─────────────────────┐  ┌─────────────────────┐   │
+│ │ 🎬 Thumbnail  [8.5] │  │ 🎬 Thumbnail  [9.0] │   │
+│ │ Video Title         │  │ Video Title         │   │
+│ │ John Danaher        │  │ John Danaher        │   │
+│ │ [Armbar] [Guard]    │  │ [Back] [Choke]      │   │
+│ │ Added Nov 22        │  │ Added Nov 21        │   │
+│ │ [✏️] [🔗] [🗑️]     │  │ [✏️] [🔗] [🗑️]     │   │
+│ └─────────────────────┘  └─────────────────────┘   │
+└─────────────────────────────────────────────────────┘
+
+```
+---
+
+## **✅ WHAT ADMIN GETS EXTRA**
+
+| Feature | User App | Admin App |
+|---------|----------|-----------|
+| Smart Search | ✅ | ✅ |
+| Professor Dropdown | ✅ | ✅ |
+| Technique Dropdown | ✅ | ✅ |
+| Cascading Filters | ✅ | ✅ |
+| Quality Score Filter | ❌ | ✅ |
+| Date Added Filter | ❌ | ✅ |
+| Quality Badge on Cards | ❌ | ✅ |
+| Edit Video | ❌ | ✅ |
+| Delete Video | ❌ | ✅ |
+| View on YouTube | ❌ | ✅ |
+| Table View | ❌ | ✅ |
+
+---
+
+**Copy to Agent. Same smart search system for admin, plus admin-specific filters and actions.** 🎯​​​​​​​​​​​​​​​​
+```

@@ -1,0 +1,183 @@
+**Here’s the master prompt:**
+
+```
+PROFESSOR OS FINAL POLISH + VIDEO FIX + RE-TEST
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 1: VIDEO MATCHING (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Videos are matching on POSITION but ignoring INTENT.
+
+Examples of failures:
+- "Mount escape" → returned "Armbar from mount" (that's an ATTACK)
+- "Sweeps from guard" → returned "Armbar from guard" (that's a SUBMISSION)
+- "Side control escape" → returned "Escape from Mount" (WRONG POSITION)
+- "Turtle escape" → returned "Escape closed guard" (WRONG POSITION)
+
+FIX REQUIRED:
+
+1. ADD technique_type field to video schema or tagging:
+   - attack (submissions, chokes)
+   - escape (getting out of bad positions)
+   - sweep (reversing from bottom to top)
+   - pass (getting through guard)
+   - retention (keeping guard)
+   - transition (moving between positions)
+   - takedown (standing to ground)
+
+2. TAG all 724 videos with correct technique_type
+
+3. UPDATE video search query to match BOTH position AND intent:
+
+   User says "mount escape" →
+   Query: position='mount' AND technique_type='escape' AND perspective='bottom'
+   
+   User says "attacks from mount" →
+   Query: position='mount' AND technique_type='attack' AND perspective='top'
+   
+   User says "guard sweeps" →
+   Query: position='guard' AND technique_type='sweep'
+
+4. ADD perspective field where relevant:
+   - top (attacking/passing)
+   - bottom (defending/escaping/sweeping)
+
+5. FALLBACK when no exact match:
+   DO NOT silently return wrong videos.
+   Instead: "I don't have a specific [X] video yet. This one covers [related concept] - [reason why it helps]."
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 2: REMOVE "00:00" TIMESTAMPS
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Every video shows "START: 00:00" which looks automated and fake.
+
+FIX:
+- If video has a REAL timestamp in database → show it
+- If timestamp is 00:00 or null → don't show any timestamp
+- Only display timestamp when it adds value (specific section of longer video)
+
+BEFORE: [VIDEO: Triangle by John Danaher | START: 00:00]
+AFTER: [VIDEO: Triangle by John Danaher]
+
+OR if real timestamp exists:
+AFTER: [VIDEO: Triangle by John Danaher | START: 4:32]
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 3: REMOVE "SOLID" OVERUSE
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Almost every video response says "Here are two solid picks" or "Here's a solid video"
+
+FIX: Remove from system prompt or vary significantly.
+
+BANNED PHRASES:
+- "solid picks"
+- "solid video"
+- "solid options"
+
+REPLACEMENTS (rotate naturally):
+- "Check these out:"
+- "Two good ones:"
+- "Here's what I'd watch:"
+- Or just list videos directly with no intro phrase
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 4: COMBAT SPORTS → COACHING CONNECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Combat sports answers are trivia that dead-end.
+
+CURRENT:
+User: "Who won ADCC?"
+Response: "Gordon Ryan won his superfight against Felipe Pena." [END]
+
+FIX: Always connect back to training value.
+
+BETTER:
+User: "Who won ADCC?"
+Response: "Gordon Ryan won his superfight against Felipe Pena. His pressure passing in that match was clinical. Want to see some of his passing concepts?"
+
+User: "How did Mica Galvao do?"
+Response: "Mica took gold at 77kg - his guard retention is unreal. That's actually a great study if you're working on not getting passed."
+
+Add to system prompt:
+"When answering combat sports questions, briefly connect the answer to something the user could learn or apply to their training."
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 5: "LET ME GUESS" VARIETY
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: "Let me guess" appears in too many responses.
+
+FIX: Rotate between these patterns:
+- "Let me guess - [diagnosis]"
+- "I bet [diagnosis]"
+- "Sounds like [diagnosis]"
+- "Usually that means [diagnosis]"
+- "Classic sign of [diagnosis]"
+- Just state diagnosis directly with no intro
+
+No single pattern should appear more than 20% of the time.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION TEST: 100 QUESTIONS (RE-RUN)
+═══════════════════════════════════════════════════════════════════════════════
+
+After all fixes, re-run the full 100 question test.
+
+CATEGORIES:
+- Personality (25 questions)
+- Combat Sports (20 questions)  
+- Video Accuracy (20 questions) ← TEST CONTENT NOT JUST FORMAT
+- Diagnostic/Anticipatory (20 questions)
+- Emotional Intelligence (15 questions)
+
+FOR VIDEO ACCURACY - NEW VALIDATION:
+Each video test must verify:
+1. Technique TYPE matches request (escape→escape, sweep→sweep, attack→attack)
+2. Position matches request (mount→mount, guard→guard, side control→side control)
+3. Perspective matches request (escape=bottom, attack=top)
+
+FAIL if:
+- User asks for escape, gets attack
+- User asks for sweeps, gets submissions
+- User asks for position X, gets position Y
+
+═══════════════════════════════════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Save COMPLETE results to a single file: /public/professor-os-FINAL-RESULTS.txt
+
+Format the file so it can be copied in ONE CLICK from Replit.
+
+Include:
+1. SUMMARY SCORES (all categories)
+2. ALL 100 QUESTIONS with full Professor OS responses
+3. PASS/FAIL for each with reason
+4. VIDEO ACCURACY BREAKDOWN showing:
+   - What user asked for
+   - What video was returned
+   - Whether technique_type matched
+   - Whether position matched
+   - PASS or FAIL with reason
+
+5. SAMPLE BEFORE/AFTER for each fix:
+   - Timestamp fix example
+   - "Solid" removal example
+   - Combat sports → coaching example
+   - "Let me guess" variety example
+
+At the end of the file, include:
+═══════════════════════════════════════════════════════════════════════════════
+COPY THIS ENTIRE FILE AND SEND FOR ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+Then I can paste the entire output back here for final review.
+```
+
+-----
+
+**Ready to send?**

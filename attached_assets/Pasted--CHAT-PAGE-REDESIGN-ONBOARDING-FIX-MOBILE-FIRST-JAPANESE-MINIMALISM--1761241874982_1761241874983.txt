@@ -1,0 +1,460 @@
+```
+CHAT PAGE REDESIGN + ONBOARDING FIX - MOBILE-FIRST JAPANESE MINIMALISM
+
+===================================
+PART 1: FIX ONBOARDING FLOW
+===================================
+
+CRITICAL BUG: Users logging in with phone number are not being asked onboarding questions on first login, and returning users are being asked questions again.
+
+CORRECT AUTHENTICATION & ONBOARDING FLOW:
+
+USER TYPES:
+1. Regular User: Enters phone number, SMS verification required
+2. Lifetime Member (Admin-granted): Special access code or direct link, NO SMS verification
+
+First-Time Regular User (phone number NOT in database):
+1. User enters phone number
+2. SMS verification code sent
+3. User verifies code
+4. System checks database: phone_number exists?
+   - NO → Proceed to onboarding (4 steps)
+5. Onboarding Step 1: Username
+   - Question: "Choose your username"
+   - Input: text (3-20 characters, alphanumeric only)
+   - Validation: Check uniqueness in database
+   - Error if taken: "Username already taken. Try another."
+6. Onboarding Step 2: Belt Level
+   - Question: "What's your current belt level?"
+   - Options: White Belt, Blue Belt, Purple Belt, Brown Belt, Black Belt
+   - Display belt graphics for each option
+   - User selects one
+7. Onboarding Step 3: Training Style
+   - Question: "What do you train?"
+   - Options: Gi, No-Gi, Both
+   - Large button selection
+8. Onboarding Step 4: Training Frequency
+   - Question: "How often do you train?"
+   - Dropdown: 1-7 days per week
+9. After completion:
+   - Save to database: phone_number, username, belt_level, training_style, training_frequency
+   - Set onboarding_completed = true
+   - Set subscription_tier = "paid"
+   - Set created_at = now()
+   - Redirect to /chat
+
+First-Time Lifetime Member (admin-granted, NO SMS):
+1. Admin grants lifetime access (sets up account with email/username or provides access link)
+2. User accesses app (no SMS verification needed)
+3. System checks database: onboarding_completed?
+   - NO → Proceed to onboarding (4 steps - SAME as regular user)
+4. Onboarding Step 1: Username (if not already set by admin)
+   - Question: "Choose your username"
+   - Input: text (3-20 characters, alphanumeric only)
+   - Validation: Check uniqueness in database
+   - Error if taken: "Username already taken. Try another."
+5. Onboarding Step 2: Belt Level
+   - Question: "What's your current belt level?"
+   - Options: White Belt, Blue Belt, Purple Belt, Brown Belt, Black Belt
+   - Display belt graphics for each option
+6. Onboarding Step 3: Training Style
+   - Question: "What do you train?"
+   - Options: Gi, No-Gi, Both
+7. Onboarding Step 4: Training Frequency
+   - Question: "How often do you train?"
+   - Dropdown: 1-7 days per week
+8. After completion:
+   - Save to database: username, belt_level, training_style, training_frequency
+   - Set onboarding_completed = true
+   - Keep subscription_tier = "lifetime" (already set by admin)
+   - Set created_at = now() (if not already set)
+   - Redirect to /chat
+
+Returning Regular User (phone number EXISTS in database):
+1. User enters phone number
+2. SMS verification code sent
+3. User verifies code
+4. System checks database: phone_number exists AND onboarding_completed = true?
+   - YES → Load user profile from database
+   - Skip onboarding completely
+   - Redirect directly to /chat
+5. Chat loads with all user context available to Prof. OS
+
+Returning Lifetime Member (already completed onboarding):
+1. User accesses app (no SMS needed)
+2. System checks database: onboarding_completed = true?
+   - YES → Load user profile from database
+   - Skip onboarding completely
+   - Redirect directly to /chat
+3. Chat loads with all user context available to Prof. OS
+
+CRITICAL RULES:
+- Onboarding happens ONCE per user, EVER (first login only)
+- After onboarding_completed = true, user NEVER sees onboarding again
+- Lifetime members and paid users have IDENTICAL features (no differences)
+- Lifetime members do NOT require SMS verification
+- Regular users ALWAYS require SMS verification
+- All users go through same 4-step onboarding on first access
+- Returning users (both types) skip directly to chat
+
+Database Requirements:
+users table must have:
+- id (UUID, primary key)
+- phone_number (STRING, UNIQUE, NULLABLE) - null for lifetime members without phone
+- email (STRING, UNIQUE, NULLABLE) - for lifetime members if no phone
+- username (STRING, UNIQUE, NOT NULL)
+- belt_level (STRING, NOT NULL) - White/Blue/Purple/Brown/Black
+- training_style (STRING, NOT NULL) - Gi/No-Gi/Both
+- training_frequency (INTEGER, NOT NULL) - 1-7
+- onboarding_completed (BOOLEAN, default false)
+- subscription_tier (STRING, NOT NULL) - "paid" or "lifetime"
+- created_at (TIMESTAMP, default now())
+- total_logins (INTEGER, default 0)
+- last_login_date (DATE)
+- granted_by_admin (BOOLEAN, default false) - true for lifetime members
+
+Admin Dashboard Requirements:
+- Admin can create lifetime member accounts
+- Admin sets: email or phone_number, subscription_tier = "lifetime", granted_by_admin = true
+- Admin can optionally pre-set username
+- Onboarding_completed starts as false (user still needs to complete onboarding on first login)
+- After admin creates account, user receives access link
+- User clicks link → goes through onboarding (one time) → full access
+
+Authentication Logic:
+```
+
+if (user has phone_number in database) {
+// Regular user or phone-based lifetime member
+require SMS verification
+if (onboarding_completed === false) {
+show onboarding (4 steps)
+} else {
+load profile, go to chat
+}
+} else if (user has email or access_token in database && granted_by_admin === true) {
+// Lifetime member without phone
+NO SMS verification required
+if (onboarding_completed === false) {
+show onboarding (4 steps)
+} else {
+load profile, go to chat
+}
+}
+
+```
+===================================
+PART 2: CHAT PAGE DESIGN
+===================================
+
+DESIGN PHILOSOPHY:
+- Mobile-first (design for 375px iPhone width first, then scale to desktop)
+- Japanese minimalism (ma, kanso, shizen, seijaku)
+- Intelligence shown through factual statements, not marketing copy
+- Huge breathing room, generous spacing
+- Custom, premium, calm, confident
+- No status bars, no stats counters
+
+HEADER (sticky at top):
+
+Mobile (375px):
+┌─────────────────────────┐
+│                         │
+│      Prof. OS           │
+│  Learns your game.      │
+│  Makes you better.      │
+│                         │
+└─────────────────────────┘
+
+Style:
+- Background: #0A0A0B
+- Height: 80px
+- Border-bottom: 1px solid #1A1A1C
+- "Prof. OS": 20px, white 100%, bold, centered
+- Subtitle: 13px, white 70%, regular, centered, line-height 1.6
+- Position: sticky, top: 0, z-index: 100
+
+Desktop (600px+):
+- Same design, slightly larger text (24px / 14px)
+- Max width: 100%, centered content
+
+WELCOME MESSAGE (centered in viewport):
+
+Mobile Content (375px):
+```
+
+```
+  Prof. OS           
+```
+
+I’ve analyzed 10,000+  
+videos from elite  
+instructors.
+
+I track patterns in  
+your training you  
+can’t see.
+
+I remember every  
+detail you share.
+
+The more we talk,  
+the smarter I get  
+about YOUR jiu jitsu.
+
+What did you work  
+on today?
+
+```
+Mobile Box Style (375px):
+- Background: #0A0A0B
+- Border: 1px solid #1A1A1C
+- Border radius: 12px
+- Padding: 40px 20px (vertical generous, horizontal tight for mobile)
+- Margin: 20px (sides)
+- Drop shadow: 0 4px 20px rgba(0,0,0,0.5)
+- Center aligned text
+
+Desktop Box Style (600px+):
+- Same design
+- Max width: 600px, centered on screen
+- Padding: 60px 40px (more generous)
+- Margin: 40px auto
+
+Typography (Mobile 375px):
+- "Prof. OS": 24px, white 100%, medium weight
+- Capability statements (3 lines): 15px, white 90%, regular, line-height 1.8
+- Relationship statement: 15px, white 85%, regular, line-height 1.8
+- CTA question: 16px, white 100%, medium weight
+- Letter spacing: 0.02em (slightly loose)
+- Center aligned
+
+Typography (Desktop 600px+):
+- "Prof. OS": 28px, white 100%, medium weight
+- Capability statements: 16px, white 90%, regular, line-height 1.8
+- Relationship statement: 16px, white 85%, regular, line-height 1.8
+- CTA question: 18px, white 100%, medium weight
+- Letter spacing: 0.02em
+- Center aligned
+
+Spacing (Mobile):
+- 20px from header to message box top
+- Inside message box:
+  - 40px top padding
+  - "Prof. OS" title
+  - 32px space
+  - First capability statement
+  - 24px space
+  - Second capability statement
+  - 24px space
+  - Third capability statement
+  - 40px space
+  - Relationship statement
+  - 60px space
+  - CTA question
+  - 40px bottom padding
+- 20px from message box to input area
+
+Spacing (Desktop):
+- Same ratios, slightly more generous (60px top, 80px before CTA, 60px bottom)
+
+INPUT AREA (fixed at bottom):
+
+Mobile (375px):
+┌─────────────────────────┐
+│                         │
+│ [Ask Prof. OS...]       │
+│                         │
+│  🎤         Send        │
+│                         │
+└─────────────────────────┘
+
+Style:
+- Position: fixed, bottom: 0, left: 0, right: 0
+- Background: #0A0A0B
+- Border-top: 1px solid #1A1A1C
+- Padding: 16px
+- Safe area insets: padding-bottom: calc(16px + env(safe-area-inset-bottom))
+- z-index: 1000
+
+Input field:
+- Background: #111113
+- Border: 1px solid #333333
+- Border radius: 24px
+- Padding: 12px 20px
+- Font size: 16px (prevents iOS zoom on focus)
+- Color: white 100%
+- Placeholder: white 60%
+- Width: 100%
+- Min height: 48px (touch target)
+
+Voice button:
+- Position: absolute right inside input
+- Icon: 🎤 or microphone SVG
+- Size: 40px × 40px (touch target)
+- Color: white 70%
+- Hover: white 100%
+- Circular
+
+Send button:
+- Below input
+- Full width
+- Height: 48px (touch target)
+- Background: blue #2563EB
+- Color: white
+- Border radius: 24px
+- Font: 16px, medium weight
+- Text: "Send"
+
+Desktop:
+- Same design, max width 600px centered
+- Input and buttons slightly larger
+
+CHAT MESSAGES (after user starts chatting):
+
+User message (right side):
+- Background: #2563EB (blue)
+- Color: white 100%
+- Border radius: 16px 16px 4px 16px
+- Padding: 12px 16px
+- Max width: 75%
+- Align: right
+- Margin: 8px 20px 8px auto
+- Font: 15px, regular
+
+Prof. OS message (left side):
+- Background: #111113 (dark gray)
+- Color: white 90%
+- Border radius: 16px 16px 16px 4px
+- Padding: 12px 16px
+- Max width: 75%
+- Align: left
+- Margin: 8px auto 8px 20px
+- Font: 15px, regular
+
+Timestamp:
+- Below each message
+- 12px, white 50%
+- Format: "9:45 AM" (within 24 hours)
+- Format: "Oct 22, 9:45 AM" (older than 24 hours)
+
+Date dividers:
+- When day changes, show: "Today", "Yesterday", or "Oct 20"
+- 12px, white 50%, centered
+- 20px margin top/bottom
+
+Video recommendations in messages:
+- Card format within Prof. OS message
+- Background: #0A0A0B
+- Border: 1px solid #1A1A1C
+- Border radius: 8px
+- Padding: 12px
+- Thumbnail: 16:9 aspect ratio (if available)
+- Title: 14px, white 90%, bold
+- Instructor: 12px, blue #2563EB
+- "Watch" button: blue #2563EB, 36px height, rounded
+- Feedback: 👍 👎 icons (gray, turn blue/red on click)
+
+===================================
+PART 3: PROF. OS AI INTEGRATION
+===================================
+
+System Prompt Integration:
+When Prof. OS responds, ALWAYS include user profile data in AI context:
+```
+
+User Profile (from database):
+
+- Username: ${username}
+- Belt Level: ${belt_level}
+- Training Style: ${training_style}
+- Training Frequency: ${training_frequency}x per week
+- Member Since: ${created_at}
+- Subscription Tier: ${subscription_tier}
+
+Use this information in every response. Tailor recommendations
+to their belt level and training style. Reference their frequency
+when discussing training plans. Never ask for this information again.
+
+NOTE: Lifetime and paid members receive IDENTICAL features and treatment.
+Never mention or reference subscription tier in responses.
+
+```
+Prof. OS personality (maintain from previous prompts):
+- Training partner who learns YOUR game
+- Journey-focused language ("YOUR game", "YOUR journey")
+- Encourages sharing training details
+- Spots patterns over time
+- Recommends 1-3 videos with context
+- Black belt best friend tone
+- Natural, conversational, not robotic
+
+===================================
+PART 4: MOBILE OPTIMIZATION
+===================================
+
+Critical mobile requirements:
+- Design for 375px width first (iPhone SE/13 mini)
+- Touch targets: minimum 48px × 48px
+- Font size: minimum 16px for inputs (prevents iOS zoom)
+- Line length: 30-40 characters optimal for readability
+- Safe area insets for iPhone notch and home indicator
+- No horizontal scroll
+- Fast load time (minimal animations)
+- Thumb-friendly layout (important actions in center/bottom)
+- Keyboard handling: input stays visible when keyboard opens
+
+Responsive breakpoints:
+- Mobile: < 768px
+- Desktop: 768px+
+
+===================================
+PART 5: EXCELLENCE STANDARDS
+===================================
+
+Visual quality:
+- Clean, crisp edges on all elements
+- Consistent spacing throughout (use 4px/8px grid)
+- Proper contrast ratios (WCAG AA minimum)
+- Subtle shadows for depth, not decoration
+- No pixelation, professional rendering
+- Smooth transitions (200ms) on interactive elements
+
+Functional requirements:
+- Input field ALWAYS visible and accessible
+- No elements hidden behind keyboard
+- Messages scroll smoothly
+- Chat history persists on refresh
+- Loading states for AI responses
+- Error handling for failed messages
+- Offline detection and messaging
+
+Japanese minimalist principles:
+- Ma (negative space): generous padding, breathing room
+- Kanso (simplicity): eliminate clutter, one message at a time
+- Shizen (natural): conversation flows naturally
+- Seijaku (calm): no aggressive colors, no urgency
+- Subtlety: intelligence shown through interaction, not explanation
+
+===================================
+IMPLEMENTATION CHECKLIST
+===================================
+
+✅ Fix onboarding flow (one-time only for ALL users, saves forever)
+✅ Lifetime member logic (admin-granted, NO SMS required, SAME onboarding as regular users)
+✅ Database fields (phone_number nullable, email nullable, username, belt_level, training_style, training_frequency, onboarding_completed, subscription_tier, granted_by_admin)
+✅ Returning user auto-login (skip onboarding if onboarding_completed = true)
+✅ Chat page header (sticky, minimal)
+✅ Welcome message (mobile-first, Japanese minimalism)
+✅ Input area (fixed bottom, mobile-optimized)
+✅ Prof. OS AI context (always include user profile)
+✅ Message bubbles (user right, AI left)
+✅ Timestamps and date dividers
+✅ Video recommendation cards
+✅ Mobile responsive (375px → 768px+)
+✅ Safe area insets (iOS notch/home indicator)
+✅ Touch targets 48px minimum
+✅ Font sizes optimized for mobile
+
+Excellence is our pillar. Every pixel matters.
+```

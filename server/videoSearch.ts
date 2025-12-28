@@ -1,0 +1,1163 @@
+import { db } from './db';
+import { aiVideoKnowledge } from '../shared/schema';
+import { sql, desc, and, or, eq, ilike } from 'drizzle-orm';
+
+interface VideoSearchParams {
+  userMessage: string;
+  userId?: string; // For session context lookup
+  conversationContext?: {
+    sessionFocus?: Record<string, number>;
+    recommendedVideoIds?: number[];
+    userGiNogi?: string;
+    lastInstructor?: string; // From session context
+  };
+}
+
+interface SearchIntent {
+  techniqueType?: string;
+  positionCategory?: string;
+  searchTerms: string[];
+  specificIntent?: 'escape' | 'sweep' | 'pass' | 'attack' | 'retention' | 'takedown' | 'transition';
+  perspective?: 'top' | 'bottom';
+  requestedInstructor?: string;
+}
+
+interface VideoSearchResult {
+  videos: any[];
+  totalMatches: number;
+  searchIntent: SearchIntent;
+}
+
+// ============================================================================
+// DYNAMIC INSTRUCTOR CACHE - pulls from database instead of hardcoded list
+// ============================================================================
+
+// Cache for instructor names from database
+let cachedInstructors: string[] = [];
+let cachedInstructorVariations: Map<string, string> = new Map(); // Variation -> canonical name
+let lastInstructorCacheTime = 0;
+const INSTRUCTOR_CACHE_TTL = 3600000; // 1 hour
+
+// Fallback list for common nicknames/variations not in database
+const INSTRUCTOR_ALIASES: Record<string, string[]> = {
+  'john danaher': ['danaher'],
+  'gordon ryan': ['gordon'],
+  'jt torres': ['j.t. torres', 'jt'],
+  'marcelo garcia': ['marcelo'],
+  'roger gracie': ['roger'],
+  'lachlan giles': ['lachlan'],
+  'bernardo faria': ['bernardo'],
+  'craig jones': ['craig'],
+  'mikey musumeci': ['mikey'],
+  'marcus buchecha': ['buchecha'],
+  'keenan cornelius': ['keenan'],
+  'priit mihkelson': ['priit'],
+  'andre galvao': ['galvao'],
+  'rafael mendes': ['rafa mendes', 'rafa'],
+  'guilherme mendes': ['gui mendes', 'gui'],
+  'eddie bravo': ['eddie', 'bravo'],
+  'stephan kesting': ['kesting'],
+  'andrew wiltse': ['wiltse'],
+  'ryan hall': ['hall'],
+  'lucas lepri': ['lepri'],
+  'nicholas meregali': ['meregali'],
+  'roberto abreu': ['cyborg'],
+  'rodolfo vieira': ['rodolfo'],
+  'rickson gracie': ['rickson'],
+  'georges st pierre': ['gsp'],
+};
+
+async function loadInstructorCache(): Promise<void> {
+  try {
+    // Query database for all unique instructor names
+    const results = await db.selectDistinct({ name: aiVideoKnowledge.instructorName })
+      .from(aiVideoKnowledge)
+      .where(sql`${aiVideoKnowledge.instructorName} IS NOT NULL`);
+    
+    // Build list with the canonical names
+    const instructorNames = results
+      .map(r => r.name?.toLowerCase().trim())
+      .filter((name): name is string => !!name && name.length > 0);
+    
+    cachedInstructors = [...new Set(instructorNames)]; // Deduplicate
+    
+    // Build variations map
+    cachedInstructorVariations.clear();
+    
+    // Add canonical names
+    for (const name of cachedInstructors) {
+      cachedInstructorVariations.set(name, name);
+    }
+    
+    // Add known aliases
+    for (const [canonical, aliases] of Object.entries(INSTRUCTOR_ALIASES)) {
+      // Only add aliases if we have videos from this instructor
+      const matchingInstructor = cachedInstructors.find(name => 
+        name.includes(canonical) || canonical.includes(name)
+      );
+      if (matchingInstructor) {
+        for (const alias of aliases) {
+          cachedInstructorVariations.set(alias.toLowerCase(), matchingInstructor);
+        }
+      }
+    }
+    
+    // Also add first/last name variations
+    for (const name of cachedInstructors) {
+      const parts = name.split(' ').filter(p => p.length >= 3);
+      for (const part of parts) {
+        // Only add if not too generic and doesn't conflict
+        if (!cachedInstructorVariations.has(part) && part.length >= 4) {
+          cachedInstructorVariations.set(part, name);
+        }
+      }
+    }
+    
+    lastInstructorCacheTime = Date.now();
+    console.log(`[INSTRUCTOR CACHE] Loaded ${cachedInstructors.length} instructors, ${cachedInstructorVariations.size} variations`);
+  } catch (error) {
+    console.error('[INSTRUCTOR CACHE] Failed to load:', error);
+  }
+}
+
+async function getInstructorList(): Promise<string[]> {
+  const now = Date.now();
+  
+  // Return cached list if fresh
+  if (cachedInstructors.length > 0 && (now - lastInstructorCacheTime) < INSTRUCTOR_CACHE_TTL) {
+    return cachedInstructors;
+  }
+  
+  // Reload cache
+  await loadInstructorCache();
+  return cachedInstructors;
+}
+
+// Export for initialization on server start
+export async function initializeInstructorCache(): Promise<void> {
+  await loadInstructorCache();
+}
+
+// ============================================================================
+// INSTRUCTOR EXTRACTION - uses dynamic cache
+// ============================================================================
+
+export async function extractRequestedInstructorAsync(message: string): Promise<string | undefined> {
+  // Normalize: lowercase, remove punctuation, collapse spaces
+  const normalizedMessage = message.toLowerCase()
+    .replace(/['']/g, "'")
+    .replace(/[.,!?;:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  // Ensure cache is loaded
+  await getInstructorList();
+  
+  // Check for full names first (more specific) - sort by length descending
+  const fullNames = cachedInstructors
+    .filter(name => name.includes(' '))
+    .sort((a, b) => b.length - a.length);
+  
+  for (const instructor of fullNames) {
+    const normalizedInstructor = instructor.replace(/\./g, '').replace(/\s+/g, ' ');
+    if (normalizedMessage.includes(normalizedInstructor)) {
+      console.log(`[INSTRUCTOR EXTRACT] Matched full name: "${instructor}"`);
+      return instructor;
+    }
+  }
+  
+  // Check aliases and single-word matches
+  for (const [variation, canonical] of cachedInstructorVariations.entries()) {
+    if (!variation.includes(' ')) {
+      // Use word boundary matching for single names
+      const regex = new RegExp(`\\b${variation}\\b`, 'i');
+      if (regex.test(normalizedMessage)) {
+        console.log(`[INSTRUCTOR EXTRACT] Matched variation "${variation}" -> "${canonical}"`);
+        return canonical;
+      }
+    }
+  }
+  
+  return undefined;
+}
+
+// Fallback hardcoded instructor names for cold start / cache miss scenarios
+// Includes both full names AND common single-word aliases
+const FALLBACK_INSTRUCTORS = [
+  // Full names
+  'john danaher', 'gordon ryan', 'craig jones', 'lachlan giles', 'bernardo faria',
+  'marcelo garcia', 'roger gracie', 'mikey musumeci', 'garry tonon', 'andre galvao',
+  'keenan cornelius', 'jt torres', 'priit mihkelson', 'ryan hall', 'eddie bravo',
+  'stephan kesting', 'andrew wiltse', 'jon thomas', 'lucas lepri', 'nicholas meregali',
+  // Common single-word aliases (for alias coverage during cold start)
+  'danaher', 'gordon', 'marcelo', 'lachlan', 'bernardo', 'craig', 'keenan',
+  'priit', 'mikey', 'galvao', 'wiltse', 'meregali', 'lepri', 'buchecha'
+];
+
+// Synchronous version (uses cached data with robust fallback)
+export function extractRequestedInstructor(message: string): string | undefined {
+  // Normalize: lowercase, remove punctuation, collapse spaces
+  const normalizedMessage = message.toLowerCase()
+    .replace(/['']/g, "'")
+    .replace(/[.,!?;:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  // Use fallback list if cache is empty (cold start scenario)
+  const instructorList = cachedInstructors.length > 0 ? cachedInstructors : FALLBACK_INSTRUCTORS;
+  const variationsMap = cachedInstructorVariations.size > 0 ? cachedInstructorVariations : new Map<string, string>();
+  
+  // Check for full names first (more specific)
+  const fullNames = instructorList
+    .filter(name => name.includes(' '))
+    .sort((a, b) => b.length - a.length);
+  
+  for (const instructor of fullNames) {
+    const normalizedInstructor = instructor.replace(/\./g, '').replace(/\s+/g, ' ');
+    if (normalizedMessage.includes(normalizedInstructor)) {
+      return instructor;
+    }
+  }
+  
+  // Helper function to escape special regex characters
+  const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  // Check variations from cache (if available)
+  for (const [variation, canonical] of variationsMap.entries()) {
+    if (!variation.includes(' ')) {
+      try {
+        const regex = new RegExp(`\\b${escapeRegex(variation)}\\b`, 'i');
+        if (regex.test(normalizedMessage)) {
+          return canonical;
+        }
+      } catch (e) {
+        // Skip invalid patterns
+        console.warn(`[INSTRUCTOR EXTRACT] Invalid regex for variation: "${variation}"`);
+      }
+    }
+  }
+  
+  // Check single names from instructor list
+  for (const instructor of instructorList) {
+    if (!instructor.includes(' ')) {
+      try {
+        const regex = new RegExp(`\\b${escapeRegex(instructor)}\\b`, 'i');
+        if (regex.test(normalizedMessage)) {
+          return instructor;
+        }
+      } catch (e) {
+        // Skip invalid patterns
+        console.warn(`[INSTRUCTOR EXTRACT] Invalid regex for instructor: "${instructor}"`);
+      }
+    }
+  }
+  
+  // Final fallback: extract capitalized name patterns from original message
+  const namePattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g;
+  const matches = message.match(namePattern);
+  if (matches && matches.length > 0) {
+    console.log(`[INSTRUCTOR EXTRACT] Fallback pattern matched: "${matches[0]}"`);
+    return matches[0].toLowerCase();
+  }
+  
+  return undefined;
+}
+
+export async function searchByInstructor(instructorName: string, limit: number = 20): Promise<{
+  videos: any[];
+  totalMatches: number;
+  instructorFound: boolean;
+}> {
+  try {
+    // Search for videos by this instructor (case-insensitive)
+    const videos = await db.select()
+      .from(aiVideoKnowledge)
+      .where(and(
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
+        ilike(aiVideoKnowledge.instructorName, `%${instructorName}%`)
+      ))
+      .orderBy(desc(aiVideoKnowledge.qualityScore))
+      .limit(limit);
+    
+    // Get total count for this instructor
+    const countResult = await db.select({ count: sql`COUNT(*)` })
+      .from(aiVideoKnowledge)
+      .where(and(
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
+        ilike(aiVideoKnowledge.instructorName, `%${instructorName}%`)
+      ));
+    
+    const totalMatches = Number(countResult[0]?.count) || 0;
+    
+    console.log(`[INSTRUCTOR SEARCH] Searched for "${instructorName}": found ${videos.length} videos (${totalMatches} total)`);
+    
+    return {
+      videos,
+      totalMatches,
+      instructorFound: videos.length > 0
+    };
+  } catch (error) {
+    console.error('[INSTRUCTOR SEARCH] Error:', error);
+    return { videos: [], totalMatches: 0, instructorFound: false };
+  }
+}
+
+export async function getAvailableInstructors(): Promise<{ name: string; videoCount: number }[]> {
+  try {
+    const result = await db.select({
+      name: aiVideoKnowledge.instructorName,
+      count: sql<number>`COUNT(*)`
+    })
+      .from(aiVideoKnowledge)
+      .where(sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`)
+      .groupBy(aiVideoKnowledge.instructorName)
+      .orderBy(desc(sql`COUNT(*)`))
+      .limit(50);
+    
+    return result.map(r => ({ name: r.name || 'Unknown', videoCount: Number(r.count) }));
+  } catch (error) {
+    console.error('[INSTRUCTOR LIST] Error:', error);
+    return [];
+  }
+}
+
+export function extractSearchIntent(message: string): {
+  techniqueType?: string;
+  positionCategory?: string;
+  searchTerms: string[];
+  specificIntent?: 'escape' | 'sweep' | 'pass' | 'attack' | 'retention' | 'takedown' | 'transition';
+  perspective?: 'top' | 'bottom';
+  requestedInstructor?: string;
+} {
+  const lowerMessage = message.toLowerCase();
+  
+  let techniqueType: string | undefined;
+  let specificIntent: 'escape' | 'sweep' | 'pass' | 'attack' | 'retention' | 'takedown' | 'transition' | undefined;
+  let perspective: 'top' | 'bottom' | undefined;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PERSPECTIVE DETECTION: Determine if user wants TOP (passer) or BOTTOM (guard)
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  // TOP/PASSER perspective indicators - specific passing/smashing terms only
+  // Avoid generic phrases like "how to", "against" which could apply to any perspective
+  const topIndicators = [
+    'pass guard', 'passing guard', 'pass the guard', 'guard pass', 'guard passing',
+    'smash pass', 'smash their', 'smashing', 'crush their', 'crushing their',
+    'flatten them', 'flatten their', 'pressure pass', 'knee cut pass', 'leg drag',
+    'torreando', 'headquarters', 'combat base', 'open their guard', 'break open',
+    'stack pass', 'over under pass', 'bullfighter', 'x pass', 'knee slice'
+  ];
+  
+  // BOTTOM/GUARD perspective indicators - words that indicate user is ON BOTTOM
+  const bottomIndicators = [
+    'retain', 'retention', 'keep', 'maintain', 'hold', 'sweep', 'submit from',
+    'attack from', 'play', 'playing', 'my guard', 'from guard', 'off my back',
+    'when im on bottom', 'when i\'m on bottom', 'recover', 'regain',
+    'use my', 'my half', 'my closed', 'my open'
+  ];
+  
+  const hasTopIndicator = topIndicators.some(ind => lowerMessage.includes(ind));
+  const hasBottomIndicator = bottomIndicators.some(ind => lowerMessage.includes(ind));
+  
+  // Detect specific intent FIRST (more precise than general attack/defense)
+  const escapeKeywords = ['escape', 'escapes', 'escaping', 'get out', 'getting out', 'survive', 'survival'];
+  const sweepKeywords = ['sweep', 'sweeps', 'sweeping', 'reversal', 'reversals'];
+  const passKeywords = ['pass', 'passes', 'passing', 'guard pass'];
+  const retentionKeywords = ['retention', 'retain', 'retaining', 'keep', 'keeping guard', 'guard retention'];
+  const attackKeywords = ['submit', 'submission', 'finish', 'finishing', 'attack', 'attacking', 'choke', 'choking', 
+    'lock', 'locking', 'armbar', 'triangle', 'kimura', 'guillotine', 'rnc', 'rear naked'];
+  const takedownKeywords = ['takedown', 'takedowns', 'taking down', 'throw', 'throws'];
+  
+  // Check for specific intents in order of specificity
+  if (escapeKeywords.some(k => lowerMessage.includes(k))) {
+    specificIntent = 'escape';
+    techniqueType = 'defense';
+    perspective = 'bottom'; // Escaping = you're in bad position (bottom)
+  } else if (sweepKeywords.some(k => lowerMessage.includes(k))) {
+    specificIntent = 'sweep';
+    techniqueType = 'attack'; // Sweeps are offensive moves
+    perspective = 'bottom'; // Sweeping = you're on bottom
+  } else if (passKeywords.some(k => lowerMessage.includes(k))) {
+    specificIntent = 'pass';
+    techniqueType = 'attack';
+    perspective = 'top'; // Passing = you're on top
+  } else if (retentionKeywords.some(k => lowerMessage.includes(k))) {
+    specificIntent = 'retention';
+    techniqueType = 'defense';
+    perspective = 'bottom'; // Retaining guard = you're on bottom
+  } else if (takedownKeywords.some(k => lowerMessage.includes(k))) {
+    specificIntent = 'takedown';
+    techniqueType = 'attack';
+    // No perspective for standing
+  } else if (attackKeywords.some(k => lowerMessage.includes(k))) {
+    specificIntent = 'attack';
+    techniqueType = 'attack';
+    // Could be either top or bottom depending on position
+  }
+  
+  // OVERRIDE perspective based on explicit keywords (if intent didn't set it)
+  if (!perspective) {
+    if (hasTopIndicator && !hasBottomIndicator) {
+      perspective = 'top';
+    } else if (hasBottomIndicator && !hasTopIndicator) {
+      perspective = 'bottom';
+    }
+  }
+  
+  // If no specific intent found, check general categories
+  const defenseKeywords = ['defense', 'defend', 'defending', 'counter', 'countering', 'recover', 'recovering'];
+  if (!specificIntent && defenseKeywords.some(k => lowerMessage.includes(k))) {
+    techniqueType = 'defense';
+  }
+  
+  let positionCategory: string | undefined;
+  
+  const positionMap: Record<string, string> = {
+    'closed guard': 'closed_guard',
+    'full guard': 'closed_guard',
+    'open guard': 'open_guard',
+    'spider guard': 'open_guard',
+    'spider': 'open_guard',
+    'de la riva': 'open_guard',
+    'dlr': 'open_guard',
+    'rdlr': 'open_guard',
+    'reverse de la riva': 'open_guard',
+    'butterfly guard': 'open_guard',
+    'butterfly': 'open_guard',
+    'x guard': 'open_guard',
+    'x-guard': 'open_guard',
+    'single leg x': 'open_guard',
+    'slx': 'open_guard',
+    'lasso guard': 'open_guard',
+    'lasso': 'open_guard',
+    'collar sleeve': 'open_guard',
+    'half guard': 'half_guard',
+    'half-guard': 'half_guard',
+    'deep half': 'half_guard',
+    'z guard': 'half_guard',
+    'z-guard': 'half_guard',
+    'knee shield': 'half_guard',
+    'lockdown': 'half_guard',
+    'mount': 'mount',
+    'mounted': 'mount',
+    'full mount': 'mount',
+    's mount': 'mount',
+    's-mount': 'mount',
+    'high mount': 'mount',
+    'low mount': 'mount',
+    'side control': 'side_control',
+    'side mount': 'side_control',
+    'cross side': 'side_control',
+    'cross-side': 'side_control',
+    '100 kilos': 'side_control',
+    'kesa gatame': 'side_control',
+    'scarf hold': 'side_control',
+    'back control': 'back',
+    'back mount': 'back',
+    'rear mount': 'back',
+    'the back': 'back',
+    'back take': 'back',
+    'taking the back': 'back',
+    'standing': 'standing',
+    'stand up': 'standing',
+    'takedown': 'standing',
+    'takedowns': 'standing',
+    'wrestling': 'standing',
+    'judo': 'standing',
+    'throws': 'standing',
+    'throw': 'standing',
+    'single leg': 'standing',
+    'double leg': 'standing',
+    'turtle': 'turtle',
+    'front headlock': 'turtle',
+    'leg lock': 'leg_entanglement',
+    'leg locks': 'leg_entanglement',
+    'heel hook': 'leg_entanglement',
+    'heel hooks': 'leg_entanglement',
+    'knee bar': 'leg_entanglement',
+    'kneebar': 'leg_entanglement',
+    'toe hold': 'leg_entanglement',
+    'calf slicer': 'leg_entanglement',
+    '50/50': 'leg_entanglement',
+    'fifty fifty': 'leg_entanglement',
+    'ashi garami': 'leg_entanglement',
+    'ashi': 'leg_entanglement',
+    'saddle': 'leg_entanglement',
+    'inside sankaku': 'leg_entanglement',
+    'north south': 'north_south',
+    'north-south': 'north_south',
+    'knee on belly': 'knee_on_belly',
+    'kob': 'knee_on_belly',
+    'passing': 'guard_passing',
+    'guard pass': 'guard_passing',
+    'guard passing': 'guard_passing',
+    'pass guard': 'guard_passing'
+  };
+  
+  for (const [keyword, category] of Object.entries(positionMap)) {
+    if (lowerMessage.includes(keyword)) {
+      positionCategory = category;
+      break;
+    }
+  }
+  
+  const techniquePatterns = [
+    'armbar', 'arm bar', 'juji gatame',
+    'triangle', 'triangle choke', 'sankaku',
+    'kimura', 'double wristlock',
+    'americana', 'keylock', 'ude garami',
+    'omoplata', 'omo plata',
+    'guillotine', 'guillotine choke',
+    'rear naked', 'rnc', 'mata leao', 'rear naked choke',
+    'arm triangle', 'head and arm', 'kata gatame',
+    'darce', "d'arce", 'brabo',
+    'anaconda', 'anaconda choke',
+    'ezekiel', 'ezequiel', 'sode guruma jime',
+    'bow and arrow', 'bow arrow',
+    'collar choke', 'cross collar', 'cross choke',
+    'loop choke',
+    'baseball choke', 'baseball bat',
+    'north south choke',
+    'clock choke',
+    'hip bump', 'hip bump sweep',
+    'scissor sweep', 'scissor',
+    'flower sweep', 'pendulum sweep', 'pendulum',
+    'elevator sweep',
+    'knee slice', 'knee cut', 'knee slide',
+    'torreando', 'toreando', 'bullfighter',
+    'over under', 'over-under',
+    'stack pass', 'stacking',
+    'leg drag',
+    'x pass',
+    'smash pass', 'pressure pass',
+    'long step', 'long step pass',
+    'folding pass',
+    'single leg', 'single leg takedown',
+    'double leg', 'double leg takedown',
+    'ankle pick',
+    'snap down',
+    'arm drag',
+    'berimbolo', 'bolo',
+    'kiss of the dragon',
+    'crab ride',
+    'shrimp', 'hip escape',
+    'bridge', 'bridging',
+    'frame', 'framing', 'frames',
+    'underhook', 'underhooks',
+    'overhook', 'whizzer'
+  ];
+  
+  const searchTerms: string[] = [];
+  for (const technique of techniquePatterns) {
+    if (lowerMessage.includes(technique)) {
+      searchTerms.push(technique);
+    }
+  }
+  
+  if (searchTerms.length === 0) {
+    const words = lowerMessage.split(/\s+/);
+    const stopWords = ['the', 'a', 'an', 'for', 'on', 'in', 'with', 'show', 'me', 'video', 'videos', 
+      'how', 'to', 'do', 'can', 'you', 'help', 'my', 'i', 'get', 'keep', 'getting', 'from', 
+      'when', 'what', 'why', 'any', 'some', 'more', 'good', 'best', 'need', 'want', 'like',
+      'about', 'please', 'could', 'would', 'should'];
+    const meaningful = words.filter(w => w.length > 3 && !stopWords.includes(w));
+    searchTerms.push(...meaningful.slice(0, 3));
+  }
+  
+  // Detect instructor request
+  const requestedInstructor = extractRequestedInstructor(message);
+  
+  return { techniqueType, positionCategory, searchTerms, specificIntent, perspective, requestedInstructor };
+}
+
+export async function searchVideos(params: VideoSearchParams): Promise<VideoSearchResult> {
+  const { userMessage, userId, conversationContext } = params;
+  const intent = extractSearchIntent(userMessage);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FOLLOW-UP REFERENCE DETECTION
+  // Handle phrases like "his videos", "their instructionals", "that instructor"
+  // ═══════════════════════════════════════════════════════════════════════════
+  const lowerMessage = userMessage.toLowerCase();
+  const followUpPatterns = [
+    'his video', 'his vid', 'his instructional', 'his content', 'his stuff',
+    'their video', 'their vid', 'their instructional', 'their content', 'their stuff',
+    'that instructor', 'that person', 'from them', 'from him', 'by him', 'by them',
+    'do you have any of his', 'do you have videos of his', 'vids of his',
+    'any videos from', 'show me his', 'show me their', 'recommend his', 'recommend their',
+    'anything from him', 'anything from them', 'more from him', 'more from them'
+  ];
+  const isFollowUpReference = followUpPatterns.some(p => lowerMessage.includes(p));
+  
+  // Check session context for last instructor if this is a follow-up
+  let resolvedInstructor = intent.requestedInstructor;
+  if (!resolvedInstructor && isFollowUpReference) {
+    // Try to get from conversation context
+    if (conversationContext?.lastInstructor) {
+      resolvedInstructor = conversationContext.lastInstructor;
+      console.log(`[VIDEO SEARCH] 🔄 FOLLOW-UP DETECTED: Using session instructor "${resolvedInstructor}"`);
+    }
+    // Also try to get from session map if userId provided
+    else if (userId) {
+      const session = getSessionContext(userId);
+      if (session.lastInstructor) {
+        resolvedInstructor = session.lastInstructor;
+        console.log(`[VIDEO SEARCH] 🔄 FOLLOW-UP DETECTED: Using session instructor "${resolvedInstructor}" (from userId)`);
+      }
+    }
+    
+    if (!resolvedInstructor) {
+      console.log(`[VIDEO SEARCH] ⚠️ Follow-up detected but no lastInstructor in session`);
+    }
+  }
+  
+  // Update intent with resolved instructor for return value
+  if (resolvedInstructor && !intent.requestedInstructor) {
+    intent.requestedInstructor = resolvedInstructor;
+  }
+  
+  try {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BJJ-INTELLIGENT SEARCH: Position-first, title-matching, NO broad categories
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 
+    // PRINCIPLE: "Half guard escape" should ONLY return half guard videos.
+    //            Triangle videos should NEVER appear for half guard queries.
+    //
+    // APPROACH:
+    // 1. POSITION is MANDATORY when detected - this is the primary filter
+    // 2. Use TITLE MATCHING for technique keywords - not broad technique_type
+    // 3. Never broaden to generic "attack" or "defense" categories
+    // 4. Let quality score sort the best content to the top
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    const conditions: any[] = [];
+    
+    // Base quality threshold
+    conditions.push(sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`);
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STEP 0: INSTRUCTOR FILTER (HIGHEST PRIORITY)
+    // If user asks for a specific instructor, this MUST be the primary filter
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (resolvedInstructor) {
+      conditions.push(ilike(aiVideoKnowledge.instructorName, `%${resolvedInstructor}%`));
+      console.log(`[VIDEO SEARCH] 🎯 INSTRUCTOR LOCKED: ${resolvedInstructor}`);
+    }
+  
+    // Exclude already-recommended videos
+    if (conversationContext?.recommendedVideoIds?.length) {
+      const excludeIds = conversationContext.recommendedVideoIds;
+      conditions.push(sql`${aiVideoKnowledge.id} NOT IN (${sql.join(excludeIds.map(id => sql`${id}`), sql`, `)})`);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STEP 1: POSITION FILTER (MANDATORY when detected)
+    // If user mentions "half guard", "mount", "back", etc. - this is NON-NEGOTIABLE
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (intent.positionCategory) {
+      // Handle positions that might be stored with different variations
+      const positionVariations: string[] = [intent.positionCategory];
+      
+      // Add related position variations for broader matching
+      if (intent.positionCategory === 'half_guard') {
+        positionVariations.push('half guard', 'deep_half', 'deep half');
+      } else if (intent.positionCategory === 'closed_guard') {
+        positionVariations.push('closed guard', 'full_guard', 'guard');
+      } else if (intent.positionCategory === 'open_guard') {
+        positionVariations.push('open guard', 'spider', 'de_la_riva', 'butterfly');
+      } else if (intent.positionCategory === 'side_control') {
+        positionVariations.push('side control', 'cross_side', 'kesa_gatame');
+      } else if (intent.positionCategory === 'back') {
+        positionVariations.push('back_control', 'rear_mount');
+      }
+      
+      // Position match is MANDATORY - use OR for variations
+      const positionConditions = positionVariations.map(p => 
+        sql`${aiVideoKnowledge.positionCategory} ILIKE ${`%${p.replace('_', '%')}%`}`
+      );
+      
+      // Also check title for position mentions (catches videos with wrong category metadata)
+      positionConditions.push(sql`${aiVideoKnowledge.title} ILIKE ${`%${intent.positionCategory.replace('_', ' ')}%`}`);
+      
+      conditions.push(or(...positionConditions));
+      
+      console.log(`[VIDEO SEARCH] 🎯 POSITION LOCKED: ${intent.positionCategory} (${positionVariations.length} variations)`);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STEP 2: TECHNIQUE/INTENT FILTER (Title-based, NOT category-based)
+    // Use actual keywords from user query, not broad "attack"/"defense" categories
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (intent.specificIntent) {
+      const intentTitleConditions: any[] = [];
+      
+      switch (intent.specificIntent) {
+        case 'escape':
+          // Match escape-specific title keywords
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%escape%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%get out%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%survival%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%stop getting%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%defense%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%recover%'`);
+          // Also allow technique_type = 'defense' OR 'escape' (if position is locked)
+          if (intent.positionCategory) {
+            intentTitleConditions.push(sql`${aiVideoKnowledge.techniqueType} = 'defense'`);
+            intentTitleConditions.push(sql`${aiVideoKnowledge.techniqueType} = 'escape'`);
+          }
+          conditions.push(or(...intentTitleConditions));
+          break;
+          
+        case 'sweep':
+          // Match sweep-specific keywords only
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%sweep%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%reversal%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.techniqueType} = 'sweep'`);
+          conditions.push(or(...intentTitleConditions));
+          break;
+          
+        case 'pass':
+          // Match pass-specific keywords only
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%pass%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%passing%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.techniqueType} = 'pass'`);
+          conditions.push(or(...intentTitleConditions));
+          break;
+          
+        case 'retention':
+          // Match retention-specific keywords
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%retention%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%keep%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%maintain%'`);
+          if (intent.positionCategory) {
+            intentTitleConditions.push(sql`${aiVideoKnowledge.techniqueType} = 'defense'`);
+          }
+          conditions.push(or(...intentTitleConditions));
+          break;
+          
+        case 'attack':
+          // For attacks: ONLY add technique_type filter if NO position is specified
+          // This prevents "triangle from closed guard" from returning all "attack" type videos
+          if (!intent.positionCategory) {
+            conditions.push(eq(aiVideoKnowledge.techniqueType, 'attack'));
+          }
+          break;
+          
+        case 'takedown':
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%takedown%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.title} ILIKE '%throw%'`);
+          intentTitleConditions.push(sql`${aiVideoKnowledge.positionCategory} = 'standing'`);
+          conditions.push(or(...intentTitleConditions));
+          break;
+      }
+      
+      console.log(`[VIDEO SEARCH] 🎯 INTENT: ${intent.specificIntent}`);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STEP 3: SEARCH TERMS (Direct keyword matching in title/tags/technique)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Only add search term conditions if we DON'T have a position + intent locked
+    // (otherwise they're redundant and can filter out good results)
+    if (intent.searchTerms.length > 0 && !intent.positionCategory) {
+      const searchConditions: any[] = [];
+      for (const term of intent.searchTerms) {
+        searchConditions.push(sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`);
+        searchConditions.push(sql`COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`}`);
+        searchConditions.push(sql`${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`}`);
+      }
+      if (searchConditions.length > 0) {
+        conditions.push(or(...searchConditions));
+      }
+    }
+    
+    // Gi/Nogi preference
+    if (conversationContext?.userGiNogi && conversationContext.userGiNogi !== 'both') {
+      conditions.push(
+        or(
+          eq(aiVideoKnowledge.giOrNogi, conversationContext.userGiNogi),
+          eq(aiVideoKnowledge.giOrNogi, 'both'),
+          sql`${aiVideoKnowledge.giOrNogi} IS NULL`
+        )
+      );
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STEP 4: PERSPECTIVE FILTER (Top vs Bottom content)
+    // If user wants PASSING videos, exclude RETENTION/SWEEP content and vice versa
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (intent.perspective === 'top') {
+      // User wants TOP/PASSER content - find videos about passing/crushing/collapsing
+      const topContentConditions: any[] = [
+        sql`${aiVideoKnowledge.title} ILIKE '%pass%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%smash%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%pressure%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%collapse%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%kill%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%crush%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%beat%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%counter%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%defeat%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%open%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%break%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%top%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%passer%'`,
+        sql`${aiVideoKnowledge.techniqueType} = 'pass'`
+      ];
+      conditions.push(or(...topContentConditions));
+      console.log(`[VIDEO SEARCH] 🎯 PERSPECTIVE: TOP (passer) - filtering for passing/crushing content`);
+    } else if (intent.perspective === 'bottom') {
+      // User wants BOTTOM/GUARD content - find videos about playing/retaining/sweeping
+      const bottomContentConditions: any[] = [
+        sql`${aiVideoKnowledge.title} ILIKE '%sweep%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%retain%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%retention%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%escape%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%recover%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%play%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%guard game%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%from guard%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%bottom%'`,
+        sql`${aiVideoKnowledge.title} ILIKE '%attack from%'`,
+        sql`${aiVideoKnowledge.techniqueType} = 'sweep'`,
+        sql`${aiVideoKnowledge.techniqueType} = 'defense'`,
+        sql`${aiVideoKnowledge.techniqueType} = 'escape'`
+      ];
+      conditions.push(or(...bottomContentConditions));
+      console.log(`[VIDEO SEARCH] 🎯 PERSPECTIVE: BOTTOM (guard) - filtering for retention/sweep/escape content`);
+    }
+    
+    console.log(`[VIDEO SEARCH] Query: "${userMessage}"`);
+    console.log(`[VIDEO SEARCH] Intent: ${intent.specificIntent || 'general'}, Position: ${intent.positionCategory || 'any'}, Perspective: ${intent.perspective || 'any'}, Terms: [${intent.searchTerms.join(', ')}]`);
+    
+    // Execute primary search
+    let videos = await db.select()
+      .from(aiVideoKnowledge)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(aiVideoKnowledge.qualityScore))
+      .limit(50);
+    
+    console.log(`[VIDEO SEARCH] Primary search returned ${videos.length} videos`);
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STEP 4: FALLBACK - If too few results, broaden within constraints
+    // NEVER drop instructor/position filters - that would cause cross-contamination
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    // INSTRUCTOR FALLBACK: If instructor search returned few results, lower quality threshold
+    if (videos.length < 3 && intent.requestedInstructor) {
+      console.log(`[VIDEO SEARCH] ⚠️ Only ${videos.length} results for ${intent.requestedInstructor}, lowering quality threshold`);
+      
+      videos = await db.select()
+        .from(aiVideoKnowledge)
+        .where(and(
+          sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`,
+          ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`)
+        ))
+        .orderBy(desc(aiVideoKnowledge.qualityScore))
+        .limit(50);
+        
+      console.log(`[VIDEO SEARCH] Instructor fallback search returned ${videos.length} videos`);
+    }
+    
+    // POSITION FALLBACK: Broaden within position category
+    if (videos.length < 3 && intent.positionCategory && !intent.requestedInstructor) {
+      console.log(`[VIDEO SEARCH] ⚠️ Only ${videos.length} results, broadening WITHIN position: ${intent.positionCategory}`);
+      
+      // Keep position locked, but remove intent/technique restrictions
+      const fallbackConditions: any[] = [
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`
+      ];
+      
+      // Position variations (same as above)
+      const positionVariations: string[] = [intent.positionCategory];
+      if (intent.positionCategory === 'half_guard') {
+        positionVariations.push('half guard', 'deep_half');
+      } else if (intent.positionCategory === 'closed_guard') {
+        positionVariations.push('closed guard', 'full_guard');
+      }
+      
+      const positionConditions = positionVariations.map(p => 
+        sql`${aiVideoKnowledge.positionCategory} ILIKE ${`%${p.replace('_', '%')}%`}`
+      );
+      positionConditions.push(sql`${aiVideoKnowledge.title} ILIKE ${`%${intent.positionCategory.replace('_', ' ')}%`}`);
+      fallbackConditions.push(or(...positionConditions));
+      
+      videos = await db.select()
+        .from(aiVideoKnowledge)
+        .where(and(...fallbackConditions))
+        .orderBy(desc(aiVideoKnowledge.qualityScore))
+        .limit(50);
+        
+      console.log(`[VIDEO SEARCH] Fallback search returned ${videos.length} videos`);
+    }
+    
+    // Session focus boosting (keeps position-filtered results, just re-ranks)
+    if (conversationContext?.sessionFocus && videos.length > 0) {
+      videos = videos.map(v => {
+        let boost = 0;
+        const videoTags = v.tags || [];
+        
+        for (const [topic, count] of Object.entries(conversationContext.sessionFocus!)) {
+          const topicLower = topic.toLowerCase().replace('_', ' ');
+          
+          if (videoTags.some((t: string) => t.toLowerCase().includes(topicLower))) {
+            boost += (count as number) * 2;
+          }
+          if (v.positionCategory?.includes(topic)) {
+            boost += (count as number) * 3;
+          }
+          if (v.techniqueName?.toLowerCase().includes(topicLower)) {
+            boost += (count as number) * 2;
+          }
+        }
+        
+        return { ...v, relevanceBoost: boost };
+      }).sort((a: any, b: any) => {
+        const scoreA = (Number(a.qualityScore) || 0) + (a.relevanceBoost || 0);
+        const scoreB = (Number(b.qualityScore) || 0) + (b.relevanceBoost || 0);
+        return scoreB - scoreA;
+      });
+    }
+    
+    // Limit to 2 videos per instructor for variety
+    // BUT: Skip this limit when user specifically requested an instructor
+    if (!intent.requestedInstructor) {
+      const instructorCount: Record<string, number> = {};
+      videos = videos.filter(v => {
+        const instructor = v.instructorName || 'unknown';
+        instructorCount[instructor] = (instructorCount[instructor] || 0) + 1;
+        return instructorCount[instructor] <= 2;
+      });
+    }
+    
+    const countResult = await db.select({ count: sql`COUNT(*)` })
+      .from(aiVideoKnowledge)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+    
+    const totalMatches = Number(countResult[0]?.count) || 0;
+    
+    return {
+      videos: videos.slice(0, 50),
+      totalMatches,
+      searchIntent: intent
+    };
+  } catch (error) {
+    console.error('[VIDEO SEARCH] Database error:', error);
+    return {
+      videos: [],
+      totalMatches: 0,
+      searchIntent: intent
+    };
+  }
+}
+
+export async function fallbackSearch(userMessage: string): Promise<VideoSearchResult> {
+  const intent = extractSearchIntent(userMessage);
+  
+  let videos;
+  
+  // PRIORITY 0: Instructor filter is HIGHEST priority
+  // If user asked for a specific instructor, search by instructor first
+  if (intent.requestedInstructor) {
+    console.log(`[FALLBACK SEARCH] Using instructor filter: ${intent.requestedInstructor}`);
+    videos = await db.select()
+      .from(aiVideoKnowledge)
+      .where(and(
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
+        ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`)
+      ))
+      .orderBy(desc(aiVideoKnowledge.qualityScore))
+      .limit(50);
+  }
+  // PRIORITY 1: Position category is most specific - use it first
+  // This prevents cross-contamination (e.g., half guard query returning leg lock videos)
+  else if (intent.positionCategory) {
+    console.log(`[FALLBACK SEARCH] Using position category: ${intent.positionCategory}`);
+    videos = await db.select()
+      .from(aiVideoKnowledge)
+      .where(and(
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 7.0`,
+        eq(aiVideoKnowledge.positionCategory, intent.positionCategory)
+      ))
+      .orderBy(desc(aiVideoKnowledge.qualityScore))
+      .limit(5);
+  } 
+  // PRIORITY 2: Use specific intent (pass, sweep, escape) with title matching
+  // Avoid broad "attack"/"defense" categories that cause cross-contamination
+  else if (intent.specificIntent && intent.specificIntent !== 'attack') {
+    console.log(`[FALLBACK SEARCH] Using specific intent: ${intent.specificIntent}`);
+    const intentKeyword = intent.specificIntent;
+    videos = await db.select()
+      .from(aiVideoKnowledge)
+      .where(and(
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 7.0`,
+        sql`${aiVideoKnowledge.title} ILIKE ${`%${intentKeyword}%`}`
+      ))
+      .orderBy(desc(aiVideoKnowledge.qualityScore))
+      .limit(5);
+  }
+  // PRIORITY 3: Use search terms from message for title matching
+  else if (intent.searchTerms.length > 0) {
+    console.log(`[FALLBACK SEARCH] Using search terms: ${intent.searchTerms.join(', ')}`);
+    const termConditions = intent.searchTerms.map(term => 
+      sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`
+    );
+    videos = await db.select()
+      .from(aiVideoKnowledge)
+      .where(and(
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 7.0`,
+        or(...termConditions)
+      ))
+      .orderBy(desc(aiVideoKnowledge.qualityScore))
+      .limit(5);
+  }
+  // PRIORITY 4: Last resort - return empty to avoid wrong recommendations
+  else {
+    console.log(`[FALLBACK SEARCH] No specific criteria found, returning empty to avoid cross-contamination`);
+    videos = [];
+  }
+  
+  console.log(`[FALLBACK SEARCH] Found ${videos.length} videos`);
+  
+  return { 
+    videos, 
+    totalMatches: videos.length,
+    searchIntent: intent
+  };
+}
+
+// Session context manager for tracking topic focus across messages
+const sessionContextMap = new Map<string, SessionContext>();
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+interface SessionContext {
+  sessionFocus: Record<string, number>;
+  recommendedVideoIds: string[];
+  lastActivity: number;
+  lastInstructor?: string; // Track last mentioned instructor for follow-up references
+}
+
+export function getSessionContext(userId: string): SessionContext {
+  const existing = sessionContextMap.get(userId);
+  const now = Date.now();
+  
+  // Return existing if still fresh
+  if (existing && (now - existing.lastActivity) < SESSION_TIMEOUT_MS) {
+    return existing;
+  }
+  
+  // Create new session
+  const newSession: SessionContext = {
+    sessionFocus: {},
+    recommendedVideoIds: [],
+    lastActivity: now
+  };
+  sessionContextMap.set(userId, newSession);
+  return newSession;
+}
+
+export function updateSessionContext(userId: string, searchIntent: SearchIntent, recommendedVideoIds?: string[]): void {
+  const session = getSessionContext(userId);
+  session.lastActivity = Date.now();
+  
+  // Track instructor if detected (for follow-up references like "his videos")
+  if (searchIntent.requestedInstructor) {
+    session.lastInstructor = searchIntent.requestedInstructor;
+    console.log(`[SESSION] Saved last instructor: ${searchIntent.requestedInstructor}`);
+  }
+  
+  // Track technique type focus
+  if (searchIntent.techniqueType) {
+    session.sessionFocus[searchIntent.techniqueType] = (session.sessionFocus[searchIntent.techniqueType] || 0) + 1;
+  }
+  
+  // Track position focus
+  if (searchIntent.positionCategory) {
+    session.sessionFocus[searchIntent.positionCategory] = (session.sessionFocus[searchIntent.positionCategory] || 0) + 1;
+  }
+  
+  // Track search terms
+  for (const term of searchIntent.searchTerms) {
+    session.sessionFocus[term.toLowerCase()] = (session.sessionFocus[term.toLowerCase()] || 0) + 1;
+  }
+  
+  // Track recommended videos to avoid repeats
+  if (recommendedVideoIds) {
+    for (const id of recommendedVideoIds) {
+      if (!session.recommendedVideoIds.includes(id)) {
+        session.recommendedVideoIds.push(id);
+      }
+    }
+    // Keep only last 50 recommended videos
+    if (session.recommendedVideoIds.length > 50) {
+      session.recommendedVideoIds = session.recommendedVideoIds.slice(-50);
+    }
+  }
+  
+  sessionContextMap.set(userId, session);
+}
+
+export function clearSessionContext(userId: string): void {
+  sessionContextMap.delete(userId);
+}
+
+// Periodic cleanup of stale sessions (runs every 10 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, session] of sessionContextMap.entries()) {
+    if (now - session.lastActivity > SESSION_TIMEOUT_MS) {
+      sessionContextMap.delete(userId);
+    }
+  }
+}, 10 * 60 * 1000);
+
+export function formatVideosForPrompt(videos: any[], totalMatches: number): string {
+  if (videos.length === 0) {
+    return '';
+  }
+  
+  const lines = videos.map((v, idx) => {
+    const position = v.positionCategory?.replace('_', ' ') || '';
+    const type = v.techniqueType || '';
+    const tags = (v.tags || []).slice(0, 3).join(', ');
+    
+    return `${idx + 1}. "${v.techniqueName || v.title}" by ${v.instructorName || 'Unknown'} [${type}/${position}] ${tags ? `(${tags})` : ''}`;
+  });
+  
+  let result = lines.join('\n');
+  
+  if (totalMatches > videos.length) {
+    result += `\n\n(${totalMatches - videos.length} more videos available on this topic)`;
+  }
+  
+  return result;
+}
+
+export async function getVideoLibrarySummary(): Promise<string> {
+  const stats = await db.select({
+    total: sql`COUNT(*)`,
+    attacks: sql`COUNT(CASE WHEN technique_type = 'attack' THEN 1 END)`,
+    defenses: sql`COUNT(CASE WHEN technique_type = 'defense' THEN 1 END)`,
+    concepts: sql`COUNT(CASE WHEN technique_type = 'concept' THEN 1 END)`
+  })
+    .from(aiVideoKnowledge)
+    .where(sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`);
+  
+  const positionStats = await db.select({
+    position: aiVideoKnowledge.positionCategory,
+    count: sql`COUNT(*)`
+  })
+    .from(aiVideoKnowledge)
+    .where(sql`${aiVideoKnowledge.positionCategory} IS NOT NULL`)
+    .groupBy(aiVideoKnowledge.positionCategory)
+    .orderBy(desc(sql`COUNT(*)`))
+    .limit(10);
+  
+  const s = stats[0];
+  const positions = positionStats.map(p => `${p.position?.replace('_', ' ')}: ${p.count}`).join(', ');
+  
+  return `Video Library: ${s.total} total (${s.attacks} attacks, ${s.defenses} defenses, ${s.concepts} concepts). Top positions: ${positions}`;
+}

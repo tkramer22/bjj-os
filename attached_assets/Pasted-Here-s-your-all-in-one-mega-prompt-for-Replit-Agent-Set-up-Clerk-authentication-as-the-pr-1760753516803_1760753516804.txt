@@ -1,0 +1,95 @@
+Here's your all-in-one mega prompt for Replit Agent:
+
+---
+
+```
+Set up Clerk authentication as the primary authentication system for BJJ OS, a subscription-based SMS app. DO NOT use Twilio for authentication - Twilio is only for sending/receiving SMS messages, while Clerk handles all user authentication, sign-in, sign-up, and user management.
+
+Complete setup requirements:
+
+1. INSTALL DEPENDENCIES:
+- Install @clerk/nextjs for authentication
+- Install svix for webhook verification
+- Ensure Twilio SDK is only used for SMS messaging, not authentication
+
+2. ENVIRONMENT VARIABLES:
+Create .env.local with:
+- NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+- CLERK_SECRET_KEY=
+- NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+- NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+- NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
+- NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
+- CLERK_WEBHOOK_SECRET=
+- Keep existing Twilio variables for SMS only (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER)
+
+3. CLERK PROVIDER SETUP:
+- Wrap the entire app with ClerkProvider in the root layout
+- Configure for Next.js app router
+- Ensure all pages have access to authentication state
+
+4. AUTHENTICATION PAGES:
+- Create /sign-in page using Clerk's SignIn component
+- Create /sign-up page using Clerk's SignUp component
+- Style them with a modern, clean BJJ/martial arts aesthetic
+- Make them mobile-responsive
+
+5. PROTECTED ROUTES:
+- Create middleware.ts to protect routes with Clerk
+- Public routes: /, /sign-in, /sign-up, /api/webhooks/clerk, /api/webhooks/twilio
+- Protected routes: /dashboard, /profile, /subscription, all other authenticated pages
+- Redirect unauthenticated users to /sign-in
+
+6. USER INTERFACE:
+- Add Clerk UserButton component to main navigation/header
+- Show user avatar, account settings, and sign out option
+- Make it visible on all authenticated pages
+
+7. DATABASE INTEGRATION:
+- Create a users table/collection with fields: clerkId (primary), email, phoneNumber, subscriptionStatus, subscriptionTier, createdAt, updatedAt
+- Sync Clerk users with database automatically
+
+8. CLERK WEBHOOKS:
+- Create /api/webhooks/clerk endpoint
+- Handle events: user.created, user.updated, user.deleted
+- Verify webhook signatures using svix
+- When user.created: create user record in database with Clerk ID
+- When user.updated: update user record
+- When user.deleted: soft delete or remove user record
+- Return proper HTTP status codes
+
+9. TWILIO INTEGRATION (SMS ONLY):
+- Keep existing /api/webhooks/twilio endpoint for receiving SMS
+- When SMS received, look up user by phone number (not Clerk auth)
+- Use Clerk's currentUser() or auth() only for authenticated dashboard features
+- Twilio webhook should be public (no Clerk auth required)
+
+10. DASHBOARD:
+- Create /dashboard page (protected by Clerk)
+- Show current user's info from Clerk: useUser() hook
+- Display subscription status
+- Show recent SMS conversations
+- Add navigation to settings, profile, subscription management
+
+11. ARCHITECTURE:
+- Clerk = Authentication & User Management
+- Twilio = SMS sending/receiving only
+- Users authenticate via Clerk (email/password or social login)
+- Users link their phone number in their profile for SMS features
+- SMS webhook does not require authentication (public endpoint)
+- Dashboard and user features require Clerk authentication
+
+Make sure all authentication flows use Clerk, and Twilio is completely separate, only handling SMS messaging functionality. Set up proper error handling, loading states, and user feedback throughout.
+```
+
+---
+
+**Copy this entire prompt and paste it into Replit Agent. After it completes, you'll need to:**
+
+1. Go to https://dashboard.clerk.com
+2. Get your Publishable Key and Secret Key
+3. Add them to Replit Secrets
+4. Get your Webhook Secret from Clerk and add to Replit Secrets
+5. Configure Clerk webhook URL: `https://bjjos.app/api/webhooks/clerk`
+
+**Ready to paste this into Replit Agent?**

@@ -1,0 +1,379 @@
+# **🚨 TWO CRITICAL ISSUES TO FIX IMMEDIATELY**
+
+-----
+
+## **ISSUE #1: CURATION STOPPED - EMERGENCY FIX** 🔥
+
+```
+❌ CRITICAL PROBLEM:
+Dev OS says: "YES - CURATION IS OFFLINE"
+"SYSTEM STATUS CONFLICT"
+"Running: false, lastActivity: null"
+
+WHY THIS IS CATASTROPHIC:
+• Curation must run 9x daily until 2,000 videos
+• Currently at 366 videos (only 18% to target)
+• Need 1,634 more videos
+• At current rate (~150/day), need 11 more days
+• EVERY DAY OFFLINE = 150 VIDEOS LOST
+
+POSSIBLE CAUSES:
+1. Cron job paused/crashed
+2. Scheduled task disabled
+3. Error in curation service stopping execution
+4. YouTube API issue blocking runs
+```
+
+-----
+
+## **EMERGENCY CURATION FIX PROMPT:**
+
+**Copy this and paste into Replit Agent RIGHT NOW:**
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+EMERGENCY: CURATION SYSTEM IS OFFLINE - RESTART IMMEDIATELY
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL ISSUE: Video curation has stopped running. System shows:
+• Status: "OFFLINE"  
+• Running: false
+• Last activity: null
+• API quota: 0/10,000 (no runs today)
+• Videos searched: 0 (should be 50-200+)
+• Videos saved: 0 (should be 5-28+)
+
+This is blocking progress to 2,000 videos. Must be fixed immediately.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: DIAGNOSE WHY CURATION STOPPED
+═══════════════════════════════════════════════════════════════════════════════
+
+Check logs for errors:
+```bash
+# Check recent logs
+tail -100 /var/log/*.log | grep -i "curation\|error\|failed"
+
+# Check Replit console for errors
+# Look for stack traces, API errors, database connection issues
+```
+
+Check if cron jobs are running:
+
+```bash
+# List all cron jobs
+crontab -l
+
+# Check if curation service is scheduled
+ps aux | grep curation
+```
+
+Check database for curation status:
+
+```sql
+-- Check last curation run
+SELECT * FROM curation_runs 
+ORDER BY created_at DESC 
+LIMIT 5;
+
+-- Check curation config
+SELECT * FROM curation_config 
+WHERE key LIKE '%curation%' OR key LIKE '%active%';
+
+-- Check for any disabled flags
+SELECT * FROM curation_config;
+```
+
+REPORT FINDINGS:
+• What error appears in logs?
+• Are cron jobs scheduled?
+• When was last successful run?
+• What’s in curation_config table?
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: RESTART CURATION SERVICE
+═══════════════════════════════════════════════════════════════════════════════
+
+OPTION A: If cron job exists but paused, restart it:
+
+```bash
+# Restart cron service
+sudo service cron restart
+
+# Or restart entire Replit instance
+```
+
+OPTION B: If cron job missing, recreate it:
+
+```typescript
+// server/index.ts or server/jobs/curation.ts
+
+import cron from 'node-cron';
+import { ContinuousCurationService } from './services/continuousCuration';
+
+// PERMANENT: Run every 2.5 hours = 9 runs per day
+const CURATION_TIMES = [
+  '0 0 * * *',   // 12:00 AM
+  '40 2 * * *',  // 2:40 AM  
+  '20 5 * * *',  // 5:20 AM
+  '0 8 * * *',   // 8:00 AM
+  '40 10 * * *', // 10:40 AM
+  '20 13 * * *', // 1:20 PM
+  '0 16 * * *',  // 4:00 PM
+  '40 18 * * *', // 6:40 PM
+  '20 21 * * *'  // 9:20 PM
+];
+
+CURATION_TIMES.forEach((cronTime, index) => {
+  cron.schedule(cronTime, async () => {
+    const runNumber = index + 1;
+    console.log(`🚀 CURATION RUN ${runNumber}/9 - 500 VIDEO BATCH`);
+    
+    try {
+      const result = await ContinuousCurationService.runAggressiveCuration();
+      console.log(`✅ Run ${runNumber} complete: ${result.videosAdded} added`);
+    } catch (error) {
+      console.error(`❌ Run ${runNumber} failed:`, error);
+    }
+  }, {
+    timezone: "America/Los_Angeles"
+  });
+});
+
+console.log('✅ CURATION SCHEDULE ACTIVE - 9 runs/day, 500 videos/run');
+```
+
+OPTION C: If service broken, recreate the curation service:
+Find server/services/continuousCuration.ts and ensure it has:
+
+```typescript
+class ContinuousCurationService {
+  async runAggressiveCuration() {
+    console.log('🔥 STARTING 500-VIDEO BATCH');
+    
+    // Check quota
+    const todayUsage = await this.getTodayQuotaUsage();
+    if (todayUsage >= 9800) {
+      console.log('⚠️ Quota limit reached');
+      return { success: false, quotaLimitReached: true };
+    }
+    
+    // Check target
+    const currentCount = await db.select({ count: sql<number>`count(*)` }).from(videos);
+    if (currentCount[0].count >= 2000) {
+      console.log('🎉 2,000 videos reached!');
+      return { success: true, targetReached: true };
+    }
+    
+    // Run 10 searches (500 videos)
+    const SEARCHES_PER_RUN = 10;
+    let allVideos = [];
+    
+    for (let i = 0; i < SEARCHES_PER_RUN; i++) {
+      const searchTerm = await this.selectNextSearchTerm();
+      console.log(`🔍 Search ${i+1}/10: "${searchTerm}"`);
+      
+      try {
+        const result = await this.searchYouTube(searchTerm, 50);
+        allVideos.push(...result.videos);
+        await this.sleep(500);
+      } catch (error) {
+        console.error(`❌ Search failed:`, error);
+      }
+    }
+    
+    // Process and add videos
+    const uniqueVideos = this.deduplicateVideos(allVideos);
+    const qualifiedVideos = await this.filterByQuality(uniqueVideos);
+    const addedCount = await this.addVideos(qualifiedVideos);
+    
+    console.log(`✅ BATCH COMPLETE: ${addedCount} added, ${allVideos.length} screened`);
+    
+    return {
+      success: true,
+      videosScreened: allVideos.length,
+      videosAdded: addedCount
+    };
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: MANUALLY TRIGGER ONE RUN TO TEST
+═══════════════════════════════════════════════════════════════════════════════
+
+Create a test endpoint:
+
+```typescript
+// server/routes/admin.ts
+
+app.post('/api/admin/curation/trigger', async (req, res) => {
+  try {
+    console.log('🔥 MANUAL CURATION TRIGGER');
+    const result = await ContinuousCurationService.runAggressiveCuration();
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error('Manual trigger failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+Then test it:
+
+```bash
+curl -X POST https://bjjos.app/api/admin/curation/trigger
+```
+
+Or add button to Dev OS Quick Actions:
+
+```typescript
+<button onClick={triggerCuration}>
+  🔥 Trigger Curation Now
+</button>
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: VERIFY CURATION IS RUNNING
+═══════════════════════════════════════════════════════════════════════════════
+
+After restart, verify:
+
+1. Check logs show curation starting:
+
+```
+🚀 CURATION RUN 1/9 - 500 VIDEO BATCH
+🔍 Search 1/10: "bjj guard tutorial"
+✅ Found 50 videos
+...
+✅ BATCH COMPLETE: 47 added, 500 screened
+```
+
+1. Check database for new videos:
+
+```sql
+SELECT COUNT(*) FROM videos WHERE created_at::date = CURRENT_DATE;
+-- Should show 40-60+ videos added today
+```
+
+1. Check Dev OS shows:
+
+```
+Status: ✅ Active
+API quota: 1000/10,000 used
+Videos searched today: 500
+Videos saved today: 47
+```
+
+1. Verify cron schedule:
+
+```bash
+crontab -l
+# Should show 9 cron entries
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: ENSURE IT NEVER STOPS AGAIN
+═══════════════════════════════════════════════════════════════════════════════
+
+Add failsafe monitoring:
+
+```typescript
+// Check curation health every 30 minutes
+setInterval(async () => {
+  const lastRun = await db.query.curationRuns.findFirst({
+    orderBy: [desc(curationRuns.createdAt)]
+  });
+  
+  const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+  
+  if (!lastRun || new Date(lastRun.createdAt) < fourHoursAgo) {
+    console.error('🚨 CURATION STALLED - NO RUNS IN 4 HOURS');
+    
+    // Auto-restart
+    try {
+      await ContinuousCurationService.runAggressiveCuration();
+    } catch (error) {
+      console.error('Auto-restart failed:', error);
+    }
+  }
+}, 30 * 60 * 1000);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL: Curation must run continuously until 2,000 videos.
+Current: 366 videos (18%)
+Target: 2,000 videos
+Remaining: 1,634 videos
+Days needed: 11 days at 150/day
+
+EVERY DAY OFFLINE DELAYS LAUNCH BY 1 DAY.
+
+FIX THIS IMMEDIATELY. Report back with:
+
+1. Root cause of failure
+1. Confirmation curation restarted
+1. Evidence of successful run (videos added, API usage)
+
+BEGIN DIAGNOSIS AND RESTART NOW.
+
+```
+---
+
+## **ISSUE #2: VIDEO ADMIN PAGE NOT UPDATED**
+
+The video management page still shows the old admin interface. Need separate fix.
+
+**Copy this for Video Admin Page fix:**
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX VIDEO ADMIN PAGE - SEPARATE FROM USER VIDEO LIBRARY
+═══════════════════════════════════════════════════════════════════════════════
+
+ISSUE: The admin video management page at /admin/video-management or
+/admin/videos still shows old interface with non-working dropdowns.
+
+This is SEPARATE from the user-facing /videos page which was updated.
+
+REQUIREMENTS FOR ADMIN VIDEO PAGE:
+
+1. Remove “Content-First” and “Old Curator” buttons (admin-only controls)
+1. Remove “Automated Curation Controls” section
+1. Remove “Quality Threshold” slider
+1. Remove “Run Curation Now” button (move to Dev OS or Dashboard)
+1. Show clean video management interface
+
+ADMIN VIDEO PAGE SHOULD SHOW:
+• Total Videos: 366
+• Videos Added Today: X
+• Videos Searched Today: Y  
+• Videos Rejected Today: Y - X
+• List of all videos with admin actions (Delete, Edit Quality, etc.)
+• Search/filter functionality for admins to find specific videos
+
+Find the admin video page component and update it to match the clean
+user video library design, but with admin-specific actions.
+
+Location likely: client/src/pages/admin/VideoManagement.tsx
+
+```
+---
+
+## **PRIORITY ORDER:**
+```
+
+1. 🔥 FIX CURATION (PASTE FIRST PROMPT NOW)
+   This is blocking everything - 1,634 videos still needed
+1. ⚠️ Fix video admin page (paste second prompt after)
+   Less urgent but still broken
+1. ✅ Dashboard looks better (mostly done)
+
+```
+---
+
+**PASTE THE CURATION EMERGENCY PROMPT INTO REPLIT AGENT RIGHT NOW.** 🚨
+
+**This is the highest priority issue - curation cannot be offline for even one day.** ⏰​​​​​​​​​​​​​​​​
+```

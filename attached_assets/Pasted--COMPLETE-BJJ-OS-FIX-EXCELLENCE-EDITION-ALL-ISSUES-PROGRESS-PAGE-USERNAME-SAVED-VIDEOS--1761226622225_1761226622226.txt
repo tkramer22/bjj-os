@@ -1,0 +1,631 @@
+```
+COMPLETE BJJ OS FIX - EXCELLENCE EDITION - ALL ISSUES + PROGRESS PAGE + USERNAME + SAVED VIDEOS + PERFECT BELT GRAPHICS + VIDEO CURATION ACTIVE
+
+DESIGN PHILOSOPHY:
+Excellence is our pillar. Every pixel matters. This is a premium product that must look and feel world-class. No shortcuts, no compromises.
+
+CRITICAL BUGS TO FIX:
+
+ISSUE 1: ONBOARDING BYPASS FOR EXISTING USERS
+Problem: Users who already completed onboarding are forced through it again on subsequent logins.
+
+Fix Required:
+- Check if user has completed onboarding (belt_level EXISTS in database)
+- If onboarding complete, redirect directly to /chat (NOT /welcome)
+- Onboarding should only show ONCE per user, ever
+- Lifetime users treated EXACTLY like paying users after initial setup (no feature differences)
+
+Correct Authentication Flow:
+1. User enters phone number
+2. Check database: Does this phone number have a profile?
+   - YES → User logs in → Redirect to /chat (all previous data loads automatically)
+   - NO → New user → Complete onboarding → Save profile → Redirect to /chat
+3. User stays logged in across all pages
+4. No forced logout unless user clicks logout or session expires (30 days)
+5. Previous chats, saved videos, settings ALL persist and load when user returns
+
+ISSUE 2: CHAT ERROR - "Failed to send message. Please try again."
+Problem: Chat interface shows red error when trying to send messages.
+
+Debug and fix:
+- Check API endpoint connection to backend (https://twilio-daily-sms-toddkramer2.replit.app)
+- Verify Claude API key is active and working
+- Check authentication token is being passed correctly in API calls
+- Verify user session is maintained
+- Check console for specific error message and fix root cause
+- Test message sending end-to-end
+
+This is CRITICAL - chat must work or app is useless.
+
+ISSUE 3: NAVIGATION ERRORS
+Problem: Clicking "Home" from Progress page redirects to landing page, then forces login again.
+
+Fix Required:
+- "Home" button should go to /chat (NOT / landing page)
+- User session should persist across ALL pages
+- No forced re-login unless session actually expired
+- Remove landing page redirect for logged-in users
+- If user is authenticated, never show landing page
+
+ISSUE 4: CHAT TIMESTAMPS
+Problem: Need better timestamp formatting.
+
+Fix Required:
+- Show time for messages within last 24 hours: "9:45 AM"
+- Show date + time for messages older than 24 hours: "Oct 22, 9:45 AM"
+- Group messages by date with date dividers: "Today", "Yesterday", "Oct 20"
+
+ISSUE 5: SESSION PERSISTENCE
+Problem: User session not persisting correctly, causing forced re-logins.
+
+Fix Required:
+- Implement proper session management (JWT or session cookies)
+- Session should last 30 days minimum
+- Store session in localStorage as backup
+- Check authentication on route change, not page refresh
+- Session should work across all pages
+- When user returns (even weeks later), everything loads: chat history, saved videos, settings
+
+CRITICAL: AUTONOMOUS VIDEO CURATION SYSTEM - MUST BE RUNNING NOW
+
+VIDEO CURATION STATUS CHECK:
+1. Verify curation system is currently active and running
+2. If NOT running, start it immediately
+3. System should be continuously searching and analyzing videos 24/7
+
+VIDEO CURATION REQUIREMENTS:
+
+Database Table: ai_video_knowledge
+- id (UUID, primary key)
+- video_url (STRING, unique, not null)
+- video_title (STRING, not null)
+- instructor_name (STRING, not null)
+- technique_category (STRING, not null) - Submissions/Passes/Sweeps/Escapes/Takedowns/Guard Retention/Position Control/Other
+- quality_score (DECIMAL 1-10, not null)
+- helpful_count (INTEGER, default 0) - increments when users mark video helpful
+- unhelpful_count (INTEGER, default 0) - increments when users mark unhelpful
+- belt_level_appropriate (STRING ARRAY) - ["White", "Blue", "Purple", "Brown", "Black"]
+- gi_or_nogi (STRING) - "Gi", "No-Gi", or "Both"
+- video_duration (INTEGER) - seconds
+- key_details (TEXT) - AI-extracted technique details
+- timestamp_key_moment (INTEGER) - second where key technique shown
+- approved (BOOLEAN, default false) - manual review flag
+- added_at (TIMESTAMP, default now())
+- last_recommended (TIMESTAMP, nullable)
+- recommendation_count (INTEGER, default 0)
+
+Trusted Instructors List (auto-approve if quality_score ≥ 7.0):
+- John Danaher
+- Gordon Ryan
+- Garry Tonon
+- Bernardo Faria
+- Lachlan Giles
+- Roger Gracie
+- Marcelo Garcia
+- Keenan Cornelius
+- Jon Thomas
+- Chewjitsu
+- Ryan Hall
+- Craig Jones
+- Mikey Musumeci
+- Andrew Wiltse
+- Priit Mihkelson
+- Add more as needed
+
+Curation Process (AUTOMATED, CONTINUOUS):
+
+Step 1: YouTube Search (Run every 6 hours)
+- Search queries rotate through:
+  - "[technique name] tutorial"
+  - "[technique name] breakdown"
+  - "[technique name] step by step"
+  - "BJJ [technique name]"
+  - "Jiu jitsu [technique name]"
+- Technique names cover: All major submissions, passes, sweeps, escapes, takedowns
+- Target: 50-100 new videos analyzed per search cycle
+
+Step 2: AI Analysis with Claude
+For each video found:
+- Extract video title, description, channel name
+- Identify instructor name
+- Determine technique category
+- Assess instructional quality (1-10 score based on):
+  - Clear demonstration
+  - Step-by-step breakdown
+  - Common mistakes addressed
+  - Multiple angles shown
+  - Beginner-friendly explanation
+- Determine appropriate belt levels
+- Identify if Gi, No-Gi, or Both
+- Extract key teaching points
+- Identify timestamp of key moment
+- Check if instructor is in trusted list
+
+Step 3: Auto-Approval Logic
+- If instructor in trusted list AND quality_score ≥ 7.0 → approved = true, add to library
+- If instructor NOT in trusted list AND quality_score ≥ 8.0 → approved = true, add to library
+- If quality_score < 7.0 → approved = false, add to manual review queue
+- Reject completely if:
+  - Not instructional content
+  - Poor video quality (blurry, bad audio)
+  - Clickbait with no real instruction
+  - Spam or promotional content
+
+Step 4: Database Storage
+- Save all approved videos to ai_video_knowledge table
+- Videos immediately available for Prof. OS to recommend in chat
+- Track recommendation_count and last_recommended for each video
+
+CURATION CONTROLS (Admin Dashboard):
+
+Create Admin Page: /admin/curation
+
+Status Section (top):
+- "Auto-Curation Status: RUNNING" (green indicator) or "STOPPED" (red)
+- "Videos in Library: [count]"
+- "Videos Added Today: [count]"
+- "Videos Pending Review: [count]"
+- "Last Curation Run: [timestamp]"
+
+Control Panel:
+- Toggle Switch: "Auto-Curation" (ON/OFF) - large, prominent
+  - When ON: Green, runs every 6 hours automatically
+  - When OFF: Red, no automatic curation
+- Button: "Run Curation Now" (blue, manual trigger)
+  - Immediately starts new curation cycle
+  - Shows progress: "Searching... 25/50 videos analyzed"
+- Slider: "Quality Threshold" (7.0 - 9.0)
+  - Default: 7.5
+  - Only videos above this score auto-approve
+  - Live updates as slider moves
+
+Recent Additions (last 24 hours):
+- Table showing newest videos added
+- Columns: Thumbnail, Title, Instructor, Category, Quality Score, Added At
+- Sortable by any column
+- Click video to view details or remove
+
+Manual Review Queue:
+- Videos that scored below auto-approve threshold
+- Show: Title, Instructor, Quality Score, AI Reasoning
+- Actions: Approve, Reject, Watch Video
+- Batch actions: Approve All, Reject All
+
+Trusted Instructors Management:
+- List of all trusted instructors
+- "Add Instructor" button (search by channel name or add manually)
+- Remove instructor from list (moves them to regular approval threshold)
+- Show video count per instructor
+
+CURRENT STATUS REQUIREMENT:
+- Check if curation system is running NOW
+- If not running, START IT IMMEDIATELY
+- Target: Begin building library to 1,000+ videos within 48 hours
+- Show progress in admin dashboard
+- Log all curation activity (videos found, analyzed, approved, rejected)
+
+Integration with Chat:
+- When Prof. OS recommends videos, pull from ai_video_knowledge table
+- Filter by: user's belt level, technique category, gi/no-gi preference
+- Sort by: quality_score DESC, helpful_count DESC
+- Track: recommendation_count++ when video recommended
+- Track: last_recommended timestamp
+
+BELT GRAPHIC REDESIGN - PERFECTION REQUIRED:
+
+This is CRITICAL for brand identity. The belt must look exactly like a real IBJJF belt.
+
+BELT PROGRESSION (5 RANKS):
+
+1. WHITE BELT
+   - Main section: White #FFFFFF (90% of belt width)
+   - Stripe section: White #FFFFFF (10% of belt width)
+   - Stripes: None visible (white on white)
+   - Border: 2px solid #333333 around entire belt (so it shows on dark background)
+
+2. BLUE BELT (DEFAULT FOR LANDING PAGE)
+   - Main section: IBJJF Blue #2563EB (90% of belt width)
+   - Stripe section: Black #000000 (10% of belt width)
+   - Stripes: 4 white vertical stripes
+   - Black section border: 2px white #FFFFFF (so black stands out)
+
+3. PURPLE BELT
+   - Main section: IBJJF Purple #7C3AED (90% of belt width)
+   - Stripe section: Black #000000 (10% of belt width)
+   - Stripes: 4 white vertical stripes
+   - Black section border: 2px white #FFFFFF
+
+4. BROWN BELT
+   - Main section: IBJJF Brown #92400E (90% of belt width)
+   - Stripe section: Black #000000 (10% of belt width)
+   - Stripes: 4 white vertical stripes
+   - Black section border: 2px white #FFFFFF
+
+5. BLACK BELT
+   - Main section: Black #000000 (90% of belt width)
+   - Stripe section: Red #DC2626 (10% of belt width)
+   - Stripes: 4 white vertical stripes
+   - Main section border: 2px white #FFFFFF (so black shows on dark background)
+
+BELT SPECIFICATIONS (ALL RANKS):
+
+Dimensions:
+- Width: 500px total
+- Height: 80px
+- Perfectly straight horizontal rectangle (no curves, no angles)
+
+Main Section (Left side):
+- 90% of total width (~450px)
+- Solid color based on belt rank
+- No gradients, no patterns, flat color
+
+Stripe Section (Right side):
+- Only 10% of total width (~50px) - THIS IS SMALL, just the tip of the belt
+- Black for White/Blue/Purple/Brown belts
+- Red for Black belt only
+- This is where the 4 stripes go
+
+Stripes (only on stripe section):
+- 4 white vertical stripes
+- Style: Must look like white athletic tape wrapped around a real belt
+- Each stripe: 4px wide × 60px tall (leaves 10px margin top/bottom)
+- Evenly spaced across the 50px stripe section with equal gaps
+- Color: White #FFFFFF
+- Add subtle texture/shadow to make them look like real tape (not flat rectangles)
+- Think: actual white tape wrapped around dark fabric
+
+Visual Quality:
+- Clean, crisp edges
+- Subtle drop shadow: 0 4px 12px rgba(0, 0, 0, 0.4)
+- Professional SVG quality, not pixelated
+- Should look premium and authentic
+
+Belt Display Logic:
+- Landing page (not logged in): Show BLUE BELT
+- Onboarding Step 3 (belt selection): Show belt being selected
+- Dashboard/Chat (logged in): Show user's current belt rank
+- Progress page: Show user's belt rank at top
+- Settings page: Show user's belt rank
+
+The belt is a core brand element. It must be perfect. No compromises.
+
+NEW FEATURE: USERNAME IN ONBOARDING
+
+Update Onboarding Flow (now 4 steps):
+
+Step 1: Phone Number (already exists)
+- Enter phone number
+- Verify SMS code
+
+Step 2: Username (NEW)
+- Question: "Choose your username"
+- Input field: text input (3-20 characters, alphanumeric only, no spaces)
+- Validation: Check if username is unique in database
+- Error message if username taken: "Username already taken. Try another."
+- Style: Same as other onboarding steps, centered, clean
+- Skip/Next disabled until valid unique username entered
+
+Step 3: Belt Level
+- Question: "What's your current belt level?"
+- Options: White Belt, Blue Belt, Purple Belt, Brown Belt, Black Belt
+- Display actual belt graphics for each option (not just text)
+- When selected, highlight with blue border
+
+Step 4: Training Preferences
+- Training style: Gi / No-Gi / Both (large buttons)
+- Training frequency: Dropdown (1-7 days per week)
+
+After completing all 4 steps:
+- Save ALL data to database (username, belt_level, training_style, training_frequency, phone_number)
+- Set onboarding_completed = true
+- Redirect to /chat with welcome message from Prof. OS
+
+DATABASE UPDATES REQUIRED:
+
+Add/update users table:
+- phone_number (STRING, UNIQUE, NOT NULL) - primary identifier for login
+- username (STRING, UNIQUE, NOT NULL) - chosen during onboarding
+- onboarding_completed (BOOLEAN, default false)
+- created_at (TIMESTAMP, default now())
+- total_logins (INTEGER, default 0) - increment on each login
+- current_streak (INTEGER, default 0) - consecutive days
+- last_login_date (DATE) - update on each login
+- belt_level (STRING) - White/Blue/Purple/Brown/Black
+- training_style (STRING) - Gi/No-Gi/Both
+- training_frequency (INTEGER) - 1-7
+- subscription_tier (STRING) - "lifetime" or "paid"
+
+Settings Page Updates:
+- Display ALL user data from database
+- Editable fields:
+  - Username (with uniqueness validation)
+  - Belt level (dropdown with belt graphics)
+  - Training style
+  - Training frequency
+- Optional fields (user can add if they want):
+  - Real name (text input)
+  - Age (number input)
+  - Weight (number input)
+  - Home gym/academy (text input)
+  - Training goals (textarea, 500 char max)
+- "Save Changes" button (blue, prominent)
+- Success message: "Settings saved!" (green, fades after 3 seconds)
+- All changes save to database immediately
+
+NEW FEATURE: SAVED VIDEOS WITH DUAL FILTERS
+
+Saved Videos Page Redesign:
+
+Page Title: "Saved Videos" (32px, white, bold, centered)
+
+Top Section - Two Filter Dropdowns (side by side, 20px gap):
+
+Filter 1: Category Dropdown (left)
+- Label above: "Filter by Technique" (14px, white 70%)
+- Dropdown default: "All Categories"
+- Options:
+  - All Categories
+  - Submissions
+  - Guard Passes
+  - Sweeps
+  - Escapes
+  - Takedowns
+  - Guard Retention
+  - Position Control
+  - Other
+- Style: Dark dropdown #111113, white text, blue accent on select
+
+Filter 2: Instructor Dropdown (right)
+- Label above: "Filter by Instructor" (14px, white 70%)
+- Dropdown default: "All Instructors"
+- Options: Dynamically populated from user's saved videos
+  - All Instructors
+  - [Alphabetically sorted list of unique instructors from user's saved videos]
+  - Example: Bernardo Faria, Gordon Ryan, John Danaher, Lachlan Giles, etc.
+- Style: Same as category dropdown
+
+Filter Behavior:
+- Both filters work together (AND logic)
+- Real-time filtering (no apply button needed)
+- Examples:
+  - "Submissions" + "John Danaher" → only Danaher submission videos
+  - "All Categories" + "Gordon Ryan" → all Gordon Ryan videos
+  - "Guard Passes" + "All Instructors" → all guard pass videos
+
+Video Grid Display:
+- Grid layout: 2 columns on desktop, 1 column on mobile
+- 20px gap between cards
+- Each video card:
+  - Dark surface #111113
+  - Rounded 12px
+  - Border 1px #333333
+  - 20px padding
+  - Hover: border turns blue #2563EB
+
+Video Card Contents:
+- Thumbnail image (if available, 16:9 aspect ratio)
+- Video title (16px, white 90%, bold, 2 lines max)
+- Instructor name (14px, blue #2563EB, 1 line)
+- Category badge (small pill, colored by category, 12px text)
+- "Watch" button (blue #2563EB, full width, 40px height)
+- "Remove" button (red #DC2626, icon only, top right corner)
+
+Empty State (no saved videos):
+- Large icon (bookmark or video icon, 64px, white 30%)
+- Message: "No saved videos yet" (24px, white 70%)
+- Subtext: "Start chatting with Prof. OS to get video recommendations you can save" (16px, white 50%)
+
+Category Badge Colors:
+- Submissions: Red #DC2626
+- Guard Passes: Blue #2563EB
+- Sweeps: Purple #7C3AED
+- Escapes: Green #10B981
+- Takedowns: Orange #F59E0B
+- Guard Retention: Cyan #06B6D4
+- Position Control: Yellow #EAB308
+- Other: Gray #6B7280
+
+Auto-Categorization Logic:
+- When user saves a video from chat, AI automatically assigns category
+- Extract category from video title, description, or conversation context
+- Extract instructor name and standardize (John Danaher → Danaher, Gordon Ryan → Gordon Ryan)
+- If uncertain, default to "Other" category
+
+Database for Saved Videos:
+- Table: saved_videos
+  - id (UUID, primary key)
+  - user_id (UUID, foreign key → users.id)
+  - video_url (STRING, not null)
+  - video_title (STRING, not null)
+  - instructor_name (STRING, not null) - standardized format
+  - category (STRING, not null) - must be one of the 8 categories
+  - thumbnail_url (STRING, nullable)
+  - saved_at (TIMESTAMP, default now())
+  - notes (TEXT, nullable) - user can add personal notes later
+
+When user saves a video in chat:
+1. AI extracts: title, instructor, category, URL
+2. Save to saved_videos table
+3. Show success toast: "Saved to [Category] - [Instructor]" (green, 3 seconds)
+4. Video immediately appears in Saved Videos page
+
+NEW FEATURE: PROGRESS PAGE
+
+Route: /progress
+Page Title: "Your Journey" (32px, white, bold, centered, 40px margin top)
+
+TOP: Belt Graphic (user's current rank)
+- Display user's belt rank (not always blue)
+- Same specifications as above (500px × 80px)
+- Centered with 60px margin below
+
+Progress Stats (3 cards, stacked vertically):
+
+STAT CARD 1: Member Since
+- Icon: 📅 (32px, centered above text)
+- Label: "Member Since" (14px, white 70%)
+- Value: [Date formatted as "October 23, 2025"] (32px, white 100%, bold)
+- Centered text
+
+STAT CARD 2: Total Logins
+- Icon: 🥋 (32px, centered above text)
+- Label: "Total Logins" (14px, white 70%)
+- Value: [Number] (48px, blue #2563EB, bold)
+- Centered text
+
+STAT CARD 3: Current Streak
+- Icon: 🔥 (32px, only show if streak ≥ 3 days, otherwise show 📊)
+- Label: "Current Streak" (14px, white 70%)
+- Value: [Number] (48px, purple #7C3AED, bold)
+- Subtext: "days in a row" (12px, white 60%)
+- Centered text
+
+Card Styling:
+- Background: #111113
+- Border: 1px solid #333333
+- Rounded: 12px
+- Padding: 60px (generous, premium feel)
+- Max width: 500px
+- Centered on page
+- 40px vertical spacing between cards
+- Mobile: 20px side margins, full width minus margins
+
+Streak Calculation Logic (implement in backend):
+- On each login, check last_login_date
+- If last login was yesterday: current_streak++
+- If last login was today (same day): no change to streak
+- If last login was 2+ days ago: current_streak = 1 (reset)
+- Update last_login_date to today
+- Increment total_logins by 1
+
+USER EXPERIENCE - LIFETIME VS PAID:
+
+Lifetime users = Paid users (NO DIFFERENCES)
+- Both get: full chat, video recommendations, saved videos, progress tracking, ALL features
+- Database field subscription_tier = "lifetime" or "paid"
+- UI never shows subscription tier to user
+- No feature gates, no upsells, no limitations
+
+Returning User Flow (SEAMLESS):
+1. User enters phone number
+2. System checks: phone number exists in database?
+3. YES → Log in automatically
+4. Load ALL user data:
+   - Chat history (all previous conversations)
+   - Saved videos (with categories and instructors)
+   - Settings (belt, preferences, optional info)
+   - Progress stats (streak, logins, member since)
+5. Redirect to /chat
+6. User sees "Welcome back, [username]" from Prof. OS
+7. Everything works as if they never left
+
+New User Flow:
+1. Enter phone number → verify SMS code
+2. Complete 4-step onboarding (username → belt → preferences)
+3. Save all data to database, set onboarding_completed = true
+4. Redirect to /chat
+5. Prof. OS sends welcome message personalized to their belt level
+
+PRIORITY ORDER (IMPLEMENT IN THIS SEQUENCE):
+
+1. VERIFY/START VIDEO CURATION - Check if running, start if not (CRITICAL)
+2. FIX CHAT ERROR - Debug and fix message sending (BLOCKING ISSUE)
+3. FIX SESSION PERSISTENCE - User stays logged in, data loads on return
+4. FIX ONBOARDING BYPASS - Check onboarding_completed, skip if true
+5. BUILD ADMIN CURATION DASHBOARD - Controls + status monitoring
+6. PERFECT BELT GRAPHICS - All 5 belts with exact specifications
+7. ADD USERNAME STEP - New step 2 in onboarding with validation
+8. FIX NAVIGATION - Home button always goes to /chat
+9. BUILD SAVED VIDEOS PAGE - Dual filters, auto-categorization
+10. BUILD PROGRESS PAGE - Belt graphic + 3 stats
+11. UPDATE SETTINGS PAGE - All fields editable, optional fields
+12. ADD CHAT TIMESTAMPS - Proper date/time formatting
+13. UPDATE DATABASE - All new fields and tables
+14. TEST EVERYTHING - Complete flow for new and returning users
+
+TESTING CHECKLIST (MUST PASS ALL):
+
+Video Curation:
+✅ Curation system is running (check admin dashboard status)
+✅ Can manually trigger "Run Curation Now"
+✅ Videos being added to ai_video_knowledge table
+✅ Quality scores calculated correctly
+✅ Trusted instructors auto-approve at threshold
+✅ Prof. OS can recommend videos from library in chat
+✅ Admin can view recent additions
+✅ Admin can manage trusted instructors list
+
+New User Flow:
+✅ Enter phone → SMS code → username (unique check works) → belt → preferences → chat
+✅ Belt graphic displays correctly on onboarding step 3
+✅ After onboarding, redirect to chat with welcome message
+✅ Can send messages in chat and receive responses (NO ERRORS)
+✅ Can save videos from chat recommendations
+✅ Saved video appears in Saved Videos with correct category and instructor
+
+Returning User Flow:
+✅ Enter phone → immediately logged in (no re-onboarding)
+✅ All previous chat history loads
+✅ All saved videos load with correct filters
+✅ Settings show all saved data
+✅ Progress page shows correct stats
+✅ Current streak increments correctly on consecutive days
+✅ Belt graphic shows user's actual rank (not always blue)
+
+Navigation:
+✅ "Home" button from any page → /chat
+✅ No forced redirects to landing page when logged in
+✅ No forced logout unless user clicks logout or 30 days pass
+✅ Can navigate between Chat, Saved Videos, Progress, Settings seamlessly
+
+Saved Videos:
+✅ Category dropdown populates correctly
+✅ Instructor dropdown populates from user's videos only
+✅ Both filters work together (AND logic)
+✅ Can watch videos from saved list
+✅ Can remove videos from saved list
+✅ Empty state shows when no videos saved
+
+Progress Page:
+✅ Belt graphic shows user's rank
+✅ Member Since shows signup date
+✅ Total Logins increments on each login
+✅ Current Streak calculates correctly
+✅ Streak resets if gap > 1 day
+✅ Fire emoji 🔥 only shows if streak ≥ 3
+
+Settings:
+✅ All fields populate from database
+✅ Can edit and save changes
+✅ Username uniqueness validation works
+✅ Optional fields save correctly
+✅ Success message appears after saving
+
+Visual Quality:
+✅ Belt graphics look professional and authentic (not pixelated)
+✅ All spacing and typography consistent across pages
+✅ Mobile responsive on all pages
+✅ No layout breaks or overlapping elements
+✅ Colors match design system exactly
+
+EXCELLENCE STANDARDS:
+
+Every element must meet these criteria:
+- Visually perfect (no rough edges, proper alignment, consistent spacing)
+- Functionally flawless (no bugs, no errors, works every time)
+- Performance optimized (fast loads, smooth animations)
+- Mobile excellent (not just "works" but actually great on phone)
+- Accessible (keyboard navigation, screen reader friendly)
+
+This is not a minimum viable product. This is a premium product that practitioners will brag about using. Every detail matters.
+
+If something doesn't meet excellence standards, iterate until it does. No shortcuts.
+
+IMMEDIATE ACTION REQUIRED:
+- Check video curation system status RIGHT NOW
+- If not running, start it immediately
+- Begin building video library to 1,000+ videos
+- Monitor progress in admin dashboard
+
+Implement everything above with precision and care. Excellence is our pillar.
+```

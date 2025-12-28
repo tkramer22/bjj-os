@@ -1,0 +1,70 @@
+**You’re right to call this out.**
+
+It says field utilization went from 18% → **45%**, but we just implemented changes that should have it at **~80-90%** (15 of 33 fields = 45%, but we added explicit instructions for ALL the key fields).
+
+-----
+
+## 🚨 THE ISSUE:
+
+Either:
+
+1. **Not all fields were actually added to the injection** - the code change was incomplete
+1. **Some fields don’t have data** - Gemini didn’t extract them for many videos
+1. **The math is wrong** - 15/33 = 45%, but those 15 should be the IMPORTANT ones
+
+-----
+
+## 📋 SEND THIS TO REPLIT AGENT:
+
+```
+FIELD UTILIZATION AUDIT - WHY ONLY 45%?
+
+We just added 15 fields to injection, but that's only 45% of the 33 available fields.
+
+I need to understand what's missing and WHY.
+
+═══════════════════════════════════════════════════════════════════════════════
+QUESTION 1: WHAT ARE ALL 33 FIELDS?
+═══════════════════════════════════════════════════════════════════════════════
+
+List every column in video_knowledge table and mark each as:
+- ✅ INJECTED (now being shown to Claude)
+- ❌ NOT INJECTED (exists but not used)
+
+═══════════════════════════════════════════════════════════════════════════════
+QUESTION 2: WHY AREN'T THE OTHER 18 FIELDS BEING USED?
+═══════════════════════════════════════════════════════════════════════════════
+
+For each non-injected field, explain:
+- Is it metadata (not useful for coaching)?
+- Is it empty/null for most videos?
+- Should it BE injected but was missed?
+- Is it redundant with another field?
+
+═══════════════════════════════════════════════════════════════════════════════
+QUESTION 3: WHAT'S THE ACTUAL VALUE GAP?
+═══════════════════════════════════════════════════════════════════════════════
+
+Of the 18 fields NOT being injected:
+- How many contain valuable coaching data that SHOULD be shown to Claude?
+- How many are just system/metadata fields (id, created_at, etc.)?
+
+═══════════════════════════════════════════════════════════════════════════════
+QUESTION 4: COMPLETE THE INJECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+If there are valuable fields still missing, add them to buildSystemPrompt now.
+
+Goal: 100% of VALUABLE fields should be injected. 
+(System metadata like id, timestamps don't count)
+
+Show me the final utilization rate for COACHING-RELEVANT fields only.
+```
+
+-----
+
+**The goal isn’t 100% of ALL fields** - some are just database metadata (id, created_at, updated_at).
+
+But we need to confirm the **coaching-relevant fields** are ALL being used. That’s what matters.
+
+Send it?​​​​​​​​​​​​​​​​

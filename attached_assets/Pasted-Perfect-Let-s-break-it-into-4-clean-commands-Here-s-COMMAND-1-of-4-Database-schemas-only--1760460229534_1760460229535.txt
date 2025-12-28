@@ -1,0 +1,919 @@
+Perfect! Let’s break it into 4 clean commands. Here’s **COMMAND 1 of 4** - Database schemas only.
+
+-----
+
+# COMMAND 1 OF 4: DATABASE SCHEMAS
+
+```
+BUILD BJJ OS AI INTELLIGENCE - PART 1: DATABASE SCHEMAS
+
+CRITICAL SAFETY RULES:
+❌ DO NOT modify existing tables: users, videos, subscriptions, or any SMS-related tables
+❌ DO NOT touch Twilio integration or existing SMS delivery code
+✅ Create NEW tables only (29 tables listed below)
+✅ All new tables are for AI intelligence layer
+✅ Existing app functionality will remain unchanged
+
+═══════════════════════════════════════════════════════════════════════════════
+CREATE 29 NEW AI INTELLIGENCE TABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+Execute these CREATE TABLE statements in your PostgreSQL database.
+
+---
+TABLE 1: ai_video_knowledge
+---
+Stores accumulated knowledge from every video analyzed.
+
+CREATE TABLE ai_video_knowledge (
+  id SERIAL PRIMARY KEY,
+  video_url TEXT NOT NULL UNIQUE,
+  technique_name TEXT NOT NULL,
+  instructor_name TEXT,
+  
+  -- Core classifications
+  position_category TEXT,
+  technique_type TEXT,
+  difficulty_score INTEGER,
+  gi_or_nogi TEXT,
+  
+  -- Problems this technique solves
+  problems_solved JSONB,
+  prerequisites JSONB,
+  
+  -- Detailed breakdowns
+  key_details JSONB,
+  common_mistakes JSONB,
+  counters JSONB,
+  
+  -- Relationships
+  related_techniques JSONB,
+  progressions_to JSONB,
+  progressions_from JSONB,
+  
+  -- Metadata
+  analyzed_at TIMESTAMP DEFAULT NOW(),
+  times_sent_to_users INTEGER DEFAULT 0,
+  avg_user_rating DECIMAL(3,2),
+  total_ratings INTEGER DEFAULT 0,
+  
+  -- AI confidence
+  analysis_confidence DECIMAL(3,2),
+  needs_review BOOLEAN DEFAULT FALSE,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_video_technique ON ai_video_knowledge(technique_name);
+CREATE INDEX idx_video_position ON ai_video_knowledge(position_category);
+CREATE INDEX idx_video_difficulty ON ai_video_knowledge(difficulty_score);
+CREATE INDEX idx_video_instructor ON ai_video_knowledge(instructor_name);
+
+---
+TABLE 2: ai_user_feedback_signals
+---
+Captures ALL user interactions for learning.
+
+CREATE TABLE ai_user_feedback_signals (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  video_id INTEGER REFERENCES ai_video_knowledge(id),
+  technique_name TEXT,
+  
+  signal_type TEXT NOT NULL,
+  signal_value TEXT,
+  
+  user_belt_level TEXT,
+  days_since_signup INTEGER,
+  time_of_day TEXT,
+  
+  sentiment TEXT,
+  engagement_score DECIMAL(3,2),
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_feedback_user ON ai_user_feedback_signals(user_id);
+CREATE INDEX idx_feedback_video ON ai_user_feedback_signals(video_id);
+CREATE INDEX idx_feedback_type ON ai_user_feedback_signals(signal_type);
+CREATE INDEX idx_feedback_created ON ai_user_feedback_signals(created_at);
+
+---
+TABLE 3: ai_problem_solution_map
+---
+Maps user problems to solutions (techniques).
+
+CREATE TABLE ai_problem_solution_map (
+  id SERIAL PRIMARY KEY,
+  
+  problem_statement TEXT NOT NULL,
+  problem_category TEXT,
+  user_belt_level TEXT,
+  
+  solution_video_ids JSONB,
+  solution_effectiveness JSONB,
+  
+  times_problem_mentioned INTEGER DEFAULT 0,
+  users_who_mentioned JSONB,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_problem_category ON ai_problem_solution_map(problem_category);
+CREATE INDEX idx_problem_statement ON ai_problem_solution_map(problem_statement);
+
+---
+TABLE 4: ai_user_context
+---
+Complete user profile for context-aware recommendations.
+
+CREATE TABLE ai_user_context (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+  
+  belt_level TEXT,
+  years_training DECIMAL(3,1),
+  training_frequency TEXT,
+  preferred_positions JSONB,
+  struggling_with JSONB,
+  
+  primary_goal TEXT,
+  competition_level TEXT,
+  
+  height_cm INTEGER,
+  weight_kg DECIMAL(5,2),
+  age INTEGER,
+  body_type TEXT,
+  injuries JSONB,
+  
+  preferred_instructors JSONB,
+  teaching_style_preference TEXT,
+  video_length_preference TEXT,
+  
+  avg_watch_time_seconds INTEGER,
+  favorite_technique_types JSONB,
+  skipped_technique_types JSONB,
+  
+  total_interactions INTEGER DEFAULT 0,
+  positive_signals INTEGER DEFAULT 0,
+  negative_signals INTEGER DEFAULT 0,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_context_user ON ai_user_context(user_id);
+CREATE INDEX idx_user_context_belt ON ai_user_context(belt_level);
+
+---
+TABLE 5: ai_technique_relationships
+---
+Maps how techniques relate to each other.
+
+CREATE TABLE ai_technique_relationships (
+  id SERIAL PRIMARY KEY,
+  
+  technique_a_id INTEGER NOT NULL REFERENCES ai_video_knowledge(id),
+  technique_a_name TEXT,
+  
+  technique_b_id INTEGER NOT NULL REFERENCES ai_video_knowledge(id),
+  technique_b_name TEXT,
+  
+  relationship_type TEXT NOT NULL,
+  relationship_strength DECIMAL(3,2),
+  
+  is_bidirectional BOOLEAN DEFAULT FALSE,
+  
+  times_observed INTEGER DEFAULT 1,
+  confidence DECIMAL(3,2),
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(technique_a_id, technique_b_id, relationship_type)
+);
+
+CREATE INDEX idx_rel_technique_a ON ai_technique_relationships(technique_a_id);
+CREATE INDEX idx_rel_technique_b ON ai_technique_relationships(technique_b_id);
+CREATE INDEX idx_rel_type ON ai_technique_relationships(relationship_type);
+
+---
+TABLE 6: ai_confidence_tracking
+---
+Tracks AI's confidence in its own decisions.
+
+CREATE TABLE ai_confidence_tracking (
+  id SERIAL PRIMARY KEY,
+  
+  decision_type TEXT NOT NULL,
+  decision_context JSONB,
+  decision_made TEXT,
+  
+  confidence_score DECIMAL(3,2),
+  data_points_used INTEGER,
+  uncertainty_factors JSONB,
+  
+  user_id INTEGER REFERENCES users(id),
+  was_correct BOOLEAN,
+  actual_outcome TEXT,
+  
+  should_admit_uncertainty BOOLEAN,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_confidence_type ON ai_confidence_tracking(decision_type);
+CREATE INDEX idx_confidence_user ON ai_confidence_tracking(user_id);
+
+---
+TABLE 7: ai_reasoning_traces
+---
+Transparent decision-making logs.
+
+CREATE TABLE ai_reasoning_traces (
+  id SERIAL PRIMARY KEY,
+  
+  decision_id TEXT NOT NULL,
+  decision_type TEXT,
+  user_id INTEGER REFERENCES users(id),
+  
+  reasoning_steps JSONB,
+  factors_considered JSONB,
+  alternatives_rejected JSONB,
+  
+  final_decision TEXT,
+  confidence DECIMAL(3,2),
+  
+  show_to_user BOOLEAN DEFAULT FALSE,
+  user_friendly_explanation TEXT,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_reasoning_decision ON ai_reasoning_traces(decision_id);
+CREATE INDEX idx_reasoning_user ON ai_reasoning_traces(user_id);
+
+---
+TABLE 8: ai_instructor_profiles
+---
+Learn teaching styles and match to users.
+
+CREATE TABLE ai_instructor_profiles (
+  id SERIAL PRIMARY KEY,
+  instructor_name TEXT NOT NULL UNIQUE,
+  
+  teaching_style TEXT,
+  explanation_depth TEXT,
+  video_length_avg INTEGER,
+  pace TEXT,
+  
+  specialty_positions JSONB,
+  belt_levels_targeted JSONB,
+  gi_nogi_focus TEXT,
+  
+  users_who_love JSONB,
+  users_who_skip JSONB,
+  avg_rating DECIMAL(3,2),
+  total_ratings INTEGER DEFAULT 0,
+  
+  trained_under TEXT,
+  notable_students JSONB,
+  school_affiliation TEXT,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_instructor_name ON ai_instructor_profiles(instructor_name);
+
+---
+TABLE 9: ai_effectiveness_tracking
+---
+Track what ACTUALLY works in sparring.
+
+CREATE TABLE ai_effectiveness_tracking (
+  id SERIAL PRIMARY KEY,
+  
+  video_id INTEGER REFERENCES ai_video_knowledge(id),
+  technique_name TEXT,
+  
+  user_id INTEGER REFERENCES users(id),
+  user_belt_level TEXT,
+  
+  attempted_date DATE,
+  result TEXT,
+  context TEXT,
+  opponent_belt_level TEXT,
+  
+  user_notes TEXT,
+  what_worked TEXT,
+  what_didnt_work TEXT,
+  
+  effectiveness_score DECIMAL(3,2),
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_effectiveness_video ON ai_effectiveness_tracking(video_id);
+CREATE INDEX idx_effectiveness_user ON ai_effectiveness_tracking(user_id);
+CREATE INDEX idx_effectiveness_belt ON ai_effectiveness_tracking(user_belt_level);
+
+---
+TABLE 10: ai_injury_awareness
+---
+Avoid techniques that could aggravate injuries.
+
+CREATE TABLE ai_injury_awareness (
+  id SERIAL PRIMARY KEY,
+  
+  injury_type TEXT NOT NULL,
+  injury_severity TEXT,
+  
+  risky_techniques JSONB,
+  risk_level JSONB,
+  
+  safe_alternatives JSONB,
+  
+  reported_by_users JSONB,
+  times_aggravated INTEGER DEFAULT 0,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_injury_type ON ai_injury_awareness(injury_type);
+
+---
+TABLE 11: ai_semantic_embeddings
+---
+Vector embeddings for semantic search.
+
+CREATE TABLE ai_semantic_embeddings (
+  id SERIAL PRIMARY KEY,
+  video_id INTEGER NOT NULL REFERENCES ai_video_knowledge(id),
+  
+  embedding_vector FLOAT8[],
+  embedding_model TEXT DEFAULT 'text-embedding-3-small',
+  
+  embedded_text TEXT,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_embedding_video ON ai_semantic_embeddings(video_id);
+
+---
+TABLE 12: ai_predictive_models
+---
+Anticipate user needs before they ask.
+
+CREATE TABLE ai_predictive_models (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  
+  predicted_next_interest JSONB,
+  predicted_struggle_areas JSONB,
+  predicted_churn_risk DECIMAL(3,2),
+  predicted_upgrade_likelihood DECIMAL(3,2),
+  
+  best_send_time TEXT,
+  engagement_windows JSONB,
+  
+  model_version TEXT,
+  last_trained TIMESTAMP,
+  prediction_confidence DECIMAL(3,2),
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_predictive_user ON ai_predictive_models(user_id);
+
+---
+TABLE 13: ai_competition_meta
+---
+Track what's working NOW in competitions.
+
+CREATE TABLE ai_competition_meta (
+  id SERIAL PRIMARY KEY,
+  
+  technique_name TEXT,
+  video_id INTEGER REFERENCES ai_video_knowledge(id),
+  
+  competition_name TEXT,
+  competition_date DATE,
+  rule_set TEXT,
+  
+  times_seen_used INTEGER DEFAULT 1,
+  success_rate DECIMAL(3,2),
+  belt_divisions JSONB,
+  weight_classes JSONB,
+  
+  trending_up BOOLEAN DEFAULT FALSE,
+  trend_score DECIMAL(3,2),
+  
+  video_source TEXT,
+  analyzed_by TEXT,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_meta_technique ON ai_competition_meta(technique_name);
+CREATE INDEX idx_meta_date ON ai_competition_meta(competition_date);
+CREATE INDEX idx_meta_ruleset ON ai_competition_meta(rule_set);
+
+---
+TABLE 14: ai_sentiment_analysis
+---
+Detect emotions and adjust communication.
+
+CREATE TABLE ai_sentiment_analysis (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  
+  message_text TEXT,
+  message_type TEXT,
+  
+  sentiment TEXT,
+  sentiment_score DECIMAL(3,2),
+  emotions JSONB,
+  
+  user_belt_level TEXT,
+  days_since_signup INTEGER,
+  recent_engagement TEXT,
+  
+  ai_response_strategy TEXT,
+  should_human_review BOOLEAN DEFAULT FALSE,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_sentiment_user ON ai_sentiment_analysis(user_id);
+CREATE INDEX idx_sentiment_score ON ai_sentiment_analysis(sentiment_score);
+
+---
+TABLE 15: ai_technique_evolution
+---
+Track how techniques changed 2010-2025.
+
+CREATE TABLE ai_technique_evolution (
+  id SERIAL PRIMARY KEY,
+  technique_name TEXT NOT NULL,
+  
+  year INTEGER NOT NULL,
+  era TEXT,
+  
+  how_it_changed TEXT,
+  key_innovators JSONB,
+  video_examples JSONB,
+  
+  effectiveness_then DECIMAL(3,2),
+  effectiveness_now DECIMAL(3,2),
+  still_relevant BOOLEAN,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_evolution_technique ON ai_technique_evolution(technique_name);
+CREATE INDEX idx_evolution_year ON ai_technique_evolution(year);
+
+---
+TABLE 16: ai_instructor_lineage
+---
+Map who trained under whom.
+
+CREATE TABLE ai_instructor_lineage (
+  id SERIAL PRIMARY KEY,
+  
+  instructor_name TEXT NOT NULL,
+  
+  trained_under TEXT,
+  generation INTEGER,
+  lineage_path JSONB,
+  
+  teaching_style_inherited TEXT,
+  notable_innovations JSONB,
+  
+  notable_students JSONB,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_lineage_instructor ON ai_instructor_lineage(instructor_name);
+
+---
+TABLE 17: ai_counter_chains
+---
+Complete counter → counter → counter sequences.
+
+CREATE TABLE ai_counter_chains (
+  id SERIAL PRIMARY KEY,
+  
+  initial_technique_id INTEGER NOT NULL REFERENCES ai_video_knowledge(id),
+  initial_technique_name TEXT,
+  
+  counter_chain JSONB,
+  chain_length INTEGER,
+  
+  position_context TEXT,
+  common_in_belt_level TEXT,
+  
+  times_observed INTEGER DEFAULT 1,
+  success_rate DECIMAL(3,2),
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_counter_initial ON ai_counter_chains(initial_technique_id);
+
+---
+TABLE 18: ai_body_type_optimization
+---
+Track which techniques work for different body types.
+
+CREATE TABLE ai_body_type_optimization (
+  id SERIAL PRIMARY KEY,
+  
+  body_type TEXT NOT NULL,
+  height_range TEXT,
+  weight_range TEXT,
+  
+  effective_techniques JSONB,
+  effectiveness_scores JSONB,
+  
+  ineffective_techniques JSONB,
+  
+  biomechanical_reasons JSONB,
+  
+  users_in_this_category INTEGER DEFAULT 0,
+  data_confidence DECIMAL(3,2),
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_bodytype_type ON ai_body_type_optimization(body_type);
+
+---
+TABLE 19: ai_gym_culture
+---
+Regional meta and gym-specific styles.
+
+CREATE TABLE ai_gym_culture (
+  id SERIAL PRIMARY KEY,
+  
+  gym_name TEXT,
+  gym_city TEXT,
+  gym_region TEXT,
+  
+  primary_style TEXT,
+  meta_techniques JSONB,
+  competition_focus BOOLEAN,
+  
+  head_instructor TEXT,
+  lineage TEXT,
+  
+  users_at_gym JSONB,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_gym_name ON ai_gym_culture(gym_name);
+CREATE INDEX idx_gym_region ON ai_gym_culture(gym_region);
+
+---
+TABLE 20: ai_terminology_mapping
+---
+Map alternative technique names.
+
+CREATE TABLE ai_terminology_mapping (
+  id SERIAL PRIMARY KEY,
+  
+  canonical_name TEXT NOT NULL UNIQUE,
+  
+  alternative_names JSONB,
+  regional_variations JSONB,
+  slang_terms JSONB,
+  
+  system_names JSONB,
+  
+  video_ids JSONB,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_terminology_canonical ON ai_terminology_mapping(canonical_name);
+
+---
+TABLE 21: ai_competition_rules
+---
+Optimize for different rule sets.
+
+CREATE TABLE ai_competition_rules (
+  id SERIAL PRIMARY KEY,
+  
+  rule_set_name TEXT NOT NULL,
+  
+  legal_techniques JSONB,
+  illegal_techniques JSONB,
+  points_system JSONB,
+  
+  high_value_techniques JSONB,
+  low_risk_techniques JSONB,
+  risky_techniques JSONB,
+  
+  current_meta_techniques JSONB,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_rules_name ON ai_competition_rules(rule_set_name);
+
+---
+TABLE 22: ai_micro_details
+---
+Identify tiny details elite instructors all mention.
+
+CREATE TABLE ai_micro_details (
+  id SERIAL PRIMARY KEY,
+  
+  detail_description TEXT NOT NULL,
+  technique_id INTEGER REFERENCES ai_video_knowledge(id),
+  technique_name TEXT,
+  
+  criticality_score DECIMAL(3,2),
+  mentioned_by_count INTEGER DEFAULT 1,
+  elite_instructors_mention JSONB,
+  
+  failure_mode TEXT,
+  
+  video_timestamps JSONB,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_microdetail_technique ON ai_micro_details(technique_id);
+CREATE INDEX idx_microdetail_criticality ON ai_micro_details(criticality_score);
+
+---
+TABLE 23: ai_failure_modes
+---
+Diagnose WHY techniques fail.
+
+CREATE TABLE ai_failure_modes (
+  id SERIAL PRIMARY KEY,
+  
+  technique_id INTEGER NOT NULL REFERENCES ai_video_knowledge(id),
+  technique_name TEXT,
+  
+  failure_type TEXT,
+  failure_description TEXT,
+  
+  root_cause TEXT,
+  missing_detail TEXT,
+  
+  solution TEXT,
+  correction_video_id INTEGER REFERENCES ai_video_knowledge(id),
+  
+  times_reported INTEGER DEFAULT 1,
+  reported_by_belt_levels JSONB,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_failure_technique ON ai_failure_modes(technique_id);
+CREATE INDEX idx_failure_type ON ai_failure_modes(failure_type);
+
+---
+TABLE 24: ai_learning_curves
+---
+Predict how long techniques take to learn.
+
+CREATE TABLE ai_learning_curves (
+  id SERIAL PRIMARY KEY,
+  
+  technique_id INTEGER NOT NULL REFERENCES ai_video_knowledge(id),
+  technique_name TEXT,
+  
+  avg_time_to_proficiency JSONB,
+  difficulty_by_belt JSONB,
+  
+  learning_stages JSONB,
+  
+  must_know_first JSONB,
+  accelerates_learning JSONB,
+  
+  users_tracked INTEGER DEFAULT 0,
+  confidence DECIMAL(3,2),
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_learning_technique ON ai_learning_curves(technique_id);
+
+---
+TABLE 25: ai_attribution
+---
+Who invented/popularized each technique.
+
+CREATE TABLE ai_attribution (
+  id SERIAL PRIMARY KEY,
+  
+  technique_id INTEGER NOT NULL REFERENCES ai_video_knowledge(id),
+  technique_name TEXT,
+  
+  inventor TEXT,
+  inventor_year INTEGER,
+  popularized_by TEXT,
+  popularized_year INTEGER,
+  
+  original_form TEXT,
+  modern_variations JSONB,
+  
+  origin_story TEXT,
+  cultural_significance TEXT,
+  
+  sources JSONB,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_attribution_technique ON ai_attribution(technique_id);
+CREATE INDEX idx_attribution_inventor ON ai_attribution(inventor);
+
+---
+TABLE 26: ai_training_load
+---
+Detect overtraining and recommend recovery.
+
+CREATE TABLE ai_training_load (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  
+  week_start_date DATE NOT NULL,
+  sessions_this_week INTEGER DEFAULT 0,
+  total_training_minutes INTEGER DEFAULT 0,
+  high_intensity_sessions INTEGER DEFAULT 0,
+  
+  engagement_score DECIMAL(3,2),
+  message_response_time INTEGER,
+  enthusiasm_score DECIMAL(3,2),
+  
+  fatigue_level TEXT,
+  warning_signs JSONB,
+  
+  should_recommend_rest BOOLEAN DEFAULT FALSE,
+  recommended_actions JSONB,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_training_load_user ON ai_training_load(user_id);
+CREATE INDEX idx_training_load_week ON ai_training_load(week_start_date);
+
+---
+TABLE 27: ai_user_journey
+---
+Track white → black belt over 10 years.
+
+CREATE TABLE ai_user_journey (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  
+  signup_date DATE,
+  starting_belt TEXT,
+  current_belt TEXT,
+  belt_promotions JSONB,
+  
+  techniques_mastered JSONB,
+  position_expertise JSONB,
+  
+  training_frequency_history JSONB,
+  focus_areas_over_time JSONB,
+  
+  competitions_entered JSONB,
+  
+  total_techniques_learned INTEGER DEFAULT 0,
+  avg_learning_speed DECIMAL(3,2),
+  retention_rate DECIMAL(3,2),
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_journey_user ON ai_user_journey(user_id);
+CREATE INDEX idx_journey_belt ON ai_user_journey(current_belt);
+
+---
+TABLE 28: ai_conversation_learning
+---
+Extract valuable info from chats, ignore noise.
+
+CREATE TABLE ai_conversation_learning (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  
+  message_text TEXT NOT NULL,
+  message_type TEXT,
+  conversation_date TIMESTAMP DEFAULT NOW(),
+  
+  contains_valuable_signal BOOLEAN DEFAULT FALSE,
+  extracted_insights JSONB,
+  
+  conversation_topic TEXT,
+  sentiment TEXT,
+  
+  should_update_profile BOOLEAN DEFAULT FALSE,
+  profile_updates JSONB,
+  
+  is_noise BOOLEAN DEFAULT FALSE,
+  noise_reason TEXT,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_conversation_user ON ai_conversation_learning(user_id);
+CREATE INDEX idx_conversation_signal ON ai_conversation_learning(contains_valuable_signal);
+CREATE INDEX idx_conversation_topic ON ai_conversation_learning(conversation_topic);
+
+---
+TABLE 29: ai_feature_flags
+---
+Control gradual rollout of all AI features.
+
+CREATE TABLE ai_feature_flags (
+  id SERIAL PRIMARY KEY,
+  
+  feature_name TEXT NOT NULL UNIQUE,
+  feature_description TEXT,
+  
+  is_enabled BOOLEAN DEFAULT FALSE,
+  rollout_percentage INTEGER DEFAULT 0,
+  enabled_for_users JSONB,
+  disabled_for_users JSONB,
+  
+  can_rollback BOOLEAN DEFAULT TRUE,
+  rollback_reason TEXT,
+  
+  error_count INTEGER DEFAULT 0,
+  success_count INTEGER DEFAULT 0,
+  last_error_at TIMESTAMP,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_feature_name ON ai_feature_flags(feature_name);
+
+-- Insert default feature flags
+INSERT INTO ai_feature_flags (feature_name, feature_description, is_enabled, rollout_percentage) VALUES
+('enhanced_scoring', 'Use AI intelligence for technique selection', FALSE, 0),
+('semantic_search', 'Enable vector-based semantic search', FALSE, 0),
+('predictive_recommendations', 'Anticipate user needs', FALSE, 0),
+('injury_awareness', 'Filter based on injuries', FALSE, 0),
+('competition_meta', 'Show trending competition techniques', FALSE, 0),
+('instructor_matching', 'Match users to instructor teaching styles', FALSE, 0),
+('difficulty_adaptation', 'Auto-adjust difficulty based on progress', FALSE, 0),
+('reasoning_transparency', 'Show AI decision-making to users', FALSE, 0);
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After creating all tables, run this verification query:
+
+SELECT 
+  table_name,
+  (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = t.table_name) as column_count
+FROM information_schema.tables t
+WHERE table_schema = 'public' 
+AND table_name LIKE 'ai_%'
+ORDER BY table_name;
+
+You should see 29 tables starting with 'ai_'.
+
+═══════════════════════════════════════════════════════════════════════════════
+NEXT STEP
+═══════════════════════════════════════════════════════════════════════════════
+
+After tables are created successfully, you will receive:
+- COMMAND 2 OF 4: Core AI Functions
+- COMMAND 3 OF 4: Enhanced Scoring Algorithm
+- COMMAND 4 OF 4: API Endpoints & Admin Dashboard
+
+Do NOT proceed to next commands until this one completes successfully.
+```
+
+-----
+
+**Send this to Replit Agent now. Once it confirms all 29 tables are created, tell me and I’ll give you COMMAND 2 OF 4.**

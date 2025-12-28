@@ -1,0 +1,272 @@
+**Here’s the complete master prompt for your approval:**
+
+-----
+
+```
+PROFESSOR OS INTELLIGENCE DIAGNOSTIC + FIX + PERSONALITY ENHANCEMENT
+
+We need to verify all intelligence systems are connected AND enhance off-topic handling.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: DIAGNOSTIC LOGGING SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+In the main chat endpoint (/api/ai/chat/message), add comprehensive logging that runs BEFORE the Claude API call. Log to both console AND a new table called `professor_os_diagnostics`.
+
+CREATE TABLE professor_os_diagnostics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  user_message TEXT,
+  timestamp TIMESTAMP DEFAULT NOW(),
+  diagnostics JSONB
+);
+
+For EVERY message, capture and log:
+
+1. USER CONTEXT
+   - Was loadAccumulatedKnowledge() called? YES/NO
+   - User profile loaded? Show: belt, weight, goals, training frequency
+   - How many past conversation messages loaded?
+   - What detected patterns exist for this user?
+   - What memory markers exist (working + long-term)?
+
+2. INTELLIGENCE ENHANCEMENT
+   - Was intelligence-enhancer.ts triggered? YES/NO
+   - Did query match combat sports keywords? Which ones?
+   - Was combatSportsScraper called?
+   - What news/context was injected (if any)?
+
+3. POPULATION INTELLIGENCE
+   - Was technique_population_stats queried? YES/NO
+   - What "users like you" data was found?
+
+4. SYSTEM PROMPT
+   - What is the FULL system prompt being sent to Claude?
+   - Character count of system prompt
+   - Token count estimate
+   - Is the coaching personality present?
+
+5. VIDEO SEARCH
+   - Was dynamic search triggered?
+   - How many videos in library?
+   - What search query was used?
+   - How many results returned?
+
+6. MODEL VERIFICATION
+   - Exact model string being called (must be claude-sonnet-4-5-20241022)
+   - Response time in ms
+
+7. TOKEN/CONTEXT BUDGET
+   - System prompt tokens
+   - User context injection tokens
+   - Conversation history tokens
+   - Total tokens vs limit
+   - Is anything being truncated?
+
+8. VIDEO INSTRUCTOR SEARCH
+   - When user asks for specific instructor, log:
+     - Search query used
+     - Database searched? YES/NO
+     - Results count
+     - If 0 results, what fallback was offered?
+   - NEVER say "I don't have X" without searching first
+
+9. ERROR HANDLING
+   - If any intelligence system fails, log the error
+   - What fallback was used?
+   - Did user still get a response?
+
+10. RETURNING USER DETECTION
+    - Is this a new user or returning user?
+    - If returning, how many previous sessions?
+    - What key memories exist?
+
+11. ADDITIONAL TABLES CHECK
+    - training_partners: Queried? Data found?
+    - userInjuryProfile: Queried? Data found?
+    - userTechniqueEcosystem: Queried? Data found?
+    - Log what exists vs what gets injected
+
+Log format:
+{
+  "timestamp": "...",
+  "userId": "...",
+  "userMessage": "...",
+  "modelUsed": "...",
+  "responseTimeMs": 0,
+  "diagnostics": {
+    "userProfile": {
+      "loaded": true/false,
+      "belt": "...",
+      "weight": "...",
+      "goals": "...",
+      "trainingFrequency": "..."
+    },
+    "conversationHistory": {
+      "messagesLoaded": 0,
+      "tokensUsed": 0
+    },
+    "detectedPatterns": [...],
+    "memoryMarkers": {
+      "working": [...],
+      "longTerm": [...]
+    },
+    "intelligenceEnhancer": {
+      "triggered": true/false,
+      "keywordsMatched": [...],
+      "contextInjected": "..."
+    },
+    "populationIntelligence": {
+      "queried": true/false,
+      "dataFound": {...}
+    },
+    "systemPrompt": {
+      "charCount": 0,
+      "tokenCount": 0,
+      "coachingPersonalityPresent": true/false,
+      "bannedPhrasesCheck": "PASS/FAIL"
+    },
+    "videoSearch": {
+      "triggered": true/false,
+      "librarySize": 0,
+      "query": "...",
+      "resultsCount": 0
+    },
+    "additionalTables": {
+      "trainingPartners": { "queried": true/false, "dataFound": true/false },
+      "injuryProfile": { "queried": true/false, "dataFound": true/false },
+      "techniqueEcosystem": { "queried": true/false, "dataFound": true/false }
+    },
+    "errors": [...]
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: DIAGNOSTIC ENDPOINTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Create these endpoints:
+
+GET /api/ai/diagnostics/:userId
+- Returns last 20 diagnostic logs for that user
+- Summary of what's working vs broken
+
+GET /api/ai/diagnostics/system-prompt
+- Returns the FULL system prompt currently being sent to Claude
+- Save copy to: /public/professor-os-system-prompt-live.txt
+
+GET /api/ai/diagnostics/health
+- Quick health check of all systems
+- Returns: { userContext: OK/FAIL, intelligenceEnhancer: OK/FAIL, populationIntelligence: OK/FAIL, videoSearch: OK/FAIL, memory: OK/FAIL }
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: OFF-TOPIC HANDLING WITH BJJ HUMOR
+═══════════════════════════════════════════════════════════════════════════════
+
+When user goes off-topic, Professor OS should redirect using BJJ-themed humor. 
+
+Add to the system prompt a section for OFF-TOPIC RESPONSES:
+
+"""
+OFF-TOPIC HANDLING:
+
+When user asks something unrelated to BJJ (math homework, recipes, relationship advice, random trivia, etc.), redirect with humor using BJJ references:
+
+Examples:
+
+User: "What's the capital of France?"
+Response: "Geography's outside my guard. Paris, I think - but more importantly, you training today?"
+
+User: "Can you help with my taxes?"
+Response: "The only submissions I know are rear naked chokes, not tax forms. What's happening on the mats?"
+
+User: "What should I make for dinner?"
+Response: "My meal prep is protein and açaí. For actual recipes, ask Google. For sweeps? I'm your guy."
+
+User: "Tell me a joke"
+Response: "A white belt asked a black belt how long it takes to master BJJ. The black belt said 'longer than this conversation.' Now what are you working on?"
+
+User: "Who would win, gorilla or grizzly bear?"
+Response: "Neither has guard retention. What position are YOU trying to fix?"
+
+User: "Write me a poem"
+Response: "Roses are red, your guard just got passed. Let's work on retention so next time you last. What's giving you trouble?"
+
+User: "What's the meaning of life?"
+Response: "Show up, tap, learn, repeat. That's the meaning on the mats anyway. You training today or philosophizing?"
+
+RULES:
+- Keep it light and playful, not dismissive
+- Always end with a redirect back to BJJ
+- Match their energy (short question = short redirect)
+- Use BJJ terminology naturally (guard, submissions, sweeps, tap, roll)
+- Never be rude or condescending
+- If they persist off-topic 3+ times, just say: "I'm your BJJ coach, not a general assistant. Hit me with training questions and I've got you."
+"""
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: RUN DIAGNOSTIC TEST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing Parts 1-3, send these 5 test messages and show me the FULL diagnostic output for each:
+
+TEST 1: "Hey, what's up?"
+- Should load user context and profile
+- Expecting: User profile loaded, returning user detected (if applicable)
+
+TEST 2: "What happened at the last ADCC?"
+- Should trigger combat sports intelligence
+- Expecting: intelligenceEnhancer.triggered = true, context injected
+
+TEST 3: "What technique should I work on based on my game?"
+- Should load population insights + user patterns + technique ecosystem
+- Expecting: Population data, detected patterns, personalized recommendation
+
+TEST 4: "Show me some Gordon Ryan videos"
+- Should search video database dynamically
+- Expecting: videoSearch.triggered = true, actual search performed
+
+TEST 5: "Can you help me with my math homework?"
+- Should trigger BJJ humor redirect
+- Expecting: Playful redirect with BJJ reference
+
+Show diagnostic output for all 5 tests.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: FIX WHAT'S BROKEN
+═══════════════════════════════════════════════════════════════════════════════
+
+Based on diagnostic results, fix any systems that aren't connected:
+
+□ If loadAccumulatedKnowledge() isn't being called → connect it
+□ If combat sports intelligence isn't triggering → fix keyword detection and scraper connection  
+□ If population insights aren't loading → connect the technique_population_stats query
+□ If video search isn't dynamic → implement real database search before responding
+□ If system prompt is missing coaching personality → inject the full 8,000+ character prompt
+□ If memory markers aren't being loaded → connect the query
+□ If training_partners/injury/technique tables aren't queried → add the queries
+□ If model is wrong → update to claude-sonnet-4-5-20241022
+□ If "I don't have X videos" happens without search → add search-first logic
+
+After fixes, re-run all 5 test messages and show BEFORE vs AFTER diagnostics.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: DELIVERABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+When complete, provide:
+
+1. Diagnostic table created: YES/NO
+2. Diagnostic endpoints working: YES/NO
+3. BJJ humor redirects added to system prompt: YES/NO
+4. Full diagnostic output for 5 test messages (BEFORE fixes)
+5. List of what was broken
+6. List of what was fixed
+7. Full diagnostic output for 5 test messages (AFTER fixes)
+8. System prompt exported to: /public/professor-os-system-prompt-live.txt
+9. Health check endpoint result: /api/ai/diagnostics/health
+```
+
+-----
+
+**Ready to send?**

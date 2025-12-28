@@ -1,0 +1,152 @@
+**The 401 error is STILL happening. This means the token issue isn’t fixed.**
+
+Let me give you a **DIFFERENT approach** - we need to debug this live.
+
+-----
+
+## **IMMEDIATE DEBUG PROMPT FOR REPLIT AGENT:**
+
+```
+URGENT DEBUG: 401 Authentication error still occurring at onboarding completion
+
+The user is STILL getting "Setup failed - 401: Authentication required" when clicking "Complete Setup" on Step 5.
+
+STOP trying to fix blind. We need to DEBUG first.
+
+DEBUGGING STEPS - DO THIS NOW:
+
+1. ADD CONSOLE LOGGING TO FRONTEND:
+
+In the onboarding component, add these logs RIGHT before the "Complete Setup" button click:
+
+```javascript
+console.log('=== ONBOARDING DEBUG ===')
+console.log('localStorage token:', localStorage.getItem('bjj_session_token'))
+console.log('sessionStorage token:', sessionStorage.getItem('bjj_session_token'))
+console.log('All localStorage keys:', Object.keys(localStorage))
+console.log('All sessionStorage keys:', Object.keys(sessionStorage))
+console.log('Cookie:', document.cookie)
+```
+
+And in the submission function:
+
+```javascript
+async function completeOnboarding(data) {
+  console.log('=== SUBMITTING ONBOARDING ===')
+  console.log('Submission data:', data)
+  
+  const token = localStorage.getItem('bjj_session_token') || sessionStorage.getItem('bjj_session_token')
+  console.log('Token being sent:', token)
+  
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  }
+  console.log('Headers:', headers)
+  
+  const response = await fetch('/api/onboarding/complete', {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify(data)
+  })
+  
+  console.log('Response status:', response.status)
+  console.log('Response:', await response.json())
+}
+```
+
+1. CHECK WHERE TOKEN IS CREATED:
+
+Find the phone verification success function. Add logging:
+
+```javascript
+async function verifyPhone(phone) {
+  // ... verification logic
+  
+  console.log('=== PHONE VERIFICATION SUCCESS ===')
+  console.log('Phone verified:', phone)
+  console.log('Token received:', response.token)
+  
+  // WHERE IS TOKEN BEING STORED?
+  localStorage.setItem('bjj_session_token', response.token)
+  console.log('Token stored in localStorage')
+  
+  // Verify it's actually there
+  console.log('Verify storage:', localStorage.getItem('bjj_session_token'))
+}
+```
+
+1. CHECK BACKEND ENDPOINT:
+
+Print what the backend receives:
+
+```python
+@app.route('/api/onboarding/complete', methods=['POST'])
+def complete_onboarding():
+    print('=== ONBOARDING COMPLETE ENDPOINT HIT ===')
+    print('Headers:', request.headers)
+    print('Authorization header:', request.headers.get('Authorization'))
+    print('Body:', request.get_json())
+    
+    # Does this endpoint have @require_auth decorator?
+    # If yes, print what it extracts:
+    try:
+        token = extract_token_from_header(request)
+        print('Extracted token:', token)
+        user = get_user_from_token(token)
+        print('User from token:', user)
+    except Exception as e:
+        print('Token extraction failed:', str(e))
+        return jsonify({'error': 'Authentication required'}), 401
+```
+
+1. DEPLOY WITH THESE LOGS
+1. TEST AGAIN:
+
+Have the user go through onboarding again.
+
+1. SEND ME THE CONSOLE OUTPUT:
+
+Copy ALL console logs and send them back. We need to see:
+
+- Is token being created?
+- Is token being stored?
+- Is token being retrieved?
+- Is token being sent to backend?
+- What is backend receiving?
+
+DON’T try to fix anything yet. Just add logging and redeploy.
+
+We need to see what’s actually happening before we can fix it.
+
+```
+---
+
+## **WHILE WAITING, TELL ME:**
+
+Can you open the browser console (F12 or right-click → Inspect → Console) and send me:
+
+1. **What you see in the console when you click "Complete Setup"?**
+2. **Go to Application tab → Local Storage → Check if there's a token stored**
+3. **Go to Network tab → Click "Complete Setup" → Look for the API call → Show me the Request Headers**
+
+Take screenshots of those three things and I can diagnose exactly what's wrong.
+
+---
+
+## **MY HYPOTHESIS:**
+
+One of these is happening:
+
+**A) Token is never created** (phone verification doesn't create one)  
+**B) Token is created but not stored** (storage call is missing)  
+**C) Token is stored but not retrieved** (retrieval code is wrong)  
+**D) Token is retrieved but not sent** (headers are wrong)  
+**E) Token is sent but backend doesn't recognize it** (backend auth is broken)  
+
+The logs will tell us which one it is.
+
+---
+
+**Send Replit Agent that debug prompt, then share the console output with me. We'll fix this in the next iteration once we see what's actually happening.**
+```

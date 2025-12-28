@@ -1,0 +1,69 @@
+```
+URGENT FIXES - 3 Critical Issues to Resolve
+
+Read all three issues before making any changes.
+
+---
+
+ISSUE 1: VIDEO THUMBNAILS NOT LOADING
+
+The video thumbnails are showing gray placeholder boxes instead of actual YouTube thumbnails.
+
+FIX:
+1. Check the YouTube thumbnail URL format - ensure you're using the correct YouTube thumbnail URL pattern:
+   - https://img.youtube.com/vi/[VIDEO_ID]/maxresdefault.jpg
+   - Fallback to: https://img.youtube.com/vi/[VIDEO_ID]/hqdefault.jpg
+   - Second fallback to: https://img.youtube.com/vi/[VIDEO_ID]/mqdefault.jpg
+
+2. Add error handling for failed thumbnail loads - if thumbnail fails, show a branded fallback image (dark background with BJJ OS logo or a generic mat texture)
+
+3. Check if video IDs are being extracted correctly from YouTube URLs stored in database
+
+4. Add lazy loading and caching for thumbnails to prevent rate limiting
+
+5. Test with multiple videos to confirm fix works
+
+---
+
+ISSUE 2: COUNTDOWN TEXT IN PROFESSOR OS RESPONSES
+
+Professor OS is including trial countdown text in coaching responses like:
+"(6 days left - drill these tonight)"
+
+This breaks the coaching experience and feels salesy.
+
+FIX:
+1. Find where this countdown text is being injected into Professor OS responses
+2. REMOVE all countdown/trial references from Professor OS system prompt and response generation
+3. Trial countdown should ONLY appear in:
+   - A subtle UI element (header, footer, or account page)
+   - A separate notification banner
+   - Settings/subscription page
+4. Professor OS should NEVER mention trials, pricing, days left, or anything sales-related in coaching responses
+5. Search codebase for "days left" and "drill these tonight" to find and remove
+
+---
+
+ISSUE 3: IRRELEVANT VIDEO SUGGESTIONS
+
+User asked about ARMBARS but Professor OS suggested "Escaping Closed Guard with Gordon Ryan" which is completely unrelated.
+
+FIX:
+1. Review video matching/recommendation logic
+2. Ensure video suggestions are filtered by:
+   - Primary technique mentioned (armbar, guard pass, sweep, etc.)
+   - Position context (mount, guard, side control, etc.)
+   - Only return videos where technique tags MATCH the user query
+3. Add stricter relevance scoring - videos must match the PRIMARY technique requested
+4. If no highly relevant videos exist, say so rather than suggesting loosely related content
+5. Test by asking "How do I finish an armbar from mount?" and verify ONLY armbar videos are returned
+
+---
+
+PRIORITY ORDER:
+1. Fix thumbnails first (most visible bug)
+2. Remove countdown from Professor OS (breaks user trust)
+3. Fix video relevance (affects core product value)
+
+Test all three fixes before confirming complete.
+```

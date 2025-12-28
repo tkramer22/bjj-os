@@ -1,0 +1,141 @@
+# 🚨 BUILD ERROR - MISSING DATABASE EXPORTS
+
+I can see the issue! Your deployment is failing because of missing database schema exports in `/server/admin-email.ts`:
+
+**Errors:**
+
+```
+- esbuild compilation failed: No matching export in shared/schema.ts for import 'stripeSubscriptions'
+- esbuild compilation failed: No matching export in shared/schema.ts for import 'videoLibrary'
+- esbuild compilation failed: No matching export in shared/schema.ts for import 'trainingLog'
+```
+
+-----
+
+## **🔧 QUICK FIX PROMPT:**
+
+Copy this and send to Replit Agent:
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════
+FIX BUILD ERROR - MISSING SCHEMA EXPORTS
+═══════════════════════════════════════════════════════════════
+
+MISSION:
+Fix the build error by removing or commenting out references to tables that don't exist in the schema.
+
+ERRORS TO FIX:
+1. Remove import of 'stripeSubscriptions' from server/admin-email.ts line 4
+2. Remove import of 'videoLibrary' from server/admin-email.ts line 5
+3. Remove import of 'trainingLog' from server/admin-email.ts line 6
+4. Comment out references to these removed tables in the report generation code
+
+═══════════════════════════════════════════════════════════════
+STEP 1: FIX IMPORTS
+═══════════════════════════════════════════════════════════════
+
+UPDATE FILE: /server/admin-email.ts
+
+Remove or comment out these lines (around line 4-6):
+
+REMOVE:
+```typescript
+import { stripeSubscriptions } from '../shared/schema';
+import { videoLibrary } from '../shared/schema';
+import { trainingLog } from '../shared/schema';
+```
+
+Keep only the imports that exist in the schema.
+
+═══════════════════════════════════════════════════════════════
+STEP 2: COMMENT OUT BROKEN QUERIES
+═══════════════════════════════════════════════════════════════
+
+In the same file, find any queries that reference these tables and comment them out:
+
+COMMENT OUT queries like:
+
+- db.select().from(stripeSubscriptions)
+- db.select().from(videoLibrary)
+- db.select().from(trainingLog)
+
+Replace with placeholder data or remove the sections entirely from the email report.
+
+═══════════════════════════════════════════════════════════════
+STEP 3: ADD FALLBACK DATA
+═══════════════════════════════════════════════════════════════
+
+For any sections that used these tables, add fallback text like:
+
+```typescript
+// Subscription data
+// TODO: Add when stripe integration is complete
+const subscriptionData = {
+  active: 0,
+  trial: 0,
+  cancelled: 0
+};
+
+// Video library data  
+// TODO: Add when video curation is integrated
+const videoData = {
+  total: 0,
+  approved: 0
+};
+
+// Training log data
+// TODO: Add when training logs are implemented
+const trainingData = {
+  sessions: 0
+};
+```
+
+═══════════════════════════════════════════════════════════════
+STEP 4: REBUILD
+═══════════════════════════════════════════════════════════════
+
+After making changes:
+
+1. Save all files
+1. Try to republish
+1. Verify build succeeds
+
+═══════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════
+
+✅ No import errors for stripeSubscriptions
+✅ No import errors for videoLibrary  
+✅ No import errors for trainingLog
+✅ Build completes successfully
+✅ App deploys without errors
+
+═══════════════════════════════════════════════════════════════
+CRITICAL NOTES
+═══════════════════════════════════════════════════════════════
+
+• Only remove references to tables that don’t exist in schema
+• Keep any working imports/queries
+• Add TODO comments for future implementation
+• Focus on getting build working first
+• We can add these features back properly later
+
+START FIX NOW.
+
+```
+---
+
+## ✅ **QUICK FIX READY!**
+
+**This will:**
+1. ✅ Remove the broken imports
+2. ✅ Comment out queries to non-existent tables
+3. ✅ Add fallback data
+4. ✅ Get your build working again
+
+**Copy the prompt above and send it to Replit Agent!** 🚀
+
+After this fixes the build, we can properly add those features if needed. Right now we just need to get it deploying again.​​​​​​​​​​​​​​​​
+```

@@ -1,0 +1,664 @@
+# COMMAND 3 OF 4: ENHANCED SCORING ALGORITHM
+
+Copy and paste this into Replit Agent:
+
+-----
+
+```
+BUILD BJJ OS AI INTELLIGENCE - PART 3: ENHANCED SCORING ALGORITHM
+
+CRITICAL SAFETY RULES:
+❌ DO NOT modify existing SMS delivery system
+❌ DO NOT remove old scoring function
+✅ Create NEW enhanced scoring function
+✅ Use feature flags to control which scoring is used
+✅ Default to OLD scoring unless feature flag enabled
+✅ Zero risk to production users
+
+═══════════════════════════════════════════════════════════════════════════════
+ADD TO EXISTING FILE: /server/ai_intelligence.js
+═══════════════════════════════════════════════════════════════════════════════
+
+Add these functions to the END of /server/ai_intelligence.js (before module.exports)
+
+═══════════════════════════════════════════════════════════════════════════════
+FEATURE 6-10: INTELLIGENCE LAYER FUNCTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+async function checkConfidenceLevel(decisionType, context) {
+  // AI admits when it doesn't have enough data
+  console.log(`Checking confidence for: ${decisionType}`);
+  
+  try {
+    const dataPoints = await pool.query(`
+      SELECT COUNT(*) as count FROM ai_user_feedback_signals
+      WHERE user_id = $1
+    `, [context.userId]);
+    
+    const count = parseInt(dataPoints.rows[0].count);
+    const confidence = Math.min(count / 50, 1.0); // Need 50+ signals for full confidence
+    
+    await pool.query(`
+      INSERT INTO ai_confidence_tracking (
+        decision_type, decision_context, confidence_score, data_points_used,
+        uncertainty_factors, should_admit_uncertainty, user_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [
+      decisionType,
+      JSON.stringify(context),
+      confidence,
+      count,
+      JSON.stringify(confidence < 0.7 ? ['insufficient_data'] : []),
+      confidence < 0.7,
+      context.userId
+    ]);
+    
+    return {
+      confidence: confidence,
+      shouldAdmit: confidence < 0.7,
+      message: confidence < 0.7 
+        ? "I'm still learning your preferences. This recommendation is based on limited data." 
+        : null
+    };
+  } catch (error) {
+    console.error('Error checking confidence:', error);
+    return { confidence: 0.5, shouldAdmit: true, message: null };
+  }
+}
+
+async function logReasoningTrace(decisionId, decisionType, userId, reasoningSteps, finalDecision) {
+  // Log transparent decision-making
+  console.log(`Logging reasoning trace: ${decisionId}`);
+  
+  try {
+    await pool.query(`
+      INSERT INTO ai_reasoning_traces (
+        decision_id, decision_type, user_id, reasoning_steps,
+        factors_considered, final_decision, confidence, show_to_user, user_friendly_explanation
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      decisionId,
+      decisionType,
+      userId,
+      JSON.stringify(reasoningSteps),
+      JSON.stringify(reasoningSteps.map(s => s.factor)),
+      finalDecision,
+      0.85,
+      false,
+      generateUserFriendlyExplanation(reasoningSteps, finalDecision)
+    ]);
+    
+    console.log('✅ Reasoning trace logged');
+  } catch (error) {
+    console.error('Error logging reasoning:', error);
+  }
+}
+
+function generateUserFriendlyExplanation(steps, decision) {
+  const topReasons = steps
+    .filter(s => s.weight > 0.1)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 3)
+    .map(s => s.thought);
+  
+  if (topReasons.length === 0) return `Selected: ${decision}`;
+  return `I chose this because: ${topReasons.join(', ')}.`;
+}
+
+async function matchInstructorStyle(userId) {
+  // Match user to instructors whose style they prefer
+  console.log(`Matching instructor style for user ${userId}`);
+  
+  try {
+    const lovedInstructors = await pool.query(`
+      SELECT 
+        vk.instructor_name,
+        AVG(CAST(fs.signal_value AS DECIMAL)) as avg_rating,
+        COUNT(*) as interaction_count
+      FROM ai_user_feedback_signals fs
+      JOIN ai_video_knowledge vk ON fs.video_id = vk.id
+      WHERE fs.user_id = $1 
+      AND fs.signal_type = 'rating'
+      AND CAST(fs.signal_value AS DECIMAL) >= 4.0
+      AND vk.instructor_name IS NOT NULL
+      GROUP BY vk.instructor_name
+      ORDER BY avg_rating DESC, interaction_count DESC
+      LIMIT 5
+    `, [userId]);
+    
+    // Update user context with preferred instructors
+    if (lovedInstructors.rows.length > 0) {
+      await pool.query(`
+        UPDATE ai_user_context
+        SET preferred_instructors = $2, updated_at = NOW()
+        WHERE user_id = $1
+      `, [userId, JSON.stringify(lovedInstructors.rows.map(i => i.instructor_name))]);
+    }
+    
+    console.log(`✅ Found ${lovedInstructors.rows.length} preferred instructors`);
+    return lovedInstructors.rows;
+  } catch (error) {
+    console.error('Error matching instructor:', error);
+    return [];
+  }
+}
+
+async function trackEffectivenessInSparring(userId, videoId, result, context, notes) {
+  // Track what ACTUALLY works when user tries it
+  console.log(`Tracking effectiveness: ${result}`);
+  
+  try {
+    const userBelt = await getUserBeltLevel(userId);
+    const techniqueName = await getTechniqueName(videoId);
+    
+    const effectiveness = await pool.query(`
+      INSERT INTO ai_effectiveness_tracking (
+        user_id, video_id, technique_name, user_belt_level,
+        attempted_date, result, context, user_notes,
+        what_worked, what_didnt_work, effectiveness_score
+      ) VALUES ($1, $2, $3, $4, CURRENT_DATE, $5, $6, $7, $8, $9, $10)
+      RETURNING *
+    `, [
+      userId,
+      videoId,
+      techniqueName,
+      userBelt,
+      result,
+      context,
+      notes,
+      result === 'success' ? notes : null,
+      result === 'failure' ? notes : null,
+      result === 'success' ? 1.0 : (result === 'partial' ? 0.5 : 0.0)
+    ]);
+    
+    console.log('✅ Effectiveness tracked');
+    return effectiveness.rows[0];
+  } catch (error) {
+    console.error('Error tracking effectiveness:', error);
+    throw error;
+  }
+}
+
+async function checkInjuryAwareness(userId, videoId) {
+  // Don't recommend techniques that could aggravate injuries
+  
+  try {
+    const userInjuries = await pool.query(`
+      SELECT injuries FROM ai_user_context
+      WHERE user_id = $1
+    `, [userId]);
+    
+    if (!userInjuries.rows[0] || !userInjuries.rows[0].injuries) {
+      return { safe: true };
+    }
+    
+    const injuries = userInjuries.rows[0].injuries;
+    
+    // Check if technique has injury risks
+    const techniqueRisks = await pool.query(`
+      SELECT 
+        ia.injury_type,
+        ia.risk_level
+      FROM ai_injury_awareness ia
+      WHERE ia.risky_techniques @> $1::jsonb
+      AND ia.injury_type = ANY($2)
+    `, [JSON.stringify([videoId]), injuries]);
+    
+    if (techniqueRisks.rows.length > 0) {
+      // Find safe alternatives
+      const alternatives = await pool.query(`
+        SELECT safe_alternatives FROM ai_injury_awareness
+        WHERE injury_type = ANY($1)
+        LIMIT 1
+      `, [injuries]);
+      
+      return {
+        safe: false,
+        risks: techniqueRisks.rows,
+        alternatives: alternatives.rows[0]?.safe_alternatives || []
+      };
+    }
+    
+    return { safe: true };
+  } catch (error) {
+    console.error('Error checking injury awareness:', error);
+    return { safe: true }; // Default to safe if error
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+ENHANCED SCORING ALGORITHM - THE BRAIN
+═══════════════════════════════════════════════════════════════════════════════
+
+async function enhancedTechniqueScoring(userId) {
+  /*
+  This is the CORE algorithm that uses all AI features to select
+  the perfect technique for each user each day.
+  
+  Controlled by feature flag 'enhanced_scoring'
+  */
+  
+  console.log(`\n🧠 ENHANCED SCORING for User ${userId}`);
+  
+  try {
+    // Check if enhanced scoring is enabled for this user
+    const featureFlag = await pool.query(`
+      SELECT is_enabled, rollout_percentage, enabled_for_users
+      FROM ai_feature_flags
+      WHERE feature_name = 'enhanced_scoring'
+    `);
+    
+    if (featureFlag.rows.length === 0) {
+      console.log('❌ Feature flag not found, using old scoring');
+      return null; // Fall back to old scoring
+    }
+    
+    const flag = featureFlag.rows[0];
+    
+    // Determine if this user gets enhanced scoring
+    const enabledUsers = flag.enabled_for_users || [];
+    const useEnhanced = flag.is_enabled && (
+      enabledUsers.includes(userId) ||
+      (Math.random() * 100 < flag.rollout_percentage)
+    );
+    
+    if (!useEnhanced) {
+      console.log('⚠️ Enhanced scoring not enabled for this user, using old scoring');
+      return null; // Fall back to old scoring
+    }
+    
+    console.log('✅ Enhanced scoring ENABLED for this user');
+    
+    // ENHANCED SCORING STARTS HERE
+    const decisionId = generateUUID();
+    const reasoningSteps = [];
+    
+    // Step 1: Load full user context
+    const userContext = await loadFullUserContext(userId);
+    if (!userContext) {
+      console.log('❌ No user context found, using old scoring');
+      return null;
+    }
+    
+    reasoningSteps.push({
+      step: 1,
+      factor: 'user_context',
+      thought: `Loaded ${userContext.user.belt_level || 'white'} belt profile`,
+      weight: 1.0
+    });
+    
+    // Step 2: Get all available videos not sent recently
+    const allVideos = await pool.query(`
+      SELECT 
+        vk.*,
+        COALESCE(vk.avg_user_rating, 3.0) as rating,
+        COALESCE(vk.times_sent_to_users, 0) as send_count
+      FROM ai_video_knowledge vk
+      WHERE vk.id NOT IN (
+        SELECT video_id FROM ai_user_feedback_signals
+        WHERE user_id = $1 
+        AND video_id IS NOT NULL
+        AND created_at > NOW() - INTERVAL '30 days'
+      )
+      LIMIT 100
+    `, [userId]);
+    
+    if (allVideos.rows.length === 0) {
+      console.log('❌ No videos available, using old scoring');
+      return null;
+    }
+    
+    console.log(`📊 Scoring ${allVideos.rows.length} videos...`);
+    
+    // Step 3: Score each video using ALL intelligence
+    const scoredVideos = [];
+    
+    for (const video of allVideos.rows) {
+      let score = 0;
+      let scoreBreakdown = {};
+      
+      // Factor 1: User's preferred technique types (20% weight)
+      if (userContext.user.favorite_technique_types?.includes(video.technique_type)) {
+        score += 20;
+        scoreBreakdown.favorite_type = 20;
+        reasoningSteps.push({
+          factor: 'preferred_type',
+          thought: `${video.technique_name} matches preferred type`,
+          weight: 0.2
+        });
+      }
+      
+      // Factor 2: Difficulty matching (15% weight)
+      const difficultyMatch = calculateDifficultyMatch(
+        video.difficulty_score,
+        userContext.user.belt_level,
+        userContext.user.years_training
+      );
+      score += difficultyMatch * 15;
+      scoreBreakdown.difficulty = difficultyMatch * 15;
+      
+      // Factor 3: Injury safety (25% weight - CRITICAL)
+      const injuryCheck = await checkInjuryAwareness(userId, video.id);
+      if (!injuryCheck.safe) {
+        score = 0; // Immediately disqualify unsafe techniques
+        scoreBreakdown.injury_risk = -100;
+        continue;
+      }
+      score += 25;
+      scoreBreakdown.injury_safe = 25;
+      
+      // Factor 4: Problem-solution matching (15% weight)
+      if (userContext.user.struggling_with) {
+        for (const problem of userContext.user.struggling_with) {
+          if (video.problems_solved?.includes(problem)) {
+            score += 15;
+            scoreBreakdown.solves_problem = 15;
+            reasoningSteps.push({
+              factor: 'problem_solving',
+              thought: `Solves struggle: ${problem}`,
+              weight: 0.15
+            });
+            break;
+          }
+        }
+      }
+      
+      // Factor 5: Instructor matching (10% weight)
+      if (userContext.user.preferred_instructors?.includes(video.instructor_name)) {
+        score += 10;
+        scoreBreakdown.preferred_instructor = 10;
+      }
+      
+      // Factor 6: Video rating (10% weight)
+      const ratingScore = (video.rating / 5.0) * 10;
+      score += ratingScore;
+      scoreBreakdown.rating = ratingScore;
+      
+      // Factor 7: Freshness - penalize over-sent videos (5% weight)
+      const freshness = Math.max(0, 5 - (video.send_count / 100));
+      score += freshness;
+      scoreBreakdown.freshness = freshness;
+      
+      scoredVideos.push({
+        video: video,
+        score: score,
+        breakdown: scoreBreakdown
+      });
+    }
+    
+    // Step 4: Sort by score and pick top technique
+    scoredVideos.sort((a, b) => b.score - a.score);
+    
+    if (scoredVideos.length === 0) {
+      console.log('❌ No scored videos available');
+      return null;
+    }
+    
+    const topChoice = scoredVideos[0];
+    
+    console.log(`\n🏆 TOP CHOICE: ${topChoice.video.technique_name}`);
+    console.log(`   Score: ${topChoice.score.toFixed(2)}`);
+    console.log(`   Breakdown:`, topChoice.breakdown);
+    
+    // Step 5: Log reasoning trace
+    await logReasoningTrace(
+      decisionId,
+      'daily_technique_selection',
+      userId,
+      reasoningSteps.slice(0, 10), // Top 10 reasoning steps
+      topChoice.video.technique_name
+    );
+    
+    // Step 6: Check confidence and admit uncertainty if needed
+    const confidence = await checkConfidenceLevel('technique_selection', { userId });
+    
+    // Return the enhanced selection
+    return {
+      videoId: topChoice.video.id,
+      videoUrl: topChoice.video.video_url,
+      techniqueName: topChoice.video.technique_name,
+      instructor: topChoice.video.instructor_name,
+      score: topChoice.score,
+      scoreBreakdown: topChoice.breakdown,
+      confidence: confidence,
+      decisionId: decisionId,
+      reasoningSteps: reasoningSteps.slice(0, 5) // Top 5 for display
+    };
+    
+  } catch (error) {
+    console.error('❌ Error in enhanced scoring:', error);
+    return null; // Fall back to old scoring
+  }
+}
+
+function calculateDifficultyMatch(videoDifficulty, userBelt, yearsTraining) {
+  // Match difficulty to user level
+  const beltScores = {
+    'white': 1,
+    'blue': 3,
+    'purple': 5,
+    'brown': 7,
+    'black': 9
+  };
+  
+  const userLevel = beltScores[userBelt] || 1;
+  const difficulty = videoDifficulty || 5;
+  
+  // Perfect match: difficulty within 2 points of user level
+  const diff = Math.abs(difficulty - userLevel);
+  
+  if (diff === 0) return 1.0;
+  if (diff === 1) return 0.9;
+  if (diff === 2) return 0.7;
+  if (diff === 3) return 0.5;
+  return 0.3;
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+FEATURE FLAG CHECKER
+═══════════════════════════════════════════════════════════════════════════════
+
+async function isFeatureEnabled(featureName, userId = null) {
+  // Check if a feature is enabled for a specific user or globally
+  
+  try {
+    const result = await pool.query(`
+      SELECT is_enabled, rollout_percentage, enabled_for_users, disabled_for_users
+      FROM ai_feature_flags
+      WHERE feature_name = $1
+    `, [featureName]);
+    
+    if (result.rows.length === 0) return false;
+    
+    const flag = result.rows[0];
+    
+    if (!flag.is_enabled) return false;
+    
+    // Check if user is specifically disabled
+    if (userId && flag.disabled_for_users?.includes(userId)) {
+      return false;
+    }
+    
+    // Check if user is specifically enabled
+    if (userId && flag.enabled_for_users?.includes(userId)) {
+      return true;
+    }
+    
+    // Check rollout percentage
+    if (userId) {
+      // Deterministic rollout based on user ID
+      const userHash = userId % 100;
+      return userHash < flag.rollout_percentage;
+    }
+    
+    // No user ID - just check if enabled
+    return flag.is_enabled && flag.rollout_percentage > 0;
+    
+  } catch (error) {
+    console.error('Error checking feature flag:', error);
+    return false;
+  }
+}
+
+async function enableFeatureForUser(featureName, userId) {
+  // Enable a specific feature for a specific user
+  
+  try {
+    await pool.query(`
+      UPDATE ai_feature_flags
+      SET 
+        enabled_for_users = 
+          CASE 
+            WHEN enabled_for_users IS NULL THEN $2
+            WHEN enabled_for_users @> $2 THEN enabled_for_users
+            ELSE enabled_for_users || $2
+          END,
+        updated_at = NOW()
+      WHERE feature_name = $1
+    `, [featureName, JSON.stringify([userId])]);
+    
+    console.log(`✅ Feature '${featureName}' enabled for user ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('Error enabling feature:', error);
+    return false;
+  }
+}
+
+async function setFeatureRollout(featureName, percentage, enabled = true) {
+  // Set rollout percentage for a feature
+  
+  try {
+    await pool.query(`
+      UPDATE ai_feature_flags
+      SET 
+        is_enabled = $2,
+        rollout_percentage = $3,
+        updated_at = NOW()
+      WHERE feature_name = $1
+    `, [featureName, enabled, percentage]);
+    
+    console.log(`✅ Feature '${featureName}' set to ${percentage}% rollout`);
+    return true;
+  } catch (error) {
+    console.error('Error setting rollout:', error);
+    return false;
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+UPDATE MODULE EXPORTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Replace the existing module.exports section with this updated version:
+
+module.exports = {
+  // Core intelligence functions (Features 1-5)
+  analyzeAndStoreVideo,
+  processUserFeedback,
+  mapProblemToSolutions,
+  loadFullUserContext,
+  mapTechniqueRelationships,
+  
+  // Intelligence layer functions (Features 6-10)
+  checkConfidenceLevel,
+  logReasoningTrace,
+  matchInstructorStyle,
+  trackEffectivenessInSparring,
+  checkInjuryAwareness,
+  
+  // Enhanced scoring algorithm (THE BRAIN)
+  enhancedTechniqueScoring,
+  
+  // Feature flag management
+  isFeatureEnabled,
+  enableFeatureForUser,
+  setFeatureRollout,
+  
+  // Helper functions
+  getUserBeltLevel,
+  getDaysSinceSignup,
+  getTechniqueType,
+  getTechniqueName,
+  generateUUID,
+  calculateDifficultyMatch,
+  
+  // Database pool
+  pool
+};
+
+console.log('✅ BJJ OS Enhanced Scoring Algorithm loaded');
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION SCRIPT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create new file: /server/test_enhanced_scoring.js
+
+const aiIntelligence = require('./ai_intelligence');
+
+async function testEnhancedScoring() {
+  console.log('\n🧪 TESTING ENHANCED SCORING SYSTEM\n');
+  
+  // Test 1: Check feature flags
+  console.log('Test 1: Checking feature flags...');
+  const flags = await aiIntelligence.pool.query('SELECT * FROM ai_feature_flags');
+  console.log(`Found ${flags.rows.length} feature flags`);
+  console.log(flags.rows);
+  
+  // Test 2: Enable enhanced scoring for test user (user ID 1)
+  console.log('\nTest 2: Enabling enhanced scoring for user 1...');
+  await aiIntelligence.enableFeatureForUser('enhanced_scoring', 1);
+  
+  // Test 3: Check if enabled
+  console.log('\nTest 3: Checking if enabled for user 1...');
+  const isEnabled = await aiIntelligence.isFeatureEnabled('enhanced_scoring', 1);
+  console.log(`Enhanced scoring enabled for user 1: ${isEnabled}`);
+  
+  // Test 4: Try enhanced scoring (if you have videos in ai_video_knowledge)
+  console.log('\nTest 4: Testing enhanced scoring algorithm...');
+  try {
+    const result = await aiIntelligence.enhancedTechniqueScoring(1);
+    if (result) {
+      console.log('✅ Enhanced scoring SUCCESS:');
+      console.log(`   Technique: ${result.techniqueName}`);
+      console.log(`   Score: ${result.score}`);
+      console.log(`   Confidence: ${result.confidence.confidence}`);
+    } else {
+      console.log('⚠️ Enhanced scoring returned null (expected if no videos analyzed yet)');
+    }
+  } catch (error) {
+    console.log('⚠️ Enhanced scoring error (expected if no videos yet):', error.message);
+  }
+  
+  console.log('\n✅ Testing complete!\n');
+  process.exit(0);
+}
+
+testEnhancedScoring().catch(console.error);
+
+═══════════════════════════════════════════════════════════════════════════════
+INSTRUCTIONS TO REPLIT AGENT
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Add all the functions above to /server/ai_intelligence.js
+2. Make sure module.exports is updated with all new functions
+3. Create the test file /server/test_enhanced_scoring.js
+4. DO NOT modify any existing SMS delivery code
+5. DO NOT change how daily techniques are currently sent
+6. This enhanced scoring will be controlled by feature flags
+
+After implementation, you can test by running:
+node server/test_enhanced_scoring.js
+
+This will verify that:
+- Feature flags are working
+- Enhanced scoring can be enabled for specific users
+- The scoring algorithm runs without errors
+
+NEXT: Command 4 will create API endpoints and admin dashboard to control everything.
+```
+
+-----
+
+**Send this to Replit Agent. Once it confirms the enhanced scoring is added and the test file is created, tell me and I’ll give you COMMAND 4 OF 4 (the final command).**

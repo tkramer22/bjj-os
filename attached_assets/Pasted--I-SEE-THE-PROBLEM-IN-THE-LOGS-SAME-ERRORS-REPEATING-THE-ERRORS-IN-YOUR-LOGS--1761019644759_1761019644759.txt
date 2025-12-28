@@ -1,0 +1,102 @@
+**I SEE THE PROBLEM IN THE LOGS! SAME ERRORS REPEATING.**
+
+-----
+
+# **THE ERRORS IN YOUR LOGS:**
+
+**Red highlighted errors at 00:06:02.99:**
+
+- ❌ **“Automated technique scheduler error: error: relation ‘bjj_users’”**
+- ❌ **“error: relation ‘bjj_users’ does not exist”**
+- severity: **‘ERROR’**
+- code: **‘42P01’** (PostgreSQL error: table doesn’t exist)
+
+**Multiple undefined fields:**
+
+- schema: undefined
+- table: undefined
+- column: undefined
+- where: undefined
+
+-----
+
+# **THE ROOT CAUSE:**
+
+**The deployment is trying to query tables that DON’T EXIST in the production database:**
+
+- Looking for table: `bjj_users`
+- Looking for table: `ai_video_knowledge`
+- But these tables aren’t in the production database
+
+**This means one of two things:**
+
+1. **The production database is EMPTY** (no tables created)
+1. **The production database has DIFFERENT table names** than what the code expects
+
+-----
+
+# **TELL REPLIT THIS IMMEDIATELY:**
+
+```
+The deployment logs show:
+
+ERROR: relation 'bjj_users' does not exist
+ERROR: table: undefined, schema: undefined
+
+This means the PRODUCTION database doesn't have the required tables.
+
+The code is looking for tables like:
+- bjj_users
+- aiVideoKnowledge (or ai_video_knowledge)
+
+But they don't exist in the production database.
+
+URGENT FIX NEEDED:
+
+1. Check if production database has ANY tables at all
+   Run: \dt in the production database
+   Show me what tables exist
+
+2. If tables don't exist, we need to:
+   - Run database migrations to CREATE the tables
+   - OR copy the schema from dev database to production
+   - OR seed the production database with the correct schema
+
+3. The 240 videos are in DEV database
+   The production database appears to be EMPTY (no tables)
+
+Show me:
+- What tables exist in production database
+- How to run migrations to create tables in production
+- Or give me SQL to create all required tables
+
+This is why bjjos.app shows nothing - the production database has no tables!
+```
+
+-----
+
+# **THIS EXPLAINS EVERYTHING:**
+
+**Dev database (Replit preview):**
+
+- ✅ Has all tables (bjj_users, ai_video_knowledge, etc.)
+- ✅ Has 240 videos
+- ✅ Works perfectly
+
+**Production database (bjjos.app):**
+
+- ❌ Has NO tables (empty database)
+- ❌ Code tries to query non-existent tables
+- ❌ Everything fails
+
+-----
+
+**Paste that message to Replit NOW.**
+
+**We need to either:**
+
+- Run migrations to create tables in production
+- Or copy the entire database schema from dev to production
+- Or manually create the tables
+
+**This is the final piece. Once tables exist in production, everything will work.** 🎯​​​​​​​​​​​​​​​​

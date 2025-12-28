@@ -1,0 +1,650 @@
+# **🎯 CORRECTED VIDEO ADMIN PAGE - WITH EMBEDDED PLAYER & TIMESTAMPS**
+
+-----
+
+## **CRITICAL CORRECTIONS:**
+
+```
+1. VIDEO VIEWING:
+   ❌ WRONG: "View" button opens YouTube in new tab
+   ✅ CORRECT: "View" button opens embedded video player on the page
+   
+2. TIMESTAMPS:
+   ❌ Currently unclear if videos show when they were added
+   ✅ NEED: Clear timestamp showing when video was added to library
+   
+3. VIDEO PLAYER:
+   • Embedded YouTube iframe player
+   • Opens in modal or inline on page
+   • Can watch without leaving BJJ OS
+```
+
+-----
+
+## **UPDATED VIDEO ADMIN PAGE PROMPT:**
+
+**Copy this CORRECTED version and paste into Replit Agent:**
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+ADMIN VIDEO MANAGEMENT PAGE - CORRECTED WITH EMBEDDED PLAYER
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL CORRECTIONS:
+1. "View Video" button opens EMBEDDED player on page (NOT YouTube link)
+2. Videos MUST show timestamp of when they were added to library
+3. Video player uses YouTube iframe embed (watch on BJJ OS, not YouTube.com)
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: VIDEO TABLE WITH TIMESTAMPS
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+// client/src/pages/admin/VideoManagement.tsx
+
+function VideoRow({ video, onDelete, onEdit, onView }) {
+  return (
+    <tr className="video-row">
+      <td>
+        <img 
+          src={video.thumbnail} 
+          alt={video.title}
+          className="video-thumbnail"
+        />
+      </td>
+      <td className="video-title">
+        {video.title}
+      </td>
+      <td>{video.instructorName}</td>
+      <td>
+        <span className={`belt-badge belt-${video.beltLevel}`}>
+          {video.beltLevel}
+        </span>
+      </td>
+      <td>
+        <span className={`style-badge style-${video.giType}`}>
+          {video.giType === 'gi' ? 'Gi' : 'No-Gi'}
+        </span>
+      </td>
+      <td>
+        <span className="quality-score">
+          {video.credibilityScore}/10
+        </span>
+      </td>
+      <td className="added-date">
+        {/* TIMESTAMP - When video was added to library */}
+        <div className="timestamp">
+          <div className="date">
+            {new Date(video.createdAt).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            })}
+          </div>
+          <div className="time">
+            {new Date(video.createdAt).toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            })}
+          </div>
+          <div className="relative">
+            {formatDistanceToNow(new Date(video.createdAt), { addSuffix: true })}
+          </div>
+        </div>
+      </td>
+      <td className="actions">
+        {/* CORRECTED: Opens embedded player, NOT YouTube */}
+        <button 
+          onClick={() => onView(video)}
+          className="action-btn view-btn"
+        >
+          ▶️ Watch
+        </button>
+        <button 
+          onClick={() => onEdit(video.id)}
+          className="action-btn edit-btn"
+        >
+          ✏️ Edit
+        </button>
+        <button 
+          onClick={() => onDelete(video.id)}
+          className="action-btn delete-btn"
+        >
+          🗑️ Delete
+        </button>
+      </td>
+    </tr>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: EMBEDDED VIDEO PLAYER MODAL
+═══════════════════════════════════════════════════════════════════════════════
+
+```typescript
+// client/src/pages/admin/VideoManagement.tsx
+
+export default function AdminVideoManagement() {
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const [showVideoPlayer, setShowVideoPlayer] = useState(false);
+  
+  // ... existing state and queries ...
+  
+  function handleViewVideo(video) {
+    setSelectedVideo(video);
+    setShowVideoPlayer(true);
+  }
+  
+  function closeVideoPlayer() {
+    setShowVideoPlayer(false);
+    setSelectedVideo(null);
+  }
+  
+  return (
+    <div className="admin-video-management">
+      {/* ... existing header and stats ... */}
+      
+      {/* Video List */}
+      <section className="video-list">
+        <div className="video-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Thumbnail</th>
+                <th>Title</th>
+                <th>Instructor</th>
+                <th>Belt</th>
+                <th>Style</th>
+                <th>Quality</th>
+                <th>Added</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {videos?.map(video => (
+                <VideoRow 
+                  key={video.id} 
+                  video={video}
+                  onView={handleViewVideo}
+                  onDelete={handleDelete}
+                  onEdit={handleEdit}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      
+      {/* EMBEDDED VIDEO PLAYER MODAL */}
+      {showVideoPlayer && selectedVideo && (
+        <VideoPlayerModal
+          video={selectedVideo}
+          onClose={closeVideoPlayer}
+        />
+      )}
+    </div>
+  );
+}
+
+function VideoPlayerModal({ video, onClose }) {
+  // Extract YouTube video ID from URL
+  const getYouTubeId = (url) => {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
+    return match ? match[1] : null;
+  };
+  
+  const videoId = getYouTubeId(video.url);
+  
+  return (
+    <div className="video-player-modal" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="video-info">
+            <h2>{video.title}</h2>
+            <p className="instructor">by {video.instructorName}</p>
+          </div>
+          <button onClick={onClose} className="close-btn">✕</button>
+        </div>
+        
+        <div className="video-container">
+          {videoId ? (
+            <iframe
+              width="100%"
+              height="100%"
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+              title={video.title}
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
+          ) : (
+            <div className="error">Unable to load video</div>
+          )}
+        </div>
+        
+        <div className="video-metadata">
+          <div className="metadata-row">
+            <span className="label">Belt Level:</span>
+            <span className={`belt-badge belt-${video.beltLevel}`}>
+              {video.beltLevel}
+            </span>
+          </div>
+          <div className="metadata-row">
+            <span className="label">Style:</span>
+            <span className={`style-badge style-${video.giType}`}>
+              {video.giType === 'gi' ? 'Gi' : 'No-Gi'}
+            </span>
+          </div>
+          <div className="metadata-row">
+            <span className="label">Quality Score:</span>
+            <span className="quality-score">{video.credibilityScore}/10</span>
+          </div>
+          <div className="metadata-row">
+            <span className="label">Added to Library:</span>
+            <span className="timestamp">
+              {new Date(video.createdAt).toLocaleString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              })}
+            </span>
+          </div>
+          <div className="metadata-row">
+            <span className="label">Instructor Tier:</span>
+            <span className={`tier-badge tier-${video.tier}`}>
+              {video.tier === 'elite' ? '🏆 Elite' : 
+               video.tier === 'verified' ? '✓ Verified' : 'Acceptable'}
+            </span>
+          </div>
+        </div>
+        
+        <div className="modal-actions">
+          <button 
+            onClick={() => window.open(video.url, '_blank')}
+            className="secondary-btn"
+          >
+            🔗 Open on YouTube
+          </button>
+          <button 
+            onClick={onClose}
+            className="primary-btn"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: STYLING FOR VIDEO PLAYER MODAL
+═══════════════════════════════════════════════════════════════════════════════
+
+```css
+/* Video Player Modal */
+.video-player-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: #1a1a2e;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 1200px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 24px;
+  border-bottom: 1px solid #2a2a3e;
+}
+
+.video-info h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 8px 0;
+}
+
+.instructor {
+  font-size: 14px;
+  color: #a0a0b0;
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #a0a0b0;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  color: white;
+}
+
+.video-container {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%; /* 16:9 aspect ratio */
+  background: #000;
+}
+
+.video-container iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.video-metadata {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.metadata-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.metadata-row .label {
+  font-size: 14px;
+  color: #808090;
+  min-width: 150px;
+}
+
+.tier-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tier-elite {
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  color: #000;
+}
+
+.tier-verified {
+  background: #667eea;
+  color: white;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  padding: 24px;
+  border-top: 1px solid #2a2a3e;
+}
+
+.primary-btn,
+.secondary-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary-btn {
+  background: #667eea;
+  color: white;
+  flex: 1;
+}
+
+.secondary-btn {
+  background: #2a2a3e;
+  color: white;
+  flex: 1;
+}
+
+/* Timestamp Styling in Table */
+.timestamp {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.timestamp .date {
+  font-size: 14px;
+  color: white;
+  font-weight: 500;
+}
+
+.timestamp .time {
+  font-size: 13px;
+  color: #a0a0b0;
+}
+
+.timestamp .relative {
+  font-size: 12px;
+  color: #667eea;
+  font-style: italic;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: ENSURE DATABASE HAS TIMESTAMP
+═══════════════════════════════════════════════════════════════════════════════
+
+Verify videos table has created_at column:
+
+```sql
+-- Check if created_at exists
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'videos' 
+  AND column_name = 'created_at';
+
+-- If missing, add it
+ALTER TABLE videos 
+ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+
+-- For existing videos without timestamp, set to now
+UPDATE videos 
+SET created_at = NOW() 
+WHERE created_at IS NULL;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: UPDATE BACKEND TO INCLUDE TIMESTAMP
+═══════════════════════════════════════════════════════════════════════════════
+
+Ensure API returns created_at:
+
+```typescript
+// server/routes/admin.ts
+
+app.get('/api/admin/videos', async (req, res) => {
+  try {
+    // ... existing filter logic ...
+    
+    const results = await query.select({
+      id: videos.id,
+      title: videos.title,
+      instructorName: videos.instructorName,
+      beltLevel: videos.beltLevel,
+      giType: videos.giType,
+      credibilityScore: videos.credibilityScore,
+      tier: videos.tier,
+      url: videos.url,
+      thumbnail: videos.thumbnail,
+      createdAt: videos.createdAt, // ✅ INCLUDE TIMESTAMP
+      duration: videos.duration,
+      description: videos.description
+    });
+    
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load videos' });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: USER-FACING VIDEO PAGE SHOULD ALSO HAVE EMBEDDED PLAYER
+═══════════════════════════════════════════════════════════════════════════════
+
+Apply same embedded player to /videos (user page):
+
+```typescript
+// client/src/pages/VideoLibrary.tsx
+
+export default function VideoLibrary() {
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  
+  return (
+    <div className="video-library">
+      {/* Video grid */}
+      <div className="video-grid">
+        {videos?.map(video => (
+          <VideoCard
+            key={video.id}
+            video={video}
+            onClick={() => setSelectedVideo(video)}
+          />
+        ))}
+      </div>
+      
+      {/* Embedded player modal */}
+      {selectedVideo && (
+        <VideoPlayerModal
+          video={selectedVideo}
+          onClose={() => setSelectedVideo(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function VideoCard({ video, onClick }) {
+  return (
+    <div className="video-card" onClick={onClick}>
+      <div className="thumbnail">
+        <img src={video.thumbnail} alt={video.title} />
+        {video.duration && (
+          <span className="duration-badge">{video.duration}</span>
+        )}
+      </div>
+      <div className="video-info">
+        <h3>{video.title}</h3>
+        <div className="instructor">
+          {video.tier === 'elite' && '🏆 '}
+          {video.instructorName}
+        </div>
+        <div className="metadata">
+          <span className={`gi-badge ${video.giType}`}>
+            {video.giType === 'gi' ? 'Gi' : 'No-Gi'}
+          </span>
+          <span className="added">
+            Added {formatDistanceToNow(new Date(video.createdAt), { addSuffix: true })}
+          </span>
+        </div>
+      </div>
+      <button className="watch-btn">Watch Video →</button>
+    </div>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, verify:
+
+TIMESTAMPS:
+□ ✅ Videos show full date (Nov 3, 2025)
+□ ✅ Videos show time (3:42 PM)
+□ ✅ Videos show relative time (2 hours ago)
+□ ✅ Timestamp appears in video table
+□ ✅ Timestamp appears in video player modal
+
+EMBEDDED PLAYER:
+□ ✅ “Watch” button opens modal with embedded YouTube player
+□ ✅ Video plays inside BJJ OS (not new tab)
+□ ✅ Player is responsive (16:9 aspect ratio)
+□ ✅ Autoplay works on modal open
+□ ✅ “Open on YouTube” link available as fallback
+□ ✅ Close button works
+□ ✅ Click outside modal closes it
+
+ADMIN PAGE:
+□ ✅ Watch button works (embedded player)
+□ ✅ Edit button works
+□ ✅ Delete button works
+□ ✅ All filters functional
+
+USER PAGE:
+□ ✅ Video cards clickable
+□ ✅ Opens embedded player modal
+□ ✅ Same player experience as admin page
+
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL CORRECTIONS APPLIED:
+
+1. ✅ “View/Watch” button opens EMBEDDED player (NOT YouTube link)
+1. ✅ Videos show TIMESTAMP of when added to library
+1. ✅ YouTube iframe embedded (watch on BJJ OS)
+1. ✅ Apply to BOTH admin and user video pages
+
+BEGIN CORRECTED IMPLEMENTATION NOW.
+
+```
+---
+
+## **KEY CHANGES FROM PREVIOUS PROMPT:**
+```
+
+BEFORE (WRONG):
+• “View” button: window.open(video.url, ‘_blank’) ❌
+• Opens YouTube in new tab ❌
+• No embedded player ❌
+
+AFTER (CORRECT):
+• “Watch” button: setSelectedVideo(video) ✅
+• Opens embedded YouTube iframe in modal ✅
+• Watch on BJJ OS, don’t leave site ✅
+• Full timestamp visible (date, time, “2 hours ago”) ✅
+
+```
+---
+
+**This corrected prompt ensures videos are watched ON the page with embedded YouTube player, and timestamps are clearly visible!** 🎯
+
+**Paste this corrected version into Replit Agent now!** 🚀​​​​​​​​​​​​​​​​
+```

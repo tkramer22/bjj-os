@@ -1,0 +1,643 @@
+import { useState, useEffect, useRef } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Play, Pause, RefreshCw, Trash2, Activity, Mail, TestTube, Camera, AlertTriangle, Settings, ChevronDown, ChevronUp, ExternalLink, Radio } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
+import { AdminLayout } from "./dashboard";
+
+interface CommandResult {
+  status: 'success' | 'error';
+  title: string;
+  timestamp: string;
+  actions: string[];
+  metrics?: Record<string, string | number>;
+  changes?: Array<{ before: string; after: string }>;
+  viewLink?: string;
+  duration?: string;
+}
+
+interface CommandLog {
+  id: number;
+  command: string;
+  success: boolean;
+  message: string;
+  executionTimeMs: number;
+  timestamp: string;
+}
+
+interface CurationSettings {
+  qualityThreshold: number;
+  videosPerRun: number;
+  focusInstructors: string;
+}
+
+interface ProgressEvent {
+  id: string;
+  timestamp: string;
+  message: string;
+  icon: string;
+  detail?: string;
+}
+
+export default function CommandCenter() {
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [results, setResults] = useState<Record<string, CommandResult>>({});
+  const [logs, setLogs] = useState<CommandLog[]>([]);
+  const [curationStatus, setCurationStatus] = useState<'idle' | 'running'>('idle');
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [settings, setSettings] = useState<CurationSettings>({
+    qualityThreshold: 7.0,
+    videosPerRun: 20,
+    focusInstructors: ''
+  });
+  const [progressEvents, setProgressEvents] = useState<ProgressEvent[]>([]);
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const progressEndRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    loadCommandLog();
+    loadSettings();
+  }, []);
+
+  // Auto-scroll to bottom of progress feed
+  useEffect(() => {
+    if (progressEndRef.current && progressEvents.length > 0) {
+      progressEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [progressEvents]);
+
+  // Subscribe to SSE progress stream
+  const subscribeToProgress = (runId: string) => {
+    // Close existing connection
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    setCurrentRunId(runId);
+    setProgressEvents([]);
+
+    const eventSource = new EventSource(`/api/admin/curation/stream?runId=${runId}`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Handle all progress types from the backend
+        if (data.type === 'success' && data.message.includes('complete')) {
+          // Completion event
+          setProgressEvents(prev => [...prev, {
+            id: crypto.randomUUID(),
+            timestamp: data.time || new Date().toISOString(),
+            message: data.message,
+            icon: data.icon || '✅'
+          }]);
+          setCurationStatus('idle');
+          loadCommandLog();
+          eventSource.close();
+        } else if (data.type === 'error') {
+          // Error event
+          setProgressEvents(prev => [...prev, {
+            id: crypto.randomUUID(),
+            timestamp: data.time || new Date().toISOString(),
+            message: data.message,
+            icon: data.icon || '❌'
+          }]);
+          setCurationStatus('idle');
+          eventSource.close();
+        } else {
+          // Regular progress events (info, search, analyze, added, skipped)
+          setProgressEvents(prev => [...prev, {
+            id: crypto.randomUUID(),
+            timestamp: data.time || new Date().toISOString(),
+            message: data.message,
+            icon: data.icon || '•',
+            detail: data.data
+          }]);
+        }
+      } catch (e) {
+        console.error('Failed to parse SSE event:', e);
+      }
+    };
+
+    eventSource.onerror = () => {
+      console.log('SSE connection closed or error');
+      eventSource.close();
+      
+      // Reset status and notify user
+      setCurationStatus('idle');
+      setProgressEvents(prev => [...prev, {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        message: 'Connection lost - check logs for final results',
+        icon: '⚠️'
+      }]);
+      
+      // Refresh command log to get latest status
+      loadCommandLog();
+    };
+  };
+
+  // Cleanup SSE on unmount
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, []);
+
+  const loadCommandLog = async () => {
+    try {
+      const res = await fetch('/api/admin/command/log?limit=20');
+      const data = await res.json();
+      if (data.success) {
+        setLogs(data.logs);
+      }
+    } catch (error) {
+      console.error('Failed to load command log:', error);
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      const res = await fetch('/api/admin/curation/settings');
+      const data = await res.json();
+      if (data) {
+        setSettings({
+          qualityThreshold: data.qualityThreshold || 7.0,
+          videosPerRun: data.videosPerRun || 20,
+          focusInstructors: data.focusInstructors?.join(', ') || ''
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    }
+  };
+
+  const saveSettings = async () => {
+    try {
+      const res = await fetch('/api/admin/curation/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          qualityThreshold: settings.qualityThreshold,
+          videosPerRun: settings.videosPerRun,
+          focusInstructors: settings.focusInstructors.split(',').map(s => s.trim()).filter(Boolean)
+        })
+      });
+
+      if (res.ok) {
+        toast({
+          title: "✅ Settings Saved",
+          description: "Changes will apply to next curation run",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "❌ Failed to Save",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const executeCommand = async (command: string, params: any = {}) => {
+    setLoading(prev => ({ ...prev, [command]: true }));
+
+    try {
+      const res = await fetch('/api/admin/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command, params })
+      });
+
+      const result = await res.json();
+
+      // Store rich result data if provided
+      if (result.result) {
+        setResults(prev => ({ ...prev, [command]: result.result }));
+      }
+
+      // Special handling for run_curation command
+      const runId = result.runId || result.data?.runId;
+      if (command === 'run_curation' && result.success && runId) {
+        setCurationStatus('running');
+        subscribeToProgress(runId);
+        toast({
+          title: "🚀 Curation Started",
+          description: "Watch live progress below!",
+        });
+      } else if (command === 'run_curation' && result.success) {
+        setCurationStatus('running');
+        toast({
+          title: "🚀 Curation Started",
+          description: "Running in background. You'll receive an email in 5-10 minutes with results.",
+        });
+        setTimeout(() => setCurationStatus('idle'), 30000);
+      } else {
+        toast({
+          title: result.success ? "✅ Command Executed" : "❌ Command Failed",
+          description: result.message,
+          variant: result.success ? "default" : "destructive"
+        });
+      }
+
+      // Refresh command log
+      await loadCommandLog();
+      
+      setLoading(prev => ({ ...prev, [command]: false }));
+
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to execute command';
+      
+      setResults(prev => ({
+        ...prev,
+        [command]: {
+          status: 'error',
+          title: 'Command Failed',
+          timestamp: new Date().toISOString(),
+          actions: [errorMessage]
+        }
+      }));
+
+      toast({
+        title: "❌ Command Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
+      
+      setLoading(prev => ({ ...prev, [command]: false }));
+    }
+  };
+
+  // Result display component
+  const ResultDisplay = ({ result }: { result: CommandResult }) => {
+    return (
+      <div className={`mt-3 rounded-lg border ${result.status === 'success' ? 'border-green-500/50 bg-green-500/5' : 'border-destructive/50 bg-destructive/5'}`}>
+        <div className="p-4 space-y-3">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">{result.status === 'success' ? '✅' : '❌'}</span>
+              <span className="font-semibold">{result.title}</span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {new Date(result.timestamp).toLocaleTimeString()}
+            </span>
+          </div>
+
+          {/* What Happened */}
+          <div>
+            <h4 className="text-sm font-semibold mb-1.5">What Happened:</h4>
+            <ul className="space-y-1 text-sm text-muted-foreground">
+              {result.actions.map((action, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">•</span>
+                  <span>{action}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Metrics */}
+          {result.metrics && Object.keys(result.metrics).length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold mb-2">Results:</h4>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(result.metrics).map(([key, value]) => (
+                  <div key={key} className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground">{key}</span>
+                    <span className="text-sm font-medium">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Changes */}
+          {result.changes && result.changes.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold mb-1.5">Changes Made:</h4>
+              <ul className="space-y-1 text-sm">
+                {result.changes.map((change, i) => (
+                  <li key={i} className="flex items-center gap-2 text-muted-foreground">
+                    <span>{change.before}</span>
+                    <span className="text-primary">→</span>
+                    <span className="font-medium text-foreground">{change.after}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* View Link */}
+          {result.viewLink && (
+            <a 
+              href={result.viewLink} 
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            >
+              View Details <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Simplified command button
+  const CommandButton = ({ 
+    icon: Icon, 
+    title, 
+    duration,
+    command, 
+    danger = false
+  }: { 
+    icon: any; 
+    title: string; 
+    duration: string;
+    command: string; 
+    danger?: boolean;
+  }) => {
+    const isLoading = loading[command];
+    const result = results[command];
+    const isCurationRunning = command === 'run_curation' && curationStatus === 'running';
+
+    return (
+      <Card className={`${danger ? 'border-destructive/50' : ''} hover-elevate`}>
+        <CardContent className="pt-6">
+          <div className="space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Icon className={`h-5 w-5 ${danger ? 'text-destructive' : 'text-primary'}`} />
+                <h3 className="font-semibold">{title}</h3>
+              </div>
+              <Badge variant="outline" className="text-xs">
+                {isLoading || isCurationRunning ? '⏳ Running...' : duration}
+              </Badge>
+            </div>
+
+            {/* Execute Button */}
+            <Button
+              onClick={() => executeCommand(command)}
+              disabled={isLoading || isCurationRunning}
+              variant={danger ? "destructive" : "default"}
+              className="w-full"
+              data-testid={`button-${command}`}
+            >
+              {isCurationRunning ? 'Running...' : 'Execute'}
+            </Button>
+            
+            {/* Curation Live Progress */}
+            {command === 'run_curation' && isCurationRunning && progressEvents.length > 0 && (
+              <div className="bg-background border border-primary/30 rounded-md overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 border-b border-primary/20">
+                  <Radio className="h-3 w-3 text-primary animate-pulse" />
+                  <span className="text-xs font-medium text-primary">Live Progress</span>
+                  <Badge variant="outline" className="text-[10px] ml-auto">
+                    {progressEvents.length} events
+                  </Badge>
+                </div>
+                <ScrollArea className="h-48">
+                  <div className="p-2 space-y-1 text-xs font-mono">
+                    {progressEvents.map((event) => (
+                      <div key={event.id} className="flex items-start gap-2 py-0.5">
+                        <span className="w-4 text-center flex-shrink-0">{event.icon}</span>
+                        <span className="text-muted-foreground flex-shrink-0">
+                          {new Date(event.timestamp).toLocaleTimeString('en-US', { hour12: false })}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-foreground">{event.message}</span>
+                          {event.detail && (
+                            <span className="text-muted-foreground ml-1">({event.detail})</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={progressEndRef} />
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+            
+            {/* Curation Status Message (no live progress) */}
+            {command === 'run_curation' && isCurationRunning && progressEvents.length === 0 && (
+              <div className="bg-muted/50 border border-border rounded-md p-3 text-sm space-y-2">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Mail className="h-4 w-4" />
+                  <span>Curation running in background</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  You'll receive an email in 5-10 minutes with:
+                  <ul className="list-disc list-inside mt-1 ml-2">
+                    <li>Videos analyzed</li>
+                    <li>Videos added to library</li>
+                    <li>API quota used</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {/* Result */}
+            {result && <ResultDisplay result={result} />}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  return (
+    <AdminLayout>
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">⚡ Command Center</h1>
+            <p className="text-muted-foreground">Execute system commands and operations</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={loadCommandLog}
+            data-testid="button-refresh-logs"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Logs
+          </Button>
+        </div>
+
+        {/* Curation Commands */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">🎯 Curation Controls</h2>
+            <Badge variant="outline">System Operations</Badge>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <CommandButton
+              icon={Play}
+              title="▶️ Run Curation"
+              duration="5-10 min"
+              command="run_curation"
+            />
+            <CommandButton
+              icon={Camera}
+              title="📸 Take Snapshot"
+              duration="~30 sec"
+              command="take_snapshot"
+            />
+            <CommandButton
+              icon={Trash2}
+              title="🗑️ Flush Cache"
+              duration="Instant"
+              command="flush_cache"
+            />
+        </div>
+
+        {/* Curation Settings */}
+        <Card>
+          <CardHeader className="cursor-pointer" onClick={() => setSettingsExpanded(!settingsExpanded)}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                <CardTitle className="text-base">⚙️ Curation Settings</CardTitle>
+              </div>
+              {settingsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </div>
+            <CardDescription className="text-xs">Customize curation parameters</CardDescription>
+          </CardHeader>
+
+          {settingsExpanded && (
+            <CardContent className="space-y-4">
+              {/* Quality Threshold */}
+              <div className="space-y-2">
+                <Label htmlFor="quality-threshold" className="text-sm flex justify-between">
+                  <span>Quality Threshold</span>
+                  <span className="font-bold">{settings.qualityThreshold}</span>
+                </Label>
+                <Slider
+                  id="quality-threshold"
+                  min={5}
+                  max={9}
+                  step={0.5}
+                  value={[settings.qualityThreshold]}
+                  onValueChange={(value) => setSettings({ ...settings, qualityThreshold: value[0] })}
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">Minimum quality score for videos (5-9)</p>
+              </div>
+
+              {/* Videos Per Run */}
+              <div className="space-y-2">
+                <Label htmlFor="videos-per-run" className="text-sm">Videos to Analyze Per Run</Label>
+                <select
+                  id="videos-per-run"
+                  value={settings.videosPerRun}
+                  onChange={(e) => setSettings({ ...settings, videosPerRun: parseInt(e.target.value) })}
+                  className="w-full p-2 border rounded bg-background"
+                >
+                  <option value="10">10 (Fast - 3 min)</option>
+                  <option value="20">20 (Normal - 5 min)</option>
+                  <option value="30">30 (Thorough - 8 min)</option>
+                  <option value="50">50 (Maximum - 12 min)</option>
+                </select>
+                <p className="text-xs text-muted-foreground">More videos = longer runtime, more results</p>
+              </div>
+
+              {/* Focus Instructors */}
+              <div className="space-y-2">
+                <Label htmlFor="focus-instructors" className="text-sm">Priority Instructors</Label>
+                <Input
+                  id="focus-instructors"
+                  type="text"
+                  placeholder="e.g., John Danaher, Gordon Ryan"
+                  value={settings.focusInstructors}
+                  onChange={(e) => setSettings({ ...settings, focusInstructors: e.target.value })}
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">Comma-separated list of instructors to prioritize</p>
+              </div>
+
+              {/* Save Button */}
+              <Button 
+                onClick={saveSettings}
+                className="w-full"
+                variant="default"
+              >
+                💾 Save Settings
+              </Button>
+
+              <p className="text-xs text-muted-foreground text-center">
+                Settings apply to next curation run
+              </p>
+            </CardContent>
+          )}
+        </Card>
+      </div>
+
+      {/* System Commands */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold">⚙️ System Maintenance</h2>
+          <Badge variant="outline">API Testing</Badge>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <CommandButton
+            icon={TestTube}
+            title="🔌 Test APIs"
+            duration="~10 sec"
+            command="test_apis"
+          />
+        </div>
+      </div>
+
+      {/* Command Log */}
+      <div className="space-y-3">
+        <h2 className="text-xl font-semibold">📋 Recent Commands</h2>
+        <Card>
+          <CardHeader>
+            <CardTitle>Execution Log</CardTitle>
+            <CardDescription>Last {logs.length} commands executed</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {logs.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No commands executed yet
+                </div>
+              ) : (
+                logs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="flex items-center justify-between p-3 rounded border bg-card hover-elevate"
+                    data-testid={`log-entry-${log.id}`}
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      <Badge variant={log.success ? "default" : "destructive"}>
+                        {log.success ? '✅' : '❌'}
+                      </Badge>
+                      <div className="flex-1">
+                        <div className="font-medium">{log.command}</div>
+                        <div className="text-xs text-muted-foreground">{log.message}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground text-right">
+                      <div>{new Date(log.timestamp).toLocaleString()}</div>
+                      <div className="text-[10px]">{log.executionTimeMs}ms</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      </div>
+    </AdminLayout>
+  );
+}

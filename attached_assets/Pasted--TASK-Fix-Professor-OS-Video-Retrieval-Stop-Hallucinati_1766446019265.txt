@@ -1,0 +1,464 @@
+```
+TASK: Fix Professor OS Video Retrieval + Stop Hallucinating Instructor Credentials
+
+TWO CRITICAL BUGS TO FIX:
+
+BUG 1: Professor OS only sees 30 generic videos regardless of what user asks
+- User asks "Any JT Torres videos?" 
+- System has 50+ JT Torres videos in database
+- Prof OS says "I don't have any JT Torres videos"
+- Because JT Torres wasn't in the generic top 30 pre-fetched videos
+
+BUG 2: Professor OS invents instructor credentials
+- User asks about JT Torres
+- Prof OS says "JT Torres won 2022 ADCC" (FALSE - he did not)
+- AI is hallucinating competition results it doesn't actually know
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: INTELLIGENT VIDEO RETRIEVAL SYSTEM
+═══════════════════════════════════════════════════════════════════════════════
+
+LOCATION: server/routes.ts
+
+STEP 1: Add the message analyzer function (add this BEFORE the buildSystemPrompt function)
+
+async function analyzeMessageForVideoQuery(message: string): Promise<{
+  instructorNames: string[];
+  techniques: string[];
+  positions: string[];
+  isVideoRequest: boolean;
+  queryType: 'instructor' | 'technique' | 'position' | 'general';
+}> {
+  const messageLower = message.toLowerCase();
+  
+  // Known instructor names to detect
+  const knownInstructors = [
+    'jt torres', 'j.t. torres', 'jt', 'john danaher', 'danaher', 
+    'gordon ryan', 'gordon', 'craig jones', 'lachlan giles', 'lachlan',
+    'bernardo faria', 'bernardo', 'marcelo garcia', 'marcelo', 
+    'roger gracie', 'roger', 'mikey musumeci', 'mikey',
+    'garry tonon', 'tonon', 'andre galvao', 'galvao', 
+    'marcus buchecha', 'buchecha', 'leandro lo',
+    'nicholas meregali', 'meregali', 'felipe pena', 'preguica',
+    'kaynan duarte', 'kaynan', 'tainan dalpra', 'tainan',
+    'mica galvao', 'keenan cornelius', 'keenan', 'ryan hall',
+    'eddie bravo', 'jean jacques machado', 'renzo gracie', 'renzo',
+    'rickson gracie', 'rickson', 'demian maia', 'demian',
+    'fabricio werdum', 'jacare souza', 'xande ribeiro', 'xande',
+    'saulo ribeiro', 'saulo', 'cobrinha', 'rafael mendes', 'rafa mendes',
+    'gui mendes', 'guilherme mendes', 'lucas lepri', 'lepri',
+    'michael langhi', 'romulo barral', 'romulo', 'otavio sousa',
+    'gilbert burns', 'murilo santana', 'comprido', 'terere', 'leo vieira',
+    'bruno malfacine', 'caio terra', 'caio', 'paulo miyao', 'joao miyao',
+    'miyao brothers', 'ruotolo brothers', 'tye ruotolo', 'kade ruotolo',
+    'nicky ryan', 'nicky rod', 'ethan crelinsten', 'oliver taza',
+    'dante leon', 'william tackett', 'tackett', 'andrew wiltse', 'wiltse',
+    'josh hinger', 'hinger', 'tom deblass', 'deblass', 'travis stevens',
+    'jimmy pedro', 'georges st pierre', 'gsp', 'ffion davies', 'ffion',
+    'amanda leve', 'beatriz mesquita', 'bia mesquita', 'gabi garcia',
+    'robert degle', 'degle', 'jon thomas', 'jordan teaches jiujitsu',
+    'chewjitsu', 'chewy', 'knight jiu jitsu', 'aoj', 'atos',
+    'b team', 'new wave', 'daisy fresh', 'pedigo submission fighting'
+  ];
+  
+  // Known techniques to detect
+  const knownTechniques = [
+    'armbar', 'arm bar', 'arm-bar', 'juji gatame',
+    'triangle', 'triangle choke', 'sankaku',
+    'kimura', 'double wristlock', 'americana', 'keylock', 'ude garami',
+    'omoplata', 'omoplata sweep',
+    'guillotine', 'arm-in guillotine', 'high elbow guillotine', 'marcelotine',
+    'rear naked choke', 'rear naked', 'rnc', 'mata leao',
+    'darce', 'darce choke', 'd\'arce', 'brabo choke',
+    'anaconda', 'anaconda choke', 'gator roll',
+    'ezekiel', 'ezekiel choke', 'sode guruma jime',
+    'baseball bat choke', 'baseball choke',
+    'bow and arrow', 'bow and arrow choke',
+    'cross collar choke', 'cross choke', 'x choke',
+    'loop choke', 'clock choke', 'north south choke',
+    'arm triangle', 'head and arm choke', 'kata gatame',
+    'heel hook', 'inside heel hook', 'outside heel hook',
+    'knee bar', 'kneebar', 'leg lock', 'leg attack',
+    'toe hold', 'ankle lock', 'straight ankle', 'straight foot lock',
+    'calf slicer', 'calf crush', 'bicep slicer', 'wrist lock',
+    'sweep', 'scissor sweep', 'hip bump', 'hip bump sweep',
+    'flower sweep', 'pendulum sweep', 'elevator sweep',
+    'butterfly sweep', 'hook sweep',
+    'x guard sweep', 'technical standup',
+    'de la riva sweep', 'dlr sweep', 'berimbolo', 'bolo',
+    'pass', 'passing', 'guard pass', 'guard passing',
+    'torreando', 'toreando', 'bullfighter pass',
+    'knee cut', 'knee slice', 'knee slide',
+    'leg drag', 'leg weave',
+    'stack pass', 'stacking',
+    'over under', 'over under pass',
+    'double under', 'double unders',
+    'smash pass', 'pressure pass', 'pressure passing',
+    'long step', 'long step pass',
+    'body lock pass', 'body lock passing',
+    'takedown', 'wrestling', 'single leg', 'double leg',
+    'ankle pick', 'arm drag', 'two on one',
+    'snap down', 'front headlock',
+    'foot sweep', 'trip',
+    'osoto gari', 'ouchi gari', 'kouchi gari',
+    'seoi nage', 'drop seoi', 'uchi mata',
+    'escape', 'escapes', 'defense',
+    'bridge', 'bridge and roll', 'upa',
+    'shrimp', 'shrimping', 'elbow escape', 'hip escape',
+    'mount escape', 'side control escape', 'back escape',
+    'guard retention', 'guard recovery', 'reguard',
+    'frames', 'framing', 'underhook', 'overhook', 'whizzer',
+    'collar tie', 'wrist control', 'sleeve grip', 'collar grip', 'pant grip'
+  ];
+  
+  // Known positions to detect
+  const knownPositions = [
+    'closed guard', 'full guard',
+    'open guard', 'seated guard',
+    'half guard', 'deep half', 'deep half guard', 'lockdown',
+    'z guard', 'knee shield', 'knee shield half guard',
+    'butterfly guard', 'butterfly', 'seated butterfly',
+    'de la riva', 'dlr', 'de la riva guard',
+    'reverse de la riva', 'rdlr', 'reverse dlr',
+    'spider guard', 'spider',
+    'lasso guard', 'lasso',
+    'x guard', 'x-guard',
+    'single leg x', 'slx', 'single x', 'ashi garami',
+    '50 50', 'fifty fifty', '50/50',
+    'rubber guard', 'mission control', '10th planet',
+    'williams guard',
+    'worm guard', 'lapel guard', 'squid guard',
+    'collar sleeve', 'collar and sleeve',
+    'mount', 'full mount', 'mounted',
+    'back mount', 'back control', 'back take', 'taking the back',
+    'rear mount', 'hooks in', 'seatbelt',
+    'side control', 'side mount', 'cross side', 'hundred kilos',
+    'knee on belly', 'knee on chest', 'kob',
+    'north south', 'north-south', '69 position',
+    'turtle', 'turtle position', 'all fours',
+    'standing', 'stand up', 'wrestling position',
+    'clinch', 'over under clinch', 'body lock',
+    'front headlock', 'front head', 'guillotine position',
+    'crucifix', 'twister side control',
+    'truck', 'truck position'
+  ];
+  
+  // Detect instructors mentioned
+  const instructorNames = knownInstructors.filter(instructor => 
+    messageLower.includes(instructor.toLowerCase())
+  );
+  
+  // Detect techniques mentioned
+  const techniques = knownTechniques.filter(technique => 
+    messageLower.includes(technique.toLowerCase())
+  );
+  
+  // Detect positions mentioned
+  const positions = knownPositions.filter(position => 
+    messageLower.includes(position.toLowerCase())
+  );
+  
+  // Determine if this is a video request
+  const videoKeywords = ['video', 'videos', 'watch', 'show me', 'recommend', 'suggestion', 'instructional', 'tutorial', 'learn', 'teach', 'drill', 'drilling'];
+  const isVideoRequest = videoKeywords.some(keyword => messageLower.includes(keyword)) ||
+    instructorNames.length > 0 ||
+    (techniques.length > 0 && (messageLower.includes('how') || messageLower.includes('help')));
+  
+  // Determine query type priority
+  let queryType: 'instructor' | 'technique' | 'position' | 'general' = 'general';
+  if (instructorNames.length > 0) {
+    queryType = 'instructor';
+  } else if (techniques.length > 0) {
+    queryType = 'technique';
+  } else if (positions.length > 0) {
+    queryType = 'position';
+  }
+  
+  return {
+    instructorNames,
+    techniques,
+    positions,
+    isVideoRequest,
+    queryType
+  };
+}
+
+STEP 2: Add the intelligent video fetcher function (add after the analyzer)
+
+async function fetchRelevantVideos(
+  analysis: {
+    instructorNames: string[];
+    techniques: string[];
+    positions: string[];
+    isVideoRequest: boolean;
+    queryType: 'instructor' | 'technique' | 'position' | 'general';
+  },
+  userContext: any,
+  limit: number = 50
+): Promise<any[]> {
+  const { instructorNames, techniques, positions, queryType } = analysis;
+  
+  let videos: any[] = [];
+  
+  try {
+    // PRIORITY 1: Query by instructor name
+    if (queryType === 'instructor' && instructorNames.length > 0) {
+      for (const instructor of instructorNames) {
+        const instructorVideos = await db.select()
+          .from(aiVideoKnowledge)
+          .where(
+            sql`LOWER(${aiVideoKnowledge.instructorName}) LIKE LOWER(${'%' + instructor + '%'})`
+          )
+          .orderBy(desc(aiVideoKnowledge.qualityScore))
+          .limit(limit);
+        
+        videos = [...videos, ...instructorVideos];
+      }
+      
+      // If instructor query but also has technique, filter further
+      if (videos.length > 0 && techniques.length > 0) {
+        const techniqueFiltered = videos.filter(v => {
+          const videoText = `${v.title} ${v.techniqueName} ${v.techniqueType}`.toLowerCase();
+          return techniques.some(t => videoText.includes(t.toLowerCase()));
+        });
+        if (techniqueFiltered.length > 0) {
+          videos = techniqueFiltered;
+        }
+      }
+    }
+    
+    // PRIORITY 2: Query by technique
+    if (videos.length === 0 && queryType === 'technique' && techniques.length > 0) {
+      for (const technique of techniques) {
+        const techniqueVideos = await db.select()
+          .from(aiVideoKnowledge)
+          .where(
+            or(
+              sql`LOWER(${aiVideoKnowledge.techniqueName}) LIKE LOWER(${'%' + technique + '%'})`,
+              sql`LOWER(${aiVideoKnowledge.techniqueType}) LIKE LOWER(${'%' + technique + '%'})`,
+              sql`LOWER(${aiVideoKnowledge.title}) LIKE LOWER(${'%' + technique + '%'})`
+            )
+          )
+          .orderBy(desc(aiVideoKnowledge.qualityScore))
+          .limit(limit);
+        
+        videos = [...videos, ...techniqueVideos];
+      }
+    }
+    
+    // PRIORITY 3: Query by position
+    if (videos.length === 0 && queryType === 'position' && positions.length > 0) {
+      for (const position of positions) {
+        const positionVideos = await db.select()
+          .from(aiVideoKnowledge)
+          .where(
+            or(
+              sql`LOWER(${aiVideoKnowledge.positionCategory}) LIKE LOWER(${'%' + position + '%'})`,
+              sql`LOWER(${aiVideoKnowledge.techniqueName}) LIKE LOWER(${'%' + position + '%'})`,
+              sql`LOWER(${aiVideoKnowledge.title}) LIKE LOWER(${'%' + position + '%'})`
+            )
+          )
+          .orderBy(desc(aiVideoKnowledge.qualityScore))
+          .limit(limit);
+        
+        videos = [...videos, ...positionVideos];
+      }
+    }
+    
+    // FALLBACK: General top videos matching user's gi/nogi preference
+    if (videos.length === 0) {
+      const userStyle = userContext?.user?.style || 'both';
+      
+      if (userStyle === 'gi') {
+        videos = await db.select()
+          .from(aiVideoKnowledge)
+          .where(
+            or(
+              eq(aiVideoKnowledge.giOrNogi, 'gi'),
+              eq(aiVideoKnowledge.giOrNogi, 'both'),
+              sql`${aiVideoKnowledge.giOrNogi} IS NULL`
+            )
+          )
+          .orderBy(desc(aiVideoKnowledge.qualityScore))
+          .limit(limit);
+      } else if (userStyle === 'nogi' || userStyle === 'no-gi') {
+        videos = await db.select()
+          .from(aiVideoKnowledge)
+          .where(
+            or(
+              eq(aiVideoKnowledge.giOrNogi, 'nogi'),
+              eq(aiVideoKnowledge.giOrNogi, 'no-gi'),
+              eq(aiVideoKnowledge.giOrNogi, 'both'),
+              sql`${aiVideoKnowledge.giOrNogi} IS NULL`
+            )
+          )
+          .orderBy(desc(aiVideoKnowledge.qualityScore))
+          .limit(limit);
+      } else {
+        videos = await db.select()
+          .from(aiVideoKnowledge)
+          .orderBy(desc(aiVideoKnowledge.qualityScore))
+          .limit(limit);
+      }
+    }
+    
+    // Remove duplicates based on video URL
+    const uniqueVideos = videos.filter((video, index, self) =>
+      index === self.findIndex(v => v.videoUrl === video.videoUrl)
+    );
+    
+    // Sort by quality score and limit
+    return uniqueVideos
+      .sort((a, b) => (Number(b.qualityScore) || 0) - (Number(a.qualityScore) || 0))
+      .slice(0, limit);
+      
+  } catch (error) {
+    console.error('Error fetching relevant videos:', error);
+    // Fallback to basic query on any error
+    return await db.select()
+      .from(aiVideoKnowledge)
+      .orderBy(desc(aiVideoKnowledge.qualityScore))
+      .limit(30);
+  }
+}
+
+STEP 3: Update the /api/ai/chat/message endpoint
+
+FIND the section where availableVideos is currently fetched. It probably looks something like:
+
+const availableVideos = await db.select()
+  .from(aiVideoKnowledge)
+  .orderBy(desc(aiVideoKnowledge.qualityScore))
+  .limit(30);
+
+REPLACE that entire block with:
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTELLIGENT VIDEO RETRIEVAL - Query based on user's actual question
+// ═══════════════════════════════════════════════════════════════════════════
+const messageAnalysis = await analyzeMessageForVideoQuery(message);
+console.log('[VIDEO RETRIEVAL] Message analysis:', {
+  queryType: messageAnalysis.queryType,
+  instructors: messageAnalysis.instructorNames,
+  techniques: messageAnalysis.techniques,
+  positions: messageAnalysis.positions,
+  isVideoRequest: messageAnalysis.isVideoRequest
+});
+
+const availableVideos = await fetchRelevantVideos(messageAnalysis, context, 50);
+
+console.log(`[VIDEO RETRIEVAL] Fetched ${availableVideos.length} videos for query type: ${messageAnalysis.queryType}`);
+if (messageAnalysis.instructorNames.length > 0) {
+  console.log(`[VIDEO RETRIEVAL] Instructor filter applied: ${messageAnalysis.instructorNames.join(', ')}`);
+  console.log(`[VIDEO RETRIEVAL] Sample videos found:`, availableVideos.slice(0, 3).map(v => `${v.instructorName}: ${v.title}`));
+}
+
+STEP 4: Make sure these imports exist at the top of routes.ts
+
+import { sql, or, eq, desc, and } from 'drizzle-orm';
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: PROFESSOR OS SYSTEM PROMPT - ADD NEW RULES
+═══════════════════════════════════════════════════════════════════════════════
+
+LOCATION: Find the buildSystemPrompt function in server/routes.ts (or server/professor-os-prompts.ts if prompts are stored separately)
+
+FIND the section with the existing rules (RULE #1 through RULE #6) and ADD these new rules:
+
+RULE #7: NO REPETITION
+Never repeat the same information, fact, or concept within a single response. Say it once, make your point, move on. If you've mentioned that someone is known for pressure passing, don't mention it again in the same response. Each sentence should add NEW information.
+
+RULE #8: NEVER INVENT INSTRUCTOR CREDENTIALS
+NEVER make up or guess instructor competition results, achievements, titles, or credentials. This is a CRITICAL rule.
+
+BAD (hallucination): "JT Torres won ADCC in 2022"
+BAD (hallucination): "Lachlan Giles is a 3x world champion"
+BAD (guessing): "He won multiple world titles"
+
+GOOD: "JT Torres is known for his pressure passing style"
+GOOD: "Lachlan Giles breaks down techniques systematically"
+GOOD: "Here's what I have from [instructor]..."
+
+If you don't have VERIFIED data about an instructor's competitive record stored in your context, DO NOT mention it. Focus on:
+- Their teaching style
+- What techniques they're known for
+- The videos you have available from them
+
+It is better to say NOTHING about credentials than to invent them.
+
+RULE #9: TRUST YOUR VIDEO LIBRARY
+The videos provided to you in this prompt were specifically retrieved based on the user's question. If the user asks "Any JT Torres videos?" and you see JT Torres videos in your library, RECOMMEND THEM. Do not say "I don't have videos from X instructor" if you can see their videos in your available library.
+
+Before claiming you don't have something, CHECK your video library list in this prompt.
+
+STEP 5: Update the video library section in buildSystemPrompt
+
+FIND where the video library is injected into the prompt and UPDATE it to be clearer:
+
+// Replace the existing video library formatting with this:
+const videoLibrarySection = `
+═══════════════════════════════════════════════════════════════════════════════
+YOUR VIDEO LIBRARY FOR THIS CONVERSATION
+═══════════════════════════════════════════════════════════════════════════════
+
+These ${availableVideos.length} videos were retrieved based on what ${displayName} asked about:
+
+${availableVideos.map((v, index) => 
+  `${index + 1}. "${v.title || v.techniqueName}" by ${v.instructorName}
+   Type: ${v.techniqueType || 'technique'} | Quality: ${v.qualityScore || 'N/A'}/10
+   URL: ${v.videoUrl}`
+).join('\n\n')}
+
+═══════════════════════════════════════════════════════════════════════════════
+VIDEO RECOMMENDATION RULES:
+- If user asked about a specific instructor and you see their videos above, RECOMMEND THEM
+- Do NOT say "I don't have videos from [instructor]" if their videos appear in this list
+- When recommending, give 1-3 relevant videos with context about why they'll help
+- Always include the video title, instructor name, and URL
+═══════════════════════════════════════════════════════════════════════════════
+`;
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION TESTS
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing, test with these exact queries:
+
+TEST 1: "Any JT Torres videos you would suggest for me?"
+EXPECTED: Returns multiple JT Torres videos with recommendations
+FAIL IF: Says "I don't have JT Torres videos" or invents competition results
+
+TEST 2: "Show me some triangle choke tutorials"
+EXPECTED: Returns triangle-related videos from various instructors
+FAIL IF: Returns random unrelated videos
+
+TEST 3: "What does Gordon Ryan teach about passing?"
+EXPECTED: Returns Gordon Ryan guard passing videos
+FAIL IF: Returns non-Gordon Ryan videos or invents credentials
+
+TEST 4: "Help me with my half guard"
+EXPECTED: Returns half guard videos
+FAIL IF: Returns mount escape videos
+
+TEST 5: "Tell me about Lachlan Giles"
+EXPECTED: Talks about teaching style, available videos - NO invented competition results
+FAIL IF: Says "Lachlan Giles won X championship in Y year" (unless verified)
+
+Check the console logs to verify the intelligent retrieval is working:
+[VIDEO RETRIEVAL] Message analysis: { queryType: 'instructor', instructors: ['jt torres'], ... }
+[VIDEO RETRIEVAL] Fetched 52 videos for query type: instructor
+
+═══════════════════════════════════════════════════════════════════════════════
+SUMMARY OF CHANGES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. NEW FUNCTION: analyzeMessageForVideoQuery() - Parses user message for intent
+2. NEW FUNCTION: fetchRelevantVideos() - Queries database based on intent
+3. UPDATED: Chat endpoint now uses intelligent retrieval instead of generic top 30
+4. NEW RULE #7: No repetition in responses
+5. NEW RULE #8: Never invent instructor credentials
+6. NEW RULE #9: Trust your video library
+7. UPDATED: Video library section in system prompt is clearer
+
+DO NOT modify any other functionality. Only implement these specific changes.
+```

@@ -1,0 +1,517 @@
+# 🎯 COMPLETE MASTER PROMPT - FINAL VERSION
+
+```
+MASTER FIX: COMPLETE SIGNUP SYSTEM - LIFETIME AND REGULAR USERS
+
+Fix everything in one comprehensive update:
+1. Both signup flows ask IDENTICAL questions (no differences)
+2. Questions use BUTTONS (not text input) for all selections
+3. Data saves to SAME database columns
+4. Lifetime users skip payment (free forever)
+5. Regular users MUST pay via Stripe checkout
+6. Admin panel: Add correct personal message, remove ALL phone references
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: STANDARDIZED ONBOARDING QUESTIONS (IDENTICAL FOR BOTH FLOWS)
+═══════════════════════════════════════════════════════════════════════════════
+
+BOTH lifetime invitation signup AND regular signup must ask these exact 
+questions in this order. Use the same HTML/JavaScript for both flows.
+
+QUESTION 1: Email Address
+- Lifetime flow: Pre-filled from invitation token, read-only
+- Regular flow: User types their email
+- Field: email (text input)
+
+QUESTION 2: First Name  
+- User types their first name
+- Field: firstName (text input)
+- Placeholder: "Enter your first name"
+
+QUESTION 3: Username
+- User types username
+- Real-time validation: ✅ green if available, ❌ red if taken
+- Field: username (text input)
+- Validation: letters, numbers, underscores only
+- Check availability with: GET /api/auth/check-username?username=xxx
+
+QUESTION 4: Belt Level (BUTTONS TO CLICK - NO EMOJIS, TEXT ONLY)
+- Show 5 buttons with text only:
+  • "White Belt" → "white"
+  • "Blue Belt" → "blue"
+  • "Purple Belt" → "purple"
+  • "Brown Belt" → "brown"
+  • "Black Belt" → "black"
+- When clicked, button gets purple border (.selected class)
+- Store value in hidden input: beltLevel
+
+QUESTION 5: Years Training (BUTTONS TO CLICK)
+- Show 6 buttons with these labels and values:
+  • "Less than 6 months" → "0-0.5"
+  • "6 months - 1 year" → "0.5-1"
+  • "1-2 years" → "1-2"
+  • "2-5 years" → "2-5"
+  • "5-10 years" → "5-10"
+  • "10+ years" → "10+"
+- Store value in hidden input: yearsTraining
+
+QUESTION 6: Training Frequency (BUTTONS TO CLICK)
+- Show 3 buttons:
+  • "1-2 times per week" → "1-2"
+  • "3-4 times per week" → "3-4"
+  • "5+ times per week" → "5+"
+- Store value in hidden input: trainingFrequency
+
+QUESTION 7: Struggle Area (BUTTONS TO CLICK - NOT TEXT INPUT)
+- Show 7 buttons:
+  • "Guard Passing" → "guard_passing"
+  • "Guard Retention" → "guard_retention"
+  • "Takedowns" → "takedowns"
+  • "Submissions" → "submissions"
+  • "Escapes" → "escapes"
+  • "Transitions" → "transitions"
+  • "Other" → "other"
+- Store value in hidden input: struggleArea
+
+QUESTION 8: Training Focus (BUTTONS TO CLICK)
+- Show 3 buttons:
+  • "Gi" → "gi"
+  • "No-Gi" → "nogi"
+  • "Both" → "both"
+- Store value in hidden input: trainingFocus
+
+CRITICAL: Questions 4-8 must be BUTTONS users click, NOT text input fields.
+NO EMOJIS - just clean text on buttons.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: AFTER ONBOARDING - SPLIT INTO TWO PATHS
+═══════════════════════════════════════════════════════════════════════════════
+
+After user completes all 8 questions, check if lifetime or regular:
+
+PATH A: LIFETIME INVITATION USER (has ?token=xxx in URL)
+1. Collect all form data
+2. POST to /api/auth/signup-with-lifetime-invite with token
+3. Backend creates user immediately with lifetime_access = true
+4. Set auth cookie/token
+5. Redirect to /dashboard
+6. NO PAYMENT, NO STRIPE
+
+PATH B: REGULAR USER (no token in URL)
+1. Collect all form data
+2. Store data temporarily in sessionStorage
+3. Redirect to /checkout
+4. Show Stripe checkout for $3.99/month subscription
+5. After payment succeeds, Stripe webhook creates user account
+6. Redirect to /dashboard
+
+IMPLEMENTATION:
+
+```javascript
+async function completeSignup() {
+  // Check if this is lifetime invitation
+  const urlParams = new URLSearchParams(window.location.search);
+  const lifetimeToken = urlParams.get('token');
+  
+  // Collect all onboarding data
+  const signupData = {
+    email: document.getElementById('email').value,
+    firstName: document.getElementById('first-name').value,
+    username: document.getElementById('username').value,
+    beltLevel: document.getElementById('belt-level').value,
+    yearsTraining: document.getElementById('years-training').value,
+    trainingFrequency: document.getElementById('training-frequency').value,
+    struggleArea: document.getElementById('struggle-area').value,
+    trainingFocus: document.getElementById('training-focus').value
+  };
+  
+  if (lifetimeToken) {
+    // PATH A: LIFETIME USER - Create account now (no payment)
+    const response = await fetch('/api/auth/signup-with-lifetime-invite', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: lifetimeToken,
+        ...signupData
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      window.location.href = '/dashboard';
+    } else {
+      alert('Error: ' + data.error);
+    }
+    
+  } else {
+    // PATH B: REGULAR USER - Must pay first
+    sessionStorage.setItem('pendingSignupData', JSON.stringify(signupData));
+    window.location.href = '/checkout';
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: BACKEND - LIFETIME SIGNUP ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Endpoint for lifetime users (creates account immediately):
+
+```javascript
+app.post('/api/auth/signup-with-lifetime-invite', async (req, res) => {
+  const { 
+    token, email, firstName, username, 
+    beltLevel, yearsTraining, trainingFrequency, 
+    struggleArea, trainingFocus 
+  } = req.body;
+  
+  try {
+    // Validate invitation token
+    const invite = await db.query(
+      `SELECT * FROM lifetime_invitations 
+       WHERE invite_token = $1 AND status = 'pending' AND expires_at > NOW()`,
+      [token]
+    );
+    
+    if (invite.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired invitation' });
+    }
+    
+    const invitation = invite.rows[0];
+    
+    // Check username availability
+    const existingUser = await db.query(
+      'SELECT id FROM users WHERE LOWER(username) = LOWER($1)',
+      [username]
+    );
+    
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ error: 'Username already taken' });
+    }
+    
+    // Create user account (NO PASSWORD - device memory auth)
+    const newUser = await db.query(
+      `INSERT INTO users 
+       (email, first_name, username, 
+        belt_level, years_training, training_frequency,
+        struggle_area, training_focus,
+        lifetime_access, is_founding_member, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, true, NOW())
+       RETURNING id, email, username, first_name, lifetime_access`,
+      [
+        invitation.email, 
+        firstName, 
+        username, 
+        beltLevel,
+        yearsTraining,
+        trainingFrequency,
+        struggleArea, 
+        trainingFocus
+      ]
+    );
+    
+    const user = newUser.rows[0];
+    
+    // Mark invitation as completed
+    await db.query(
+      `UPDATE lifetime_invitations 
+       SET status = 'completed', used_at = NOW(), completed_by_user_id = $1
+       WHERE id = $2`,
+      [user.id, invitation.id]
+    );
+    
+    // Generate JWT token for auto-login
+    const jwt = require('jsonwebtoken');
+    const authToken = jwt.sign(
+      { 
+        userId: user.id,
+        email: user.email,
+        lifetimeAccess: true
+      },
+      process.env.JWT_SECRET || 'bjjos-secret-key',
+      { expiresIn: '365d' }
+    );
+    
+    // Set auth cookie
+    res.cookie('bjjos_auth', authToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+      sameSite: 'strict'
+    });
+    
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.first_name,
+        lifetimeAccess: true
+      }
+    });
+    
+  } catch (error) {
+    console.error('[LIFETIME SIGNUP ERROR]:', error);
+    res.status(500).json({ error: 'Signup failed' });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: BACKEND - REGULAR SIGNUP (VIA STRIPE)
+═══════════════════════════════════════════════════════════════════════════════
+
+Endpoint to create Stripe checkout session:
+
+```javascript
+app.post('/api/stripe/create-checkout-session', async (req, res) => {
+  const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+  const { signupData } = req.body;
+  
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price: process.env.STRIPE_PRICE_ID, // Your $3.99/month price
+        quantity: 1,
+      }],
+      mode: 'subscription',
+      success_url: `${process.env.APP_URL}/signup-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.APP_URL}/signup?cancelled=true`,
+      customer_email: signupData.email,
+      metadata: {
+        signupData: JSON.stringify(signupData)
+      }
+    });
+    
+    res.json({ 
+      success: true, 
+      checkoutUrl: session.url 
+    });
+    
+  } catch (error) {
+    console.error('[STRIPE ERROR]:', error);
+    res.status(500).json({ error: 'Checkout creation failed' });
+  }
+});
+```
+
+Stripe webhook to create account after payment:
+
+```javascript
+app.post('/api/stripe/webhook', async (req, res) => {
+  const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+  const sig = req.headers['stripe-signature'];
+  
+  let event;
+  
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+  
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const signupData = JSON.parse(session.metadata.signupData);
+    
+    // Create user account after successful payment
+    const newUser = await db.query(
+      `INSERT INTO users 
+       (email, first_name, username, 
+        belt_level, years_training, training_frequency,
+        struggle_area, training_focus,
+        stripe_customer_id, stripe_subscription_id,
+        lifetime_access, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, NOW())
+       RETURNING *`,
+      [
+        signupData.email,
+        signupData.firstName,
+        signupData.username,
+        signupData.beltLevel,
+        signupData.yearsTraining,
+        signupData.trainingFrequency,
+        signupData.struggleArea,
+        signupData.trainingFocus,
+        session.customer,
+        session.subscription
+      ]
+    );
+    
+    console.log('[STRIPE] User created:', newUser.rows[0].id);
+  }
+  
+  res.json({ received: true });
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: ADMIN PANEL FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+FIX A: Add personal message with correct tone and content
+
+FIND the Personal Message textarea in admin panel and UPDATE:
+
+```html
+<div class="form-group">
+  <label for="personal-message">Personal Message (Optional)</label>
+  <textarea 
+    id="personal-message" 
+    name="personalMessage"
+    rows="13"
+    placeholder="You have lifetime access to BJJ OS. Forever. No charge..."
+  >You have lifetime access to BJJ OS. Forever. No charge.
+
+I'm genuinely grateful you're here early.
+
+Prof. OS is your training companion that never forgets. After each session, tell it what you worked on - it remembers everything, spots patterns in your game, and tells you what to work on next.
+
+The more you use it, the smarter it gets about YOUR game.
+
+It also scans YouTube daily for new instructionals from elite grapplers, curates a video library, and recommends techniques specific to what you're struggling with.
+
+Here's my only ask: Talk to it like a coach or friend and journal your training after every session for a week. Let's see what happens.
+
+Reach out by text anytime with criticisms. The bad and what can be better only helps. Your feedback shapes what this becomes.
+
+Thanks for using this and helping me build. It means the world.
+
+Oss!
+
+-Todd
+Todd@bjjos.app
+914.837.3750
+Text me anytime with ANY input</textarea>
+  <small style="display: block; margin-top: 8px; color: #888; font-size: 13px; line-height: 1.6;">
+    Default message for lifetime members. Edit to personalize for specific recipients.
+  </small>
+</div>
+```
+
+CRITICAL: If this exact message text does not save or persist, create a constant
+in the backend code to store it:
+
+```javascript
+const DEFAULT_LIFETIME_MESSAGE = `You have lifetime access to BJJ OS. Forever. No charge.
+
+I'm genuinely grateful you're here early.
+
+Prof. OS is your training companion that never forgets. After each session, tell it what you worked on - it remembers everything, spots patterns in your game, and tells you what to work on next.
+
+The more you use it, the smarter it gets about YOUR game.
+
+It also scans YouTube daily for new instructionals from elite grapplers, curates a video library, and recommends techniques specific to what you're struggling with.
+
+Here's my only ask: Talk to it like a coach or friend and journal your training after every session for a week. Let's see what happens.
+
+Reach out by text anytime with criticisms. The bad and what can be better only helps. Your feedback shapes what this becomes.
+
+Thanks for using this and helping me build. It means the world.
+
+Oss!
+
+-Todd
+Todd@bjjos.app
+914.837.3750
+Text me anytime with ANY input`;
+
+// Use this constant to pre-fill the admin form field on page load
+```
+
+FIX B: Remove ALL phone-based access sections
+
+FIND and DELETE these sections completely from admin panel:
+
+- Any section with heading “Phone-Based Access”
+- Any SMS-related features
+- Any phone number inputs
+- Any Twilio references
+
+DELETE the entire HTML block, don’t just hide with CSS.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: DATABASE MIGRATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Ensure all columns exist:
+
+```sql
+-- Add missing columns to users table
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS first_name VARCHAR(100),
+ADD COLUMN IF NOT EXISTS username VARCHAR(50) UNIQUE,
+ADD COLUMN IF NOT EXISTS belt_level VARCHAR(20),
+ADD COLUMN IF NOT EXISTS years_training VARCHAR(20),
+ADD COLUMN IF NOT EXISTS training_frequency VARCHAR(20),
+ADD COLUMN IF NOT EXISTS struggle_area VARCHAR(50),
+ADD COLUMN IF NOT EXISTS training_focus VARCHAR(20),
+ADD COLUMN IF NOT EXISTS lifetime_access BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS is_founding_member BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(100),
+ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(100);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA - VERIFY ALL OF THESE
+═══════════════════════════════════════════════════════════════════════════════
+
+SIGNUP QUESTIONS:
+✅ Both lifetime and regular flows ask identical 8 questions
+✅ Questions 4-8 use BUTTONS (not text input)
+✅ Belt level shows text-only buttons (NO EMOJIS)
+✅ Years training shows 6 button options
+✅ Training frequency shows 3 button options
+✅ Struggle area shows 7 button options (NOT TEXT INPUT)
+✅ Training focus shows 3 button options
+✅ Button selection works (highlights with purple border)
+✅ Username real-time validation shows ✅/❌
+
+LIFETIME FLOW:
+✅ Has ?token=xxx in URL
+✅ Email pre-filled and read-only
+✅ After completing questions → creates account immediately
+✅ No Stripe checkout shown
+✅ Redirects directly to dashboard
+✅ User has lifetime_access = true in database
+
+REGULAR FLOW:
+✅ No token in URL
+✅ User enters email manually
+✅ After completing questions → redirects to Stripe checkout
+✅ Shows $3.99/month subscription payment
+✅ Cannot access dashboard without payment
+✅ After payment → webhook creates account
+✅ User has stripe_subscription_id in database
+
+ADMIN PANEL:
+✅ Personal message has EXACT text pre-filled (with lifetime acknowledgment)
+✅ Message includes: grateful, Prof OS explanation, video scanning, criticism ask
+✅ Signed: “Oss! -Todd” with contact info
+✅ Message persists and doesn’t disappear
+✅ NO “Phone-Based Access” section visible anywhere
+✅ NO SMS or phone references anywhere
+
+DATABASE:
+✅ Both flows save to same columns
+✅ All 8 onboarding fields saved correctly
+✅ Lifetime users have lifetime_access = true
+✅ Regular users have stripe_subscription_id
+
+IMPLEMENT ALL FIXES NOW - THIS IS THE COMPLETE COMPREHENSIVE FIX.
+
+```
+---
+
+**Copy this entire prompt and send to Replit Agent!** 🚀
+
+The personal message is now embedded in Part 5 with a fallback constant to ensure it persists if the textarea doesn't save properly.​​​​​​​​​​​​​​​​
+```

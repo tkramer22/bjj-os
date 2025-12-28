@@ -1,0 +1,1013 @@
+# **🔧 COMPLETE FIX: ADMIN VIDEO PAGE + DEV OS CURATION CONTROL**
+
+-----
+
+**Copy this ENTIRE prompt and paste into Replit Agent:**
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL FIX: ADMIN VIDEO PAGE + DEV OS CURATION CONTROL
+═══════════════════════════════════════════════════════════════════════════════
+
+TWO ISSUES TO FIX:
+1. Admin video page still has curation controls and non-working dropdowns
+2. Dev OS cannot restart curation when asked
+
+CRITICAL: The admin video page format should be IDENTICAL to the user video 
+page that was already fixed. Copy the exact same design, filters, and layout.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: FIX ADMIN VIDEO PAGE - MAKE IT IDENTICAL TO USER PAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 1.1: Find Both Video Pages
+
+```bash
+# Find user video page (this one is already correct)
+find client/src -name "*VideoLibrary*" -o -name "*Videos.tsx" | grep -v admin
+
+# Find admin video page (this one needs fixing)
+find client/src/pages/admin -name "*Video*"
+```
+
+STEP 1.2: Copy User Video Page Design to Admin Page
+
+The user video page at /videos already has:
+✅ Working dropdowns (All Belts, All Styles, Quality filter)
+✅ Search bar that filters
+✅ Clean video cards with thumbnails
+✅ Timestamps (“Added X ago”)
+✅ Watch button that opens embedded player
+✅ No curation controls
+
+The admin video page should be EXACTLY THE SAME but with admin actions added.
+
+STEP 1.3: Replace Admin Video Page Component Completely
+
+```typescript
+// client/src/pages/admin/VideoManagement.tsx (or Videos.tsx)
+
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { formatDistanceToNow } from 'date-fns';
+
+export default function AdminVideoManagement() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [beltFilter, setBeltFilter] = useState('all');
+  const [styleFilter, setStyleFilter] = useState('all');
+  const [qualityFilter, setQualityFilter] = useState('all');
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  
+  // Fetch stats
+  const { data: stats } = useQuery({
+    queryKey: ['admin-video-stats'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/videos/stats');
+      return response.json();
+    }
+  });
+  
+  // Fetch videos with filters (refetch when filters change)
+  const { data: videos, refetch } = useQuery({
+    queryKey: ['admin-videos', searchQuery, beltFilter, styleFilter, qualityFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (searchQuery) params.append('search', searchQuery);
+      if (beltFilter !== 'all') params.append('belt', beltFilter);
+      if (styleFilter !== 'all') params.append('style', styleFilter);
+      if (qualityFilter !== 'all') params.append('quality', qualityFilter);
+      
+      const response = await fetch(`/api/admin/videos?${params.toString()}`);
+      return response.json();
+    }
+  });
+  
+  async function handleDelete(videoId) {
+    if (!confirm('Delete this video? This cannot be undone.')) return;
+    
+    try {
+      await fetch(`/api/admin/videos/${videoId}`, { method: 'DELETE' });
+      refetch();
+    } catch (error) {
+      console.error('Delete failed:', error);
+      alert('Failed to delete video');
+    }
+  }
+  
+  return (
+    <div className="admin-video-management">
+      {/* Header - Same as user page */}
+      <header className="page-header">
+        <div>
+          <h1>Video Library</h1>
+          <p>Manage curated BJJ technique videos</p>
+        </div>
+      </header>
+      
+      {/* Stats Cards - ADMIN ONLY */}
+      <section className="video-stats">
+        <div className="stat-card">
+          <div className="stat-icon">📹</div>
+          <div className="stat-content">
+            <div className="stat-value">{stats?.totalVideos || 0}</div>
+            <div className="stat-label">Total Videos</div>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon">✅</div>
+          <div className="stat-content">
+            <div className="stat-value">{stats?.addedToday || 0}</div>
+            <div className="stat-label">Saved Today</div>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon">🔍</div>
+          <div className="stat-content">
+            <div className="stat-value">{stats?.searchedToday || 0}</div>
+            <div className="stat-label">Searched Today</div>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon">❌</div>
+          <div className="stat-content">
+            <div className="stat-value">
+              {(stats?.searchedToday || 0) - (stats?.addedToday || 0)}
+            </div>
+            <div className="stat-label">Rejected Today</div>
+          </div>
+        </div>
+      </section>
+      
+      {/* Search and Filters - IDENTICAL TO USER PAGE */}
+      <section className="filters-section">
+        <div className="search-box">
+          <input
+            type="text"
+            placeholder="🔍 Search videos..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="search-input"
+          />
+        </div>
+        
+        <div className="filters">
+          <select 
+            value={beltFilter}
+            onChange={(e) => setBeltFilter(e.target.value)}
+            className="filter-dropdown"
+          >
+            <option value="all">All Belts</option>
+            <option value="white">White Belt</option>
+            <option value="blue">Blue Belt</option>
+            <option value="purple">Purple Belt</option>
+            <option value="brown">Brown Belt</option>
+            <option value="black">Black Belt</option>
+          </select>
+          
+          <select
+            value={styleFilter}
+            onChange={(e) => setStyleFilter(e.target.value)}
+            className="filter-dropdown"
+          >
+            <option value="all">All Styles</option>
+            <option value="gi">Gi</option>
+            <option value="nogi">No-Gi</option>
+          </select>
+          
+          <select
+            value={qualityFilter}
+            onChange={(e) => setQualityFilter(e.target.value)}
+            className="filter-dropdown"
+          >
+            <option value="all">7+ Quality</option>
+            <option value="9">9+ Quality</option>
+            <option value="8">8+ Quality</option>
+            <option value="7">7+ Quality</option>
+          </select>
+        </div>
+      </section>
+      
+      {/* Video Grid - IDENTICAL TO USER PAGE + Admin Actions */}
+      <section className="video-grid-section">
+        <div className="section-header">
+          <h2>📹 Recently Added (Last 24 Hours)</h2>
+          <span className="video-count">{videos?.length || 0} videos</span>
+        </div>
+        
+        <div className="video-grid">
+          {videos?.map(video => (
+            <div key={video.id} className="video-card">
+              {/* Thumbnail */}
+              <div className="video-thumbnail" onClick={() => setSelectedVideo(video)}>
+                <img src={video.thumbnail} alt={video.title} />
+                {video.duration && (
+                  <span className="duration-badge">{video.duration}</span>
+                )}
+              </div>
+              
+              {/* Video Info */}
+              <div className="video-info">
+                <h3 className="video-title">{video.title}</h3>
+                
+                <div className="instructor-info">
+                  {video.tier === 'elite' && <span className="elite-badge">🏆</span>}
+                  <span className="instructor-name">{video.instructorName}</span>
+                </div>
+                
+                <div className="video-metadata">
+                  {/* Belt Badge */}
+                  <span className={`belt-badge belt-${video.beltLevel}`}>
+                    {video.beltLevel}
+                  </span>
+                  
+                  {/* Gi/No-Gi Badge */}
+                  <span className={`style-badge style-${video.giType}`}>
+                    {video.giType === 'gi' ? 'Gi' : 'No-Gi'}
+                  </span>
+                  
+                  {/* Timestamp */}
+                  <span className="timestamp">
+                    🕐 Added {formatDistanceToNow(new Date(video.createdAt), { addSuffix: true })}
+                  </span>
+                </div>
+                
+                <div className="quality-info">
+                  <span className="quality-label">Quality:</span>
+                  <span className="quality-score">{video.credibilityScore}/10</span>
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="video-actions">
+                <button 
+                  onClick={() => setSelectedVideo(video)}
+                  className="watch-btn"
+                >
+                  ▶️ Watch Video
+                </button>
+                
+                {/* ADMIN ONLY BUTTONS */}
+                <div className="admin-actions">
+                  <button 
+                    onClick={() => handleDelete(video.id)}
+                    className="delete-btn"
+                  >
+                    🗑️ Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+      
+      {/* Video Player Modal - Same as user page */}
+      {selectedVideo && (
+        <VideoPlayerModal
+          video={selectedVideo}
+          onClose={() => setSelectedVideo(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function VideoPlayerModal({ video, onClose }) {
+  const getYouTubeId = (url) => {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
+    return match ? match[1] : null;
+  };
+  
+  const videoId = getYouTubeId(video.url);
+  
+  return (
+    <div className="video-player-modal" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="video-info">
+            <h2>{video.title}</h2>
+            <p className="instructor">by {video.instructorName}</p>
+          </div>
+          <button onClick={onClose} className="close-btn">✕</button>
+        </div>
+        
+        <div className="video-container">
+          {videoId ? (
+            <iframe
+              width="100%"
+              height="100%"
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+              title={video.title}
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          ) : (
+            <div className="error">Unable to load video</div>
+          )}
+        </div>
+        
+        <div className="video-metadata">
+          <div className="metadata-row">
+            <span className="label">Belt Level:</span>
+            <span className={`belt-badge belt-${video.beltLevel}`}>
+              {video.beltLevel}
+            </span>
+          </div>
+          <div className="metadata-row">
+            <span className="label">Style:</span>
+            <span className={`style-badge style-${video.giType}`}>
+              {video.giType === 'gi' ? 'Gi' : 'No-Gi'}
+            </span>
+          </div>
+          <div className="metadata-row">
+            <span className="label">Quality:</span>
+            <span className="quality-score">{video.credibilityScore}/10</span>
+          </div>
+          <div className="metadata-row">
+            <span className="label">Added:</span>
+            <span className="timestamp">
+              {new Date(video.createdAt).toLocaleString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+              })}
+            </span>
+          </div>
+        </div>
+        
+        <div className="modal-actions">
+          <button 
+            onClick={() => window.open(video.url, '_blank')}
+            className="secondary-btn"
+          >
+            🔗 Open on YouTube
+          </button>
+          <button onClick={onClose} className="primary-btn">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+STEP 1.4: Update Backend API to Support Filters
+
+```typescript
+// server/routes/admin.ts
+
+import { sql, eq, and, or, gte, ilike } from 'drizzle-orm';
+
+app.get('/api/admin/videos', async (req, res) => {
+  try {
+    const { search, belt, style, quality } = req.query;
+    
+    let conditions = [];
+    
+    // Search filter
+    if (search && search !== '') {
+      conditions.push(
+        or(
+          ilike(videos.title, `%${search}%`),
+          ilike(videos.instructorName, `%${search}%`)
+        )
+      );
+    }
+    
+    // Belt filter
+    if (belt && belt !== 'all') {
+      conditions.push(eq(videos.beltLevel, belt));
+    }
+    
+    // Style filter
+    if (style && style !== 'all') {
+      conditions.push(eq(videos.giType, style));
+    }
+    
+    // Quality filter
+    if (quality && quality !== 'all') {
+      const minQuality = parseFloat(quality);
+      conditions.push(gte(videos.credibilityScore, minQuality));
+    }
+    
+    // Build query
+    let query = db.select().from(videos);
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    
+    // Order by most recent first
+    query = query.orderBy(desc(videos.createdAt));
+    
+    const results = await query;
+    
+    res.json(results);
+    
+  } catch (error) {
+    console.error('Video fetch error:', error);
+    res.status(500).json({ error: 'Failed to load videos' });
+  }
+});
+
+app.get('/api/admin/videos/stats', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const totalVideos = await db.select({ count: sql<number>`count(*)` })
+      .from(videos);
+    
+    const curationStats = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(videos_added), 0) as added,
+        COALESCE(SUM(videos_screened), 0) as searched
+      FROM curation_runs
+      WHERE run_date = ${today}
+    `);
+    
+    res.json({
+      totalVideos: Number(totalVideos[0].count),
+      addedToday: Number(curationStats.rows[0].added),
+      searchedToday: Number(curationStats.rows[0].searched)
+    });
+    
+  } catch (error) {
+    console.error('Stats error:', error);
+    res.status(500).json({ error: 'Failed to load stats' });
+  }
+});
+
+app.delete('/api/admin/videos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.delete(videos).where(eq(videos.id, parseInt(id)));
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete error:', error);
+    res.status(500).json({ error: 'Failed to delete video' });
+  }
+});
+```
+
+STEP 1.5: Use Same CSS as User Video Page
+
+Copy the exact same styles from the user video page:
+
+```css
+/* Copy styles from client/src/pages/VideoLibrary.css */
+/* Or client/src/styles/videos.css */
+
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  padding: 24px 0;
+}
+
+.video-card {
+  background: #1a1a2e;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.video-card:hover {
+  transform: translateY(-4px);
+}
+
+.video-thumbnail {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.video-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.duration-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.video-info {
+  padding: 16px;
+  flex: 1;
+}
+
+.video-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 12px 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.instructor-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.elite-badge {
+  font-size: 14px;
+}
+
+.instructor-name {
+  font-size: 14px;
+  color: #a0a0b0;
+}
+
+.video-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.belt-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.belt-white { background: #ffffff; color: #000; }
+.belt-blue { background: #3b82f6; color: #fff; }
+.belt-purple { background: #a855f7; color: #fff; }
+.belt-brown { background: #92400e; color: #fff; }
+.belt-black { background: #000; color: #ffd700; border: 1px solid #ffd700; }
+
+.style-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #667eea;
+  color: white;
+}
+
+.timestamp {
+  font-size: 12px;
+  color: #808090;
+}
+
+.quality-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.quality-label {
+  color: #808090;
+}
+
+.quality-score {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.video-actions {
+  padding: 16px;
+  border-top: 1px solid #2a2a3e;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.watch-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.watch-btn:hover {
+  opacity: 0.9;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.delete-btn {
+  flex: 1;
+  padding: 10px;
+  background: #ef4444;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filters-section {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.search-box {
+  margin-bottom: 16px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: #0f0f1e;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+}
+
+.filter-dropdown {
+  padding: 10px 16px;
+  background: #0f0f1e;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.filter-dropdown:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* Video Player Modal - Same as user page */
+.video-player-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: #1a1a2e;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 1200px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.video-container {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+  background: #000;
+}
+
+.video-container iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: ADD CURATION CONTROL TO DEV OS
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 2.1: Create Curation Trigger Endpoint
+
+```typescript
+// server/routes/admin.ts
+
+app.post('/api/admin/curation/start', async (req, res) => {
+  try {
+    console.log('🚀 MANUAL CURATION START REQUESTED');
+    
+    // Import and run curation service
+    const { ContinuousCurationService } = require('../services/continuousCuration');
+    
+    const result = await ContinuousCurationService.runAggressiveCuration();
+    
+    res.json({
+      success: true,
+      message: 'Curation started successfully',
+      result
+    });
+    
+  } catch (error) {
+    console.error('Failed to start curation:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to start curation',
+      details: error.message
+    });
+  }
+});
+
+app.get('/api/admin/curation/status', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Get last run
+    const lastRun = await db.query.curationRuns.findFirst({
+      orderBy: [desc(curationRuns.createdAt)]
+    });
+    
+    // Get today's stats
+    const todayStats = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(videos_added), 0) as added,
+        COALESCE(SUM(videos_screened), 0) as searched,
+        COALESCE(SUM(youtube_api_calls), 0) as api_used,
+        COUNT(*) as runs_today
+      FROM curation_runs
+      WHERE run_date = ${today}
+    `);
+    
+    res.json({
+      lastRun: lastRun ? {
+        date: lastRun.createdAt,
+        videosAdded: lastRun.videosAdded,
+        videosScreened: lastRun.videosScreened
+      } : null,
+      today: {
+        videosAdded: Number(todayStats.rows[0].added),
+        videosScreened: Number(todayStats.rows[0].searched),
+        apiUsed: Number(todayStats.rows[0].api_used),
+        runsCompleted: Number(todayStats.rows[0].runs_today)
+      }
+    });
+    
+  } catch (error) {
+    console.error('Status check error:', error);
+    res.status(500).json({ error: 'Failed to check status' });
+  }
+});
+```
+
+STEP 2.2: Update Dev OS to Support Actions
+
+```typescript
+// server/routes/admin.ts - Dev OS chat endpoint
+
+app.post('/api/admin/dev-os/chat', async (req, res) => {
+  try {
+    const { message } = req.body;
+    const userId = req.user.id;
+    
+    // Save user message
+    await db.insert(devOsMessages).values({
+      userId,
+      role: 'user',
+      content: message
+    });
+    
+    // Check for action commands
+    const lowerMessage = message.toLowerCase();
+    
+    // CURATION CONTROL COMMANDS
+    if (
+      lowerMessage.includes('start curation') ||
+      lowerMessage.includes('turn on curation') ||
+      lowerMessage.includes('resume curation') ||
+      lowerMessage.includes('run curation') ||
+      lowerMessage.includes('trigger curation')
+    ) {
+      // Trigger curation
+      try {
+        const response = await fetch('http://localhost:3000/api/admin/curation/start', {
+          method: 'POST'
+        });
+        const result = await response.json();
+        
+        const responseMessage = result.success
+          ? `✅ Curation started successfully!\n\nScreened: ${result.result.videosScreened} videos\nAdded: ${result.result.videosAdded} videos\n\nCuration is now running.`
+          : `❌ Failed to start curation: ${result.error}`;
+        
+        await db.insert(devOsMessages).values({
+          userId,
+          role: 'assistant',
+          content: responseMessage
+        });
+        
+        return res.json({ success: true, message: responseMessage });
+        
+      } catch (error) {
+        const errorMessage = `❌ Error starting curation: ${error.message}`;
+        await db.insert(devOsMessages).values({
+          userId,
+          role: 'assistant',
+          content: errorMessage
+        });
+        
+        return res.json({ success: true, message: errorMessage });
+      }
+    }
+    
+    // CURATION STATUS CHECK
+    if (
+      lowerMessage.includes('curation status') ||
+      lowerMessage.includes('is curation running') ||
+      lowerMessage.includes('curation active')
+    ) {
+      try {
+        const response = await fetch('http://localhost:3000/api/admin/curation/status');
+        const status = await response.json();
+        
+        const statusMessage = `
+📊 CURATION STATUS
+
+Today's Activity:
+• Videos Added: ${status.today.videosAdded}
+• Videos Screened: ${status.today.videosScreened}
+• API Usage: ${status.today.apiUsed} / 10,000 units
+• Runs Completed: ${status.today.runsCompleted} / 9
+
+Last Run:
+${status.lastRun 
+  ? `• ${formatDistanceToNow(new Date(status.lastRun.date), { addSuffix: true })}
+• Added ${status.lastRun.videosAdded} videos
+• Screened ${status.lastRun.videosScreened} videos`
+  : '• No runs yet today'
+}
+
+${status.today.runsCompleted === 0 ? '⚠️ Curation appears offline' : '✅ Curation is active'}
+        `.trim();
+        
+        await db.insert(devOsMessages).values({
+          userId,
+          role: 'assistant',
+          content: statusMessage
+        });
+        
+        return res.json({ success: true, message: statusMessage });
+        
+      } catch (error) {
+        // Continue to Claude for other questions
+      }
+    }
+    
+    // For all other queries, call Claude
+    const recentMessages = await db.query.devOsMessages.findMany({
+      where: eq(devOsMessages.userId, userId),
+      orderBy: [desc(devOsMessages.createdAt)],
+      limit: 10
+    });
+    
+    const response = await callClaude({
+      messages: recentMessages.reverse().map(m => ({
+        role: m.role === 'system' ? 'user' : m.role,
+        content: m.content
+      }))
+    });
+    
+    await db.insert(devOsMessages).values({
+      userId,
+      role: 'assistant',
+      content: response.content
+    });
+    
+    res.json({ success: true, message: response.content });
+    
+  } catch (error) {
+    console.error('Dev OS error:', error);
+    res.status(500).json({ error: 'Failed to process message' });
+  }
+});
+```
+
+STEP 2.3: Add Quick Action Button to Dev OS
+
+```typescript
+// client/src/pages/admin/DevOS.tsx
+
+<div className="quick-actions">
+  {/* Existing buttons */}
+  <button onClick={() => setInput('How many users signed up today?')}>
+    👥 Users Today
+  </button>
+  <button onClick={() => setInput("What's the current MRR?")}>
+    💰 Current MRR
+  </button>
+  <button onClick={() => setInput('How many videos were added this week?')}>
+    📹 Videos This Week
+  </button>
+  <button onClick={generateDailyReport}>
+    📊 Daily Report
+  </button>
+  
+  {/* NEW: Curation Control Buttons */}
+  <button 
+    onClick={() => setInput('Turn on curation')}
+    className="curation-start-btn"
+  >
+    🚀 Start Curation
+  </button>
+  <button onClick={() => setInput('Curation status')}>
+    ⚙️ Curation Status
+  </button>
+</div>
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+ADMIN VIDEO PAGE:
+□ ✅ Looks IDENTICAL to user video page
+□ ✅ Curation controls removed (no sliders, toggles, or “Run Now” button)
+□ ✅ Search bar works and filters videos
+□ ✅ “All Belts” dropdown works
+□ ✅ “All Styles” dropdown works
+□ ✅ “7+ Quality” dropdown works
+□ ✅ All dropdowns filter together correctly
+□ ✅ Video cards show timestamps (“Added X ago”)
+□ ✅ Watch button opens embedded player
+□ ✅ Delete button works (admin only)
+□ ✅ Stats cards show: Total, Saved Today, Searched Today, Rejected Today
+
+DEV OS CURATION CONTROL:
+□ ✅ Can ask “Turn on curation” and it starts
+□ ✅ Can ask “Start curation” and it triggers
+□ ✅ Can ask “Curation status” and get report
+□ ✅ Quick action button “🚀 Start Curation” works
+□ ✅ Response confirms curation started
+□ ✅ Shows videos screened and added
+
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL REQUIREMENTS:
+
+1. Admin video page must be IDENTICAL to user video page (same design, same filters)
+1. Dropdowns MUST filter videos (not just look pretty)
+1. Dev OS MUST be able to start curation when asked
+1. All curation controls removed from video page (belongs in Dev OS only)
+
+BEGIN COMPLETE IMPLEMENTATION NOW.
+
+Report back when:
+
+1. Admin video page matches user video page exactly
+1. All dropdowns filter correctly
+1. Dev OS can start curation
+1. Curation controls removed from video page
+
+```
+---
+
+**This comprehensive prompt will:**
+1. ✅ Make admin video page identical to user page
+2. ✅ Fix all dropdowns to actually filter
+3. ✅ Remove curation controls from video page
+4. ✅ Let Dev OS control curation via chat
+
+**Paste this into Replit Agent now!** 🚀​​​​​​​​​​​​​​​​
+```

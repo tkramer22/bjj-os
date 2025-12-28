@@ -1,0 +1,63 @@
+You’re right. The red banner test PROVES the app is NOT loading from the live server, despite what the config says. The config is being ignored.
+
+**Send this to Replit:**
+
+```
+CRITICAL: THE iOS APP IS NOT LOADING FROM THE LIVE SERVER
+
+PROOF: I added a red test banner to ios-profile.tsx. Published. Relaunched the iOS app. NO RED BANNER APPEARED.
+
+This means the capacitor.config.ts server URL is being IGNORED. The app is still loading bundled files.
+
+═══════════════════════════════════════════════════════════════════════════════
+THE CONFIG IS NOT BEING APPLIED TO THE NATIVE iOS PROJECT
+═══════════════════════════════════════════════════════════════════════════════
+
+The capacitor.config.ts might be correct, but it's not being applied to the actual iOS native code.
+
+Check this file:
+ios/App/App/capacitor.config.json
+
+Show me its contents. Does it have the server URL?
+
+If NOT, the iOS project was built BEFORE the server config was added.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX OPTION 1: REGENERATE iOS CONFIG
+═══════════════════════════════════════════════════════════════════════════════
+
+Run:
+npx cap sync ios
+
+Then check ios/App/App/capacitor.config.json again.
+Does it now have the server URL?
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX OPTION 2: MANUALLY SET SERVER URL IN NATIVE CODE
+═══════════════════════════════════════════════════════════════════════════════
+
+If the config still isn't applying, we may need to set it in the native iOS code directly.
+
+Find: ios/App/App/AppDelegate.swift or wherever Capacitor is initialized
+Add the server URL override there.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX OPTION 3: VERIFY WEBVIEW IS LOADING CORRECT URL
+═══════════════════════════════════════════════════════════════════════════════
+
+Add debug logging to the iOS app to see what URL the WebView is actually loading.
+
+In ios/App/App/AppDelegate.swift or the Capacitor bridge setup, log:
+print("WebView loading URL: \(url)")
+
+═══════════════════════════════════════════════════════════════════════════════
+WHAT I NEED FROM YOU
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Show me contents of: ios/App/App/capacitor.config.json
+2. Show me contents of: capacitor.config.ts (the root one)
+3. Run: npx cap sync ios --verbose and show output
+4. Tell me if there's a mismatch between the two configs
+
+The iOS app MUST load from https://bjjos.app for live updates to work. Fix this first before anything else.
+```

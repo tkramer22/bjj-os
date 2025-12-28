@@ -1,0 +1,86 @@
+# 📋 PROMPT 1: PHONE-ONLY AUTHENTICATION
+
+**Copy and paste this to Agent:**
+
+```
+Change authentication to phone number only (no email).
+
+AUTHENTICATION SYSTEM:
+
+Use phone number + SMS verification (passwordless):
+
+1. SIGNUP FLOW:
+   - User enters phone number (with country code picker, default +1)
+   - Validate format: +1 (555) 123-4567
+   - Send 6-digit SMS code via Twilio Verify API
+   - User enters code
+   - Code verified → Create account
+   - Save phone number as unique identifier
+   - Redirect to onboarding (belt level, gi/no-gi, goals)
+
+2. LOGIN FLOW:
+   - User enters phone number
+   - Send 6-digit SMS code via Twilio Verify API
+   - User enters code
+   - Code verified → Log in
+   - Redirect to /chat
+
+3. DATABASE CHANGES:
+   - Primary identifier: phone (unique, indexed)
+   - Remove email field (not needed)
+   - Keep phone field as String (format: +15551234567)
+   - Add index on phone for fast lookups
+
+4. TWILIO VERIFY SETUP:
+   - Use Twilio Verify API (not regular SMS)
+   - Handles code generation, expiration (10 min), rate limiting
+   - Add TWILIO_VERIFY_SERVICE_SID to environment variables
+   - Cost: $0.05 per verification
+
+5. UI COMPONENTS:
+   Phone Input:
+   - Country code dropdown (default +1 USA)
+   - Auto-format as user types: (555) 123-4567
+   - Mobile keyboard shows number pad
+   - "Continue" button (disabled until valid phone)
+
+   Code Input:
+   - 6 individual boxes (auto-tab between)
+   - Auto-submit when 6th digit entered
+   - "Resend Code" button (disabled for 60 seconds after send)
+   - "Code expires in 10 minutes" message
+   - Show masked phone: "Sent to +1 (555) ••• -4567"
+
+6. SECURITY:
+   - Rate limit: 3 SMS attempts per phone per hour
+   - Block after 5 failed verifications in 24 hours
+   - Log all attempts in admin dashboard
+   - IP-based rate limiting (prevent spam)
+
+7. SESSION MANAGEMENT:
+   - JWT token in httpOnly cookie
+   - 30-day expiration
+   - Refresh token for seamless experience
+   - Secure flag (HTTPS only)
+
+8. ERROR HANDLING:
+   - Invalid phone: "Please enter a valid phone number"
+   - SMS failed to send: "Unable to send code. Try again."
+   - Invalid code: "Incorrect code. Try again."
+   - Expired code: "Code expired. Request a new one."
+   - Rate limited: "Too many attempts. Try again in X minutes."
+
+REMOVE ALL EMAIL AUTH:
+- Delete email field from User schema
+- Remove password field
+- Remove "forgot password" flow
+- Remove any email-based login
+
+This is faster, more mobile-friendly, and integrates with our SMS infrastructure.
+```
+
+-----
+
+**Wait for Agent to confirm “Checkpoint made” ✅**
+
+**Then let me know and I’ll give you Prompt 2!** 📱​​​​​​​​​​​​​​​​

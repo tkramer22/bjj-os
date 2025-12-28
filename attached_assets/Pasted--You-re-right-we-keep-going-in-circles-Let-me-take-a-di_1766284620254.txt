@@ -1,0 +1,409 @@
+**You’re right - we keep going in circles.** Let me take a different approach.
+
+I need to look at your actual web app structure to design this properly. Let me check your project files to understand exactly what pages and routes exist.​​​​​​​​​​​​​​​​
+
+Now let me look at what the current web app structure actually is:​​​​​​​​​​​​​​​​
+
+Now I have a clear picture. Let me create a **definitive master prompt** that properly implements the iOS app using your **existing web app structure**:
+
+-----
+
+## 📋 DEFINITIVE MASTER PROMPT - COPY THIS ENTIRE BLOCK:
+
+```
+iOS APP - COMPLETE REBUILD USING EXISTING WEB APP
+
+STOP CREATING NEW SCREENS. The iOS app must use the EXISTING web app pages.
+
+The web app already has these working pages:
+- /chat (Professor OS chat - chat-mobile.tsx)
+- /library or /saved (Video library with filters)
+- /settings (User settings page)
+
+The iOS app is a Capacitor wrapper around the web app. We just need:
+1. Bottom tab navigation that routes to EXISTING pages
+2. iOS-specific login flow (already built at /ios-login)
+
+═══════════════════════════════════════════════════════════════════════════════
+ARCHITECTURE - HOW THIS SHOULD WORK
+═══════════════════════════════════════════════════════════════════════════════
+
+The iOS app loads: https://bjjos.app/ios-login
+
+After successful login, user is redirected to the main app with bottom navigation.
+
+The bottom nav should be a COMPONENT that wraps existing pages, NOT new pages.
+
+Create: client/src/components/ios-tab-bar.tsx
+
+This component renders at the bottom of the screen and navigates between:
+- /ios-home (or /dashboard if exists)
+- /chat (existing Professor OS page)
+- /library (existing video library page)
+- /settings (existing settings page)
+
+═══════════════════════════════════════════════════════════════════════════════
+1. BOTTOM TAB NAVIGATION COMPONENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create: client/src/components/ios-tab-bar.tsx
+
+```tsx
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Home, MessageCircle, BookOpen, User } from 'lucide-react';
+
+export function IOSTabBar() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const tabs = [
+    { path: '/ios-home', icon: Home, label: 'Home' },
+    { path: '/chat', icon: MessageCircle, label: 'Prof OS' },
+    { path: '/library', icon: BookOpen, label: 'Library' },
+    { path: '/ios-profile', icon: User, label: 'Profile' },
+  ];
+  
+  const isActive = (path: string) => location.pathname === path;
+  
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 bg-black border-t border-zinc-800 pb-safe">
+      <div className="flex justify-around items-center h-16">
+        {tabs.map(tab => (
+          <button
+            key={tab.path}
+            onClick={() => navigate(tab.path)}
+            className={`flex flex-col items-center gap-1 px-4 py-2 ${
+              isActive(tab.path) ? 'text-purple-500' : 'text-zinc-500'
+            }`}
+          >
+            <tab.icon size={24} />
+            <span className="text-xs">{tab.label}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+2. iOS LAYOUT WRAPPER
+═══════════════════════════════════════════════════════════════════════════════
+
+Create: client/src/components/ios-layout.tsx
+
+```tsx
+import { IOSTabBar } from './ios-tab-bar';
+import { ReactNode } from 'react';
+
+interface IOSLayoutProps {
+  children: ReactNode;
+  showTabBar?: boolean;
+}
+
+export function IOSLayout({ children, showTabBar = true }: IOSLayoutProps) {
+  return (
+    <div className="min-h-screen bg-black text-white">
+      <div className={showTabBar ? 'pb-20' : ''}>
+        {children}
+      </div>
+      {showTabBar && <IOSTabBar />}
+    </div>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+3. iOS HOME PAGE (Simple dashboard)
+═══════════════════════════════════════════════════════════════════════════════
+
+Create: client/src/pages/ios-home.tsx
+
+Keep it SIMPLE - just quick actions to navigate:
+
+```tsx
+import { IOSLayout } from '../components/ios-layout';
+import { useNavigate } from 'react-router-dom';
+import { MessageCircle, BookOpen } from 'lucide-react';
+
+export default function IOSHome() {
+  const navigate = useNavigate();
+  
+  return (
+    <IOSLayout>
+      <div className="p-6">
+        {/* Logo */}
+        <div className="flex justify-center mb-8 pt-4">
+          <img src="/bjjos-logo.png" alt="BJJ OS" className="h-12" />
+        </div>
+        
+        {/* Quick Actions */}
+        <div className="space-y-4">
+          <button
+            onClick={() => navigate('/chat')}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-xl flex items-center gap-4"
+          >
+            <MessageCircle size={24} />
+            <div className="text-left">
+              <div className="font-semibold">Chat with Professor OS</div>
+              <div className="text-sm text-purple-200">Get personalized coaching</div>
+            </div>
+          </button>
+          
+          <button
+            onClick={() => navigate('/library')}
+            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white p-4 rounded-xl flex items-center gap-4"
+          >
+            <BookOpen size={24} />
+            <div className="text-left">
+              <div className="font-semibold">Technique Library</div>
+              <div className="text-sm text-zinc-400">Browse instructional videos</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </IOSLayout>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+4. iOS PROFILE PAGE (Settings + Subscription)
+═══════════════════════════════════════════════════════════════════════════════
+
+Create: client/src/pages/ios-profile.tsx
+
+```tsx
+import { IOSLayout } from '../components/ios-layout';
+import { useAuth } from '../hooks/useAuth'; // Your auth hook
+import { LogOut, Settings, HelpCircle } from 'lucide-react';
+
+export default function IOSProfile() {
+  const { user, logout } = useAuth();
+  
+  const handleLogout = async () => {
+    // Clear Capacitor Preferences
+    if (window.Capacitor) {
+      const { Preferences } = await import('@capacitor/preferences');
+      await Preferences.remove({ key: 'auth_token' });
+    }
+    logout();
+  };
+  
+  return (
+    <IOSLayout>
+      <div className="p-6">
+        <h1 className="text-2xl font-bold mb-6">Profile</h1>
+        
+        {/* User Info */}
+        <div className="bg-zinc-900 rounded-xl p-4 mb-6">
+          <div className="text-lg font-semibold">{user?.name || user?.email}</div>
+          <div className="text-zinc-400">{user?.email}</div>
+        </div>
+        
+        {/* Subscription */}
+        <div className="bg-zinc-900 rounded-xl p-4 mb-6">
+          <div className="text-sm text-zinc-400 mb-1">Subscription</div>
+          <div className="font-semibold">
+            {user?.subscription?.status === 'active' ? 'BJJ OS Pro' : 'Free'}
+          </div>
+          {user?.subscription?.renewsAt && (
+            <div className="text-sm text-zinc-400">
+              Renews: {new Date(user.subscription.renewsAt).toLocaleDateString()}
+            </div>
+          )}
+          <button className="mt-3 w-full bg-purple-600 text-white py-2 rounded-lg">
+            Manage Subscription
+          </button>
+        </div>
+        
+        {/* Menu Items */}
+        <div className="bg-zinc-900 rounded-xl overflow-hidden mb-6">
+          <button className="w-full p-4 flex items-center gap-3 border-b border-zinc-800">
+            <Settings size={20} />
+            <span>Settings</span>
+          </button>
+          <button className="w-full p-4 flex items-center gap-3">
+            <HelpCircle size={20} />
+            <span>Help & Support</span>
+          </button>
+        </div>
+        
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          className="w-full border border-red-500 text-red-500 py-3 rounded-xl flex items-center justify-center gap-2"
+        >
+          <LogOut size={20} />
+          Log Out
+        </button>
+        
+        <div className="text-center text-zinc-600 text-sm mt-6">
+          BJJ OS v1.0.0
+        </div>
+      </div>
+    </IOSLayout>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+5. UPDATE EXISTING PAGES TO USE iOS LAYOUT
+═══════════════════════════════════════════════════════════════════════════════
+
+In chat-mobile.tsx (Professor OS chat):
+
+- Detect if on iOS app (check for Capacitor or URL)
+- If iOS, wrap with IOSLayout
+- Add padding at bottom for tab bar
+
+In library page:
+
+- Same - detect iOS, wrap with IOSLayout
+- Make sure filters work (dropdowns for positions)
+- Show video thumbnails, titles, instructors
+
+Example detection:
+
+```tsx
+const isIOSApp = window.location.pathname.startsWith('/ios-') || 
+                 window.Capacitor?.isNativePlatform();
+
+if (isIOSApp) {
+  return <IOSLayout>{content}</IOSLayout>;
+}
+return content;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+6. ROUTING - ADD iOS ROUTES
+═══════════════════════════════════════════════════════════════════════════════
+
+In your router configuration, add:
+
+```tsx
+// iOS App Routes
+<Route path="/ios-login" element={<IOSLogin />} />
+<Route path="/ios-forgot-password" element={<IOSForgotPassword />} />
+<Route path="/ios-home" element={<IOSHome />} />
+<Route path="/ios-profile" element={<IOSProfile />} />
+
+// These existing routes should work for iOS too:
+<Route path="/chat" element={<ChatMobile />} />
+<Route path="/library" element={<Library />} />
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+7. AFTER LOGIN - REDIRECT TO iOS HOME
+═══════════════════════════════════════════════════════════════════════════════
+
+In ios-login.tsx, after successful login:
+
+```tsx
+// After successful authentication:
+navigate('/ios-home');
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+8. LIBRARY PAGE - VIDEO DISPLAY WITH FILTERS
+═══════════════════════════════════════════════════════════════════════════════
+
+The library page should show videos with:
+
+- Search bar
+- Filter dropdowns (Position, Instructor, Difficulty)
+- Grid of video cards
+
+Each video card shows:
+
+- Thumbnail
+- Title
+- Instructor name
+- Duration
+- Position tag
+
+Filters should be DROPDOWNS (like the web app), not just buttons.
+
+═══════════════════════════════════════════════════════════════════════════════
+9. CAPACITOR CONFIG - REDIRECT AFTER LOGIN
+═══════════════════════════════════════════════════════════════════════════════
+
+Update capacitor.config.ts to start at /ios-login:
+
+```typescript
+const config: CapacitorConfig = {
+  appId: 'app.bjjos.ios',
+  appName: 'BJJ OS',
+  webDir: 'dist/public',
+  server: {
+    url: 'https://bjjos.app/ios-login',
+    androidScheme: 'https',
+    iosScheme: 'https',
+  }
+};
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+10. WHAT NOT TO DO
+═══════════════════════════════════════════════════════════════════════════════
+
+DO NOT:
+
+- Create new “Coaching Sessions”, “Day Streak”, “Weekly Progress” features
+- Create new dashboard designs that don’t exist in web app
+- Create new “Just now” conversation list views
+- Make anything that opens Safari or external browser
+- Add features that aren’t in the web app
+
+DO:
+
+- Use EXISTING web app pages
+- Add bottom tab navigation
+- Create simple iOS-specific login flow
+- Create simple iOS-specific profile page
+- Make everything work IN-APP
+
+═══════════════════════════════════════════════════════════════════════════════
+SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+New files to create:
+
+1. client/src/components/ios-tab-bar.tsx
+1. client/src/components/ios-layout.tsx
+1. client/src/pages/ios-home.tsx
+1. client/src/pages/ios-profile.tsx
+
+Files to update:
+
+1. Router - add iOS routes
+1. chat-mobile.tsx - add iOS layout wrapper
+1. library page - add iOS layout wrapper
+
+The app flow:
+
+1. User opens app → /ios-login
+1. User logs in → redirects to /ios-home
+1. User taps tabs → navigates to /chat, /library, /ios-profile
+1. All pages have bottom tab bar
+1. Everything stays IN THE APP
+
+After all changes:
+npm run build
+npx cap sync ios
+
+SHOW ME each file you create/modify.
+
+```
+---
+
+**Send this to Replit. This approach:**
+
+1. ✅ Uses your EXISTING web app pages (chat, library)
+2. ✅ Adds simple bottom tab navigation
+3. ✅ Creates minimal iOS-specific pages (home, profile)
+4. ✅ Doesn't invent new features
+5. ✅ Everything stays in-app
+
+**Let me know when it's published!**
+```

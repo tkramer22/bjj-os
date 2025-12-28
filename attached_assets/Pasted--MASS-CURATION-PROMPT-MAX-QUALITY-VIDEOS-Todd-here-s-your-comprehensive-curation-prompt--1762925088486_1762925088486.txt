@@ -1,0 +1,606 @@
+# **🎬 MASS CURATION PROMPT - MAX QUALITY VIDEOS**
+
+Todd, here’s your comprehensive curation prompt. This will scrape aggressively and include octopus guard.
+
+-----
+
+## **📋 COPY THIS TO REPLIT AGENT:**
+
+```
+═══════════════════════════════════════════════════════════════
+🎬 MISSION: MASS VIDEO CURATION - MAXIMIZE LIBRARY
+═══════════════════════════════════════════════════════════════
+
+GOAL: Curate as many high-quality BJJ videos as possible
+Quality threshold: 7.0/10
+Target: 1000+ videos (from current ~504)
+CRITICAL: Must include octopus guard content
+
+ESTIMATED TIME: 3-4 hours
+ESTIMATED COST: $40-60 in Claude API credits
+
+═══════════════════════════════════════════════════════════════
+STEP 1: VERIFY CURRENT STATE
+═══════════════════════════════════════════════════════════════
+
+Run this query first:
+
+```sql
+SELECT 
+  COUNT(*) as total_videos,
+  COUNT(CASE WHEN quality_score >= 7.0 THEN 1 END) as high_quality,
+  AVG(quality_score) as avg_quality,
+  COUNT(DISTINCT instructor_name) as unique_instructors
+FROM ai_video_knowledge;
+
+-- Check for octopus guard
+SELECT COUNT(*) as octopus_guard_videos
+FROM ai_video_knowledge
+WHERE LOWER(title) LIKE '%octopus%'
+   OR LOWER(technique_name) LIKE '%octopus%';
+```
+
+Show me these numbers before proceeding.
+
+═══════════════════════════════════════════════════════════════
+STEP 2: CREATE COMPREHENSIVE CURATION SCRIPT
+═══════════════════════════════════════════════════════════════
+
+File: `server/scripts/mass-curation-v2.ts`
+
+```typescript
+import { db } from '../db';
+import { sql, eq } from 'drizzle-orm';
+
+// AGGRESSIVE CURATION CONFIG
+const TARGET_VIDEO_COUNT = 1000;
+const QUALITY_THRESHOLD = 7.0;
+const VIDEOS_PER_CHANNEL = 30; // Increased from 20
+const VIDEOS_PER_SEARCH = 15;  // Increased from 10
+const MAX_API_CALLS = 2000;    // Safety limit
+
+// ELITE BJJ CHANNELS - EXPANDED LIST
+const ELITE_CHANNELS = [
+  // Top Tier Instructors
+  { id: 'UCkDGEQdez8XbcHsytxYh-qA', name: 'Lachlan Giles' },
+  { id: 'UCQJq9p0gfV6Oq7pLKuMd44A', name: 'Bernardo Faria' },
+  { id: 'UCyMNqD7Lj8W4mjtQVq6xCvw', name: 'Knight Jiu Jitsu (Jon Thomas)' },
+  { id: 'UCv2lXQkPgF4g50bq_AZqTRQ', name: 'Chewjitsu' },
+  { id: 'UC3VK_v9iE1V3kULM3wvfFmQ', name: 'BJJ Fanatics' },
+  { id: 'UCKWRlFr5Y6QO5cCJ6Pc_6Kw', name: 'Keenan Cornelius' },
+  { id: 'UCG_OdI3CqbvMv0y6C_7wvzQ', name: 'Grapplearts (Stephan Kesting)' },
+  { id: 'UCEPdKxA_wkxfW5CJ4S1qtvQ', name: 'Marcelo Garcia' },
+  { id: 'UCsUlHPyBk2TQPLg8lxn5HtA', name: 'Kit Dale' },
+  
+  // Additional Quality Instructors
+  { id: 'UCYhJNgLxU8VlJ0QC_KkQpFQ', name: 'Roger Gracie' },
+  { id: 'UCjoUE8y1hMp5e_-6eCq7KWA', name: 'John Danaher Instructionals' },
+  { id: 'UCXjdMNPKYiEw98VHx6gIGLQ', name: 'Gordon Ryan' },
+  { id: 'UC-qPAQnl6vDkKYZHuKW6GRQ', name: 'Mikey Musumeci' },
+  { id: 'UC8VLYaFQfthZgB0mUrN1Xqg', name: 'Craig Jones' },
+  { id: 'UCqXc8OJKFfVqNU8RH2bHp6A', name: 'Priit Mihkelson (Submissionarts)' },
+  { id: 'UCGEsqhzhNVmBQ6ysXPPK3ew', name: 'Rob Biernacki' },
+  { id: 'UC-8QhthAWJ7qU0fD5pu5nYw', name: 'Chewjitsu Podcast' },
+];
+
+// COMPREHENSIVE SEARCH QUERIES - INCLUDING OCTOPUS GUARD
+const SEARCH_QUERIES = [
+  // CRITICAL: Octopus guard
+  'bjj octopus guard tutorial',
+  'octopus guard sweeps',
+  'octopus guard attacks',
+  'octopus guard entries',
+  
+  // Guards - Bottom
+  'bjj closed guard tutorial',
+  'bjj open guard system',
+  'bjj half guard tutorial',
+  'deep half guard sweeps',
+  'bjj butterfly guard',
+  'bjj x guard tutorial',
+  'bjj single leg x guard',
+  'bjj de la riva guard',
+  'bjj reverse de la riva',
+  'bjj spider guard',
+  'bjj lasso guard',
+  'bjj worm guard',
+  'bjj k guard',
+  'bjj 50/50 guard',
+  
+  // Guards - Top (Passing)
+  'bjj guard passing tutorial',
+  'bjj pressure passing',
+  'bjj toreando pass',
+  'bjj leg drag pass',
+  'bjj stack pass',
+  'bjj knee slice pass',
+  
+  // Top Positions
+  'bjj mount control',
+  'bjj mount attacks',
+  'bjj side control tutorial',
+  'bjj north south position',
+  'bjj knee on belly',
+  'bjj back control tutorial',
+  'bjj back take techniques',
+  
+  // Escapes
+  'bjj mount escapes',
+  'bjj side control escapes',
+  'bjj back escape',
+  'bjj turtle position escapes',
+  
+  // Submissions - Chokes
+  'bjj triangle choke tutorial',
+  'bjj rear naked choke',
+  'bjj guillotine choke',
+  'bjj darce choke',
+  'bjj anaconda choke',
+  'bjj loop choke',
+  'bjj bow and arrow choke',
+  'bjj baseball choke',
+  'bjj ezekiel choke',
+  'bjj paper cutter choke',
+  
+  // Submissions - Joint Locks
+  'bjj armbar tutorial',
+  'bjj kimura tutorial',
+  'bjj americana tutorial',
+  'bjj omoplata tutorial',
+  'bjj straight ankle lock',
+  'bjj heel hook defense',
+  'bjj kneebar tutorial',
+  'bjj toe hold tutorial',
+  'bjj wrist locks',
+  
+  // Takedowns
+  'bjj takedowns for guard pullers',
+  'bjj single leg takedown',
+  'bjj double leg takedown',
+  'bjj wrestling for bjj',
+  'bjj foot sweeps',
+  
+  // Fundamentals
+  'bjj basic techniques',
+  'bjj white belt essentials',
+  'bjj blue belt techniques',
+  'bjj purple belt techniques',
+  'bjj grip fighting',
+  'bjj posture fundamentals',
+  'bjj base fundamentals',
+  
+  // Gi vs No-Gi
+  'no gi jiu jitsu',
+  'no gi guard passing',
+  'no gi submissions',
+  'gi specific techniques',
+  
+  // Competition Strategy
+  'bjj competition strategy',
+  'bjj point fighting',
+  'bjj submission only strategy',
+];
+
+interface CurationStats {
+  screened: number;
+  accepted: number;
+  rejected: number;
+  duplicates: number;
+  errors: number;
+  apiCalls: number;
+  octopusGuardFound: number;
+}
+
+async function runMassCuration() {
+  console.log('\n');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('🎬 STARTING AGGRESSIVE MASS VIDEO CURATION');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log(`Target: ${TARGET_VIDEO_COUNT} videos`);
+  console.log(`Quality threshold: ${QUALITY_THRESHOLD}/10`);
+  console.log(`Channels to scrape: ${ELITE_CHANNELS.length}`);
+  console.log(`Search queries: ${SEARCH_QUERIES.length}`);
+  console.log('\n');
+  
+  const stats: CurationStats = {
+    screened: 0,
+    accepted: 0,
+    rejected: 0,
+    duplicates: 0,
+    errors: 0,
+    apiCalls: 0,
+    octopusGuardFound: 0
+  };
+  
+  const startTime = Date.now();
+  
+  try {
+    // Check current count
+    const currentResult = await db.execute(sql`
+      SELECT COUNT(*) as count 
+      FROM ai_video_knowledge 
+      WHERE quality_score >= ${QUALITY_THRESHOLD}
+    `);
+    
+    const currentCount = parseInt(currentResult.rows[0].count);
+    const needed = TARGET_VIDEO_COUNT - currentCount;
+    
+    console.log('📊 CURRENT STATUS:');
+    console.log(`   High-quality videos: ${currentCount}`);
+    console.log(`   Target: ${TARGET_VIDEO_COUNT}`);
+    console.log(`   Need to add: ${needed}`);
+    console.log('\n');
+    
+    if (needed <= 0) {
+      console.log('🎯 Target already reached!');
+      return;
+    }
+    
+    // PHASE 1: Elite Channels
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📺 PHASE 1: Elite Channel Scraping');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('\n');
+    
+    for (const channel of ELITE_CHANNELS) {
+      if (stats.apiCalls >= MAX_API_CALLS) {
+        console.log('\n⚠️  API call limit reached, moving to next phase\n');
+        break;
+      }
+      
+      if (currentCount + stats.accepted >= TARGET_VIDEO_COUNT) {
+        console.log('\n🎯 Target reached!\n');
+        break;
+      }
+      
+      console.log(`\n📺 Scraping: ${channel.name}`);
+      console.log(`   Fetching ${VIDEOS_PER_CHANNEL} recent videos...`);
+      
+      try {
+        const videos = await fetchChannelVideos(channel.id, VIDEOS_PER_CHANNEL);
+        console.log(`   Found ${videos.length} videos\n`);
+        
+        for (const video of videos) {
+          if (stats.apiCalls >= MAX_API_CALLS) break;
+          if (currentCount + stats.accepted >= TARGET_VIDEO_COUNT) break;
+          
+          await curateVideo(video, stats);
+          
+          if (stats.screened % 25 === 0) {
+            printProgress(stats, currentCount, startTime);
+          }
+          
+          await sleep(1000); // Rate limiting
+        }
+        
+      } catch (error) {
+        console.error(`   ❌ Error: ${error.message}`);
+        stats.errors++;
+      }
+    }
+    
+    // PHASE 2: Targeted Searches
+    if (currentCount + stats.accepted < TARGET_VIDEO_COUNT && stats.apiCalls < MAX_API_CALLS) {
+      console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('🔍 PHASE 2: Targeted Search Queries');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('\n');
+      
+      for (const query of SEARCH_QUERIES) {
+        if (stats.apiCalls >= MAX_API_CALLS) {
+          console.log('\n⚠️  API call limit reached\n');
+          break;
+        }
+        
+        if (currentCount + stats.accepted >= TARGET_VIDEO_COUNT) {
+          console.log('\n🎯 Target reached!\n');
+          break;
+        }
+        
+        console.log(`\n🔍 Searching: "${query}"`);
+        
+        try {
+          const videos = await searchYouTubeVideos(query, VIDEOS_PER_SEARCH);
+          console.log(`   Found ${videos.length} videos\n`);
+          
+          for (const video of videos) {
+            if (stats.apiCalls >= MAX_API_CALLS) break;
+            if (currentCount + stats.accepted >= TARGET_VIDEO_COUNT) break;
+            
+            await curateVideo(video, stats);
+            
+            if (stats.screened % 25 === 0) {
+              printProgress(stats, currentCount, startTime);
+            }
+            
+            await sleep(1000);
+          }
+          
+        } catch (error) {
+          console.error(`   ❌ Error: ${error.message}`);
+          stats.errors++;
+        }
+      }
+    }
+    
+    // FINAL SUMMARY
+    const endTime = Date.now();
+    const duration = ((endTime - startTime) / 1000 / 60).toFixed(1);
+    
+    console.log('\n');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('✅ MASS CURATION COMPLETE');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log(`Duration:        ${duration} minutes`);
+    console.log(`Screened:        ${stats.screened}`);
+    console.log(`Accepted:        ${stats.accepted} ✅`);
+    console.log(`Rejected:        ${stats.rejected} ❌`);
+    console.log(`Duplicates:      ${stats.duplicates} ⏭️`);
+    console.log(`Errors:          ${stats.errors} ⚠️`);
+    console.log(`API Calls:       ${stats.apiCalls}`);
+    console.log(`Acceptance Rate: ${((stats.accepted / stats.screened) * 100).toFixed(1)}%`);
+    console.log(`Final Count:     ${currentCount + stats.accepted}`);
+    console.log(`Octopus Guard:   ${stats.octopusGuardFound} videos 🐙`);
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('\n');
+    
+    // Verify octopus guard
+    const octopusCheck = await db.execute(sql`
+      SELECT COUNT(*) as count
+      FROM ai_video_knowledge
+      WHERE (LOWER(title) LIKE '%octopus%' OR LOWER(technique_name) LIKE '%octopus%')
+        AND quality_score >= ${QUALITY_THRESHOLD}
+    `);
+    
+    console.log(`\n🐙 OCTOPUS GUARD VERIFICATION: ${octopusCheck.rows[0].count} videos found\n`);
+    
+  } catch (error) {
+    console.error('\n❌ FATAL ERROR:', error);
+    console.error(error.stack);
+  }
+}
+
+async function curateVideo(videoData: any, stats: CurationStats): Promise<void> {
+  stats.screened++;
+  stats.apiCalls++;
+  
+  try {
+    // Check for duplicates
+    const existing = await db.execute(sql`
+      SELECT id FROM ai_video_knowledge 
+      WHERE youtube_id = ${videoData.id}
+      LIMIT 1
+    `);
+    
+    if (existing.rows.length > 0) {
+      console.log(`   ⏭️  Skip: ${videoData.title.substring(0, 50)}... (duplicate)`);
+      stats.duplicates++;
+      return;
+    }
+    
+    console.log(`   🔍 Analyzing: ${videoData.title.substring(0, 60)}...`);
+    
+    // Analyze with Claude
+    const analysis = await analyzeVideoWithClaude(videoData);
+    stats.apiCalls++;
+    
+    // Check for octopus guard
+    const isOctopus = videoData.title.toLowerCase().includes('octopus') ||
+                      analysis.technique?.toLowerCase().includes('octopus');
+    if (isOctopus) {
+      stats.octopusGuardFound++;
+      console.log(`   🐙 OCTOPUS GUARD FOUND!`);
+    }
+    
+    // Log to curation_log
+    await db.execute(sql`
+      INSERT INTO curation_log (
+        video_id, video_title, screened, accepted, rejected,
+        quality_score, rejection_reason, created_at
+      ) VALUES (
+        ${videoData.id},
+        ${videoData.title},
+        true,
+        ${analysis.qualityScore >= QUALITY_THRESHOLD},
+        ${analysis.qualityScore < QUALITY_THRESHOLD},
+        ${analysis.qualityScore},
+        ${analysis.qualityScore < QUALITY_THRESHOLD ? analysis.reason : null},
+        NOW()
+      )
+    `);
+    
+    if (analysis.qualityScore >= QUALITY_THRESHOLD) {
+      // Add to library
+      await db.execute(sql`
+        INSERT INTO ai_video_knowledge (
+          youtube_id, video_url, title, instructor_name,
+          technique_name, technique_type, belt_level,
+          quality_score, duration, thumbnail_url, created_at
+        ) VALUES (
+          ${videoData.id},
+          ${'https://youtube.com/watch?v=' + videoData.id},
+          ${videoData.title},
+          ${videoData.channelTitle},
+          ${analysis.technique || 'Unknown'},
+          ${analysis.category || 'general'},
+          ${analysis.beltLevel || ['white', 'blue', 'purple']},
+          ${analysis.qualityScore},
+          ${videoData.duration || 0},
+          ${videoData.thumbnail},
+          NOW()
+        )
+      `);
+      
+      console.log(`   ✅ ACCEPTED: ${analysis.qualityScore.toFixed(1)}/10`);
+      stats.accepted++;
+    } else {
+      console.log(`   ❌ REJECTED: ${analysis.qualityScore.toFixed(1)}/10 - ${analysis.reason}`);
+      stats.rejected++;
+    }
+    
+  } catch (error) {
+    console.error(`   ⚠️  Error:`, error.message);
+    stats.errors++;
+  }
+}
+
+function printProgress(stats: CurationStats, startCount: number, startTime: number) {
+  const elapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
+  const rate = (stats.screened / parseFloat(elapsed)).toFixed(1);
+  
+  console.log('\n┌─────────────────────────────────────────────┐');
+  console.log('│  📊 PROGRESS UPDATE                         │');
+  console.log('├─────────────────────────────────────────────┤');
+  console.log(`│  Screened:      ${stats.screened.toString().padEnd(25)} │`);
+  console.log(`│  Accepted:      ${stats.accepted.toString().padEnd(25)} │`);
+  console.log(`│  Rejected:      ${stats.rejected.toString().padEnd(25)} │`);
+  console.log(`│  Duplicates:    ${stats.duplicates.toString().padEnd(25)} │`);
+  console.log(`│  API Calls:     ${stats.apiCalls.toString().padEnd(25)} │`);
+  console.log(`│  Total Now:     ${(startCount + stats.accepted).toString().padEnd(25)} │`);
+  console.log(`│  Time:          ${elapsed} min (${rate}/min)${' '.repeat(10)} │`);
+  console.log(`│  Octopus 🐙:    ${stats.octopusGuardFound.toString().padEnd(25)} │`);
+  console.log('└─────────────────────────────────────────────┘\n');
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Run it
+runMassCuration()
+  .then(() => {
+    console.log('✅ Curation completed successfully');
+    process.exit(0);
+  })
+  .catch(error => {
+    console.error('❌ Curation failed:', error);
+    process.exit(1);
+  });
+```
+
+═══════════════════════════════════════════════════════════════
+STEP 3: EXECUTE MASS CURATION
+═══════════════════════════════════════════════════════════════
+
+Run the script:
+
+```bash
+npx tsx server/scripts/mass-curation-v2.ts
+```
+
+This will:
+
+- Scrape 30 videos from each of 17 elite channels
+- Search 70+ technique queries with 15 videos each
+- Specifically target octopus guard content
+- Stop at 1000 videos or 2000 API calls (whichever comes first)
+- Give progress updates every 25 videos
+- Track octopus guard videos separately
+
+Expected duration: 3-4 hours
+Expected API cost: $40-60
+
+═══════════════════════════════════════════════════════════════
+STEP 4: MONITOR PROGRESS
+═══════════════════════════════════════════════════════════════
+
+Watch console for:
+
+- Progress updates every 25 videos
+- Octopus guard discoveries (🐙 markers)
+- Acceptance rate (should be 5-15%)
+- API call count (safety limit is 2000)
+
+The script will automatically stop when:
+
+- Target of 1000 videos reached
+- API call limit of 2000 reached
+- All channels and searches exhausted
+
+═══════════════════════════════════════════════════════════════
+STEP 5: VERIFY RESULTS
+═══════════════════════════════════════════════════════════════
+
+After completion, run these queries:
+
+```sql
+-- Overall stats
+SELECT 
+  COUNT(*) as total,
+  COUNT(CASE WHEN quality_score >= 7.0 THEN 1 END) as high_quality,
+  AVG(quality_score) as avg_quality,
+  COUNT(DISTINCT instructor_name) as unique_instructors
+FROM ai_video_knowledge;
+
+-- Octopus guard check
+SELECT 
+  id, title, instructor_name, quality_score
+FROM ai_video_knowledge
+WHERE (LOWER(title) LIKE '%octopus%' OR LOWER(technique_name) LIKE '%octopus%')
+  AND quality_score >= 7.0
+ORDER BY quality_score DESC;
+
+-- Top instructors by video count
+SELECT 
+  instructor_name,
+  COUNT(*) as video_count,
+  AVG(quality_score) as avg_quality
+FROM ai_video_knowledge
+WHERE quality_score >= 7.0
+GROUP BY instructor_name
+ORDER BY video_count DESC
+LIMIT 20;
+
+-- Today's curation summary
+SELECT 
+  COUNT(*) as screened,
+  SUM(CASE WHEN accepted THEN 1 ELSE 0 END) as accepted,
+  SUM(CASE WHEN rejected THEN 1 ELSE 0 END) as rejected,
+  ROUND(AVG(quality_score), 2) as avg_score
+FROM curation_log
+WHERE DATE(created_at) = CURRENT_DATE;
+```
+
+═══════════════════════════════════════════════════════════════
+CRITICAL NOTES
+═══════════════════════════════════════════════════════════════
+
+- This is AGGRESSIVE curation (1000+ videos)
+- Will use significant Claude API credits ($40-60)
+- Takes 3-4 hours to complete
+- Monitors for octopus guard specifically
+- Respects rate limits (1 second between videos)
+- Has safety limit (2000 API calls max)
+- Gives detailed progress updates
+
+OCTOPUS GUARD: Specifically targeted in Phase 2 searches.
+If not found after curation, we’ll need to manually source those videos.
+
+Ready to start? This will max out your video library.
+
+```
+---
+
+## **🎯 WHAT THIS DOES:**
+
+1. **Scrapes 17 elite channels** (30 videos each = 510 potential videos)
+2. **Searches 70+ queries** (15 videos each = 1050+ potential videos)  
+3. **Specifically hunts octopus guard** (4 dedicated searches + keyword tracking)
+4. **Quality filters at 7.0/10** (only accepts elite instruction)
+5. **Progress tracking** (updates every 25 videos with octopus count)
+
+---
+
+## **ESTIMATED RESULTS:**
+
+- **Will screen:** ~1500-2000 videos
+- **Will accept:** ~150-300 videos (10-15% acceptance rate)
+- **Final library:** ~650-800 total videos
+- **Octopus guard:** Should find 3-10 videos
+- **Duration:** 3-4 hours
+- **Cost:** $40-60 in API credits
+
+---
+
+**Copy the prompt above to Agent and let it run. Check back in a few hours.** 🚀🐙​​​​​​​​​​​​​​​​
+```

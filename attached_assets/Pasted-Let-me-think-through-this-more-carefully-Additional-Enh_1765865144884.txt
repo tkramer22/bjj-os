@@ -1,0 +1,343 @@
+Let me think through this more carefully.
+
+-----
+
+## Additional Enhancements to Add:
+
+**1. User Context Awareness**
+
+- What belt level is the user?
+- What’s their body type? (important for technique selection)
+- What have they struggled with before?
+- Professor OS should tailor responses based on user history
+
+**2. Technique Relationships**
+
+- What techniques chain together? (e.g., armbar → triangle → omoplata)
+- What’s the counter to this technique?
+- What if opponent defends? What’s the backup?
+
+**3. Competition vs Training Context**
+
+- Is this for competition or casual rolling?
+- IBJJF legal or no-gi/submission only rules?
+- Point strategy vs submission hunting
+
+**4. Physical Attributes Matching**
+
+- Instructor body type (useful for matching to user)
+- Flexibility requirements
+- Strength requirements
+- “This technique works well for shorter grapplers”
+
+**5. Search Query Variations**
+Users will ask in many ways:
+
+- “How do I finish the armbar?”
+- “People keep escaping my armbar”
+- “Armbar defense counter”
+- “What’s the grip for armbar?”
+- “Roger Gracie armbar details”
+
+**6. Learning Path Generation**
+
+- “What should I learn before this technique?”
+- “What should I learn after mastering this?”
+- Prerequisites and progressions
+
+**7. Troubleshooting Mode**
+
+- “Why does my [technique] keep failing?”
+- Match common mistakes to user’s problem
+- Specific fixes with timestamps
+
+-----
+
+## Updated Final Prompt:
+
+**Paste this into Replit Agent:**
+
+```
+COMPLETE VIDEO KNOWLEDGE SYSTEM - FINAL BUILD
+
+PART 1: ENHANCED EXTRACTION LOGIC
+
+Update the Gemini extraction prompt to capture this comprehensive structure:
+
+For each video, extract:
+
+1. PRIMARY TECHNIQUE(S):
+   - name (e.g., "Mount", "Armbar from Guard", "Knee Cut Pass")
+   - position_category (guard, mount, side control, back, standing, turtle, half guard, etc.)
+   - technique_type (submission, sweep, pass, escape, control, transition, takedown, defense)
+   - gi_or_nogi ("gi" | "nogi" | "both")
+   - skill_level ("beginner" | "intermediate" | "advanced")
+   - competition_legal (boolean - IBJJF legal at all belt levels?)
+
+2. DETAILS (linked to each primary technique):
+   Each detail should have:
+   - detail_type: "concept" | "counter" | "mechanical" | "setup" | "entry" | "finish" | "grip" | "weight_distribution" | "timing" | "mistake" | "tip" | "defense" | "chain" | "backup_option"
+   - description: What the detail is about
+   - instructor_quote: Word-for-word what instructor says
+   - timestamp_start: MM:SS
+   - timestamp_end: MM:SS
+   - why_it_matters: Why this detail is important for success
+   - common_problem_solved: What problem does this detail fix?
+
+3. TECHNIQUE RELATIONSHIPS:
+   - setups_from: What positions/techniques lead into this?
+   - chains_to: What can you transition to if this fails or succeeds?
+   - counters: What is the common defense and how to beat it?
+   - counter_to: What techniques does THIS technique counter?
+
+4. PHYSICAL CONSIDERATIONS:
+   - body_type_notes: Any mentions of "if you're tall", "for shorter grapplers", "flexibility required", etc.
+   - strength_required: Low/Medium/High
+   - flexibility_required: Low/Medium/High
+   - athletic_demand: Low/Medium/High
+
+5. VIDEO METADATA:
+   - overall_summary: 2-3 sentence summary of what video teaches
+   - instructor_name: Who is teaching
+   - instructor_credentials: Known titles/achievements (if mentioned or known)
+   - prerequisites: What techniques/concepts you should know first
+   - next_to_learn: What to learn after this
+   - best_for: "competition" | "self_defense" | "hobbyist" | "all"
+
+PART 2: DATABASE STRUCTURE FOR INTELLIGENT RECALL
+
+Ensure video_knowledge table has ALL these columns (add if missing):
+
+- id (primary key)
+- video_id (foreign key)
+- primary_technique (text)
+- position_category (text)
+- technique_type (text)
+- gi_or_nogi (text)
+- skill_level (text)
+- competition_legal (boolean)
+- detail_type (text)
+- detail_description (text)
+- instructor_quote (text)
+- timestamp_start (text)
+- timestamp_end (text)
+- why_it_matters (text)
+- common_problem_solved (text)
+- setups_from (text array)
+- chains_to (text array)
+- counters (text array)
+- counter_to (text array)
+- body_type_notes (text)
+- strength_required (text)
+- flexibility_required (text)
+- instructor_name (text)
+- instructor_credentials (text)
+- prerequisites (text array)
+- next_to_learn (text array)
+- best_for (text)
+- overall_summary (text)
+- extracted_at (timestamp)
+
+Add indexes for fast querying:
+- CREATE INDEX ON video_knowledge(primary_technique);
+- CREATE INDEX ON video_knowledge(position_category);
+- CREATE INDEX ON video_knowledge(detail_type);
+- CREATE INDEX ON video_knowledge(instructor_name);
+
+PART 3: INTELLIGENT KNOWLEDGE RETRIEVAL
+
+Create function: getRelevantKnowledge(userQuery, userContext)
+
+This function should:
+
+1. Parse user query to identify:
+   - Technique mentioned (mount, armbar, knee cut, etc.)
+   - Position mentioned (guard, side control, etc.)
+   - Intent: 
+     * "learning" - wants to learn new technique
+     * "troubleshooting" - something isn't working
+     * "defense" - wants to stop opponent's technique
+     * "competition" - preparing for tournament
+     * "chains" - what flows from/to this
+     * "comparison" - which instructor teaches this best
+   - Specific problem keywords (escaping, finishing, grip, timing, etc.)
+   - Instructor preference (if mentioned)
+
+2. Consider user context (from their profile/history):
+   - Belt level (recommend appropriate skill_level)
+   - Body type (match body_type_notes)
+   - Previous struggles (match common_problem_solved)
+   - Gi or no-gi preference
+
+3. Query video_knowledge intelligently:
+
+   Example queries Professor OS should handle:
+
+   a) "How do I maintain mount?"
+      → primary_technique = 'mount'
+      → detail_type IN ('concept', 'mechanical', 'tip', 'counter')
+   
+   b) "People keep escaping my armbar"
+      → primary_technique = 'armbar'
+      → detail_type IN ('counter', 'mistake', 'finish')
+      → common_problem_solved ILIKE '%escape%'
+   
+   c) "What can I do from closed guard?"
+      → position_category = 'closed guard'
+      → technique_type IN ('submission', 'sweep', 'transition')
+   
+   d) "I'm short, what passes work for me?"
+      → technique_type = 'pass'
+      → body_type_notes ILIKE '%short%' OR '%smaller%'
+   
+   e) "What does Danaher teach about heel hooks?"
+      → instructor_name ILIKE '%danaher%'
+      → primary_technique ILIKE '%heel hook%'
+   
+   f) "What should I learn after mastering the armbar?"
+      → Find armbar entries → return next_to_learn and chains_to
+   
+   g) "How do I defend the knee cut?"
+      → Find where counter_to includes 'knee cut'
+      → OR primary_technique = 'knee cut' AND detail_type = 'defense'
+   
+   h) "Competition legal leg locks for blue belt?"
+      → technique_type = 'submission'
+      → position_category ILIKE '%leg%'
+      → competition_legal = true
+      → skill_level IN ('beginner', 'intermediate')
+
+4. Return structured results with relevance scoring:
+   {
+     query_understood: "User wants to maintain mount better",
+     intent: "troubleshooting",
+     results: [
+       {
+         relevance_score: 0.95,
+         video_title: "Concepts for Maintaining Mount",
+         instructor: "Roger Gracie",
+         instructor_credentials: "Multiple-time World Champion",
+         primary_technique: "Mount",
+         detail: "Countering Leg Push to Reguard",
+         detail_type: "counter",
+         instructor_quote: "Keep your arms inside their legs and push down",
+         timestamp: "02:08-04:08",
+         why_it_matters: "Prevents opponent from creating space to escape",
+         problem_solved: "Opponent pushing on hips to escape"
+       },
+       ...
+     ],
+     related_techniques: ["S-Mount", "High Mount", "Mounted Triangle"],
+     suggested_next: "Once you can maintain, learn mount submissions"
+   }
+
+PART 4: PROFESSOR OS RESPONSE FORMATTING
+
+When using this knowledge, Professor OS should respond like an elite coach:
+
+FORMAT FOR LEARNING QUESTIONS:
+"Here's what the best instructors teach about [technique]:
+
+**[Instructor Name]** - [Credentials]
+📍 [Video Title] at [timestamp]
+💡 Key insight: '[instructor quote]'
+Why it matters: [explanation]
+
+**[Second Instructor]** - [Credentials]  
+📍 [Video Title] at [timestamp]
+💡 Key insight: '[instructor quote]'
+
+🔗 **What to learn next:** [chains_to / next_to_learn]
+
+Want me to go deeper on any of these?"
+
+FORMAT FOR TROUBLESHOOTING:
+"I hear you - [problem] is frustrating. Here's how to fix it:
+
+**The likely issue:** [common_problem_solved match]
+
+**The fix from [Instructor]:**
+📍 [Video Title] at [timestamp]
+'[instructor quote]'
+
+**Common mistake to avoid:** [mistake detail]
+
+**Try this:** [specific actionable tip]
+
+Would you like more options or details on the mechanics?"
+
+FORMAT FOR COMPETITION PREP:
+"For competition, here's what's legal and effective:
+
+**High-percentage option:** [technique]
+Taught by [Instructor] at [timestamp]
+Competition notes: [IBJJF legal, point value, etc.]
+
+**Backup if that fails:** [chains_to technique]
+
+**Watch out for:** [common counter]"
+
+PART 5: CONTINUOUS LEARNING INTEGRATION
+
+Professor OS should also:
+
+1. Track which knowledge gets used most (popular techniques)
+2. Track which responses get thumbs up/down
+3. Note when users ask questions the knowledge base can't answer (gaps to fill)
+4. Learn from user feedback: "That tip worked!" → boost that detail's relevance
+
+Add a table: knowledge_effectiveness
+- id
+- video_knowledge_id
+- times_recommended
+- thumbs_up_count
+- thumbs_down_count  
+- user_feedback (text)
+- created_at
+
+PART 6: APPLY TO PROCESSING
+
+1. Update extraction logic with the above comprehensive structure
+2. Apply to all remaining ~1,596 videos immediately
+3. DO NOT stop current processing - update and continue
+4. After ALL videos complete, reprocess the first 33 with new logic
+5. Processing should continue overnight automatically
+
+PART 7: VERIFICATION
+
+After updating, process ONE video and show me:
+1. The full extracted data with NEW comprehensive structure
+2. Sample queries:
+   - "How do I maintain mount?"
+   - "People keep escaping my armbar"  
+   - "What does Danaher say about leg locks?"
+   - "I'm a blue belt preparing for competition, what should I focus on?"
+3. The knowledge retrieval results for each
+4. The formatted Professor OS responses
+
+Confirm this system will:
+✓ Find relevant knowledge for any BJJ question
+✓ Reference specific timestamps
+✓ Quote instructors accurately
+✓ Match techniques to user's level and body type
+✓ Suggest what to learn next
+✓ Never recommend irrelevant videos
+✓ Get smarter over time from user feedback
+✓ Handle competition vs training contexts
+
+BUILD THIS NOW. Continue processing overnight. Show me verification results before I go to sleep.
+```
+
+-----
+
+This is comprehensive. It covers:
+
+- Better extraction with relationships and physical considerations
+- Smart retrieval for many query types
+- Response formatting for different intents
+- Continuous learning from user feedback
+- Competition context awareness
+- Body type matching
+- Learning paths
+
+**Send this and let it run overnight.** You’ll wake up to a much smarter Professor OS.​​​​​​​​​​​​​​​​

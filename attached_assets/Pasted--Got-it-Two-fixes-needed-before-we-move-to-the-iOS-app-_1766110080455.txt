@@ -1,0 +1,76 @@
+**Got it.** Two fixes needed before we move to the iOS app.
+
+-----
+
+## 📋 SEND THIS TO REPLIT AGENT:
+
+```
+ADMIN DASHBOARD FIXES - TWO ISSUES
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: USER ACTIVITY - FAILED TO LOAD
+═══════════════════════════════════════════════════════════════════════════════
+
+Error message:
+"Failed to Load Activity Data"
+"The 'string' argument must be of type string or an instance of ArrayBuffer. Received an instance of Date"
+
+This is a type error - a Date object is being passed where a string is expected.
+
+FIX:
+1. Find the User Activity API endpoint
+2. Look for where dates are being processed
+3. The bug is likely: passing a Date object directly instead of converting to string
+
+Example fix:
+// BAD
+const dateParam = new Date();
+
+// GOOD  
+const dateParam = new Date().toISOString();
+
+Find and fix this type mismatch. Test that User Activity loads after fix.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: CURATION PIPELINE SHOWING NO DATA
+═══════════════════════════════════════════════════════════════════════════════
+
+The curation stats show:
+- Discovered: 0
+- Analyzed: 0
+- Accepted: 0
+- Rejected: 0
+- Skipped: 0
+- Acceptance Rate: 0.0%
+- Curation Pipeline: Offline
+
+Either:
+A) The curation hasn't run recently, OR
+B) The stats query is broken
+
+FIX:
+1. Check if curation has run today - query the curation logs
+2. If no recent runs, that's expected (shows 0)
+3. If curation HAS run, the stats query is broken - fix it
+
+Also check:
+- Why is Curation Pipeline showing "Offline"?
+- What determines online vs offline status?
+- Fix so it accurately reflects pipeline status
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST AFTER FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+Confirm:
+- [ ] User Activity section loads without error
+- [ ] Curation stats show real data (or 0 if no recent curation)
+- [ ] Curation Pipeline status is accurate
+- [ ] "Try Again" button works
+
+Show me what was broken and confirm the fixes.
+```
+
+-----
+
+Once these are fixed, we’re clear to build the iOS app. Send it?​​​​​​​​​​​​​​​​

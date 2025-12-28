@@ -1,0 +1,1606 @@
+# 🚀 PROMPT 14: Site Restructure + Launch Readiness
+
+Copy this entire block and paste it into Replit Agent. This will restructure BJJ OS from SMS-focused to web/app-focused while preserving all SMS code for future use.
+
+-----
+
+```
+PROMPT 14: Site Restructure + Launch Readiness
+
+MISSION: Restructure BJJ OS from SMS-first to web/mobile app-first experience while preserving all SMS functionality for future reactivation. Optimize for launch with email-based authentication and web chat as primary interface.
+
+## PART 1: SMS CODE PRESERVATION
+
+### 1.1 Create SMS Archive Directory
+
+Create new directory structure to preserve SMS code:
+```
+
+/sms-archive/
+├── /api/
+│   ├── sms-incoming.js
+│   ├── sms-outgoing.js
+│   └── twilio-webhooks.js
+├── /components/
+│   ├── PhoneInput.jsx
+│   ├── SMSVerification.jsx
+│   └── DailyReminderSettings.jsx
+├── /utils/
+│   ├── twilioClient.js
+│   ├── phoneValidation.js
+│   └── smsFormatting.js
+└── SMS_REACTIVATION_GUIDE.md
+
+```
+### 1.2 Move SMS-Specific Files
+
+Move these files to `/sms-archive/` (DO NOT DELETE):
+
+**API Routes:**
+- All Twilio webhook handlers
+- SMS message processing logic
+- Daily reminder scheduling
+- Phone verification endpoints
+
+**Components:**
+- PhoneInput component
+- SMS verification component
+- SMS settings pages
+- Daily reminder UI
+
+**Utilities:**
+- Twilio SDK integration
+- Phone number formatting
+- SMS message templates
+- SMS cost tracking
+
+### 1.3 Create SMS Reactivation Guide
+
+Create `/sms-archive/SMS_REACTIVATION_GUIDE.md`:
+
+```markdown
+# SMS FEATURE - REACTIVATION GUIDE
+
+**ARCHIVED:** October 2025  
+**REASON:** Focus on web/mobile app first, activate SMS when we have scale
+
+---
+
+## WHEN TO REACTIVATE:
+
+Reactivate SMS when you hit these milestones:
+- ✅ 1,000+ active users
+- ✅ $10K+ MRR (can afford Twilio costs)
+- ✅ Users requesting SMS feature
+- ✅ Core retention proven
+
+---
+
+## COST ANALYSIS:
+
+Twilio SMS costs: $0.0079 per message
+
+**Monthly Cost Projections:**
+- 1,000 users × 30 msgs = $237/month
+- 5,000 users × 30 msgs = $1,185/month
+- 10,000 users × 30 msgs = $2,370/month
+
+Only activate when revenue supports these costs.
+
+---
+
+## TWILIO CREDENTIALS:
+
+Account SID: [STORE IN ENV]
+Auth Token: [STORE IN ENV]
+Phone Number: [YOUR TWILIO NUMBER]
+
+**Webhooks to configure:**
+- Incoming SMS: https://bjjos.app/api/sms/incoming
+- Status callbacks: https://bjjos.app/api/sms/status
+
+---
+
+## CODE LOCATIONS:
+
+All SMS functionality preserved in `/sms-archive/`:
+
+**API Routes:**
+- `sms-incoming.js` - Receives user texts
+- `sms-outgoing.js` - Sends Prof. OS responses
+- `twilio-webhooks.js` - Twilio event handlers
+
+**Components:**
+- `PhoneInput.jsx` - Phone number entry
+- `SMSVerification.jsx` - Code verification
+- `DailyReminderSettings.jsx` - SMS scheduling
+
+**Database Tables (still exist, just unused):**
+- `sms_messages` - All SMS history
+- `daily_reminders` - Scheduled check-ins
+- `phone_verifications` - Signup codes
+
+---
+
+## REACTIVATION STEPS:
+
+1. **Environment Setup:**
+   ```bash
+   SMS_ENABLED=true
+   TWILIO_ACCOUNT_SID=[your_sid]
+   TWILIO_AUTH_TOKEN=[your_token]
+   TWILIO_PHONE_NUMBER=[your_number]
+```
+
+1. **Code Integration:**
+
+- Copy files from `/sms-archive/api/` to `/app/api/sms/`
+- Copy components from archive to main `/components/`
+- Import Twilio utilities back into main codebase
+
+1. **Database Activation:**
+
+- Phone field already exists in users table (nullable)
+- SMS tables already exist, just start using them
+- No migrations needed
+
+1. **Twilio Configuration:**
+
+- Configure incoming SMS webhook
+- Set up status callbacks
+- Test with personal number first
+
+1. **Landing Page Updates:**
+
+- Add SMS messaging back to hero section
+- Update features to mention “Text your coach”
+- Add phone number signup flow
+
+1. **Testing Protocol:**
+
+- Test with 5-10 users first
+- Monitor costs daily
+- Check message delivery rates
+- Ensure two-way sync with web chat
+
+1. **Gradual Rollout:**
+
+- Week 1: Offer to 10% of users
+- Week 2: 25% of users
+- Week 3: 50% of users
+- Week 4: All users (if metrics good)
+
+-----
+
+## FEATURES TO ADD WHEN REACTIVATING:
+
+**Enhanced SMS Experience:**
+
+- Deep links from SMS to app (open specific conversations)
+- MMS support (send video thumbnails)
+- Two-way sync (SMS ↔ Web chat unified)
+- SMS-only mode (users who prefer text-only)
+- Smart batching (avoid spam perception)
+- Rich formatting (bold, bullets in SMS)
+
+**Marketing Angle:**
+“NEW FEATURE: Check in via text”
+
+- No app needed at the gym
+- Quick session logs via SMS
+- Prof. OS texts you tips
+- Works without WiFi
+
+**This becomes a differentiator vs competitors.**
+
+-----
+
+## METRICS TO TRACK WHEN ACTIVE:
+
+- SMS delivery rate (target: >98%)
+- SMS→Web conversion (do they use both?)
+- Cost per user per month
+- User preference (SMS vs web)
+- Retention lift from SMS
+- Response time (how fast they reply)
+
+-----
+
+## IMPORTANT NOTES:
+
+- Keep phone field in users table (nullable) even while SMS inactive
+- Don’t delete SMS database tables
+- Twilio account can stay active (no monthly fee if no usage)
+- This code is proven and works - just paused, not abandoned
+
+-----
+
+**SMS will be powerful growth tool when timing is right. For now, focus on core web experience.**
+
+-----
+
+END OF REACTIVATION GUIDE
+
+```
+### 1.4 Database Schema Preservation
+
+Keep these tables but make SMS fields optional:
+
+```sql
+-- Keep users table, make phone nullable
+ALTER TABLE users 
+ALTER COLUMN phone DROP NOT NULL;
+
+-- Add flag to indicate if user wants SMS (for future)
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS sms_enabled BOOLEAN DEFAULT false;
+
+-- Keep these tables (they'll be empty but preserved)
+-- sms_messages
+-- daily_reminders  
+-- phone_verifications
+
+-- Add comments so we remember why they exist
+COMMENT ON TABLE sms_messages IS 'SMS feature archived Oct 2025, will reactivate at scale';
+COMMENT ON TABLE daily_reminders IS 'SMS feature archived Oct 2025, will reactivate at scale';
+```
+
+-----
+
+## PART 2: AUTHENTICATION RESTRUCTURE
+
+### 2.1 Switch to Email-Based Auth
+
+Replace phone-based authentication with email-based:
+
+**New Auth Schema:**
+
+```sql
+-- Update users table for email auth
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS email VARCHAR(255) UNIQUE,
+ADD COLUMN IF NOT EXISTS password_hash TEXT,
+ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS verification_token TEXT,
+ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
+ADD COLUMN IF NOT EXISTS last_login TIMESTAMP;
+
+-- Make phone optional (for future SMS feature)
+ALTER TABLE users
+ALTER COLUMN phone DROP NOT NULL;
+
+-- Add index for faster email lookups
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+```
+
+### 2.2 Create Email Auth Endpoints
+
+Create `/app/api/auth/` directory with these endpoints:
+
+**`/app/api/auth/signup/route.js`:**
+
+```javascript
+import { hash } from 'bcrypt';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+export async function POST(req) {
+  const { email, password, name } = await req.json();
+  
+  // Validate email
+  if (!email || !email.includes('@')) {
+    return Response.json({ error: 'Valid email required' }, { status: 400 });
+  }
+  
+  // Validate password (min 8 chars)
+  if (!password || password.length < 8) {
+    return Response.json({ error: 'Password must be 8+ characters' }, { status: 400 });
+  }
+  
+  // Check if email exists
+  const { data: existing } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', email.toLowerCase())
+    .single();
+    
+  if (existing) {
+    return Response.json({ error: 'Email already registered' }, { status: 400 });
+  }
+  
+  // Hash password
+  const passwordHash = await hash(password, 10);
+  
+  // Create user
+  const { data: user, error } = await supabase
+    .from('users')
+    .insert({
+      email: email.toLowerCase(),
+      password_hash: passwordHash,
+      name: name || null,
+      phone: null, // Optional for future SMS
+      belt_level: 'white',
+      email_verified: false
+    })
+    .select()
+    .single();
+    
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+  
+  // Create session token (simplified - use JWT in production)
+  const sessionToken = Buffer.from(`${user.id}:${Date.now()}`).toString('base64');
+  
+  return Response.json({ 
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name
+    },
+    sessionToken 
+  });
+}
+```
+
+**`/app/api/auth/login/route.js`:**
+
+```javascript
+import { compare } from 'bcrypt';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+export async function POST(req) {
+  const { email, password } = await req.json();
+  
+  // Get user by email
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('email', email.toLowerCase())
+    .single();
+    
+  if (error || !user) {
+    return Response.json({ error: 'Invalid credentials' }, { status: 401 });
+  }
+  
+  // Verify password
+  const valid = await compare(password, user.password_hash);
+  
+  if (!valid) {
+    return Response.json({ error: 'Invalid credentials' }, { status: 401 });
+  }
+  
+  // Update last login
+  await supabase
+    .from('users')
+    .update({ last_login: new Date().toISOString() })
+    .eq('id', user.id);
+  
+  // Create session token
+  const sessionToken = Buffer.from(`${user.id}:${Date.now()}`).toString('base64');
+  
+  return Response.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      belt_level: user.belt_level
+    },
+    sessionToken
+  });
+}
+```
+
+**`/app/api/auth/logout/route.js`:**
+
+```javascript
+export async function POST(req) {
+  // Clear session (client-side will remove token)
+  return Response.json({ success: true });
+}
+```
+
+### 2.3 Create Auth Components
+
+**`/components/SignupForm.jsx`:**
+
+```jsx
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function SignupForm() {
+  const router = useRouter();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    name: ''
+  });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Signup failed');
+      }
+
+      // Store session token
+      localStorage.setItem('sessionToken', data.sessionToken);
+      localStorage.setItem('user', JSON.stringify(data.user));
+
+      // Redirect to onboarding
+      router.push('/onboarding');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="signup-form">
+      <h2>Start Your BJJ Journey</h2>
+      
+      {error && <div className="error-message">{error}</div>}
+      
+      <input
+        type="text"
+        placeholder="Name (optional)"
+        value={formData.name}
+        onChange={(e) => setFormData({...formData, name: e.target.value})}
+      />
+      
+      <input
+        type="email"
+        placeholder="Email"
+        required
+        value={formData.email}
+        onChange={(e) => setFormData({...formData, email: e.target.value})}
+      />
+      
+      <input
+        type="password"
+        placeholder="Password (min 8 characters)"
+        required
+        minLength={8}
+        value={formData.password}
+        onChange={(e) => setFormData({...formData, password: e.target.value})}
+      />
+      
+      <button type="submit" disabled={loading}>
+        {loading ? 'Creating Account...' : 'Start Free'}
+      </button>
+      
+      <p className="terms">
+        By signing up, you agree to our Terms of Service and Privacy Policy
+      </p>
+      
+      <p className="login-link">
+        Already have an account? <a href="/login">Log in</a>
+      </p>
+    </form>
+  );
+}
+```
+
+**`/components/LoginForm.jsx`:**
+
+```jsx
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function LoginForm() {
+  const router = useRouter();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Login failed');
+      }
+
+      // Store session token
+      localStorage.setItem('sessionToken', data.sessionToken);
+      localStorage.setItem('user', JSON.stringify(data.user));
+
+      // Redirect to dashboard
+      router.push('/dashboard');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="login-form">
+      <h2>Welcome Back</h2>
+      
+      {error && <div className="error-message">{error}</div>}
+      
+      <input
+        type="email"
+        placeholder="Email"
+        required
+        value={formData.email}
+        onChange={(e) => setFormData({...formData, email: e.target.value})}
+      />
+      
+      <input
+        type="password"
+        placeholder="Password"
+        required
+        value={formData.password}
+        onChange={(e) => setFormData({...formData, password: e.target.value})}
+      />
+      
+      <button type="submit" disabled={loading}>
+        {loading ? 'Logging In...' : 'Log In'}
+      </button>
+      
+      <p className="forgot-password">
+        <a href="/forgot-password">Forgot password?</a>
+      </p>
+      
+      <p className="signup-link">
+        Don't have an account? <a href="/signup">Sign up free</a>
+      </p>
+    </form>
+  );
+}
+```
+
+-----
+
+## PART 3: LANDING PAGE RESTRUCTURE
+
+### 3.1 Update Hero Section
+
+Replace SMS-focused hero with web/app-focused hero:
+
+**New Hero Copy:**
+
+```jsx
+<section className="hero">
+  <h1>Your Personal BJJ Coach, Powered by AI</h1>
+  
+  <p className="hero-subtitle">
+    Track training. Get coaching. Master techniques.
+    All in one intelligent platform.
+  </p>
+  
+  <div className="hero-cta">
+    <a href="/signup" className="btn-primary">Start Free</a>
+    <a href="#how-it-works" className="btn-secondary">See How It Works</a>
+  </div>
+  
+  <div className="hero-image">
+    {/* Screenshot of web chat interface */}
+    <img src="/images/chat-interface.png" alt="Prof. OS Chat Interface" />
+  </div>
+  
+  <div className="trust-badges">
+    <span>✓ No credit card required</span>
+    <span>✓ 7-day Pro trial</span>
+    <span>✓ Works on all devices</span>
+  </div>
+</section>
+```
+
+### 3.2 Update Features Section
+
+**Remove SMS-focused features, add web/app features:**
+
+```jsx
+<section className="features">
+  <h2>Everything You Need to Level Up Your Game</h2>
+  
+  <div className="feature-grid">
+    
+    <div className="feature">
+      <div className="feature-icon">💬</div>
+      <h3>Chat with Prof. OS</h3>
+      <p>Ask questions, get personalized coaching, receive technique breakdowns—all in natural conversation.</p>
+    </div>
+    
+    <div className="feature">
+      <div className="feature-icon">📹</div>
+      <h3>5,000+ Curated Videos</h3>
+      <p>AI-selected instruction from world champions. No more endless YouTube searches.</p>
+    </div>
+    
+    <div className="feature">
+      <div className="feature-icon">📊</div>
+      <h3>Track Your Progress</h3>
+      <p>Log sessions, spot patterns, see improvement over time. Prof. OS remembers your journey.</p>
+    </div>
+    
+    <div className="feature">
+      <div className="feature-icon">🎯</div>
+      <h3>Personalized Recommendations</h3>
+      <p>Get techniques matched to your belt level, body type, age, and current goals.</p>
+    </div>
+    
+    <div className="feature">
+      <div className="feature-icon">🧠</div>
+      <h3>Pattern Detection</h3>
+      <p>Prof. OS spots your recurring challenges and suggests targeted improvements.</p>
+    </div>
+    
+    <div className="feature">
+      <div className="feature-icon">📱</div>
+      <h3>Works Everywhere</h3>
+      <p>Web, mobile, tablet—log from the gym or review techniques at home.</p>
+    </div>
+    
+  </div>
+</section>
+```
+
+### 3.3 Add “How It Works” Section
+
+```jsx
+<section id="how-it-works" className="how-it-works">
+  <h2>How BJJ OS Works</h2>
+  
+  <div className="steps">
+    
+    <div className="step">
+      <div className="step-number">1</div>
+      <h3>Sign Up Free</h3>
+      <p>Create your account in 30 seconds. No credit card required.</p>
+    </div>
+    
+    <div className="step">
+      <div className="step-number">2</div>
+      <h3>Tell Prof. OS About You</h3>
+      <p>Share your belt level, training frequency, and what you want to work on.</p>
+    </div>
+    
+    <div className="step">
+      <div className="step-number">3</div>
+      <h3>Start Training Smarter</h3>
+      <p>Log sessions, ask questions, get personalized coaching—all from one platform.</p>
+    </div>
+    
+  </div>
+  
+  <div className="cta-box">
+    <h3>Ready to transform your training?</h3>
+    <a href="/signup" className="btn-primary">Start Your Journey</a>
+  </div>
+</section>
+```
+
+### 3.4 Update Pricing Section
+
+Remove any SMS-specific mentions:
+
+```jsx
+<section className="pricing">
+  <h2>Simple, Transparent Pricing</h2>
+  
+  <div className="pricing-grid">
+    
+    <div className="pricing-card">
+      <h3>Free</h3>
+      <div className="price">$0<span>/month</span></div>
+      <ul>
+        <li>✓ 10 Prof. OS conversations/month</li>
+        <li>✓ Basic session logging</li>
+        <li>✓ Access to video library</li>
+        <li>✓ Progress tracking</li>
+        <li>✗ Unlimited coaching</li>
+        <li>✗ Advanced features</li>
+      </ul>
+      <a href="/signup" className="btn-secondary">Start Free</a>
+    </div>
+    
+    <div className="pricing-card featured">
+      <div className="badge">Most Popular</div>
+      <h3>Pro</h3>
+      <div className="price">$9.99<span>/month</span></div>
+      <ul>
+        <li>✓ Unlimited Prof. OS coaching</li>
+        <li>✓ Unlimited session logging</li>
+        <li>✓ Full video library access</li>
+        <li>✓ Advanced progress tracking</li>
+        <li>✓ Pattern detection</li>
+        <li>✓ Competition prep mode</li>
+        <li>✓ Personalized recommendations</li>
+      </ul>
+      <a href="/signup" className="btn-primary">Try 7 Days Free</a>
+      <p className="trial-note">No credit card required for trial</p>
+    </div>
+    
+  </div>
+</section>
+```
+
+-----
+
+## PART 4: ONBOARDING FLOW
+
+### 4.1 Create Onboarding Page
+
+Create `/app/onboarding/page.js`:
+
+```jsx
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+const ONBOARDING_STEPS = [
+  {
+    id: 'belt',
+    title: "What's your belt level?",
+    options: [
+      { value: 'white', label: '⬜ White Belt' },
+      { value: 'blue', label: '🟦 Blue Belt' },
+      { value: 'purple', label: '🟣 Purple Belt' },
+      { value: 'brown', label: '🟤 Brown Belt' },
+      { value: 'black', label: '⬛ Black Belt' }
+    ]
+  },
+  {
+    id: 'training_frequency',
+    title: 'How often do you train?',
+    options: [
+      { value: '1-2', label: '1-2 times per week' },
+      { value: '3-4', label: '3-4 times per week' },
+      { value: '5+', label: '5+ times per week' },
+      { value: 'irregular', label: 'Irregular/varies' }
+    ]
+  },
+  {
+    id: 'goals',
+    title: 'What do you want to work on?',
+    type: 'multi-select',
+    options: [
+      { value: 'fundamentals', label: 'Fundamentals' },
+      { value: 'competition', label: 'Competition prep' },
+      { value: 'specific_technique', label: 'Specific techniques' },
+      { value: 'consistency', label: 'Training consistency' },
+      { value: 'belt_promotion', label: 'Belt promotion' }
+    ]
+  }
+];
+
+export default function OnboardingPage() {
+  const router = useRouter();
+  const [currentStep, setCurrentStep] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  const step = ONBOARDING_STEPS[currentStep];
+
+  async function handleNext(value) {
+    const newAnswers = { ...answers, [step.id]: value };
+    setAnswers(newAnswers);
+
+    if (currentStep < ONBOARDING_STEPS.length - 1) {
+      setCurrentStep(currentStep + 1);
+    } else {
+      // Save onboarding data
+      await saveOnboarding(newAnswers);
+    }
+  }
+
+  async function saveOnboarding(data) {
+    setLoading(true);
+    
+    try {
+      const user = JSON.parse(localStorage.getItem('user'));
+      
+      await fetch('/api/user/onboarding', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('sessionToken')}`
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          ...data
+        })
+      });
+      
+      // Redirect to chat (first Prof. OS conversation)
+      router.push('/chat?welcome=true');
+    } catch (err) {
+      console.error('Onboarding error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="onboarding-container">
+      <div className="onboarding-progress">
+        <div className="progress-bar" style={{ width: `${((currentStep + 1) / ONBOARDING_STEPS.length) * 100}%` }} />
+      </div>
+
+      <div className="onboarding-content">
+        <h1>{step.title}</h1>
+
+        {step.type === 'multi-select' ? (
+          <div className="multi-select-options">
+            {step.options.map(option => (
+              <button
+                key={option.value}
+                className={`option-button ${answers[step.id]?.includes(option.value) ? 'selected' : ''}`}
+                onClick={() => {
+                  const current = answers[step.id] || [];
+                  const updated = current.includes(option.value)
+                    ? current.filter(v => v !== option.value)
+                    : [...current, option.value];
+                  setAnswers({ ...answers, [step.id]: updated });
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+            <button
+              className="btn-primary next-button"
+              onClick={() => handleNext(answers[step.id] || [])}
+              disabled={!answers[step.id]?.length}
+            >
+              {loading ? 'Saving...' : currentStep === ONBOARDING_STEPS.length - 1 ? 'Finish' : 'Next'}
+            </button>
+          </div>
+        ) : (
+          <div className="options">
+            {step.options.map(option => (
+              <button
+                key={option.value}
+                className="option-button"
+                onClick={() => handleNext(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {currentStep > 0 && (
+          <button
+            className="btn-text back-button"
+            onClick={() => setCurrentStep(currentStep - 1)}
+          >
+            ← Back
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+### 4.2 Create Onboarding API
+
+Create `/app/api/user/onboarding/route.js`:
+
+```javascript
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+export async function POST(req) {
+  const { userId, belt, training_frequency, goals } = await req.json();
+  
+  // Update user profile
+  const { error } = await supabase
+    .from('users')
+    .update({
+      belt_level: belt,
+      training_frequency: training_frequency,
+      goals: goals, // Array of goal strings
+      onboarding_completed: true,
+      onboarding_completed_at: new Date().toISOString()
+    })
+    .eq('id', userId);
+    
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+  
+  return Response.json({ success: true });
+}
+```
+
+-----
+
+## PART 5: CHAT INTERFACE (PRIMARY EXPERIENCE)
+
+### 5.1 Optimize Chat Page
+
+Update `/app/chat/page.js` to be the primary interface:
+
+```jsx
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
+
+export default function ChatPage() {
+  const searchParams = useSearchParams();
+  const isWelcome = searchParams.get('welcome') === 'true';
+  
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    // Get user from localStorage
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
+    
+    // If welcome flow, show Prof. OS greeting
+    if (isWelcome) {
+      setMessages([{
+        role: 'assistant',
+        content: `Hey! I'm Prof. OS, your BJJ training partner. 
+
+I'm here to help you get better at jiu-jitsu. You can ask me anything—technique questions, drilling advice, what to work on next, or just tell me about your training.
+
+What would you like to talk about?`
+      }]);
+    }
+  }, [isWelcome]);
+
+  useEffect(() => {
+    // Scroll to bottom on new messages
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  async function sendMessage(e) {
+    e.preventDefault();
+    if (!input.trim() || loading) return;
+
+    const userMessage = input.trim();
+    setInput('');
+    setLoading(true);
+
+    // Add user message to chat
+    const newMessages = [...messages, { role: 'user', content: userMessage }];
+    setMessages(newMessages);
+
+    try {
+      // Send to Prof. OS
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('sessionToken')}`
+        },
+        body: JSON.stringify({
+          userId: user?.id,
+          message: userMessage,
+          conversationHistory: newMessages
+        })
+      });
+
+      const data = await res.json();
+
+      // Add Prof. OS response
+      setMessages([...newMessages, { 
+        role: 'assistant', 
+        content: data.response,
+        videos: data.videos || null
+      }]);
+    } catch (err) {
+      console.error('Chat error:', err);
+      setMessages([...newMessages, { 
+        role: 'assistant', 
+        content: 'Sorry, I had trouble responding. Please try again.' 
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="chat-page">
+      <div className="chat-header">
+        <h1>🥋 Prof. OS</h1>
+        <p>Your BJJ training partner</p>
+      </div>
+
+      <div className="chat-messages">
+        {messages.map((msg, i) => (
+          <div key={i} className={`message ${msg.role}`}>
+            <div className="message-content">
+              {msg.content}
+              
+              {msg.videos && msg.videos.length > 0 && (
+                <div className="video-recommendations">
+                  {msg.videos.map((video, j) => (
+                    <div key={j} className="video-card">
+                      <img src={video.thumbnail} alt={video.title} />
+                      <div className="video-info">
+                        <h4>{video.title}</h4>
+                        <p>{video.instructor} • {video.duration}</p>
+                        <a href={video.url} target="_blank" rel="noopener">Watch →</a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+        
+        {loading && (
+          <div className="message assistant">
+            <div className="message-content">
+              <div className="typing-indicator">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
+      </div>
+
+      <form className="chat-input" onSubmit={sendMessage}>
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Ask Prof. OS anything..."
+          disabled={loading}
+        />
+        <button type="submit" disabled={loading || !input.trim()}>
+          Send
+        </button>
+      </form>
+
+      <div className="chat-suggestions">
+        <button onClick={() => setInput("What should I drill today?")}>
+          What should I drill today?
+        </button>
+        <button onClick={() => setInput("How do I defend the guillotine?")}>
+          How do I defend the guillotine?
+        </button>
+        <button onClick={() => setInput("Log my training session")}>
+          Log my training session
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+-----
+
+## PART 6: MOBILE PWA SETUP
+
+### 6.1 Create PWA Manifest
+
+Create `/public/manifest.json`:
+
+```json
+{
+  "name": "BJJ OS",
+  "short_name": "BJJ OS",
+  "description": "Your personal BJJ coach, powered by AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#1a1a1a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+```
+
+### 6.2 Add PWA Meta Tags
+
+Update `/app/layout.js`:
+
+```jsx
+export const metadata = {
+  title: 'BJJ OS - Your Personal BJJ Coach',
+  description: 'Track training, get coaching, master techniques with AI-powered BJJ assistance',
+  manifest: '/manifest.json',
+  themeColor: '#1a1a1a',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'BJJ OS'
+  }
+};
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#1a1a1a" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+      </head>
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+### 6.3 Add Install Prompt Component
+
+Create `/components/PWAInstallPrompt.jsx`:
+
+```jsx
+'use client';
+
+import { useState, useEffect } from 'react';
+
+export default function PWAInstallPrompt() {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showPrompt, setShowPrompt] = useState(false);
+
+  useEffect(() => {
+    // Listen for install prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      
+      // Show prompt after 30 seconds (user has time to explore)
+      setTimeout(() => setShowPrompt(true), 30000);
+    });
+  }, []);
+
+  async function handleInstall() {
+    if (!deferredPrompt) return;
+
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      setShowPrompt(false);
+    }
+    
+    setDeferredPrompt(null);
+  }
+
+  if (!showPrompt) return null;
+
+  return (
+    <div className="pwa-install-prompt">
+      <div className="prompt-content">
+        <h3>📱 Install BJJ OS</h3>
+        <p>Add to your home screen for quick access!</p>
+        <div className="prompt-actions">
+          <button onClick={handleInstall} className="btn-primary">Install</button>
+          <button onClick={() => setShowPrompt(false)} className="btn-text">Maybe Later</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+-----
+
+## PART 7: ANALYTICS & RETENTION
+
+### 7.1 Create Analytics API
+
+Create `/app/api/analytics/track/route.js`:
+
+```javascript
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+export async function POST(req) {
+  const { userId, event, properties } = await req.json();
+  
+  // Track event in database
+  const { error } = await supabase
+    .from('analytics_events')
+    .insert({
+      user_id: userId,
+      event_name: event,
+      properties: properties || {},
+      created_at: new Date().toISOString()
+    });
+    
+  if (error) {
+    console.error('Analytics error:', error);
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+  
+  return Response.json({ success: true });
+}
+```
+
+### 7.2 Create Analytics Events Table
+
+```sql
+-- Create analytics events table
+CREATE TABLE IF NOT EXISTS analytics_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  event_name VARCHAR(100) NOT NULL,
+  properties JSONB,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_analytics_user ON analytics_events(user_id);
+CREATE INDEX idx_analytics_event ON analytics_events(event_name);
+CREATE INDEX idx_analytics_created ON analytics_events(created_at);
+```
+
+### 7.3 Track Key Events
+
+Add tracking throughout the app:
+
+**Events to track:**
+
+- `user_signup` - New account created
+- `onboarding_completed` - Finished onboarding
+- `first_message` - First Prof. OS conversation
+- `session_logged` - Training session logged
+- `video_watched` - Clicked on video recommendation
+- `upgrade_to_pro` - Converted to paid
+- `daily_active` - User active today (once per day)
+- `weekly_active` - User active this week (once per week)
+
+**Example tracking:**
+
+```javascript
+// Track user signup
+fetch('/api/analytics/track', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    userId: user.id,
+    event: 'user_signup',
+    properties: { source: 'web' }
+  })
+});
+```
+
+-----
+
+## PART 8: RETENTION SYSTEMS
+
+### 8.1 Email Reminder System
+
+Create `/app/api/cron/email-reminders/route.js`:
+
+```javascript
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+export async function GET(req) {
+  // Verify cron secret (Vercel cron job authentication)
+  const authHeader = req.headers.get('authorization');
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Find users who haven't logged in for 3 days
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+  const { data: inactiveUsers } = await supabase
+    .from('users')
+    .select('id, email, name')
+    .lt('last_login', threeDaysAgo.toISOString())
+    .eq('email_reminders_enabled', true);
+
+  // Send re-engagement emails
+  for (const user of inactiveUsers || []) {
+    await sendReEngagementEmail(user);
+  }
+
+  return Response.json({ 
+    success: true, 
+    emailsSent: inactiveUsers?.length || 0 
+  });
+}
+
+async function sendReEngagementEmail(user) {
+  // Use your email service (SendGrid, Resend, etc.)
+  // This is a placeholder
+  console.log(`Sending re-engagement email to ${user.email}`);
+}
+```
+
+### 8.2 Weekly Summary Email
+
+Create `/app/api/cron/weekly-summary/route.js`:
+
+```javascript
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+export async function GET(req) {
+  // Verify cron secret
+  const authHeader = req.headers.get('authorization');
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Get all active users
+  const { data: users } = await supabase
+    .from('users')
+    .select('id, email, name')
+    .eq('weekly_summary_enabled', true);
+
+  // Send weekly summaries
+  for (const user of users || []) {
+    const summary = await generateWeeklySummary(user.id);
+    await sendWeeklySummaryEmail(user, summary);
+  }
+
+  return Response.json({ 
+    success: true, 
+    emailsSent: users?.length || 0 
+  });
+}
+
+async function generateWeeklySummary(userId) {
+  // Get user's activity from past week
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+  // Count sessions logged
+  const { count: sessionsCount } = await supabase
+    .from('sessions')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', oneWeekAgo.toISOString());
+
+  // Count messages sent
+  const { count: messagesCount } = await supabase
+    .from('conversations')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', oneWeekAgo.toISOString());
+
+  return {
+    sessions: sessionsCount || 0,
+    messages: messagesCount || 0
+  };
+}
+
+async function sendWeeklySummaryEmail(user, summary) {
+  // Email content
+  const emailHTML = `
+    <h2>Your BJJ Week in Review</h2>
+    <p>Hey ${user.name || 'there'},</p>
+    <p>Here's what you accomplished this week:</p>
+    <ul>
+      <li>${summary.sessions} training sessions logged</li>
+      <li>${summary.messages} conversations with Prof. OS</li>
+    </ul>
+    <p>Keep up the great work! 🥋</p>
+    <a href="https://bjjos.app/chat">Continue Your Journey →</a>
+  `;
+
+  // Send via your email service
+  console.log(`Sending weekly summary to ${user.email}`);
+}
+```
+
+-----
+
+## PART 9: TESTING CHECKLIST
+
+After implementation, test these scenarios:
+
+### Authentication Tests:
+
+- ✅ Sign up with email/password
+- ✅ Log in with existing account
+- ✅ Invalid email shows error
+- ✅ Weak password shows error
+- ✅ Duplicate email shows error
+- ✅ Session persists after refresh
+
+### Onboarding Tests:
+
+- ✅ All 3 steps complete
+- ✅ Back button works
+- ✅ Can’t proceed without selection
+- ✅ Data saves to database
+- ✅ Redirects to chat after completion
+
+### Chat Tests:
+
+- ✅ Welcome message shows for new users
+- ✅ Can send messages
+- ✅ Prof. OS responds (test in English)
+- ✅ Prof. OS responds (test in Portuguese)
+- ✅ Video recommendations display
+- ✅ Conversation history persists
+
+### PWA Tests:
+
+- ✅ Install prompt appears (mobile)
+- ✅ App installs successfully
+- ✅ Works offline (cached pages)
+- ✅ Matches native app feel
+
+### SMS Archive Tests:
+
+- ✅ SMS code moved to `/sms-archive/`
+- ✅ Reactivation guide exists
+- ✅ Phone field still in database (nullable)
+- ✅ SMS tables preserved
+- ✅ No broken references to SMS code
+
+-----
+
+## PART 10: DEPLOYMENT
+
+### 10.1 Environment Variables
+
+Update `.env` with new required variables:
+
+```bash
+# Existing
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_KEY=
+ANTHROPIC_API_KEY=
+YOUTUBE_API_KEY=
+
+# New (remove SMS variables or keep inactive)
+# TWILIO_ACCOUNT_SID= (archived)
+# TWILIO_AUTH_TOKEN= (archived)
+# TWILIO_PHONE_NUMBER= (archived)
+
+# Auth
+JWT_SECRET=your_jwt_secret_here
+
+# Email (if using)
+SENDGRID_API_KEY=
+FROM_EMAIL=noreply@bjjos.app
+
+# Cron
+CRON_SECRET=your_cron_secret_here
+
+# Feature flags
+SMS_ENABLED=false
+```
+
+### 10.2 Vercel Deployment
+
+If using Vercel, configure:
+
+**Cron Jobs** (vercel.json):
+
+```json
+{
+  "crons": [
+    {
+      "path": "/api/cron/email-reminders",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-summary",
+      "schedule": "0 9 * * 1"
+    }
+  ]
+}
+```
+
+-----
+
+## IMPLEMENTATION SUMMARY
+
+This prompt will:
+
+1. ✅ Archive all SMS code (preserve for future)
+1. ✅ Create SMS reactivation guide
+1. ✅ Switch to email-based authentication
+1. ✅ Restructure landing page (web/app focus)
+1. ✅ Create smooth onboarding flow
+1. ✅ Make chat the primary interface
+1. ✅ Add PWA support (mobile install)
+1. ✅ Implement analytics tracking
+1. ✅ Add retention systems (email reminders)
+1. ✅ Preserve database schema (SMS fields nullable)
+
+**Result:** BJJ OS becomes a modern web/mobile app with SMS capabilities ready to reactivate when you hit scale.
+
+-----
+
+END OF PROMPT 14
+
+Paste this entire prompt into Replit Agent. It will restructure the site while keeping SMS code safe for future use. Go train, and when you return, BJJ OS will be launch-ready! 🚀🥋
+
+```
+---
+
+# ✅ READY TO DEPLOY
+
+**This prompt includes everything:**
+- SMS preservation (not deleted, just archived)
+- Email authentication system
+- Landing page restructure
+- Onboarding flow
+- PWA mobile app
+- Analytics & retention
+- Complete testing checklist
+
+**Copy the entire block above and paste into Replit Agent!**
+
+Then go train. When you return, you'll have a launch-ready web app with SMS ready to unlock later. 🥋🚀​​​​​​​​​​​​​​​​
+```

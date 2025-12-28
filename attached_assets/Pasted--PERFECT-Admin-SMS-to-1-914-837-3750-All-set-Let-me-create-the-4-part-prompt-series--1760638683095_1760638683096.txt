@@ -1,0 +1,613 @@
+# ✅ PERFECT - Admin SMS to +1.914.837.3750
+
+**All set!** Let me create the 4-part prompt series.
+
+-----
+
+# 🚀 PART 1 OF 4: FOUNDATION & SETUP
+
+**Copy this entire message and paste into Replit Agent:**
+
+-----
+
+```
+# BJJ OS - PART 1: FOUNDATION & SETUP
+
+## CONTEXT
+We're building BJJ OS - a premium PWA (Progressive Web App) for BJJ practitioners. This is a mobile-first, installable app with AI coaching, voice input, and subscription model.
+
+**Key Info:**
+- Price: $14.99/month Pro tier
+- Free tier: 5 questions/month, limited features
+- 7-day trial with credit card upfront (Apple Pay enabled)
+- Voice input powered by OpenAI Whisper API
+- Push notifications (Android native, iOS via email/SMS)
+- Admin SMS notifications to +1.914.837.3750
+- Black background (#000000) with lime green accents (#84CC16)
+
+## YOUR TASK - PART 1
+Set up the complete foundation: project structure, database, authentication, and PWA configuration.
+
+---
+
+## 1. PROJECT STRUCTURE
+
+Create this exact folder structure:
+```
+
+bjj-os/
+├── public/
+│   ├── icons/
+│   │   ├── icon-192.png (generate simple BJJ OS logo)
+│   │   ├── icon-512.png
+│   │   └── apple-touch-icon.png
+│   ├── manifest.json
+│   └── sw.js (service worker)
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx
+│   │   ├── page.tsx (landing page)
+│   │   ├── chat/
+│   │   │   └── page.tsx
+│   │   ├── library/
+│   │   │   └── page.tsx
+│   │   ├── profile/
+│   │   │   └── page.tsx
+│   │   ├── admin/
+│   │   │   └── page.tsx
+│   │   └── api/
+│   │       ├── auth/
+│   │       ├── chat/
+│   │       ├── users/
+│   │       └── webhooks/
+│   ├── components/
+│   │   ├── Navigation.tsx
+│   │   ├── VoiceInput.tsx
+│   │   ├── ChatMessage.tsx
+│   │   └── AdminDashboard.tsx
+│   ├── lib/
+│   │   ├── db.ts (Supabase client)
+│   │   ├── anthropic.ts (Claude API)
+│   │   ├── whisper.ts (OpenAI Whisper)
+│   │   ├── stripe.ts
+│   │   └── twilio.ts
+│   └── styles/
+│       └── globals.css
+├── prisma/
+│   └── schema.prisma
+├── package.json
+├── next.config.js
+├── tailwind.config.ts
+└── .env.local
+
+```
+---
+
+## 2. DATABASE SCHEMA (Supabase + Prisma)
+
+Create `prisma/schema.prisma`:
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  phone     String   @unique
+  createdAt DateTime @default(now())
+  
+  // Subscription
+  tier              String   @default("free") // "free" | "trial" | "pro"
+  trialUsed         Boolean  @default(false)
+  trialStartedAt    DateTime?
+  trialEndsAt       DateTime?
+  subscriptionId    String?  @unique
+  subscriptionStatus String? // "active" | "canceled" | "past_due"
+  subscriptionEndsAt DateTime?
+  
+  // Profile
+  beltLevel         String?  // "white" | "blue" | "purple" | "brown" | "black"
+  giPreference      String?  // "gi" | "nogi" | "both"
+  mainGoal          String?
+  age               Int?
+  bodyType          String?  // "short_stocky" | "tall_lanky" | "athletic" | "average"
+  injuries          String[] // Array of injury descriptions
+  
+  // Admin
+  role              String   @default("user") // "user" | "admin"
+  
+  // Usage tracking
+  questionsThisMonth Int     @default(0)
+  lastQuestionReset  DateTime @default(now())
+  
+  // Relations
+  sessions          Session[]
+  techniques        UserTechnique[]
+  conversations     Conversation[]
+  referrals         Referral[]      @relation("Referrer")
+  referredBy        Referral?       @relation("Referee")
+  
+  @@index([email])
+  @@index([phone])
+  @@index([tier])
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  
+  date        DateTime @default(now())
+  duration    Int      // minutes
+  type        String   // "drilling" | "sparring" | "class" | "open_mat"
+  
+  techniques  String[] // Array of technique names
+  notes       String?  @db.Text
+  voiceNotes  String?  @db.Text // Transcribed voice input
+  
+  energy      Int?     // 1-5 scale
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([date])
+}
+
+model Technique {
+  id          String   @id @default(cuid())
+  
+  // Core info
+  name        String
+  category    String   // "submission" | "sweep" | "pass" | "escape" | "takedown" | "position"
+  position    String?  // "guard" | "mount" | "side" | "back" | "standing"
+  difficulty  String   // "fundamental" | "intermediate" | "advanced"
+  
+  // For gi/no-gi
+  giApplicable   Boolean @default(true)
+  nogiApplicable Boolean @default(true)
+  
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  userTechniques UserTechnique[]
+  
+  @@index([category])
+  @@index([difficulty])
+}
+
+model UserTechnique {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  techniqueId  String
+  technique    Technique @relation(fields: [techniqueId], references: [id])
+  
+  // User's personal notes
+  userNotes    String?  @db.Text
+  expertNotes  String?  @db.Text // From Prof. OS
+  
+  // Progress tracking
+  timesDrilled Int      @default(0)
+  timesHitInSparring Int @default(0)
+  lastPracticed DateTime?
+  confidence   Int?     // 1-5 scale
+  
+  // Associated videos
+  videoIds     String[] // YouTube video IDs
+  
+  createdAt    DateTime @default(now())
+  
+  @@unique([userId, techniqueId])
+  @@index([userId])
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  messages  Json     // Array of {role, content, timestamp}
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AIVideoKnowledge {
+  id            String   @id @default(cuid())
+  
+  videoId       String   @unique // YouTube video ID
+  title         String
+  channelName   String
+  instructor    String?
+  
+  // Content analysis
+  technique     String?
+  category      String?
+  beltLevel     String?  // "white" | "blue" | "purple" | "brown" | "black" | "all"
+  giNoGi        String?  // "gi" | "nogi" | "both"
+  
+  // Quality metrics
+  qualityScore  Float    // 1-10 from AI analysis
+  helpfulCount  Int      @default(0) // User 👍
+  notHelpfulCount Int    @default(0) // User 👎
+  helpfulRatio  Float?   // Calculated: helpful / (helpful + notHelpful)
+  
+  // Video metadata
+  duration      Int?     // seconds
+  publishedAt   DateTime?
+  transcript    String?  @db.Text
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([technique])
+  @@index([category])
+  @@index([qualityScore])
+  @@index([helpfulRatio])
+}
+
+model Referral {
+  id          String   @id @default(cuid())
+  
+  referrerId  String
+  referrer    User     @relation("Referrer", fields: [referrerId], references: [id])
+  
+  refereeId   String   @unique
+  referee     User     @relation("Referee", fields: [refereeId], references: [id])
+  
+  // Tracking
+  status      String   // "pending" | "converted" | "expired"
+  convertedAt DateTime?
+  
+  // Rewards
+  freeMonthsEarned Int  @default(0)
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([referrerId])
+  @@index([status])
+}
+
+model AdminNotification {
+  id          String   @id @default(cuid())
+  
+  type        String   // "scheduled" | "instant" | "milestone"
+  message     String   @db.Text
+  
+  sent        Boolean  @default(false)
+  sentAt      DateTime?
+  
+  scheduledFor DateTime? // For 7am, 11am, etc.
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([sent])
+  @@index([scheduledFor])
+}
+```
+
+**After creating schema, run:**
+
+```bash
+npx prisma generate
+npx prisma db push
+```
+
+-----
+
+## 3. ENVIRONMENT VARIABLES
+
+Create `.env.local`:
+
+```env
+# Database
+DATABASE_URL="postgresql://your-supabase-url"
+
+# Authentication (Clerk or custom)
+NEXTAUTH_SECRET="generate-random-secret"
+NEXTAUTH_URL="http://localhost:3000"
+
+# AI Services
+ANTHROPIC_API_KEY="your-claude-api-key"
+OPENAI_API_KEY="your-openai-key-for-whisper"
+
+# Payments
+STRIPE_SECRET_KEY="your-stripe-secret-key"
+STRIPE_PUBLISHABLE_KEY="your-stripe-publishable-key"
+STRIPE_WEBHOOK_SECRET="your-stripe-webhook-secret"
+
+# SMS
+TWILIO_ACCOUNT_SID="your-twilio-sid"
+TWILIO_AUTH_TOKEN="your-twilio-auth-token"
+TWILIO_PHONE_NUMBER="+18883112854"
+ADMIN_PHONE_NUMBER="+19148373750"
+
+# App Config
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+```
+
+-----
+
+## 4. PWA CONFIGURATION
+
+Create `public/manifest.json`:
+
+```json
+{
+  "name": "BJJ OS",
+  "short_name": "BJJ OS",
+  "description": "Your BJJ coach in your pocket",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#84CC16",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["sports", "health", "education"],
+  "screenshots": []
+}
+```
+
+Create `public/sw.js` (Service Worker):
+
+```javascript
+const CACHE_NAME = 'bjj-os-v1';
+const urlsToCache = [
+  '/',
+  '/chat',
+  '/library',
+  '/profile'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(urlsToCache))
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => response || fetch(event.request))
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+});
+```
+
+-----
+
+## 5. TAILWIND CONFIG
+
+Create `tailwind.config.ts`:
+
+```typescript
+import type { Config } from 'tailwindcss'
+
+const config: Config = {
+  content: [
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        primary: '#84CC16', // Lime green
+        background: '#000000',
+        surface: '#1a1a1a',
+        border: '#333333',
+      },
+      fontFamily: {
+        mono: ['JetBrains Mono', 'monospace'],
+      },
+    },
+  },
+  plugins: [],
+}
+export default config
+```
+
+Create `src/styles/globals.css`:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-white font-mono;
+  }
+  
+  * {
+    @apply border-border;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-black font-bold py-3 px-6 rounded-lg hover:bg-primary/90 transition-colors;
+  }
+  
+  .btn-secondary {
+    @apply bg-surface text-white border border-border py-3 px-6 rounded-lg hover:bg-surface/80 transition-colors;
+  }
+  
+  .input {
+    @apply bg-surface border border-border rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors;
+  }
+  
+  .card {
+    @apply bg-surface border border-border rounded-lg p-6;
+  }
+}
+```
+
+-----
+
+## 6. ROOT LAYOUT
+
+Create `src/app/layout.tsx`:
+
+```typescript
+import type { Metadata, Viewport } from 'next'
+import { JetBrains_Mono } from 'next/font/google'
+import './globals.css'
+
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: 'BJJ OS - Your BJJ Coach',
+  description: 'AI-powered BJJ training companion',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'BJJ OS',
+  },
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#84CC16',
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <head>
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      </head>
+      <body className={jetbrainsMono.className}>
+        {children}
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js');
+              });
+            }
+          `
+        }} />
+      </body>
+    </html>
+  )
+}
+```
+
+-----
+
+## 7. PACKAGE.JSON DEPENDENCIES
+
+Update `package.json` with these dependencies:
+
+```json
+{
+  "dependencies": {
+    "next": "14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@prisma/client": "^5.9.1",
+    "@anthropic-ai/sdk": "^0.15.0",
+    "openai": "^4.26.0",
+    "stripe": "^14.14.0",
+    "twilio": "^4.20.0",
+    "axios": "^1.6.7",
+    "date-fns": "^3.3.1",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "postcss": "^8",
+    "prisma": "^5.9.1",
+    "tailwindcss": "^3.3.0",
+    "typescript": "^5"
+  }
+}
+```
+
+Run: `npm install`
+
+-----
+
+## TESTING CHECKLIST - PART 1
+
+After implementing, verify:
+
+- [ ] Project structure matches exactly
+- [ ] Database schema created (`npx prisma db push` successful)
+- [ ] All environment variables set
+- [ ] PWA manifest loads at `/manifest.json`
+- [ ] Service worker registers (check browser DevTools)
+- [ ] Tailwind styles working (black background, lime accents)
+- [ ] `npm run dev` starts without errors
+- [ ] Can access `localhost:3000`
+
+-----
+
+## CONFIRMATION
+
+Reply with: **“PART 1 CHECKPOINT MADE ✅”**
+
+Then I’ll provide PART 2: Core Features (Prof. OS chat, technique library, training log).
+
+```
+---
+
+**🎤 PASTE THIS INTO REPLIT AGENT NOW**
+
+Once it confirms "PART 1 CHECKPOINT MADE ✅", come back and I'll give you **PART 2 OF 4**!​​​​​​​​​​​​​​​​
+```

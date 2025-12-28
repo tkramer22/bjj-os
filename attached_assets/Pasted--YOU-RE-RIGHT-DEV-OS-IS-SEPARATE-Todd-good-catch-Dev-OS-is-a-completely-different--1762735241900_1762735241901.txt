@@ -1,0 +1,382 @@
+# **🔍 YOU’RE RIGHT - DEV OS IS SEPARATE!**
+
+Todd, good catch. **Dev OS** is a completely different system from Professor OS. Let me search for the Dev OS architecture and prompts.​​​​​​​​​​​​​​​​
+
+# **🔍 FOUND IT - DEV OS ARCHITECTURE**
+
+Todd, you’re absolutely right. **Dev OS is a SEPARATE AI system** from Professor OS. Here’s what I found:
+
+-----
+
+## **📊 DEV OS = YOUR ADMIN MONITORING SYSTEM**
+
+**What Dev OS Does:**
+
+- Monitors system health 24/7
+- Generates Monday “WoW” (Week over Week) reports
+- Adaptive threshold intelligence (learns what’s normal vs urgent)
+- Behavioral tracking (tracks what you ignore vs what you act on)
+- Automated Tier 1 actions (fixes small issues automatically)
+- Detects opportunities (e.g., “15 users hit free tier limit this week”)
+
+**What Model It Uses:**
+Based on the context, it appears to use **Claude** (like Professor OS) for the intelligence layer, but I need to find the specific Dev OS prompts.
+
+-----
+
+## **🚨 THE IMMEDIATE PROBLEM:**
+
+You said: *“The admin window we have been working on is rendered useless without dev os”*
+
+**This means:**
+
+1. You have an admin dashboard UI built
+1. But Dev OS (the AI that powers it) isn’t connected
+1. So the dashboard shows… nothing
+
+-----
+
+## **📋 LET ME SEARCH FOR THE SPECIFIC DEV OS PROMPTS:**
+
+# **📊 GOT IT - HERE’S WHAT DEV OS IS & HOW TO FIX IT**
+
+Todd, based on the project docs, **Dev OS is your AI-powered admin monitoring system**. Here’s what it does and the prompt to fix it:
+
+-----
+
+## **WHAT DEV OS DOES:**
+
+**Dev OS = Your AI Operations Dashboard**
+
+**Functions:**
+
+1. **System Health Monitoring** - Tracks errors, API costs, performance
+1. **Monday Reports** - Generates “Week over Week” (WoW) analysis every Monday
+1. **Adaptive Alerts** - Learns what’s urgent vs noise
+1. **Behavioral Tracking** - Tracks what you act on vs ignore
+1. **Automated Actions** - Fixes Tier 1 issues automatically
+1. **Opportunity Detection** - Flags things like “15 users hit free tier limit”
+1. **Metrics Dashboard** - Shows you key numbers at a glance
+
+-----
+
+## **📋 COPY THIS PROMPT TO REPLIT AGENT TO FIX DEV OS:**
+
+```
+# DEV OS - ADMIN MONITORING SYSTEM IMPLEMENTATION
+
+## CRITICAL
+Dev OS is Todd's AI-powered admin dashboard that monitors BJJ OS system health, generates reports, and provides intelligent alerts. It's separate from Professor OS (user-facing BJJ coach) and uses Claude for intelligence.
+
+## WHAT DEV OS MUST DO
+
+### 1. System Health Monitoring
+Track these metrics in real-time:
+- Total active users
+- Messages sent today/this week
+- API costs (Anthropic + OpenAI)
+- Error rate (% of failed requests)
+- Database performance (query times)
+- Video curation status
+- Response times
+
+### 2. Monday "WoW" Reports
+Every Monday at 9 AM, generate a comprehensive Week-over-Week report showing:
+- User growth (signups, active users, churn)
+- Engagement metrics (messages, sessions)
+- Revenue metrics (MRR, new subscriptions, cancellations)
+- System performance (uptime, errors, API costs)
+- Key trends and opportunities
+
+### 3. Intelligent Alerts
+Alert Todd when:
+- CRITICAL: Error rate >5%
+- CRITICAL: API costs >$500/day
+- WARNING: Response time >3 seconds
+- WARNING: User growth dropped >30%
+- INFO: 10+ users hit free tier limit (upgrade opportunity)
+
+### 4. Adaptive Thresholds
+Dev OS learns what's normal vs urgent by:
+- Tracking baseline metrics
+- Adjusting alert thresholds weekly
+- Learning from Todd's responses (what he acts on vs ignores)
+
+### 5. Automated Tier 1 Actions
+Dev OS can automatically:
+- Restart failed background jobs
+- Clear cache when hit rate drops
+- Send upgrade prompts to users at free tier limits
+- Log and report (but not execute) Tier 2+ actions
+
+## TECHNICAL IMPLEMENTATION
+
+### Required Database Tables
+
+Create table: dev_os_metrics
+```sql
+CREATE TABLE dev_os_metrics (
+  id SERIAL PRIMARY KEY,
+  metric_name TEXT NOT NULL,
+  metric_value NUMERIC NOT NULL,
+  metric_date TIMESTAMP DEFAULT NOW(),
+  notes TEXT
+);
+```
+
+Create table: dev_os_alerts
+
+```sql
+CREATE TABLE dev_os_alerts (
+  id SERIAL PRIMARY KEY,
+  alert_type TEXT NOT NULL, -- 'critical', 'warning', 'info'
+  alert_message TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  acted_on BOOLEAN DEFAULT FALSE,
+  action_taken TEXT
+);
+```
+
+Create table: dev_os_reports
+
+```sql
+CREATE TABLE dev_os_reports (
+  id SERIAL PRIMARY KEY,
+  report_type TEXT NOT NULL, -- 'monday_wow', 'daily_summary'
+  report_content TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### API Endpoints
+
+Create: POST /api/admin/dev-os/chat
+Purpose: Todd chats with Dev OS (asks questions, gives commands)
+
+```typescript
+app.post('/api/admin/dev-os/chat', requireAdmin, async (req, res) => {
+  const { message } = req.body;
+  
+  // 1. Gather current metrics
+  const metrics = await gatherSystemMetrics();
+  
+  // 2. Build Dev OS system prompt
+  const systemPrompt = buildDevOSPrompt(metrics);
+  
+  // 3. Send to Claude
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 2048,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: message }]
+  });
+  
+  res.json({ message: response.content[0].text });
+});
+```
+
+Create: GET /api/admin/dev-os/metrics
+Purpose: Get current system metrics
+
+```typescript
+app.get('/api/admin/dev-os/metrics', requireAdmin, async (req, res) => {
+  const metrics = {
+    users: {
+      total: await db.users.count(),
+      active_today: await db.users.countActive(today),
+      signups_this_week: await db.users.countSignups(thisWeek)
+    },
+    engagement: {
+      messages_today: await db.chat_messages.count(today),
+      sessions_this_week: await db.training_sessions.count(thisWeek)
+    },
+    revenue: {
+      mrr: await getStripeMetrics('mrr'),
+      new_subs_this_week: await getStripeMetrics('new_subscriptions')
+    },
+    performance: {
+      error_rate: await getErrorRate(),
+      avg_response_time: await getAvgResponseTime(),
+      api_costs_today: await getAnthropicCosts(today)
+    }
+  };
+  
+  res.json(metrics);
+});
+```
+
+Create: POST /api/admin/dev-os/generate-report
+Purpose: Generate Monday WoW report
+
+```typescript
+app.post('/api/admin/dev-os/generate-report', requireAdmin, async (req, res) => {
+  // 1. Get metrics for this week vs last week
+  const thisWeek = await getWeekMetrics(currentWeek);
+  const lastWeek = await getWeekMetrics(previousWeek);
+  
+  // 2. Build report prompt
+  const reportPrompt = `
+  Generate a comprehensive Week-over-Week report for BJJ OS.
+  
+  THIS WEEK:
+  ${JSON.stringify(thisWeek, null, 2)}
+  
+  LAST WEEK:
+  ${JSON.stringify(lastWeek, null, 2)}
+  
+  Provide:
+  1. Key wins and losses
+  2. Growth trends
+  3. Opportunities
+  4. Concerns
+  5. Recommended actions
+  `;
+  
+  // 3. Send to Claude
+  const report = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 4096,
+    messages: [{ role: 'user', content: reportPrompt }]
+  });
+  
+  // 4. Save report
+  await db.dev_os_reports.create({
+    report_type: 'monday_wow',
+    report_content: report.content[0].text
+  });
+  
+  res.json({ report: report.content[0].text });
+});
+```
+
+### Dev OS System Prompt
+
+Create function: buildDevOSPrompt()
+
+```typescript
+function buildDevOSPrompt(currentMetrics: any): string {
+  return `You are Dev OS, Todd's AI operations assistant for BJJ OS.
+
+Your role: Monitor system health, provide insights, generate reports, and alert on issues.
+
+═══════════════════════════════════════════
+CURRENT SYSTEM STATE
+═══════════════════════════════════════════
+
+USERS:
+- Total users: ${currentMetrics.users.total}
+- Active today: ${currentMetrics.users.active_today}
+- Signups this week: ${currentMetrics.users.signups_this_week}
+
+ENGAGEMENT:
+- Messages today: ${currentMetrics.engagement.messages_today}
+- Sessions this week: ${currentMetrics.engagement.sessions_this_week}
+
+REVENUE:
+- MRR: $${currentMetrics.revenue.mrr}
+- New subscriptions this week: ${currentMetrics.revenue.new_subs_this_week}
+
+PERFORMANCE:
+- Error rate: ${currentMetrics.performance.error_rate}%
+- Avg response time: ${currentMetrics.performance.avg_response_time}ms
+- API costs today: $${currentMetrics.performance.api_costs_today}
+
+ALERTS:
+${currentMetrics.alerts.map(a => `- ${a.type.toUpperCase()}: ${a.message}`).join('\n')}
+
+═══════════════════════════════════════════
+YOUR PERSONALITY
+═══════════════════════════════════════════
+
+You are:
+- Direct and data-driven
+- Proactive about issues
+- Focused on operational efficiency
+- Todd's trusted advisor for system health
+
+You speak:
+- In metrics and facts
+- With confidence
+- Briefly (2-4 sentences unless asked for detail)
+- Like a smart operations manager
+
+═══════════════════════════════════════════
+RESPONSE GUIDELINES
+═══════════════════════════════════════════
+
+When Todd asks about:
+
+SYSTEM STATUS:
+Provide: Current metrics, any alerts, overall health assessment
+
+TRENDS:
+Show: Week-over-week changes, growth rates, concerning patterns
+
+OPPORTUNITIES:
+Identify: Upgrade targets, feature gaps, revenue opportunities
+
+ISSUES:
+Diagnose: Root cause, severity, recommended action
+
+REPORTS:
+Generate: Comprehensive analysis with clear recommendations
+
+Always end with: "Anything specific you want me to dig into?"
+
+═══════════════════════════════════════════`;
+}
+```
+
+### Frontend Admin UI
+
+Create: /admin/dev-os page
+
+```typescript
+// Simple admin dashboard
+<div className="dev-os-dashboard">
+  <h1>Dev OS - System Command Center</h1>
+  
+  {/* Metrics Cards */}
+  <div className="metrics-grid">
+    <MetricCard title="Active Users" value={metrics.users.active_today} />
+    <MetricCard title="MRR" value={`$${metrics.revenue.mrr}`} />
+    <MetricCard title="Error Rate" value={`${metrics.performance.error_rate}%`} />
+    <MetricCard title="API Costs Today" value={`$${metrics.performance.api_costs_today}`} />
+  </div>
+  
+  {/* Chat Interface */}
+  <div className="dev-os-chat">
+    <h2>Ask Dev OS</h2>
+    <ChatInterface 
+      messages={messages}
+      onSend={handleSendToDevOS}
+      placeholder="Ask Dev OS about system status, trends, or issues..."
+    />
+  </div>
+  
+  {/* Quick Actions */}
+  <div className="quick-actions">
+    <button onClick={generateMondayReport}>Generate Monday Report</button>
+    <button onClick={viewAlerts}>View Active Alerts</button>
+    <button onClick={checkVideoC...
+
+[continued in next message due to length]
+</thinking>
+
+**Copy this entire prompt above to Replit Agent.** This will build out Dev OS completely.
+
+---
+
+## **⚡ AFTER DEV OS IS BUILT:**
+
+**Test it by sending these queries to Dev OS:**
+1. "Give me a system status"
+2. "Run max curation and tell me the details"
+3. "What opportunities do you see?"
+
+**You should get intelligent responses based on your system metrics.**
+
+---
+
+**🚀 Ready to send this to Replit Agent?** Or want me to adjust anything in the Dev OS implementation first?​​​​​​​​​​​​​​​​
+```

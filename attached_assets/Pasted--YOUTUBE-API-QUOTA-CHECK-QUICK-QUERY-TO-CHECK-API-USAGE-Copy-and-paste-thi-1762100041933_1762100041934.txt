@@ -1,0 +1,225 @@
+# **YOUTUBE API QUOTA CHECK** 📊
+
+-----
+
+## **QUICK QUERY TO CHECK API USAGE**
+
+**Copy and paste this into Replit Agent:**
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+YOUTUBE API QUOTA USAGE CHECK
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these queries to see if we're maxing out YouTube API quota:
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 1: Today's API Usage
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT 
+  run_date,
+  youtube_api_calls,
+  claude_api_calls,
+  gpt_api_calls,
+  videos_added,
+  status,
+  ROUND((youtube_api_calls::numeric / 10000 * 100), 1) as youtube_quota_used_percent
+FROM curation_runs
+WHERE run_date = CURRENT_DATE
+ORDER BY started_at DESC;
+```
+
+Expected Output:
+
+- youtube_api_calls: [X]
+- youtube_quota_used_percent: [Y%]
+- Daily limit: 10,000 units
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 2: Last 7 Days API Usage Trend
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT 
+  run_date,
+  COUNT(*) as runs_per_day,
+  SUM(youtube_api_calls) as total_youtube_calls,
+  SUM(claude_api_calls) as total_claude_calls,
+  SUM(gpt_api_calls) as total_gpt_calls,
+  SUM(videos_added) as videos_added,
+  ROUND((SUM(youtube_api_calls)::numeric / 10000 * 100), 1) as daily_quota_used_percent,
+  CASE 
+    WHEN SUM(youtube_api_calls) >= 10000 THEN '🚨 QUOTA MAXED'
+    WHEN SUM(youtube_api_calls) >= 8000 THEN '⚠️ NEAR LIMIT'
+    WHEN SUM(youtube_api_calls) >= 5000 THEN '✅ MODERATE'
+    ELSE '✅ LOW USAGE'
+  END as status
+FROM curation_runs
+WHERE run_date >= CURRENT_DATE - INTERVAL '7 days'
+GROUP BY run_date
+ORDER BY run_date DESC;
+```
+
+Expected Output:
+Daily breakdown showing if we’re hitting quota limits
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 3: Average API Cost Per Video Added
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT 
+  ROUND(AVG(youtube_api_calls::numeric / NULLIF(videos_added, 0)), 1) as avg_youtube_calls_per_video,
+  ROUND(AVG(claude_api_calls::numeric / NULLIF(videos_added, 0)), 1) as avg_claude_calls_per_video,
+  ROUND(AVG(gpt_api_calls::numeric / NULLIF(videos_added, 0)), 1) as avg_gpt_calls_per_video,
+  COUNT(*) as total_runs_analyzed
+FROM curation_runs
+WHERE videos_added > 0
+  AND run_date >= CURRENT_DATE - INTERVAL '7 days';
+```
+
+Expected Output:
+How many API calls needed per video added (efficiency metric)
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 4: Check if Rate Limited Recently
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT 
+  run_date,
+  status,
+  youtube_api_calls,
+  videos_added,
+  error_message,
+  notes
+FROM curation_runs
+WHERE status = 'rate_limited'
+  OR error_message LIKE '%quota%'
+  OR error_message LIKE '%limit%'
+ORDER BY run_date DESC
+LIMIT 10;
+```
+
+Expected Output:
+Any runs that were stopped due to quota limits
+
+═══════════════════════════════════════════════════════════════════════════════
+QUERY 5: Current Quota Configuration
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT key, value, description
+FROM curation_config
+WHERE key LIKE '%limit%' OR key LIKE '%quota%'
+ORDER BY key;
+```
+
+Expected Output:
+
+- youtube_api_daily_limit: 10000
+- Other quota settings
+
+═══════════════════════════════════════════════════════════════════════════════
+REPORT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+After running queries, provide:
+
+```
+═══════════════════════════════════════════════════════════════
+YOUTUBE API QUOTA USAGE REPORT
+═══════════════════════════════════════════════════════════════
+
+TODAY'S USAGE:
+• YouTube API Calls: [X] / 10,000 ([Y%] used)
+• Status: [🚨 MAXED / ⚠️ NEAR LIMIT / ✅ HEALTHY]
+• Videos Added: [X]
+• Runs Today: [X]
+
+LAST 7 DAYS TREND:
+Day          | API Calls | % Used | Videos | Status
+-------------|-----------|--------|--------|----------------
+Nov 2        | X         | Y%     | Z      | ✅/⚠️/🚨
+Nov 1        | X         | Y%     | Z      | ✅/⚠️/🚨
+Oct 31       | X         | Y%     | Z      | ✅/⚠️/🚨
+...
+
+EFFICIENCY METRICS:
+• Avg YouTube calls per video: [X]
+• Avg Claude calls per video: [X]
+• Avg GPT calls per video: [X]
+
+RATE LIMITING:
+• Times hit quota limit: [X times in last 7 days]
+• Last rate limited: [date or "Never"]
+
+ANALYSIS:
+[Are we close to maxing out? Do we need to increase quota or optimize?]
+
+RECOMMENDATIONS:
+[Suggestions based on usage patterns]
+
+═══════════════════════════════════════════════════════════════
+```
+
+Run all queries and provide the complete report.
+
+```
+---
+
+## **YOUTUBE API QUOTA BREAKDOWN:**
+```
+
+YOUTUBE API QUOTA LIMITS:
+• Free tier: 10,000 units/day
+• Search query: 100 units each
+• Video details: 1 unit each
+
+TYPICAL USAGE PER CURATION RUN:
+• 1 search query = 100 units
+• 50 results * 1 unit = 50 units
+• Total per search: ~150 units
+
+IF RUNNING 2X DAILY:
+• 2 runs * 150 units = 300 units/day
+• 300 / 10,000 = 3% of daily quota
+
+TO MAX OUT (10,000 units):
+• Would need ~66 search queries/day
+• OR ~33 curation runs/day
+• You’re currently doing 2 runs/day = NOT CLOSE to maxing out
+
+```
+---
+
+## **MY ESTIMATE (Before Data):**
+
+Based on your setup:
+- ✅ 2 runs per day (6 AM & 6 PM)
+- ✅ ~15 videos added per run
+- ✅ Each run does 5-10 YouTube searches
+
+**Estimated usage: 500-1,000 units/day (5-10% of quota)**
+
+**NOT CLOSE to maxing out.**
+
+---
+
+## **BUT LET'S VERIFY WITH REAL DATA:**
+
+**Paste the query prompt above into Replit Agent to get actual numbers.**
+
+**Then we'll know for sure if you're:**
+- ✅ Using <50% of quota (healthy, can increase frequency)
+- ⚠️ Using 50-80% (moderate, stay as is)
+- 🚨 Using 80-100% (maxed out, need to optimize or request quota increase)
+
+---
+
+**Want me to check the data now?** 📊​​​​​​​​​​​​​​​​
+```

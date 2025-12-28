@@ -1,0 +1,1370 @@
+# 🚀 MASTER REPLIT AGENT PROMPT - BJJ OS EMAIL AUTH
+
+Copy this entire prompt and paste it into Replit Agent:
+
+-----
+
+```
+═══════════════════════════════════════════════════════════════
+COMPLETE EMAIL AUTHENTICATION SYSTEM - BJJ OS
+═══════════════════════════════════════════════════════════════
+
+MISSION: Replace SMS/phone authentication with email verification system.
+Clean implementation from scratch - no existing users to migrate.
+
+CONFIRMED SETUP:
+✅ Domain: bjjos.app (verified with Google Workspace)
+✅ Email service: Resend
+✅ Sender email: BJJ OS <noreply@bjjos.app>
+✅ Resend API key: Available in Secrets as RESEND_API_KEY
+✅ Admin email: toddkramer@mac.com (lifetime user, admin access)
+✅ No existing users (clean slate)
+
+CORE REQUIREMENTS:
+• One-time email verification, then logged in for 90 days
+• 2-device limit per user (prevent account sharing)
+• Device fingerprinting (privacy-respecting)
+• Username optional at signup
+• Admin bypass code for toddkramer@mac.com
+• Sessions auto-extend when active
+• Beautiful branded verification emails
+
+═══════════════════════════════════════════════════════════════
+PHASE 1: DEPENDENCIES & ENVIRONMENT
+═══════════════════════════════════════════════════════════════
+
+1. INSTALL PACKAGES:
+   npm install resend
+
+2. VERIFY ENVIRONMENT VARIABLES:
+   - RESEND_API_KEY (should already exist in Secrets)
+   - Add ADMIN_BYPASS_CODE=999999 to Secrets (for emergency admin access)
+
+═══════════════════════════════════════════════════════════════
+PHASE 2: DATABASE SCHEMA
+═══════════════════════════════════════════════════════════════
+
+Execute these SQL commands to create clean email-based auth schema:
+
+-- DROP OLD SMS TABLES (if they exist)
+DROP TABLE IF EXISTS sms_verification_codes CASCADE;
+DROP TABLE IF EXISTS phone_verifications CASCADE;
+
+-- USERS TABLE (email-first design)
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  username VARCHAR(50) UNIQUE,
+  email_verified BOOLEAN DEFAULT FALSE,
+  is_admin BOOLEAN DEFAULT FALSE,
+  subscription_type VARCHAR(50) DEFAULT 'free',
+  subscription_status VARCHAR(50) DEFAULT 'active',
+  max_devices INTEGER DEFAULT 2,
+  created_at TIMESTAMP DEFAULT NOW(),
+  last_login TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- EMAIL VERIFICATION CODES
+CREATE TABLE email_verification_codes (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) NOT NULL,
+  code VARCHAR(6) NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  used BOOLEAN DEFAULT FALSE,
+  ip_address VARCHAR(45),
+  user_agent TEXT
+);
+
+-- SESSIONS (90-day tokens with device tracking)
+CREATE TABLE IF NOT EXISTS sessions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  token VARCHAR(64) UNIQUE NOT NULL,
+  device_fingerprint VARCHAR(255),
+  device_name VARCHAR(100),
+  device_type VARCHAR(50),
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  last_activity TIMESTAMP DEFAULT NOW(),
+  ip_address VARCHAR(45),
+  user_agent TEXT
+);
+
+-- INDEXES FOR PERFORMANCE
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_email_verification ON email_verification_codes(email, code, used, expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_device ON sessions(user_id, device_fingerprint);
+
+-- INSERT ADMIN USER (toddkramer@mac.com)
+INSERT INTO users (email, username, email_verified, is_admin, subscription_type, max_devices)
+VALUES ('toddkramer@mac.com', 'todd', true, true, 'lifetime', 99)
+ON CONFLICT (email) DO UPDATE SET 
+  is_admin = true, 
+  subscription_type = 'lifetime',
+  max_devices = 99;
+
+-- REMOVE phone_number COLUMN (if exists from old system)
+ALTER TABLE users DROP COLUMN IF EXISTS phone_number CASCADE;
+
+═══════════════════════════════════════════════════════════════
+PHASE 3: EMAIL SERVICE
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/email.js
+
+const { Resend } = require('resend');
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+const sendVerificationEmail = async (email, code) => {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: [email],
+      subject: 'Your BJJ OS Verification Code',
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+              }
+              .email-container {
+                background: white;
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+              }
+              .header {
+                background: #000;
+                color: white;
+                text-align: center;
+                padding: 40px 20px;
+              }
+              .header h1 {
+                margin: 0;
+                font-size: 36px;
+                font-weight: bold;
+              }
+              .header p {
+                margin: 8px 0 0 0;
+                opacity: 0.9;
+                font-size: 14px;
+              }
+              .content {
+                padding: 40px 30px;
+              }
+              .content h2 {
+                margin-top: 0;
+                color: #000;
+                font-size: 24px;
+              }
+              .code-container {
+                background: #f8f8f8;
+                border: 3px solid #000;
+                border-radius: 12px;
+                padding: 30px;
+                text-align: center;
+                margin: 30px 0;
+              }
+              .code {
+                font-size: 48px;
+                font-weight: bold;
+                letter-spacing: 12px;
+                color: #000;
+                font-family: 'Courier New', monospace;
+              }
+              .info {
+                margin-top: 20px;
+                padding: 15px;
+                background: #fff8e1;
+                border-left: 4px solid #ffc107;
+                border-radius: 4px;
+              }
+              .info strong {
+                color: #f57c00;
+              }
+              .footer {
+                background: #f8f8f8;
+                text-align: center;
+                padding: 20px;
+                font-size: 12px;
+                color: #666;
+                border-top: 1px solid #e0e0e0;
+              }
+              .footer a {
+                color: #000;
+                text-decoration: none;
+                font-weight: bold;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="email-container">
+              <div class="header">
+                <h1>🥋 BJJ OS</h1>
+                <p>The World's Smartest BJJ Coach</p>
+              </div>
+              
+              <div class="content">
+                <h2>Your Verification Code</h2>
+                <p>Enter this code to sign in to BJJ OS:</p>
+                
+                <div class="code-container">
+                  <div class="code">${code}</div>
+                </div>
+                
+                <div class="info">
+                  <p><strong>⏱️ This code expires in 10 minutes.</strong></p>
+                  <p style="margin: 8px 0 0 0; font-size: 14px;">If you didn't request this code, you can safely ignore this email.</p>
+                </div>
+              </div>
+              
+              <div class="footer">
+                <p><strong>BJJ OS</strong></p>
+                <p><a href="https://bjjos.app">bjjos.app</a></p>
+                <p style="margin-top: 10px;">This is an automated message. Please do not reply.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `,
+    });
+
+    if (error) {
+      console.error('❌ Resend error:', error);
+      return { success: false, error };
+    }
+
+    console.log('✅ Verification email sent to:', email);
+    return { success: true, data };
+    
+  } catch (error) {
+    console.error('❌ Error sending email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+const sendWelcomeEmail = async (email, username) => {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: [email],
+      subject: 'Welcome to BJJ OS - Your AI BJJ Coach',
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+              }
+              .email-container {
+                background: white;
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+              }
+              .header {
+                background: #000;
+                color: white;
+                text-align: center;
+                padding: 40px 20px;
+              }
+              .content {
+                padding: 40px 30px;
+              }
+              .feature {
+                margin: 20px 0;
+                padding: 20px;
+                background: #f8f8f8;
+                border-radius: 8px;
+                border-left: 4px solid #000;
+              }
+              .feature strong {
+                display: block;
+                font-size: 16px;
+                margin-bottom: 8px;
+                color: #000;
+              }
+              .cta {
+                text-align: center;
+                margin: 30px 0;
+              }
+              .cta-button {
+                display: inline-block;
+                background: #000;
+                color: white;
+                padding: 15px 40px;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 16px;
+              }
+              .footer {
+                background: #f8f8f8;
+                text-align: center;
+                padding: 20px;
+                font-size: 12px;
+                color: #666;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="email-container">
+              <div class="header">
+                <h1 style="margin: 0; font-size: 36px;">🥋 Welcome to BJJ OS</h1>
+              </div>
+              
+              <div class="content">
+                <h2 style="margin-top: 0;">You're In, ${username || 'there'}!</h2>
+                <p>Welcome to the world's most intelligent BJJ coaching system. You now have access to <strong>Professor OS</strong>—an AI coach trained on knowledge from 50+ world champions including Roger Gracie, Marcelo Garcia, Gordon Ryan, JT Torres, and Lucas Leite.</p>
+                
+                <div class="feature">
+                  <strong>📊 Post-Session Analysis</strong>
+                  Log your training sessions and get personalized coaching feedback based on your patterns
+                </div>
+                
+                <div class="feature">
+                  <strong>🎯 Pre-Training Focus</strong>
+                  Get technique recommendations before each session tailored to your skill level
+                </div>
+                
+                <div class="feature">
+                  <strong>🤔 Ask Anything</strong>
+                  Get answers from 50+ elite instructors' knowledge base—cite specific world champions
+                </div>
+                
+                <div class="feature">
+                  <strong>🏆 Competition Prep</strong>
+                  Build gameplans and get strategic coaching for upcoming competitions
+                </div>
+                
+                <div class="cta">
+                  <a href="https://bjjos.app" class="cta-button">Start Training →</a>
+                </div>
+                
+                <p style="margin-top: 30px; font-size: 14px; color: #666;">
+                  Questions? Reach out to us at <a href="mailto:support@bjjos.app" style="color: #000;">support@bjjos.app</a>
+                </p>
+              </div>
+              
+              <div class="footer">
+                <p><strong>BJJ OS</strong> | <a href="https://bjjos.app" style="color: #000; text-decoration: none;">bjjos.app</a></p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `,
+    });
+
+    if (error) {
+      console.error('❌ Welcome email error:', error);
+      return { success: false, error };
+    }
+
+    console.log('✅ Welcome email sent to:', email);
+    return { success: true };
+    
+  } catch (error) {
+    console.error('❌ Error sending welcome email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+module.exports = { 
+  sendVerificationEmail,
+  sendWelcomeEmail 
+};
+
+═══════════════════════════════════════════════════════════════
+PHASE 4: AUTHENTICATION ROUTES
+═══════════════════════════════════════════════════════════════
+
+CREATE OR UPDATE FILE: /server/auth.js (or wherever auth routes are)
+
+const express = require('express');
+const router = express.Router();
+const crypto = require('crypto');
+const { sendVerificationEmail, sendWelcomeEmail } = require('./email');
+
+// Assuming you have db connection - adjust import based on your setup
+const { db } = require('./db'); // or however you import your database
+
+// CONSTANTS
+const SESSION_DURATION = 90 * 24 * 60 * 60 * 1000; // 90 days
+const EXTENSION_THRESHOLD = 7 * 24 * 60 * 60 * 1000; // Extend if < 7 days left
+const MAX_DEVICES = 2;
+const ADMIN_EMAIL = 'toddkramer@mac.com';
+const ADMIN_BYPASS_CODE = process.env.ADMIN_BYPASS_CODE || '999999';
+
+// RATE LIMITING
+const rateLimitMap = new Map();
+const checkRateLimit = (email) => {
+  const now = Date.now();
+  const lastAttempt = rateLimitMap.get(email);
+  
+  if (lastAttempt && now - lastAttempt < 60000) {
+    return false;
+  }
+  
+  rateLimitMap.set(email, now);
+  return true;
+};
+
+// GENERATE 6-DIGIT CODE
+const generateCode = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// ROUTE: SEND VERIFICATION CODE
+router.post('/send-code', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email required' });
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Rate limiting
+    if (!checkRateLimit(normalizedEmail)) {
+      return res.status(429).json({ 
+        error: 'Please wait 1 minute before requesting another code' 
+      });
+    }
+    
+    // Generate code
+    const code = generateCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    
+    // Save to database
+    await db.query(
+      `INSERT INTO email_verification_codes (email, code, expires_at, ip_address, user_agent) 
+       VALUES ($1, $2, $3, $4, $5)`,
+      [normalizedEmail, code, expiresAt, req.ip, req.get('user-agent')]
+    );
+    
+    // Send email
+    const result = await sendVerificationEmail(normalizedEmail, code);
+    
+    if (!result.success) {
+      return res.status(500).json({ error: 'Failed to send verification email' });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Verification code sent to your email' 
+    });
+    
+  } catch (error) {
+    console.error('❌ Error sending verification code:', error);
+    res.status(500).json({ error: 'Failed to send verification code' });
+  }
+});
+
+// ROUTE: VERIFY CODE AND LOGIN
+router.post('/verify-code', async (req, res) => {
+  try {
+    const { 
+      email, 
+      code, 
+      username,
+      deviceFingerprint,
+      deviceName,
+      deviceType
+    } = req.body;
+    
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and code required' });
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // ADMIN BYPASS: Emergency access for admin
+    if (normalizedEmail === ADMIN_EMAIL && code === ADMIN_BYPASS_CODE) {
+      const adminResult = await db.query(
+        `SELECT * FROM users WHERE email = $1`,
+        [ADMIN_EMAIL]
+      );
+      
+      if (adminResult.rows.length > 0) {
+        const adminUser = adminResult.rows[0];
+        
+        // Create session
+        const sessionToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + SESSION_DURATION);
+        
+        await db.query(
+          `INSERT INTO sessions 
+           (user_id, token, expires_at, device_fingerprint, device_name, device_type, ip_address, user_agent, last_activity) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+          [
+            adminUser.id, 
+            sessionToken, 
+            expiresAt, 
+            deviceFingerprint || 'admin-bypass',
+            deviceName || 'Admin Access',
+            deviceType || 'unknown',
+            req.ip, 
+            req.get('user-agent')
+          ]
+        );
+        
+        console.log('✅ Admin bypass login successful');
+        
+        return res.json({
+          success: true,
+          token: sessionToken,
+          user: {
+            id: adminUser.id,
+            email: adminUser.email,
+            username: adminUser.username,
+            isAdmin: true,
+            isNew: false
+          }
+        });
+      }
+    }
+    
+    // NORMAL FLOW: Verify email code
+    const verificationResult = await db.query(
+      `SELECT * FROM email_verification_codes 
+       WHERE email = $1 AND code = $2 AND used = false AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [normalizedEmail, code]
+    );
+    
+    if (verificationResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired code' });
+    }
+    
+    const verification = verificationResult.rows[0];
+    
+    // Mark code as used
+    await db.query(
+      `UPDATE email_verification_codes SET used = true WHERE id = $1`,
+      [verification.id]
+    );
+    
+    // Find or create user
+    const existingUserResult = await db.query(
+      `SELECT * FROM users WHERE email = $1`,
+      [normalizedEmail]
+    );
+    
+    let user;
+    let isNewUser = false;
+    
+    if (existingUserResult.rows.length > 0) {
+      // Existing user
+      user = existingUserResult.rows[0];
+      
+      if (!user.email_verified) {
+        await db.query(
+          `UPDATE users SET email_verified = true, last_login = NOW() WHERE id = $1`,
+          [user.id]
+        );
+      } else {
+        await db.query(
+          `UPDATE users SET last_login = NOW() WHERE id = $1`,
+          [user.id]
+        );
+      }
+      
+    } else {
+      // New user - validate username if provided
+      if (username) {
+        const normalizedUsername = username.toLowerCase().trim();
+        
+        if (normalizedUsername.length < 3) {
+          return res.status(400).json({ error: 'Username must be at least 3 characters' });
+        }
+        
+        if (!/^[a-z0-9_]+$/.test(normalizedUsername)) {
+          return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
+        }
+        
+        const usernameCheck = await db.query(
+          `SELECT id FROM users WHERE username = $1`,
+          [normalizedUsername]
+        );
+        
+        if (usernameCheck.rows.length > 0) {
+          return res.status(400).json({ error: 'Username already taken' });
+        }
+      }
+      
+      // Create new user
+      const newUserResult = await db.query(
+        `INSERT INTO users (email, username, email_verified, created_at, last_login) 
+         VALUES ($1, $2, true, NOW(), NOW()) 
+         RETURNING *`,
+        [normalizedEmail, username || null]
+      );
+      
+      user = newUserResult.rows[0];
+      isNewUser = true;
+      
+      // Send welcome email (async, don't wait)
+      sendWelcomeEmail(normalizedEmail, username || 'there').catch(err => 
+        console.error('Welcome email failed:', err)
+      );
+    }
+    
+    // DEVICE LIMIT ENFORCEMENT
+    const activeSessionsResult = await db.query(
+      `SELECT id, device_fingerprint, device_name, created_at 
+       FROM sessions 
+       WHERE user_id = $1 AND expires_at > NOW()
+       ORDER BY created_at ASC`,
+      [user.id]
+    );
+    
+    const activeSessions = activeSessionsResult.rows;
+    const maxDevices = user.max_devices || MAX_DEVICES;
+    
+    // Check if this device already has a session
+    const existingSessionOnDevice = activeSessions.find(
+      s => s.device_fingerprint === deviceFingerprint
+    );
+    
+    let removedDevice = null;
+    let deviceLimitExceeded = false;
+    
+    if (existingSessionOnDevice) {
+      // Same device - refresh session
+      await db.query(
+        `DELETE FROM sessions WHERE id = $1`,
+        [existingSessionOnDevice.id]
+      );
+    } else if (activeSessions.length >= maxDevices) {
+      // Device limit exceeded - remove oldest
+      const oldestSession = activeSessions[0];
+      
+      await db.query(
+        `DELETE FROM sessions WHERE id = $1`,
+        [oldestSession.id]
+      );
+      
+      removedDevice = oldestSession.device_name || 'Unknown Device';
+      deviceLimitExceeded = true;
+      
+      console.log(`⚠️ Device limit exceeded for ${user.email}`);
+      console.log(`   Removed: ${removedDevice}`);
+    }
+    
+    // Create new session
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + SESSION_DURATION);
+    
+    await db.query(
+      `INSERT INTO sessions 
+       (user_id, token, expires_at, device_fingerprint, device_name, device_type, ip_address, user_agent, last_activity) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+      [
+        user.id, 
+        sessionToken, 
+        expiresAt, 
+        deviceFingerprint || 'unknown',
+        deviceName || 'Unknown Device',
+        deviceType || 'unknown',
+        req.ip, 
+        req.get('user-agent')
+      ]
+    );
+    
+    console.log(`✅ User logged in: ${user.email} (${deviceName})`);
+    
+    res.json({
+      success: true,
+      token: sessionToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        isAdmin: user.is_admin || false,
+        isNew: isNewUser
+      },
+      deviceLimitExceeded,
+      removedDevice
+    });
+    
+  } catch (error) {
+    console.error('❌ Error verifying code:', error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// ROUTE: LOGOUT
+router.post('/logout', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (token) {
+      await db.query(`DELETE FROM sessions WHERE token = $1`, [token]);
+      console.log('✅ User logged out');
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error logging out:', error);
+    res.status(500).json({ error: 'Logout failed' });
+  }
+});
+
+// ROUTE: CHECK SESSION (for /me endpoint)
+router.get('/me', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    const sessionResult = await db.query(
+      `SELECT s.*, u.email, u.username, u.is_admin, u.subscription_type, u.created_at as user_created_at
+       FROM sessions s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.token = $1 AND s.expires_at > NOW()`,
+      [token]
+    );
+    
+    if (sessionResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+    
+    const session = sessionResult.rows[0];
+    
+    // Update last_activity
+    await db.query(
+      `UPDATE sessions SET last_activity = NOW() WHERE token = $1`,
+      [token]
+    );
+    
+    // AUTO-EXTEND: If expires in < 7 days, extend it
+    const timeUntilExpiry = new Date(session.expires_at) - Date.now();
+    
+    if (timeUntilExpiry < EXTENSION_THRESHOLD) {
+      const newExpiresAt = new Date(Date.now() + SESSION_DURATION);
+      
+      await db.query(
+        `UPDATE sessions SET expires_at = $1 WHERE token = $2`,
+        [newExpiresAt, token]
+      );
+      
+      console.log(`✅ Auto-extended session for ${session.email}`);
+    }
+    
+    res.json({
+      user: {
+        id: session.user_id,
+        email: session.email,
+        username: session.username,
+        isAdmin: session.is_admin,
+        subscriptionType: session.subscription_type,
+        createdAt: session.user_created_at
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error checking session:', error);
+    res.status(500).json({ error: 'Session check failed' });
+  }
+});
+
+module.exports = router;
+
+═══════════════════════════════════════════════════════════════
+PHASE 5: FRONTEND - DEVICE FINGERPRINTING
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /client/src/utils/deviceFingerprint.js
+
+export const generateDeviceFingerprint = () => {
+  const data = {
+    userAgent: navigator.userAgent,
+    screenResolution: `${screen.width}x${screen.height}`,
+    colorDepth: screen.colorDepth,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    language: navigator.language,
+    platform: navigator.platform,
+    hardwareConcurrency: navigator.hardwareConcurrency || 0,
+    deviceMemory: navigator.deviceMemory || 0
+  };
+  
+  // Simple hash function
+  const hashString = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return hash.toString(36);
+  };
+  
+  const fingerprintString = JSON.stringify(data);
+  return hashString(fingerprintString);
+};
+
+export const getDeviceInfo = () => {
+  const ua = navigator.userAgent;
+  
+  let deviceName = 'Unknown Device';
+  let deviceType = 'desktop';
+  
+  // Detect device name
+  if (/iPhone/.test(ua)) {
+    deviceName = 'iPhone';
+    deviceType = 'mobile';
+  } else if (/iPad/.test(ua)) {
+    deviceName = 'iPad';
+    deviceType = 'tablet';
+  } else if (/Android.*Mobile/.test(ua)) {
+    deviceName = 'Android Phone';
+    deviceType = 'mobile';
+  } else if (/Android/.test(ua)) {
+    deviceName = 'Android Tablet';
+    deviceType = 'tablet';
+  } else if (/Macintosh/.test(ua)) {
+    deviceName = 'Mac';
+  } else if (/Windows/.test(ua)) {
+    deviceName = 'Windows PC';
+  } else if (/Linux/.test(ua)) {
+    deviceName = 'Linux';
+  }
+  
+  return { deviceName, deviceType };
+};
+
+═══════════════════════════════════════════════════════════════
+PHASE 6: FRONTEND - LOGIN COMPONENT
+═══════════════════════════════════════════════════════════════
+
+CREATE OR UPDATE: /client/src/pages/Login.jsx (or wherever login component is)
+
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { generateDeviceFingerprint, getDeviceInfo } from '../utils/deviceFingerprint';
+
+export default function Login() {
+  const [step, setStep] = useState('email'); // 'email' | 'code' | 'username'
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [username, setUsername] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [isNewUser, setIsNewUser] = useState(false);
+  const navigate = useNavigate();
+
+  const sendCode = async () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      const response = await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase().trim() })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send code');
+      }
+      
+      setStep('code');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const verifyCode = async () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      const deviceFingerprint = generateDeviceFingerprint();
+      const { deviceName, deviceType } = getDeviceInfo();
+      
+      const response = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: email.toLowerCase().trim(), 
+          code,
+          username: username.trim() || null,
+          deviceFingerprint,
+          deviceName,
+          deviceType
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Invalid code');
+      }
+      
+      // Check if new user needs username
+      if (data.user.isNew && !username) {
+        setIsNewUser(true);
+        setStep('username');
+        setLoading(false);
+        return;
+      }
+      
+      // Show device limit warning if applicable
+      if (data.deviceLimitExceeded) {
+        alert(
+          `⚠️ Device Limit Reached\n\n` +
+          `Your account is limited to 2 devices.\n\n` +
+          `We logged out: "${data.removedDevice}"\n\n` +
+          `You can now use this device.`
+        );
+      }
+      
+      // Store token
+      localStorage.setItem('auth_token', data.token);
+      
+      // Redirect to app
+      navigate('/');
+      
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+  
+  const completeSignup = async () => {
+    // Validate username
+    if (!username || username.trim().length < 3) {
+      setError('Username must be at least 3 characters');
+      return;
+    }
+    
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      setError('Username can only contain letters, numbers, and underscores');
+      return;
+    }
+    
+    // Try verification again with username
+    await verifyCode();
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-black">
+      <div className="max-w-md w-full p-8 bg-white rounded-lg shadow-2xl">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2">🥋 BJJ OS</h1>
+          <p className="text-gray-600 text-sm">The World's Smartest BJJ Coach</p>
+        </div>
+        
+        {step === 'email' && (
+          <>
+            <h2 className="text-2xl font-bold mb-6">Sign In</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  onKeyPress={(e) => e.key === 'Enter' && email.includes('@') && sendCode()}
+                  autoFocus
+                />
+              </div>
+              
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+              
+              <button
+                onClick={sendCode}
+                disabled={loading || !email.includes('@')}
+                className="w-full bg-black text-white p-3 rounded-lg font-bold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'Sending...' : 'Send Verification Code'}
+              </button>
+            </div>
+          </>
+        )}
+        
+        {step === 'code' && (
+          <>
+            <h2 className="text-2xl font-bold mb-4">Enter Code</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              We sent a 6-digit code to <strong>{email}</strong>
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Verification Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="123456"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full p-4 border border-gray-300 rounded-lg text-center text-3xl tracking-widest font-mono focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  maxLength={6}
+                  onKeyPress={(e) => e.key === 'Enter' && code.length === 6 && verifyCode()}
+                  autoFocus
+                />
+              </div>
+              
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+              
+              <button
+                onClick={verifyCode}
+                disabled={loading || code.length !== 6}
+                className="w-full bg-black text-white p-3 rounded-lg font-bold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'Verifying...' : 'Verify & Sign In'}
+              </button>
+              
+              <button
+                onClick={() => { setStep('email'); setCode(''); setError(''); }}
+                className="w-full text-sm text-gray-600 hover:text-black transition-colors"
+              >
+                ← Use different email
+              </button>
+            </div>
+          </>
+        )}
+        
+        {step === 'username' && (
+          <>
+            <h2 className="text-2xl font-bold mb-4">Choose Username</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Pick a username for your BJJ OS account
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  placeholder="yourname"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
+                  onKeyPress={(e) => e.key === 'Enter' && username.length >= 3 && completeSignup()}
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Letters, numbers, and underscores only (minimum 3 characters)
+                </p>
+              </div>
+              
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+              
+              <button
+                onClick={completeSignup}
+                disabled={loading || username.length < 3}
+                className="w-full bg-black text-white p-3 rounded-lg font-bold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'Creating Account...' : 'Complete Signup'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+═══════════════════════════════════════════════════════════════
+PHASE 7: UPDATE ADMIN DASHBOARD
+═══════════════════════════════════════════════════════════════
+
+FIND AND UPDATE: Admin dashboard user display components
+
+CHANGE FROM:
+- Displaying phone_number
+
+CHANGE TO:
+- Display email and username
+
+EXAMPLE UPDATE FOR ADMIN USER LIST:
+
+// OLD:
+<div>{user.phone_number}</div>
+
+// NEW:
+<div>
+  <div className="font-medium">{user.username || 'No username'}</div>
+  <div className="text-sm text-gray-600">{user.email}</div>
+  {user.is_admin && <span className="text-xs bg-black text-white px-2 py-1 rounded">ADMIN</span>}
+  {user.subscription_type === 'lifetime' && <span className="text-xs bg-gold text-black px-2 py-1 rounded">LIFETIME</span>}
+</div>
+
+UPDATE ALL ADMIN QUERIES:
+- Replace phone_number with email, username
+- Add is_admin, subscription_type to queries
+
+═══════════════════════════════════════════════════════════════
+PHASE 8: AUTH MIDDLEWARE
+═══════════════════════════════════════════════════════════════
+
+UPDATE OR CREATE: /server/middleware/auth.js (or wherever auth middleware is)
+
+const authMiddleware = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    const { db } = require('../db'); // Adjust import based on your setup
+    
+    const sessionResult = await db.query(
+      `SELECT s.*, u.* 
+       FROM sessions s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.token = $1 AND s.expires_at > NOW()`,
+      [token]
+    );
+    
+    if (sessionResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+    
+    const session = sessionResult.rows[0];
+    
+    // Update last_activity
+    await db.query(
+      `UPDATE sessions SET last_activity = NOW() WHERE token = $1`,
+      [token]
+    );
+    
+    // AUTO-EXTEND if < 7 days left
+    const EXTENSION_THRESHOLD = 7 * 24 * 60 * 60 * 1000;
+    const SESSION_DURATION = 90 * 24 * 60 * 60 * 1000;
+    const timeUntilExpiry = new Date(session.expires_at) - Date.now();
+    
+    if (timeUntilExpiry < EXTENSION_THRESHOLD) {
+      const newExpiresAt = new Date(Date.now() + SESSION_DURATION);
+      
+      await db.query(
+        `UPDATE sessions SET expires_at = $1 WHERE token = $2`,
+        [newExpiresAt, token]
+      );
+    }
+    
+    req.user = session;
+    next();
+    
+  } catch (error) {
+    console.error('❌ Auth middleware error:', error);
+    res.status(500).json({ error: 'Authentication failed' });
+  }
+};
+
+module.exports = authMiddleware;
+
+═══════════════════════════════════════════════════════════════
+PHASE 9: TESTING SCRIPT
+═══════════════════════════════════════════════════════════════
+
+CREATE FILE: /server/test-email.js
+
+const { sendVerificationEmail } = require('./email');
+
+(async () => {
+  console.log('🧪 Testing email system...\n');
+  
+  const testEmail = 'toddkramer@mac.com'; // Use your email
+  const testCode = '123456';
+  
+  console.log(`📧 Sending test email to: ${testEmail}`);
+  console.log(`🔑 Verification code: ${testCode}\n`);
+  
+  const result = await sendVerificationEmail(testEmail, testCode);
+  
+  if (result.success) {
+    console.log('✅ Email sent successfully!');
+    console.log('📬 Check your inbox at:', testEmail);
+    console.log('\n✨ Email system is working!\n');
+  } else {
+    console.log('❌ Email failed to send');
+    console.log('Error:', result.error);
+    console.log('\n⚠️  Check your RESEND_API_KEY in Secrets\n');
+  }
+})();
+
+═══════════════════════════════════════════════════════════════
+PHASE 10: DEPLOYMENT CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+BEFORE DEPLOYING:
+
+1. ✅ RESEND_API_KEY in Secrets
+2. ✅ ADMIN_BYPASS_CODE in Secrets (999999)
+3. ✅ Database migrations run
+4. ✅ Test email script works: node server/test-email.js
+5. ✅ Admin user created (toddkramer@mac.com)
+6. ✅ Remove any old SMS/Twilio code
+7. ✅ Update all imports/routes
+8. ✅ Test login flow locally
+
+AFTER DEPLOYING:
+
+1. Test your login (toddkramer@mac.com)
+2. Test admin bypass (code: 999999)
+3. Test new user signup
+4. Test device limit (login on 3 devices)
+5. Verify admin dashboard shows emails
+6. Verify sessions persist across browser refreshes
+
+═══════════════════════════════════════════════════════════════
+CRITICAL NOTES
+═══════════════════════════════════════════════════════════════
+
+✅ DO:
+- Use EXACT sender: "BJJ OS <noreply@bjjos.app>"
+- Enforce 2-device limit strictly
+- Auto-extend sessions for active users
+- Show device limit warnings to users
+- Update last_activity on every API call
+- Keep sessions table clean (delete expired)
+
+❌ DON'T:
+- Change Professor OS coaching logic
+- Modify training session tracking
+- Touch Stripe/payment code
+- Change any other features
+- Add passwords (stay passwordless)
+- Ask for confirmation - just implement
+
+ADMIN ACCESS:
+- Email: toddkramer@mac.com
+- Bypass code: 999999 (emergency access)
+- Max devices: 99 (unlimited)
+- Subscription: lifetime
+- Is admin: true
+
+═══════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════
+
+✅ Email verification works
+✅ 90-day sessions work
+✅ Sessions auto-extend
+✅ 2-device limit enforced
+✅ Admin bypass works
+✅ Username system works
+✅ Device fingerprinting works
+✅ Admin dashboard shows emails
+✅ Beautiful branded emails
+✅ No SMS/phone code remains
+
+═══════════════════════════════════════════════════════════════
+BEGIN IMPLEMENTATION NOW
+═══════════════════════════════════════════════════════════════
+
+Execute all phases in order. Report completion status after implementation.
+
+If you encounter errors:
+1. Show the exact error message
+2. Show the file and line number
+3. Don't stop - try to fix and continue
+
+DELIVERABLE:
+✅ Complete working email authentication system
+✅ Test script confirms emails work
+✅ Admin can login
+✅ Ready for production deployment
+
+START NOW.
+```
+
+-----
+
+## ✅ **AFTER REPLIT AGENT FINISHES**
+
+### **TEST IMMEDIATELY:**
+
+```bash
+# Test email system
+node server/test-email.js
+```
+
+**Expected:** Email arrives at toddkramer@mac.com with code 123456
+
+### **TEST YOUR LOGIN:**
+
+1. Go to bjjos.app/login
+1. Enter: toddkramer@mac.com
+1. Get code in email
+1. Enter code
+1. ✅ Should login as admin
+
+### **TEST ADMIN BYPASS:**
+
+1. Go to bjjos.app/login
+1. Enter: toddkramer@mac.com
+1. Enter code: 999999
+1. ✅ Should instant login (no email needed)
+
+-----
+
+## 🎉 **THAT’S IT!**
+
+This master prompt handles **EVERYTHING**:
+
+- ✅ Database setup (clean email-based schema)
+- ✅ Email service (Resend with beautiful emails)
+- ✅ Auth routes (send code, verify, logout)
+- ✅ 90-day sessions (auto-extend)
+- ✅ 2-device limit (prevent sharing)
+- ✅ Device fingerprinting
+- ✅ Admin bypass (emergency access)
+- ✅ Frontend login (3-step flow)
+- ✅ Admin dashboard updates
+- ✅ Test script
+
+**Copy, paste, and watch it build! 🚀**

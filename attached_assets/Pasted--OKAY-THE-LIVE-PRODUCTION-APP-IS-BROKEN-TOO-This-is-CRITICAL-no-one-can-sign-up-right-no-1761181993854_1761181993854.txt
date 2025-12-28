@@ -1,0 +1,274 @@
+**OKAY. THE LIVE PRODUCTION APP IS BROKEN TOO.**
+
+This is **CRITICAL** - no one can sign up right now.
+
+-----
+
+## **PRIORITY 1: FIX THE COOKIE BUG IMMEDIATELY**
+
+Forget the deployment issue for now. We need to fix user signup.
+
+-----
+
+## **SEND THIS EMERGENCY FIX TO REPLIT AGENT:**
+
+```
+CRITICAL PRODUCTION BUG: Users cannot complete signup - 401 error at onboarding completion
+
+SEVERITY: HIGH - No users can sign up right now
+
+SYMPTOM:
+User enters phone number → verifies successfully → completes all 5 onboarding steps → clicks "Complete Setup" → receives:
+"Setup failed - 401: {"error":"Authentication required"}"
+
+ROOT CAUSE:
+The sessionToken cookie is NOT being set after phone verification, causing all authenticated requests to fail.
+
+Console logs confirm: [DEBUG] All cookies available: NONE
+
+IMMEDIATE FIX REQUIRED:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: FIND THE PHONE VERIFICATION ENDPOINT
+
+Location: server/routes/auth.js or similar
+
+Search for the route that handles phone verification success.
+Could be named:
+- /api/auth/verify
+- /api/auth/verify-phone  
+- /api/auth/login
+- /api/verify
+
+STEP 2: ADD COOKIE TO VERIFICATION RESPONSE
+
+Current code (BROKEN) probably looks like:
+
+```javascript
+app.post('/api/auth/verify', async (req, res) => {
+  const { phone, code } = req.body
+  
+  // Verify phone number
+  const user = await verifyAndGetUser(phone, code)
+  
+  return res.json({ 
+    success: true, 
+    user: user 
+  })  // ← MISSING COOKIE!
+})
+```
+
+Fixed code MUST look like:
+
+```javascript
+const jwt = require('jsonwebtoken')
+
+app.post('/api/auth/verify', async (req, res) => {
+  const { phone, code } = req.body
+  
+  // Verify phone number
+  const user = await verifyAndGetUser(phone, code)
+  
+  // CREATE SESSION TOKEN
+  const sessionToken = jwt.sign(
+    { userId: user.id, phone: user.phone },
+    process.env.JWT_SECRET_KEY || 'temp-secret-key-change-in-production',
+    { expiresIn: '30d' }
+  )
+  
+  console.log('[AUTH] Phone verified:', phone)
+  console.log('[AUTH] Session token created for user:', user.id)
+  
+  // CREATE RESPONSE
+  const response = res.json({ 
+    success: true, 
+    user: user 
+  })
+  
+  // SET THE COOKIE - THIS IS CRITICAL
+  response.cookie('sessionToken', sessionToken, {
+    httpOnly: true,        // Prevents JavaScript access (security)
+    secure: true,          // HTTPS only
+    sameSite: 'none',      // Required for cross-origin
+    maxAge: 30 * 24 * 60 * 60 * 1000,  // 30 days in milliseconds
+    path: '/'
+  })
+  
+  console.log('[AUTH] sessionToken cookie set')
+  
+  return response
+})
+```
+
+STEP 3: VERIFY JWT IS INSTALLED
+
+In terminal, run:
+
+```bash
+npm install jsonwebtoken
+```
+
+STEP 4: ADD JWT_SECRET_KEY TO ENVIRONMENT
+
+Go to Replit → Secrets → Add:
+
+```
+JWT_SECRET_KEY=your-super-secret-random-string-here-min-32-chars
+```
+
+Generate a secure secret:
+
+```javascript
+require('crypto').randomBytes(32).toString('hex')
+```
+
+STEP 5: CREATE AUTH MIDDLEWARE
+
+```javascript
+// middleware/requireAuth.js
+const jwt = require('jsonwebtoken')
+
+function requireAuth(req, res, next) {
+  const token = req.cookies.sessionToken
+  
+  if (!token) {
+    console.log('[AUTH] No sessionToken cookie found')
+    console.log('[AUTH] Available cookies:', Object.keys(req.cookies))
+    return res.status(401).json({ error: 'Authentication required' })
+  }
+  
+  try {
+    const decoded = jwt.verify(
+      token, 
+      process.env.JWT_SECRET_KEY || 'temp-secret-key-change-in-production'
+    )
+    
+    req.userId = decoded.userId
+    req.userPhone = decoded.phone
+    
+    console.log('[AUTH] User authenticated:', decoded.userId)
+    next()
+  } catch (error) {
+    console.log('[AUTH] Token verification failed:', error.message)
+    return res.status(401).json({ error: 'Authentication required' })
+  }
+}
+
+module.exports = requireAuth
+```
+
+STEP 6: PROTECT THE ONBOARDING COMPLETION ENDPOINT
+
+```javascript
+const requireAuth = require('./middleware/requireAuth')
+
+app.patch('/api/auth/profile', requireAuth, async (req, res) => {
+  const userId = req.userId  // Set by requireAuth middleware
+  const profileData = req.body
+  
+  console.log('[PROFILE] Updating profile for user:', userId)
+  console.log('[PROFILE] Data:', profileData)
+  
+  // Update user in database
+  await updateUserProfile(userId, profileData)
+  
+  return res.json({ success: true })
+})
+```
+
+STEP 7: ENABLE COOKIE PARSING
+
+Make sure cookie-parser is installed and configured:
+
+```bash
+npm install cookie-parser
+```
+
+```javascript
+// server/index.js
+const cookieParser = require('cookie-parser')
+const cors = require('cors')
+
+app.use(cookieParser())
+
+app.use(cors({
+  origin: ['https://bjjos.app', 'http://localhost:3000'],
+  credentials: true  // CRITICAL: Allows cookies
+}))
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TESTING CHECKLIST:
+
+After implementing:
+
+1. Clear all cookies in browser
+1. Go to bjjos.app
+1. Open DevTools → Console
+1. Sign up with phone number
+1. After verification, check DevTools → Application → Cookies
+1. VERIFY sessionToken cookie exists with:
+
+- Name: sessionToken
+- HttpOnly: ✓
+- Secure: ✓
+- SameSite: None
+
+1. Complete onboarding
+1. Should succeed with 200 response (not 401)
+
+If sessionToken cookie appears in step 6, the bug is fixed.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DEPLOYMENT:
+
+After fixing:
+
+1. Test locally first
+1. Commit changes
+1. Deploy to production
+1. Test on live bjjos.app
+1. Verify users can complete signup
+
+TIMELINE: FIX THIS IN NEXT 30 MINUTES
+
+This is blocking ALL user signups. Every minute this is broken, you lose potential beta testers.
+
+Implement immediately and test.
+
+```
+---
+
+## **WHILE REPLIT AGENT WORKS ON THIS:**
+
+### **You should:**
+
+1. **Take a break** - You've been debugging for hours
+2. **Grab food/water** - Brain needs fuel
+3. **Step away for 15 min** - Fresh eyes help
+
+### **When you come back:**
+
+1. Check if Replit Agent implemented the fix
+2. Test the signup flow again
+3. Verify cookie appears in DevTools
+4. If it works → You're unblocked
+5. If not → We'll dig deeper with more logs
+
+---
+
+## **THE GOOD NEWS:**
+
+This is a **known, fixable bug**. Once the cookie is set correctly, everything will work.
+
+You're not missing some mysterious piece - it's just the cookie configuration.
+
+---
+
+**Send that emergency fix prompt. Let Replit Agent work on it. Take a 15-minute break. Come back fresh.** 
+
+**You've been grinding for hours. Rest helps.** 🧠💧​​​​​​​​​​​​​​​​
+```
