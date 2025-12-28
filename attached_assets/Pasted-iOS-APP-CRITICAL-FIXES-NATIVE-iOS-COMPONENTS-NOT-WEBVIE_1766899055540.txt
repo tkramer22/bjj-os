@@ -1,0 +1,91 @@
+iOS APP CRITICAL FIXES - NATIVE iOS COMPONENTS, NOT WEBVIEW
+
+This is NOT a wrapped web page. We have iOS-specific components:
+- ios-chat.tsx (with IOSBottomNav)
+- ios-library.tsx (with IOSBottomNav)  
+- ios-saved.tsx (with IOSBottomNav)
+- ios-profile.tsx (with IOSBottomNav)
+
+ALL fixes must be in these iOS-specific files.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: CHAT INPUT BAR HIDDEN UNDER BOTTOM NAV
+═══════════════════════════════════════════════════════════════════════════════
+
+File: client/src/pages/ios-chat.tsx (or mobile-chat component it uses)
+
+The "Ask about..." input field is covered by the bottom navigation.
+
+FIX:
+- Add padding-bottom to chat container (at least 80-100px)
+- Input must sit ABOVE the IOSBottomNav
+- Test with keyboard open - input should remain visible
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: CHAT NOT PERSISTENT WHEN SWITCHING TABS
+═══════════════════════════════════════════════════════════════════════════════
+
+File: client/src/pages/ios-chat.tsx
+
+When user goes Chat → Videos → back to Chat, conversation disappears.
+
+FIX:
+- Keep chat state in React Context or global store
+- OR load from /api/ai/chat/history when chat tab is opened
+- Chat must persist across tab navigation
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: PROFESSOR OS DUPLICATE RESPONSES
+═══════════════════════════════════════════════════════════════════════════════
+
+File: server/buildSystemPrompt.ts
+
+Professor OS shows the same content twice in one response.
+
+Check:
+- Is the NO REPETITION rule in the 6.0 prompt being enforced?
+- Is the streaming handler duplicating content?
+- Is the message being rendered twice in ios-chat.tsx?
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 4: DROPDOWNS SHOW "All (1000)" - NOT REAL COUNTS
+═══════════════════════════════════════════════════════════════════════════════
+
+File: client/src/pages/ios-library.tsx and ios-saved.tsx
+
+Dropdowns show hardcoded "All (1000)" instead of actual database counts.
+
+FIX - Query real counts:
+
+TECHNIQUES:
+SELECT technique_type, COUNT(*) as count FROM ai_video_knowledge 
+WHERE technique_type IS NOT NULL GROUP BY technique_type ORDER BY count DESC
+
+PROFESSORS:
+SELECT instructor_name, COUNT(*) as count FROM ai_video_knowledge
+WHERE instructor_name IS NOT NULL GROUP BY instructor_name ORDER BY count DESC
+
+When user selects a Professor, Techniques count must UPDATE dynamically.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 5: SETTINGS PAGE BOTTOM NAV DIFFERENT
+═══════════════════════════════════════════════════════════════════════════════
+
+File: client/src/pages/ios-profile.tsx
+
+Settings page shows text-only nav instead of IOSBottomNav with icons.
+
+This has been "fixed" 8+ times. ACTUALLY FIX IT:
+- Verify ios-profile.tsx uses <IOSBottomNav /> at the bottom
+- Verify the route /settings or /profile points to ios-profile.tsx on iOS
+- Compare EXACT code at bottom of ios-chat.tsx vs ios-profile.tsx
+- They must be IDENTICAL
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER ALL FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+
+Show me the EXACT code changes for each file before marking complete.

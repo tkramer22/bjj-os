@@ -1,0 +1,105 @@
+You might be onto something. Let me search for how the iOS routing was set up.​​​​​​​​​​​​​​​​
+
+**Yes, that’s exactly the problem.**
+
+Based on our past conversations, here’s what happened:
+
+1. **We built iOS-specific components:** `ios-chat.tsx`, `ios-library.tsx`, `ios-saved.tsx`, `ios-profile.tsx`
+1. **These use `IOSBottomNav`** with proper icons
+1. **BUT the platform detection/routing isn’t working** - when you’re in the iOS app, it’s loading the mobile web versions instead of the iOS-specific versions
+
+-----
+
+## **The Core Problem:**
+
+The app needs to **detect when it’s running in Capacitor (iOS)** and route to the `ios-*` components. If that detection fails, it falls back to mobile web components (which have text-only nav).
+
+-----
+
+## **MASTER PROMPT FOR REPLIT AGENT:**
+
+```
+CRITICAL: iOS APP IS LOADING WEB COMPONENTS INSTEAD OF iOS COMPONENTS
+
+We have iOS-specific components that work correctly:
+- ios-chat.tsx (uses IOSBottomNav with icons ✅)
+- ios-library.tsx (uses IOSBottomNav with icons ✅)
+- ios-saved.tsx (uses IOSBottomNav with icons ✅)
+- ios-profile.tsx (uses IOSBottomNav with icons ✅)
+
+BUT the iOS app is loading the MOBILE WEB versions instead, which is why:
+- Settings shows text-only nav (no icons)
+- Chat doesn't persist
+- Dropdowns show wrong counts
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: VERIFY PLATFORM DETECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+How does the app detect iOS/Capacitor? Find the code that checks:
+- Capacitor.isNativePlatform()
+- window.Capacitor
+- navigator.userAgent for iOS
+- URL path starting with /ios-
+
+Show me the detection logic and where it's used.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: VERIFY ROUTING
+═══════════════════════════════════════════════════════════════════════════════
+
+Show me the router configuration. When a user on iOS taps:
+- Chat → Should route to ios-chat.tsx
+- Videos → Should route to ios-library.tsx
+- Saved → Should route to ios-saved.tsx
+- Settings → Should route to ios-profile.tsx
+
+Is this happening? Or are they going to mobile web versions?
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: FIX THE ROUTING
+═══════════════════════════════════════════════════════════════════════════════
+
+If platform detection exists but routing is wrong, fix it.
+
+If platform detection is missing, add it:
+
+const isIOSApp = window.Capacitor?.isNativePlatform?.() || 
+                 window.location.pathname.startsWith('/ios-');
+
+Then in your router or layout, use the iOS components when isIOSApp is true.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: FIX THE OTHER ISSUES IN iOS COMPONENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Once routing is fixed, also fix in the ios-* files:
+
+A. CHAT INPUT HIDDEN (ios-chat.tsx)
+   - Add padding-bottom: 100px to chat container
+   - Input must be above IOSBottomNav
+
+B. CHAT NOT PERSISTENT (ios-chat.tsx)
+   - Load from /api/ai/chat/history when component mounts
+   - Store in React Context to persist across tab switches
+
+C. DROPDOWN COUNTS (ios-library.tsx, ios-saved.tsx)
+   - Query real counts from database, not hardcoded "1000"
+
+D. PROFESSOR OS DUPLICATES (server/buildSystemPrompt.ts)
+   - Verify NO REPETITION rule is in the prompt
+
+═══════════════════════════════════════════════════════════════════════════════
+SHOW ME:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. The platform detection code (file and lines)
+2. The router configuration showing iOS routes
+3. Which component ACTUALLY renders when tapping Settings on iOS
+
+Then fix all issues and run: npm run build && npx cap sync ios
+```
+
+-----
+
+**This gets to the root cause.** The iOS-specific components exist and work - they’re just not being loaded because routing/detection is broken. Send this to Replit Agent.​​​​​​​​​​​​​​​​
