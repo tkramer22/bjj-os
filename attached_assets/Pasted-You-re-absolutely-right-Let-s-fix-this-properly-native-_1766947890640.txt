@@ -1,0 +1,93 @@
+You’re absolutely right. Let’s fix this properly - native iOS components, not WebView.
+
+-----
+
+```
+FIX ios-profile.tsx - NO WEBVIEW
+
+The Settings page should NOT use WebView/iframe. Users should never feel like they're in a browser.
+
+REMOVE the WebView approach entirely.
+
+═══════════════════════════════════════════════════════════════════════════════
+REPLACE WITH NATIVE iOS COMPONENTS:
+═══════════════════════════════════════════════════════════════════════════════
+
+Settings/Profile page should have:
+
+1. USER INFO SECTION (top)
+   - Profile icon or avatar
+   - User's actual name (from /api/auth/me)
+   - User's email
+   - Subscription status (Free/Premium/Lifetime)
+
+2. SETTINGS SECTION
+   When user taps "Settings" → Navigate to /ios-settings (new page)
+   Native React component with toggles/options, NOT a web page
+
+3. TERMS OF SERVICE
+   When user taps → Navigate to /ios-terms (new page)
+   Display terms as native text content in a scrollable view
+   Back button returns to profile
+
+4. PRIVACY POLICY
+   When user taps → Navigate to /ios-privacy (new page)
+   Display privacy policy as native text content in a scrollable view
+   Back button returns to profile
+
+5. HELP & SUPPORT
+   When user taps → Navigate to /ios-help (new page)
+   Native page with FAQ, contact info, support options
+   Back button returns to profile
+
+6. MANAGE SUBSCRIPTION
+   This ONE button can open external browser (Stripe requirement)
+
+7. LOG OUT BUTTON (bottom, red)
+
+═══════════════════════════════════════════════════════════════════════════════
+CREATE THESE NEW iOS PAGES:
+═══════════════════════════════════════════════════════════════════════════════
+
+ios-settings.tsx - App settings with native toggles
+ios-terms.tsx - Terms of service as native text
+ios-privacy.tsx - Privacy policy as native text  
+ios-help.tsx - Help & support as native content
+
+Each page should have:
+- Header with back arrow and title
+- Native scrollable content
+- Consistent dark theme
+- NO WebView, NO iframe, NO external links
+- Haptic feedback on back button
+
+═══════════════════════════════════════════════════════════════════════════════
+ADD ROUTES IN App.tsx:
+═══════════════════════════════════════════════════════════════════════════════
+
+<Route path="/ios-settings" component={IOSSettingsPage} />
+<Route path="/ios-terms" component={IOSTermsPage} />
+<Route path="/ios-privacy" component={IOSPrivacyPage} />
+<Route path="/ios-help" component={IOSHelpPage} />
+
+═══════════════════════════════════════════════════════════════════════════════
+NAVIGATION PATTERN:
+═══════════════════════════════════════════════════════════════════════════════
+
+Profile → tap Terms → slides to Terms page → tap back → slides back to Profile
+
+Use React Router navigation, not modals or WebView.
+
+This should feel like Apple's Settings app - clean, native, fast.
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+```
+
+-----
+
+This gives you a fully native feel - no WebViews, no iframes, just clean React components that feel like a real iOS app.​​​​​​​​​​​​​​​​

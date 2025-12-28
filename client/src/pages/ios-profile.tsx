@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
@@ -43,7 +43,6 @@ function formatDate(dateString: string | null | undefined): string {
 export default function IOSProfilePage() {
   const [, navigate] = useLocation();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [webViewUrl, setWebViewUrl] = useState<string | null>(null);
 
   const { data: user, isLoading } = useQuery<UserProfile>({
     queryKey: ["/api/auth/me"],
@@ -62,13 +61,13 @@ export default function IOSProfilePage() {
     }
   };
 
-  // Open URL in-app using iframe WebView
-  const handleOpenInApp = (url: string) => {
+  // Navigate to native iOS page
+  const handleNavigate = (path: string) => {
     triggerHaptic('light');
-    setWebViewUrl(url);
+    navigate(path);
   };
 
-  // Open URL in external browser (for subscription management only)
+  // Open URL in external browser (for subscription management only - Stripe requirement)
   const handleOpenExternal = async (url: string) => {
     triggerHaptic('light');
     if (isNativeApp()) {
@@ -116,75 +115,6 @@ export default function IOSProfilePage() {
         justifyContent: 'center',
       }}>
         <Loader2 className="animate-spin" size={32} color="#8B5CF6" />
-      </div>
-    );
-  }
-
-  // In-App WebView Modal Overlay Component
-  const WebViewModal = () => {
-    if (!webViewUrl) return null;
-    
-    return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: '80px', // Leave space for bottom nav - not covered
-        background: 'rgba(0,0,0,0.95)',
-        zIndex: 40,
-        display: 'flex',
-        flexDirection: 'column',
-      }}>
-        {/* WebView Header */}
-        <div style={{
-          padding: '12px 16px',
-          paddingTop: 'max(12px, env(safe-area-inset-top))',
-          background: '#1A1A1D',
-          borderBottom: '1px solid #2A2A2E',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <button
-            onClick={() => setWebViewUrl(null)}
-            data-testid="button-close-webview"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#8B5CF6',
-              fontSize: '16px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              padding: '8px 0',
-            }}
-          >
-            Done
-          </button>
-          <span style={{
-            color: '#71717A',
-            fontSize: '13px',
-            maxWidth: '200px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}>
-            {webViewUrl.replace('https://', '')}
-          </span>
-          <div style={{ width: '50px' }} />
-        </div>
-        
-        {/* WebView Content */}
-        <iframe
-          src={webViewUrl}
-          style={{
-            flex: 1,
-            width: '100%',
-            border: 'none',
-            background: '#FFFFFF',
-          }}
-          title="In-App Browser"
-        />
       </div>
     );
   }
@@ -364,7 +294,7 @@ export default function IOSProfilePage() {
           </button>
         </div>
 
-        {/* Menu Items */}
+        {/* Menu Items - Native Navigation */}
         <div style={{
           background: '#1A1A1D',
           borderRadius: '16px',
@@ -373,7 +303,7 @@ export default function IOSProfilePage() {
           border: '1px solid #2A2A2E',
         }}>
           <button
-            onClick={() => handleOpenInApp('https://bjjos.app/settings')}
+            onClick={() => handleNavigate('/ios-settings')}
             data-testid="button-settings"
             style={{
               width: '100%',
@@ -395,7 +325,7 @@ export default function IOSProfilePage() {
           </button>
 
           <button
-            onClick={() => handleOpenInApp('https://bjjos.app/terms')}
+            onClick={() => handleNavigate('/ios-terms')}
             data-testid="button-terms"
             style={{
               width: '100%',
@@ -417,7 +347,7 @@ export default function IOSProfilePage() {
           </button>
 
           <button
-            onClick={() => handleOpenInApp('https://bjjos.app/privacy')}
+            onClick={() => handleNavigate('/ios-privacy')}
             data-testid="button-privacy"
             style={{
               width: '100%',
@@ -439,7 +369,7 @@ export default function IOSProfilePage() {
           </button>
 
           <button
-            onClick={() => handleOpenInApp('https://bjjos.app/help')}
+            onClick={() => handleNavigate('/ios-help')}
             data-testid="button-help"
             style={{
               width: '100%',
@@ -499,9 +429,6 @@ export default function IOSProfilePage() {
           BJJ OS v{APP_VERSION}
         </div>
       </div>
-
-      {/* WebView Modal Overlay */}
-      <WebViewModal />
 
       <IOSBottomNav />
     </div>

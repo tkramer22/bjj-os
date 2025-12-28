@@ -1,0 +1,186 @@
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { ArrowLeft, Bell, Moon, Volume2, Vibrate } from "lucide-react";
+import { triggerHaptic } from "@/lib/haptics";
+
+export default function IOSSettingsPage() {
+  const [, navigate] = useLocation();
+  const [notifications, setNotifications] = useState(true);
+  const [darkMode, setDarkMode] = useState(true);
+  const [sound, setSound] = useState(true);
+  const [haptics, setHaptics] = useState(true);
+
+  const handleBack = () => {
+    triggerHaptic('light');
+    navigate('/ios-profile');
+  };
+
+  const toggleSetting = (setter: (v: boolean) => void, currentValue: boolean) => {
+    triggerHaptic('light');
+    setter(!currentValue);
+  };
+
+  const ToggleSwitch = ({ 
+    enabled, 
+    onToggle,
+    testId
+  }: { 
+    enabled: boolean; 
+    onToggle: () => void;
+    testId: string;
+  }) => (
+    <button
+      onClick={onToggle}
+      style={{
+        width: '51px',
+        height: '31px',
+        borderRadius: '15.5px',
+        background: enabled ? '#8B5CF6' : '#3A3A3C',
+        border: 'none',
+        padding: '2px',
+        cursor: 'pointer',
+        transition: 'background 0.2s ease',
+      }}
+      data-testid={testId}
+    >
+      <div style={{
+        width: '27px',
+        height: '27px',
+        borderRadius: '50%',
+        background: '#FFFFFF',
+        transition: 'transform 0.2s ease',
+        transform: enabled ? 'translateX(20px)' : 'translateX(0)',
+      }} />
+    </button>
+  );
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: '#0A0A0B',
+      color: '#FFFFFF',
+    }}>
+      <div style={{
+        padding: '16px 20px',
+        paddingTop: 'max(16px, env(safe-area-inset-top))',
+        borderBottom: '1px solid #2A2A2E',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '16px',
+      }}>
+        <button
+          onClick={handleBack}
+          data-testid="button-back"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            padding: '8px',
+            marginLeft: '-8px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <ArrowLeft size={24} color="#8B5CF6" />
+        </button>
+        <h1 style={{ 
+          fontSize: '20px', 
+          fontWeight: 600,
+          margin: 0,
+        }}>
+          Settings
+        </h1>
+      </div>
+
+      <div style={{ padding: '20px' }}>
+        <div style={{
+          background: '#1A1A1D',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          border: '1px solid #2A2A2E',
+        }}>
+          <div style={{
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid #2A2A2E',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Bell size={20} color="#71717A" />
+              <span style={{ fontSize: '15px' }}>Push Notifications</span>
+            </div>
+            <ToggleSwitch 
+              enabled={notifications} 
+              onToggle={() => toggleSetting(setNotifications, notifications)}
+              testId="toggle-notifications"
+            />
+          </div>
+
+          <div style={{
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid #2A2A2E',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Moon size={20} color="#71717A" />
+              <span style={{ fontSize: '15px' }}>Dark Mode</span>
+            </div>
+            <ToggleSwitch 
+              enabled={darkMode} 
+              onToggle={() => toggleSetting(setDarkMode, darkMode)}
+              testId="toggle-dark-mode"
+            />
+          </div>
+
+          <div style={{
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderBottom: '1px solid #2A2A2E',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Volume2 size={20} color="#71717A" />
+              <span style={{ fontSize: '15px' }}>Sound Effects</span>
+            </div>
+            <ToggleSwitch 
+              enabled={sound} 
+              onToggle={() => toggleSetting(setSound, sound)}
+              testId="toggle-sound"
+            />
+          </div>
+
+          <div style={{
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Vibrate size={20} color="#71717A" />
+              <span style={{ fontSize: '15px' }}>Haptic Feedback</span>
+            </div>
+            <ToggleSwitch 
+              enabled={haptics} 
+              onToggle={() => toggleSetting(setHaptics, haptics)}
+              testId="toggle-haptics"
+            />
+          </div>
+        </div>
+
+        <p style={{
+          marginTop: '16px',
+          padding: '0 8px',
+          fontSize: '13px',
+          color: '#71717A',
+          lineHeight: 1.5,
+        }}>
+          Settings are stored locally on your device. Some features may require app restart to take effect.
+        </p>
+      </div>
+    </div>
+  );
+}
