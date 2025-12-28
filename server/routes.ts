@@ -795,13 +795,13 @@ export function registerRoutes(app: Express): Server {
         res.cookie('sessionToken', token, {
           httpOnly: true,
           secure: isHttps, // Use HTTPS detection instead of NODE_ENV
-          sameSite: 'lax', // Changed from 'strict' to allow top-level navigation
+          sameSite: isHttps ? 'none' : 'lax', // 'none' for cross-origin Capacitor requests
           maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
           ...(isProduction && { domain: '.bjjos.app' }) // Set domain for production only
         });
 
         console.log(`[AUTH] ✅ Login successful: ${existingUser!.phoneNumber} (Device: ${deviceInfo.deviceName})`);
-        console.log(`[AUTH] ✅ Cookie settings - secure: ${isHttps}, sameSite: lax, domain: ${isProduction ? '.bjjos.app' : 'none'}`);
+        console.log(`[AUTH] ✅ Cookie settings - secure: ${isHttps}, sameSite: ${isHttps ? 'none' : 'lax'}, domain: ${isProduction ? '.bjjos.app' : 'none'}`);
         console.log(`[AUTH] ✅ sessionToken cookie set (maxAge: 30 days, httpOnly: true)`);
 
         res.json({
@@ -904,13 +904,13 @@ export function registerRoutes(app: Express): Server {
           res.cookie('sessionToken', token, {
             httpOnly: true,
             secure: isHttps, // Use HTTPS detection instead of NODE_ENV
-            sameSite: 'lax', // Changed from 'strict' to allow top-level navigation
+            sameSite: isHttps ? 'none' : 'lax', // 'none' for cross-origin Capacitor requests
             maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
             ...(isProduction && { domain: '.bjjos.app' }) // Set domain for production only
           });
           
           console.log(`[AUTH] ✅ Signup successful: ${newUser.phoneNumber}`);
-          console.log(`[AUTH] ✅ Cookie settings - secure: ${isHttps}, sameSite: lax, domain: ${isProduction ? '.bjjos.app' : 'none'}`);
+          console.log(`[AUTH] ✅ Cookie settings - secure: ${isHttps}, sameSite: ${isHttps ? 'none' : 'lax'}, domain: ${isProduction ? '.bjjos.app' : 'none'}`);
           console.log(`[AUTH] ✅ sessionToken cookie set (maxAge: 30 days, httpOnly: true)`);
 
           res.json({
@@ -1062,7 +1062,7 @@ export function registerRoutes(app: Express): Server {
     res.clearCookie('sessionToken', {
       httpOnly: true,
       secure: isHttps, // Match the cookie settings used when setting
-      sameSite: 'lax', // Must match the original cookie settings
+      sameSite: isHttps ? 'none' : 'lax', // Must match the original cookie settings
       ...(isProduction && { domain: '.bjjos.app' })
     });
     res.json({ success: true, message: 'Logged out successfully' });
@@ -2399,7 +2399,7 @@ export function registerRoutes(app: Express): Server {
         res.cookie('sessionToken', token, {
           httpOnly: true,
           secure: isHttps,
-          sameSite: 'lax', // Consistent with logout and works reliably in dev/prod
+          sameSite: isHttps ? 'none' : 'lax', // 'none' for cross-origin Capacitor requests
           maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
         });
 
@@ -2843,14 +2843,14 @@ export function registerRoutes(app: Express): Server {
       res.cookie('sessionToken', token, {
         httpOnly: true,
         secure: isHttps, // Use HTTPS detection instead of NODE_ENV
-        sameSite: 'lax',
+        sameSite: isHttps ? 'none' : 'lax', // 'none' for cross-origin Capacitor requests
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
         ...(isProduction && { domain: '.bjjos.app' }) // Set domain for production only
       });
 
       console.log(`[AUTH] ✅ Lifetime bypass login: ${formattedPhone} (Device: ${deviceInfo.deviceName})`);
       console.log(`[AUTH] ✅ Device fingerprint: ${fingerprint.substring(0, 16)}...`);
-      console.log(`[AUTH] ✅ Cookie settings - secure: ${isHttps}, sameSite: lax, domain: ${isProduction ? '.bjjos.app' : 'none'}`);
+      console.log(`[AUTH] ✅ Cookie settings - secure: ${isHttps}, sameSite: ${isHttps ? 'none' : 'lax'}, domain: ${isProduction ? '.bjjos.app' : 'none'}`);
       console.log(`[AUTH] ✅ sessionToken cookie set (maxAge: 30 days, httpOnly: true)`);
 
       // Update login tracking with streak calculation (LIFETIME BYPASS FLOW)

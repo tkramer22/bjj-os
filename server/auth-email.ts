@@ -200,7 +200,7 @@ export function registerEmailAuthRoutes(app: Express) {
           const cookieOptions: any = {
             httpOnly: true,
             secure: isHttps,
-            sameSite: 'lax' as const,
+            sameSite: isHttps ? 'none' as const : 'lax' as const,
           };
           
           // Only set maxAge if rememberMe is true (otherwise browser session cookie)
@@ -210,7 +210,7 @@ export function registerEmailAuthRoutes(app: Express) {
           
           res.cookie('sessionToken', jwtToken, cookieOptions);
           
-          console.log(`🍪 [EMAIL-AUTH] Admin session cookie set with JWT`);
+          console.log(`🍪 [EMAIL-AUTH] Admin session cookie set with JWT (sameSite: ${isHttps ? 'none' : 'lax'})`);
           
           return res.json({
             success: true,
@@ -248,7 +248,7 @@ export function registerEmailAuthRoutes(app: Express) {
         const adminCookieOptions: any = {
           httpOnly: true,
           secure: isHttps,
-          sameSite: 'lax' as const,
+          sameSite: isHttps ? 'none' as const : 'lax' as const,
         };
         
         if (rememberMe) {
@@ -257,7 +257,7 @@ export function registerEmailAuthRoutes(app: Express) {
         
         res.cookie('sessionToken', jwtToken, adminCookieOptions);
         
-        console.log(`🍪 [EMAIL-AUTH] Admin session cookie set (persistent: ${rememberMe})`);
+        console.log(`🍪 [EMAIL-AUTH] Admin session cookie set (persistent: ${rememberMe}, sameSite: ${isHttps ? 'none' : 'lax'})`);
         
         return res.json({
           success: true,
@@ -409,7 +409,7 @@ export function registerEmailAuthRoutes(app: Express) {
         const existingDeviceCookieOptions: any = {
           httpOnly: true,
           secure: isHttps,
-          sameSite: 'lax' as const,
+          sameSite: isHttps ? 'none' as const : 'lax' as const,
         };
         
         if (rememberMe) {
@@ -418,7 +418,7 @@ export function registerEmailAuthRoutes(app: Express) {
         
         res.cookie('sessionToken', jwtToken, existingDeviceCookieOptions);
         
-        console.log(`🍪 [EMAIL-AUTH] Session cookie set for ${deviceInfo.name} (persistent: ${rememberMe})`);
+        console.log(`🍪 [EMAIL-AUTH] Session cookie set for ${deviceInfo.name} (persistent: ${rememberMe}, sameSite: ${isHttps ? 'none' : 'lax'})`);
         
         // Determine redirect for first-time lifetime users
         let redirectUrl = undefined;
@@ -492,7 +492,7 @@ export function registerEmailAuthRoutes(app: Express) {
       const newSessionCookieOptions: any = {
         httpOnly: true,
         secure: isHttps,
-        sameSite: 'lax' as const,
+        sameSite: isHttps ? 'none' as const : 'lax' as const,
       };
       
       if (rememberMe) {
@@ -501,7 +501,7 @@ export function registerEmailAuthRoutes(app: Express) {
       
       res.cookie('sessionToken', jwtToken, newSessionCookieOptions);
       
-      console.log(`🍪 [EMAIL-AUTH] Session cookie set for ${deviceInfo.name} (persistent: ${rememberMe})`);
+      console.log(`🍪 [EMAIL-AUTH] Session cookie set for ${deviceInfo.name} (persistent: ${rememberMe}, sameSite: ${isHttps ? 'none' : 'lax'})`);
       
       // Determine redirect for first-time lifetime users
       let redirectUrl = undefined;
@@ -801,11 +801,11 @@ export function registerEmailAuthRoutes(app: Express) {
       res.cookie('sessionToken', jwtToken, {
         httpOnly: true,
         secure: isHttps,
-        sameSite: 'lax',
+        sameSite: isHttps ? 'none' : 'lax',
         maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
       });
       
-      console.log(`🍪 [INVITE] Session cookie set with JWT`);
+      console.log(`🍪 [INVITE] Session cookie set with JWT (sameSite: ${isHttps ? 'none' : 'lax'})`);
       
       res.status(200).json({
         success: true,
