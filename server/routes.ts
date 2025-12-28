@@ -7050,8 +7050,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           sql`${aiVideoKnowledge.thumbnailUrl} != ''`
         )
       )
-      .orderBy(desc(aiVideoKnowledge.qualityScore), desc(aiVideoKnowledge.createdAt))
-      .limit(1000); // Limit increased to 1000 for growing library
+      .orderBy(desc(aiVideoKnowledge.qualityScore), desc(aiVideoKnowledge.createdAt));
       
       // Transform data for frontend compatibility
       const transformedVideos = videos.map(video => ({
