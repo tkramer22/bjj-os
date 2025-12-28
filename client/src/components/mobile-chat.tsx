@@ -156,8 +156,8 @@ export function MobileChat() {
     };
   }, []);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (instant?: boolean) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: instant ? "instant" : "smooth" });
   };
 
   // Only auto-scroll for NEW messages (typing indicator or newly sent/received)
@@ -167,6 +167,43 @@ export function MobileChat() {
       scrollToBottom();
     }
   }, [messages.length, isTyping, shouldAutoScroll]);
+
+  // FIX: Scroll to bottom instantly when returning to chat tab
+  // Uses Page Visibility API to detect when tab/page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && messages.length > 0) {
+        // Instant scroll to bottom when returning to chat
+        requestAnimationFrame(() => {
+          scrollToBottom(true);
+        });
+      }
+    };
+
+    // Also handle focus events for iOS app tab switching
+    const handleFocus = () => {
+      if (messages.length > 0) {
+        requestAnimationFrame(() => {
+          scrollToBottom(true);
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    
+    // Scroll to bottom on initial mount if messages exist
+    if (messages.length > 0) {
+      requestAnimationFrame(() => {
+        scrollToBottom(true);
+      });
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [messages.length]);
 
   // Sync localMessages from context when history loads on native
   // This prevents flash when switching from local to context source
@@ -719,7 +756,7 @@ What would you like to work on today?`,
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="Ask about techniques..."
+          placeholder="Ask Professor OS..."
           className="mobile-chat-input"
           rows={1}
           data-testid="input-chat-message"

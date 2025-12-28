@@ -10,7 +10,7 @@ export function IOSBottomNav() {
     { path: "/ios-chat", icon: MessageCircle, label: "Chat" },
     { path: "/ios-library", icon: BookOpen, label: "Videos" },
     { path: "/ios-saved", icon: Bookmark, label: "Saved" },
-    { path: "/ios-profile", icon: User, label: "Settings" },
+    { path: "/ios-profile", icon: User, label: "Profile" },
   ];
 
   const handleNavClick = () => {
