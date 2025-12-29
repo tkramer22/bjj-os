@@ -26,6 +26,18 @@ type EditableField = 'name' | 'beltLevel' | 'weight' | 'height' | 'style' | null
 const BELT_OPTIONS = ['white', 'blue', 'purple', 'brown', 'black'];
 const STYLE_OPTIONS = ['gi', 'no-gi', 'both'];
 
+// Generate weight options (100-300 lbs)
+const WEIGHT_OPTIONS = Array.from({ length: 201 }, (_, i) => 100 + i);
+
+// Generate height options (4'0" to 7'0")
+const HEIGHT_OPTIONS: string[] = [];
+for (let feet = 4; feet <= 7; feet++) {
+  for (let inches = 0; inches < 12; inches++) {
+    HEIGHT_OPTIONS.push(`${feet}'${inches}"`);
+    if (feet === 7 && inches === 0) break;
+  }
+}
+
 export default function IOSProfilePage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -401,57 +413,206 @@ export default function IOSProfilePage() {
               </div>
             ) : editingField === 'weight' ? (
               <div>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="number"
-                    value={editValue.replace(/[^0-9]/g, '')}
-                    onChange={e => setEditValue(e.target.value)}
-                    placeholder="Enter weight"
-                    autoFocus
-                    data-testid="input-weight"
-                    style={{
-                      width: '100%',
-                      padding: '16px',
-                      paddingRight: '50px',
-                      background: '#0A0A0B',
-                      border: '1px solid #2A2A2E',
-                      borderRadius: '12px',
-                      color: '#FFFFFF',
-                      fontSize: '16px',
-                      outline: 'none',
-                    }}
-                  />
-                  <span style={{
+                {/* iOS-style picker wheel for weight */}
+                <div 
+                  style={{
+                    height: '200px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    background: '#0A0A0B',
+                    borderRadius: '12px',
+                    border: '1px solid #2A2A2E',
+                  }}
+                  data-testid="picker-weight"
+                >
+                  {/* Selection highlight */}
+                  <div style={{
                     position: 'absolute',
-                    right: '16px',
                     top: '50%',
+                    left: 0,
+                    right: 0,
+                    height: '40px',
                     transform: 'translateY(-50%)',
-                    color: '#71717A',
-                    fontSize: '16px',
-                  }}>
-                    lbs
-                  </span>
+                    background: 'rgba(139, 92, 246, 0.2)',
+                    borderTop: '1px solid #8B5CF6',
+                    borderBottom: '1px solid #8B5CF6',
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                  }} />
+                  {/* Fade gradients */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '80px',
+                    background: 'linear-gradient(to bottom, #0A0A0B, transparent)',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: '80px',
+                    background: 'linear-gradient(to top, #0A0A0B, transparent)',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }} />
+                  {/* Scrollable list */}
+                  <div 
+                    style={{
+                      height: '100%',
+                      overflowY: 'scroll',
+                      scrollSnapType: 'y mandatory',
+                      paddingTop: '80px',
+                      paddingBottom: '80px',
+                    }}
+                    onScroll={(e) => {
+                      const container = e.currentTarget;
+                      const itemHeight = 40;
+                      const scrollTop = container.scrollTop;
+                      const selectedIndex = Math.round(scrollTop / itemHeight);
+                      if (WEIGHT_OPTIONS[selectedIndex] !== undefined) {
+                        setEditValue(String(WEIGHT_OPTIONS[selectedIndex]));
+                      }
+                    }}
+                    ref={(el) => {
+                      if (el && editValue) {
+                        const index = WEIGHT_OPTIONS.indexOf(parseInt(editValue) || 180);
+                        if (index >= 0) {
+                          el.scrollTop = index * 40;
+                        }
+                      }
+                    }}
+                  >
+                    {WEIGHT_OPTIONS.map((weight) => (
+                      <div
+                        key={weight}
+                        onClick={() => setEditValue(String(weight))}
+                        style={{
+                          height: '40px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '20px',
+                          color: editValue === String(weight) ? '#FFFFFF' : '#71717A',
+                          fontWeight: editValue === String(weight) ? 600 : 400,
+                          scrollSnapAlign: 'center',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {weight} lbs
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : editingField === 'height' ? (
-              <input
-                type="text"
-                value={editValue}
-                onChange={e => setEditValue(e.target.value)}
-                placeholder="e.g., 5'10&quot;"
-                autoFocus
-                data-testid="input-height"
-                style={{
-                  width: '100%',
-                  padding: '16px',
-                  background: '#0A0A0B',
-                  border: '1px solid #2A2A2E',
-                  borderRadius: '12px',
-                  color: '#FFFFFF',
-                  fontSize: '16px',
-                  outline: 'none',
-                }}
-              />
+              <div>
+                {/* iOS-style picker wheel for height */}
+                <div 
+                  style={{
+                    height: '200px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    background: '#0A0A0B',
+                    borderRadius: '12px',
+                    border: '1px solid #2A2A2E',
+                  }}
+                  data-testid="picker-height"
+                >
+                  {/* Selection highlight */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: 0,
+                    right: 0,
+                    height: '40px',
+                    transform: 'translateY(-50%)',
+                    background: 'rgba(139, 92, 246, 0.2)',
+                    borderTop: '1px solid #8B5CF6',
+                    borderBottom: '1px solid #8B5CF6',
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                  }} />
+                  {/* Fade gradients */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '80px',
+                    background: 'linear-gradient(to bottom, #0A0A0B, transparent)',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: '80px',
+                    background: 'linear-gradient(to top, #0A0A0B, transparent)',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }} />
+                  {/* Scrollable list */}
+                  <div 
+                    style={{
+                      height: '100%',
+                      overflowY: 'scroll',
+                      scrollSnapType: 'y mandatory',
+                      paddingTop: '80px',
+                      paddingBottom: '80px',
+                    }}
+                    onScroll={(e) => {
+                      const container = e.currentTarget;
+                      const itemHeight = 40;
+                      const scrollTop = container.scrollTop;
+                      const selectedIndex = Math.round(scrollTop / itemHeight);
+                      if (HEIGHT_OPTIONS[selectedIndex] !== undefined) {
+                        setEditValue(HEIGHT_OPTIONS[selectedIndex]);
+                      }
+                    }}
+                    ref={(el) => {
+                      if (el && editValue) {
+                        const index = HEIGHT_OPTIONS.indexOf(editValue);
+                        if (index >= 0) {
+                          el.scrollTop = index * 40;
+                        } else {
+                          // Default to 5'10"
+                          const defaultIndex = HEIGHT_OPTIONS.indexOf("5'10\"");
+                          if (defaultIndex >= 0) {
+                            el.scrollTop = defaultIndex * 40;
+                          }
+                        }
+                      }
+                    }}
+                  >
+                    {HEIGHT_OPTIONS.map((height) => (
+                      <div
+                        key={height}
+                        onClick={() => setEditValue(height)}
+                        style={{
+                          height: '40px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '20px',
+                          color: editValue === height ? '#FFFFFF' : '#71717A',
+                          fontWeight: editValue === height ? 600 : 400,
+                          scrollSnapAlign: 'center',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {height}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             ) : (
               <input
                 type="text"

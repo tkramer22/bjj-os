@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   ArrowLeft, Bell, Moon, Volume2, Vibrate, User, Award, Scale, Mail,
   CreditCard, FileText, Shield, HelpCircle, LogOut, ChevronRight,
-  ExternalLink, Loader2
+  ExternalLink, Loader2, Trash2, RotateCcw
 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
-import { clearAuth, isNativeApp } from "@/lib/capacitorAuth";
+import { clearAuth, isNativeApp, getApiUrl } from "@/lib/capacitorAuth";
 import { Browser } from '@capacitor/browser';
+import { useChatContext } from "@/contexts/ChatContext";
 
 interface UserProfile {
   id: number;
@@ -39,14 +40,54 @@ function formatDate(dateString: string | null | undefined): string {
 
 export default function IOSSettingsPage() {
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const chatContext = useChatContext();
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
   const [sound, setSound] = useState(true);
   const [haptics, setHaptics] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   
   const { data: user } = useQuery<UserProfile>({
     queryKey: ['/api/auth/me'],
+  });
+
+  const deleteChatHistory = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(getApiUrl('/api/user/chat-history'), {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to delete chat history');
+      return response.json();
+    },
+    onSuccess: () => {
+      chatContext.clearMessages();
+      queryClient.invalidateQueries({ queryKey: ['/api/chat/history'] });
+      setShowDeleteModal(false);
+      triggerHaptic('success');
+    },
+  });
+
+  const resetProfile = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(getApiUrl('/api/user/reset-profile'), {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to reset profile');
+      return response.json();
+    },
+    onSuccess: () => {
+      chatContext.clearMessages();
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/chat/history'] });
+      setShowResetModal(false);
+      triggerHaptic('success');
+      navigate('/ios-onboarding');
+    },
   });
 
   const handleBack = () => {
@@ -376,6 +417,89 @@ export default function IOSSettingsPage() {
           </div>
         </div>
 
+        {/* Data & Privacy Section */}
+        <h2 style={{ 
+          fontSize: '13px', 
+          fontWeight: 600, 
+          color: '#71717A', 
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          marginBottom: '12px',
+          paddingLeft: '8px'
+        }}>
+          Data & Privacy
+        </h2>
+        <div style={{
+          background: '#1A1A1D',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          border: '1px solid #2A2A2E',
+          marginBottom: '24px',
+        }}>
+          <button
+            onClick={() => { triggerHaptic('light'); setShowDeleteModal(true); }}
+            data-testid="button-delete-chat"
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: '1px solid #2A2A2E',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Trash2 size={20} color="#71717A" />
+                <span style={{ color: '#FFFFFF', fontSize: '15px' }}>Delete Chat History</span>
+              </div>
+              <p style={{ 
+                fontSize: '13px', 
+                color: '#71717A', 
+                margin: '4px 0 0 32px',
+                textAlign: 'left'
+              }}>
+                Removes all messages. Your profile stays intact.
+              </p>
+            </div>
+            <ChevronRight size={20} color="#71717A" />
+          </button>
+
+          <button
+            onClick={() => { triggerHaptic('light'); setShowResetModal(true); }}
+            data-testid="button-reset-profile"
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <RotateCcw size={20} color="#71717A" />
+                <span style={{ color: '#FFFFFF', fontSize: '15px' }}>Reset Professor OS Memory</span>
+              </div>
+              <p style={{ 
+                fontSize: '13px', 
+                color: '#71717A', 
+                margin: '4px 0 0 32px',
+                textAlign: 'left'
+              }}>
+                Start completely fresh. Removes conversations AND profile.
+              </p>
+            </div>
+            <ChevronRight size={20} color="#71717A" />
+          </button>
+        </div>
+
         {/* Legal Section */}
         <h2 style={{ 
           fontSize: '13px', 
@@ -501,6 +625,180 @@ export default function IOSSettingsPage() {
           BJJ OS v1.0.0
         </p>
       </div>
+
+      {/* Delete Chat History Modal */}
+      {showDeleteModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+          onClick={() => setShowDeleteModal(false)}
+          data-testid="modal-delete-overlay"
+        >
+          <div 
+            style={{
+              background: '#1A1A1D',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '320px',
+              width: '100%',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ 
+              fontSize: '18px', 
+              fontWeight: 600, 
+              marginBottom: '12px',
+              color: '#FFFFFF'
+            }}>
+              Delete Chat History?
+            </h3>
+            <p style={{ 
+              fontSize: '14px', 
+              color: '#A1A1AA', 
+              lineHeight: 1.5,
+              marginBottom: '24px'
+            }}>
+              This will permanently delete all your conversations with Professor OS. Your profile (belt rank, goals, preferences) will not be affected. This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                data-testid="button-cancel-delete"
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: '#2A2A2E',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteChatHistory.mutate()}
+                disabled={deleteChatHistory.isPending}
+                data-testid="button-confirm-delete"
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: '#DC2626',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  opacity: deleteChatHistory.isPending ? 0.5 : 1,
+                }}
+              >
+                {deleteChatHistory.isPending ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Profile Modal */}
+      {showResetModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+          onClick={() => setShowResetModal(false)}
+          data-testid="modal-reset-overlay"
+        >
+          <div 
+            style={{
+              background: '#1A1A1D',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '320px',
+              width: '100%',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ 
+              fontSize: '18px', 
+              fontWeight: 600, 
+              marginBottom: '12px',
+              color: '#FFFFFF'
+            }}>
+              Reset Everything?
+            </h3>
+            <p style={{ 
+              fontSize: '14px', 
+              color: '#A1A1AA', 
+              lineHeight: 1.5,
+              marginBottom: '24px'
+            }}>
+              This will delete ALL your data including conversations, your belt rank, goals, training preferences, and everything Professor OS has learned about you. You'll need to set up your profile again. This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowResetModal(false)}
+                data-testid="button-cancel-reset"
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: '#2A2A2E',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => resetProfile.mutate()}
+                disabled={resetProfile.isPending}
+                data-testid="button-confirm-reset"
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: '#DC2626',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  opacity: resetProfile.isPending ? 0.5 : 1,
+                }}
+              >
+                {resetProfile.isPending ? 'Resetting...' : 'Reset Everything'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

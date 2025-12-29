@@ -1,0 +1,125 @@
+Yes, absolutely! A picker wheel looks way more polished and native iOS-style. Let me search our previous notes for the exact wording on the delete options.​​​​​​​​​​​​​​​​
+
+The search returned a lot of database schema info but not the specific delete options we discussed. Let me search more specifically:​​​​​​​​​​​​​​​​
+
+Found it! Here are the exact two options we discussed:
+
+**Option 1: Delete Chat History**
+
+- Removes all messages
+- Profile stays intact (belt, goals, preferences)
+- Professor OS still knows WHO you are
+
+**Option 2: Reset Professor OS Memory**
+
+- Deletes EVERYTHING - conversations AND profile
+- Start completely fresh like a new user
+- Redirected to onboarding
+
+-----
+
+Now let me create the complete prompt with picker wheels for height/weight:
+
+```
+UI/UX FIXES - SETTINGS & PROFILE
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 1: SETTINGS - DATA & PRIVACY SECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Add "Data & Privacy" section to Settings page with TWO options:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ DATA & PRIVACY                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 🗑️ Delete Chat History                                               >     │
+│    Removes all messages. Your profile stays intact.                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 🔄 Reset Professor OS Memory                                         >     │
+│    Start completely fresh. Removes conversations AND profile.               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+DELETE CHAT HISTORY:
+- Confirmation modal: "Delete Chat History? This will permanently delete all your conversations with Professor OS. Your profile (belt rank, goals, preferences) will not be affected. This cannot be undone."
+- Buttons: [Cancel] [Delete] (Delete in red)
+- Backend: DELETE /api/user/chat-history
+- Deletes: All chat messages, conversation history
+- Keeps: User profile, saved videos, subscription
+
+RESET PROFESSOR OS MEMORY:
+- Warning modal: "Reset Everything? This will delete ALL your data including conversations, your belt rank, goals, training preferences, and everything Professor OS has learned about you. You'll need to set up your profile again. This cannot be undone."
+- Buttons: [Cancel] [Reset Everything] (Reset in red)
+- Backend: DELETE /api/user/reset-profile
+- Deletes: All messages + profile data (belt, goals, struggles, preferences)
+- Keeps: Account login, subscription status
+- After reset: Redirect to onboarding flow
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 2: PROFILE - WEIGHT PICKER WHEEL
+═══════════════════════════════════════════════════════════════════════════════
+
+When user taps Weight, show iOS-style picker wheel:
+- Range: 100 lbs to 300 lbs (or 45 kg to 135 kg)
+- Increment: 1 lb (or 1 kg)
+- Default: Current saved value or 180 lbs
+- Native iOS picker appearance
+- Save on confirm, update display immediately
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 3: PROFILE - HEIGHT PICKER WHEEL
+═══════════════════════════════════════════════════════════════════════════════
+
+When user taps Height, show iOS-style picker wheel:
+- Two columns: Feet (4-7) and Inches (0-11)
+- OR single column: 4'0" to 7'0" in 1-inch increments
+- Default: Current saved value or 5'10"
+- Native iOS picker appearance
+- Save on confirm, update display immediately
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 4: PROFILE - STYLE DROPDOWN ADD "BOTH" OPTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Style picker must have THREE options:
+- Gi
+- No-Gi
+- Both
+
+Currently missing "Both" - add it.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 5: CHAT INPUT - PLACEHOLDER TEXT
+═══════════════════════════════════════════════════════════════════════════════
+
+Change placeholder from "Ask your coach" to "Ask Professor OS..."
+Ensure it fits without overflow.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 6: CHAT INPUT - MULTILINE EXPANSION
+═══════════════════════════════════════════════════════════════════════════════
+
+Problem: When typing long messages, previous text disappears as new lines wrap.
+
+Fix:
+- Input expands vertically as user types (up to 4-5 lines max)
+- ALL typed text remains visible
+- If exceeds max height, enable scroll within input
+- Never hide previously typed text
+- User should always see what they're typing
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+
+Then push to GitHub:
+git add -A
+git commit -m "UI/UX: data privacy options, picker wheels, chat input fixes"
+git push origin main
+```
+
+-----
+
+This covers everything you mentioned. Ready to send to Replit?​​​​​​​​​​​​​​​​

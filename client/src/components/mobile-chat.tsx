@@ -520,9 +520,15 @@ What's on your mind?`,
             <textarea
               ref={textareaRef}
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => {
+                setInputValue(e.target.value);
+                // Auto-expand textarea as user types
+                const target = e.target;
+                target.style.height = 'auto';
+                target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+              }}
               onKeyPress={handleKeyPress}
-              placeholder="Ask your coach..."
+              placeholder="Ask Professor OS..."
               disabled={isTyping}
               data-testid="input-chat-message"
               style={{
@@ -535,7 +541,8 @@ What's on your mind?`,
                 outline: 'none',
                 maxHeight: '120px',
                 minHeight: '24px',
-                lineHeight: '1.4'
+                lineHeight: '1.4',
+                overflow: 'auto'
               }}
               rows={1}
             />
