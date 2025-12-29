@@ -61,7 +61,8 @@ export default function IOSSettingsPage() {
         credentials: 'include',
       });
       if (!response.ok) throw new Error('Failed to delete chat history');
-      return response.json();
+      // 204 No Content - don't try to parse JSON
+      return { success: true };
     },
     onSuccess: () => {
       chatContext.clearMessages();
@@ -78,7 +79,8 @@ export default function IOSSettingsPage() {
         credentials: 'include',
       });
       if (!response.ok) throw new Error('Failed to reset profile');
-      return response.json();
+      // 204 No Content - don't try to parse JSON
+      return { success: true };
     },
     onSuccess: () => {
       chatContext.clearMessages();

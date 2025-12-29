@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
@@ -43,6 +43,47 @@ export default function IOSProfilePage() {
   const queryClient = useQueryClient();
   const [editingField, setEditingField] = useState<EditableField>(null);
   const [editValue, setEditValue] = useState('');
+  const weightPickerRef = useRef<HTMLDivElement>(null);
+  const heightPickerRef = useRef<HTMLDivElement>(null);
+  const initialScrollSetRef = useRef<string | null>(null);
+
+  // Set initial scroll position for weight picker (only once when opened)
+  useEffect(() => {
+    if (editingField === 'weight' && weightPickerRef.current && initialScrollSetRef.current !== 'weight') {
+      const index = WEIGHT_OPTIONS.indexOf(parseInt(editValue) || 180);
+      if (index >= 0) {
+        setTimeout(() => {
+          if (weightPickerRef.current) {
+            weightPickerRef.current.scrollTop = index * 40;
+          }
+        }, 50);
+        initialScrollSetRef.current = 'weight';
+      }
+    } else if (editingField !== 'weight' && editingField !== 'height') {
+      initialScrollSetRef.current = null;
+    }
+  }, [editingField]);
+
+  // Set initial scroll position for height picker (only once when opened)
+  useEffect(() => {
+    if (editingField === 'height' && heightPickerRef.current && initialScrollSetRef.current !== 'height') {
+      let index = HEIGHT_OPTIONS.indexOf(editValue);
+      if (index < 0) {
+        // Default to 5'10"
+        index = HEIGHT_OPTIONS.indexOf("5'10\"");
+      }
+      if (index >= 0) {
+        setTimeout(() => {
+          if (heightPickerRef.current) {
+            heightPickerRef.current.scrollTop = index * 40;
+          }
+        }, 50);
+        initialScrollSetRef.current = 'height';
+      }
+    } else if (editingField !== 'weight' && editingField !== 'height') {
+      initialScrollSetRef.current = null;
+    }
+  }, [editingField]);
 
   const { data: user, isLoading } = useQuery<UserProfile>({
     queryKey: ["/api/auth/me"],
@@ -462,6 +503,7 @@ export default function IOSProfilePage() {
                   }} />
                   {/* Scrollable list */}
                   <div 
+                    ref={weightPickerRef}
                     style={{
                       height: '100%',
                       overflowY: 'scroll',
@@ -475,14 +517,10 @@ export default function IOSProfilePage() {
                       const scrollTop = container.scrollTop;
                       const selectedIndex = Math.round(scrollTop / itemHeight);
                       if (WEIGHT_OPTIONS[selectedIndex] !== undefined) {
-                        setEditValue(String(WEIGHT_OPTIONS[selectedIndex]));
-                      }
-                    }}
-                    ref={(el) => {
-                      if (el && editValue) {
-                        const index = WEIGHT_OPTIONS.indexOf(parseInt(editValue) || 180);
-                        if (index >= 0) {
-                          el.scrollTop = index * 40;
+                        const newValue = String(WEIGHT_OPTIONS[selectedIndex]);
+                        // Only update if value actually changed to prevent re-scroll
+                        if (newValue !== editValue) {
+                          setEditValue(newValue);
                         }
                       }
                     }}
@@ -560,6 +598,7 @@ export default function IOSProfilePage() {
                   }} />
                   {/* Scrollable list */}
                   <div 
+                    ref={heightPickerRef}
                     style={{
                       height: '100%',
                       overflowY: 'scroll',
@@ -573,20 +612,10 @@ export default function IOSProfilePage() {
                       const scrollTop = container.scrollTop;
                       const selectedIndex = Math.round(scrollTop / itemHeight);
                       if (HEIGHT_OPTIONS[selectedIndex] !== undefined) {
-                        setEditValue(HEIGHT_OPTIONS[selectedIndex]);
-                      }
-                    }}
-                    ref={(el) => {
-                      if (el && editValue) {
-                        const index = HEIGHT_OPTIONS.indexOf(editValue);
-                        if (index >= 0) {
-                          el.scrollTop = index * 40;
-                        } else {
-                          // Default to 5'10"
-                          const defaultIndex = HEIGHT_OPTIONS.indexOf("5'10\"");
-                          if (defaultIndex >= 0) {
-                            el.scrollTop = defaultIndex * 40;
-                          }
+                        const newValue = HEIGHT_OPTIONS[selectedIndex];
+                        // Only update if value actually changed to prevent re-scroll
+                        if (newValue !== editValue) {
+                          setEditValue(newValue);
                         }
                       }
                     }}
