@@ -4,14 +4,26 @@ import { IOSBottomNav } from "@/components/ios-bottom-nav";
 import { MessageCircle, BookOpen, Trophy, Flame, TrendingUp } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 
+interface UserData {
+  displayName?: string;
+  beltLevel?: string;
+}
+
+interface StatsData {
+  messagesCount?: number;
+  savedVideos?: number;
+  streak?: number;
+  progressPercent?: number;
+}
+
 export default function IOSHomePage() {
   const [, navigate] = useLocation();
 
-  const { data: user } = useQuery({
+  const { data: user } = useQuery<UserData>({
     queryKey: ["/api/auth/me"],
   });
 
-  const { data: stats } = useQuery({
+  const { data: stats } = useQuery<StatsData>({
     queryKey: ["/api/user/stats"],
     enabled: !!user,
   });
