@@ -1,0 +1,96 @@
+Looking at the diagnostic output, I can see exactly what’s happening:
+
+**In handleSend (when user sends message):**
+
+```
+>>> ADDING TO CONTEXT (user message)
+>>> ADDING TO LOCAL STATE (user message)
+>>> ADDING TO LOCAL STATE (assistant placeholder)
+```
+
+**The problem is clear:** When you send a message, it’s being added to BOTH:
+
+1. Context
+1. Local state
+
+Then the sync effect sees the context update and tries to sync it to local state AGAIN.
+
+**Why tab switch fixes it:**
+
+- Component unmounts
+- Remounts and loads ONLY from context (single source)
+- No double-add during fresh mount
+
+-----
+
+**THE FIX:**
+
+The handleSend function should NOT add to local state directly. It should ONLY add to context, and let the sync effect handle updating local state.
+
+OR - remove the sync effect entirely and only use local state.
+
+**You can’t have both adding messages.**
+
+-----
+
+```
+DOUBLE MESSAGE FIX - FOUND THE ROOT CAUSE
+
+The diagnostic shows the problem clearly:
+
+handleSend does:
+>>> ADDING TO CONTEXT (user message)
+>>> ADDING TO LOCAL STATE (user message)
+
+Then sync effect sees context change and adds to local state AGAIN = DUPLICATE
+
+THE FIX - CHOOSE ONE SOURCE:
+
+OPTION 1 (Recommended): Remove local state add from handleSend
+
+In handleSend, REMOVE these lines:
+- setMessages(prev => [...prev, userMessage])
+- setMessages(prev => [...prev, assistantPlaceholder])
+
+ONLY do:
+- addMessageToContext(userMessage)
+- Stream response and update context
+
+Let the sync effect be the ONLY thing that updates local state from context.
+
+OPTION 2: Remove sync effect entirely
+
+If handleSend manages local state directly, then REMOVE the useEffect that syncs context to local.
+
+Don't have BOTH adding to local state.
+
+THE CODE CHANGE:
+
+In mobile-chat.tsx handleSend function, find and REMOVE:
+```javascript
+// REMOVE THIS - it causes duplicate
+setMessages(prev => [...prev, { id: tempId, content, role: 'user' }]);
+```
+
+Keep ONLY:
+
+```javascript
+// KEEP THIS - add to context only
+addMessage({ content, role: 'user' });
+```
+
+The sync effect will then pick up the context change and update local state ONCE.
+
+After this change, the flow will be:
+
+1. User sends → adds to context
+1. Sync effect sees context change → adds to local state (ONCE)
+1. No duplicate
+
+Make this change and test immediately.
+
+```
+---
+
+This is the exact fix. The diagnostic proved that handleSend adds to BOTH context AND local state, then the sync effect adds from context to local AGAIN. Send this to Replit.​​​​​​​​​​​​​​​​
+```

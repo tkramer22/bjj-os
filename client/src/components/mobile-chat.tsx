@@ -556,24 +556,15 @@ What would you like to work on today?`,
     };
     console.log('Created user message with ID:', userMessage.id);
 
-    // CRITICAL PERSISTENCE: Sync user message to context FIRST (before any React state)
-    // This ensures the message is persisted even if React abandons the render or app is killed
+    // FIX: Only update LOCAL state during handleSend
+    // Context is updated ONLY in the finally block via syncToContext
+    // This prevents the duplicate: handleSend adds to context → sync effect adds to local AGAIN
     const messagesWithUser = [...localMessagesRef.current, userMessage];
     console.log('messagesWithUser count:', messagesWithUser.length);
     console.log('messagesWithUser IDs:', messagesWithUser.map(m => m.id));
     
-    if (isNativeApp()) {
-      // Persist directly to chatContext BEFORE any state updates
-      console.log('>>> ADDING TO CONTEXT (user message)');
-      chatContext.setMessages(messagesWithUser.map(m => ({
-        id: m.id,
-        role: m.sender === 'user' ? 'user' : 'assistant' as const,
-        content: m.message,
-        timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : new Date(m.timestamp || Date.now()).toISOString()
-      })));
-    }
-    // Then update local state (ref and React state)
-    console.log('>>> ADDING TO LOCAL STATE (user message)');
+    // Only update local state (ref and React state) - NO context update here
+    console.log('>>> ADDING TO LOCAL STATE ONLY (user message)');
     setLocalMessages(messagesWithUser);
     setInputValue("");
     setIsTyping(true);
