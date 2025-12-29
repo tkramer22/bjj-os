@@ -96,7 +96,7 @@ export async function buildSystemPrompt(userId: string, struggleAreaBoost?: stri
   }).join('\n');
 
   // 4B. FETCH VERIFIED CREDENTIALS FOR INSTRUCTORS IN VIDEO LIBRARY
-  const uniqueInstructors = [...new Set(videoLibrary.map(v => v.instructorName).filter(Boolean))] as string[];
+  const uniqueInstructors = Array.from(new Set(videoLibrary.map(v => v.instructorName).filter(Boolean))) as string[];
   const credentialsData = await getCredentialsForInstructors(uniqueInstructors);
   const credentialsSection = buildCredentialsSection(credentialsData);
 
