@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bjj-os-v1';
+const CACHE_NAME = 'bjj-os-v3';
 const urlsToCache = [
   '/',
   '/app',
