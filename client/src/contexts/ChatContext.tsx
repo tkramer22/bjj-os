@@ -24,7 +24,6 @@ function deduplicateMessages(messages: Message[]): Message[] {
   const seen = new Set<string>();
   return messages.filter(m => {
     if (seen.has(m.id)) {
-      console.log('[ChatContext] Filtered duplicate message:', m.id);
       return false;
     }
     seen.add(m.id);
@@ -48,7 +47,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setMessagesInternal(prev => {
       // Check for duplicate before adding
       if (prev.some(m => m.id === message.id)) {
-        console.log('[ChatContext] Skipped duplicate addMessage:', message.id);
         return prev;
       }
       return [...prev, message];

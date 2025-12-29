@@ -10,8 +10,6 @@ import { triggerHaptic } from "@/lib/haptics";
 import { getApiUrl, isNativeApp } from "@/lib/capacitorAuth";
 import { useChatContext } from "@/contexts/ChatContext";
 
-console.log('⚠️ mobile-chat.tsx LOADED - CONTEXT ONLY VERSION');
-
 interface Message {
   id: string;
   sender: "user" | "assistant";
@@ -272,13 +270,11 @@ What's on your mind?`,
   const handleSend = async (text = inputValue) => {
     const messageText = String(text || "").trim();
     if (!messageText || isTyping) return;
-
-    console.log('=== HANDLE SEND (CONTEXT ONLY) ===');
     
     setShouldAutoScroll(true);
     triggerHaptic('light');
 
-    // Create user message and add ONLY to context
+    // Create user message and add to context
     const userMessageId = Date.now().toString();
     chatContext.addMessage({
       id: userMessageId,
@@ -286,7 +282,6 @@ What's on your mind?`,
       content: messageText,
       timestamp: new Date().toISOString()
     });
-    console.log('Added user message to context:', userMessageId);
 
     setInputValue("");
     setIsTyping(true);
