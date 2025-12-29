@@ -1,4 +1,4 @@
-import { getApiUrl } from '@/lib/capacitorAuth';
+import { getApiUrl, getAuthToken } from '@/lib/capacitorAuth';
 
 // Get session token from localStorage (fallback for iOS WKWebView cookie issues)
 function getAuthHeaders() {
@@ -10,12 +10,23 @@ function getAuthHeaders() {
   return headers;
 }
 
+// Async version that also checks Capacitor Preferences for native apps
+async function getAuthHeadersAsync() {
+  const sessionToken = await getAuthToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (sessionToken) {
+    headers['Authorization'] = `Bearer ${sessionToken}`;
+  }
+  return headers;
+}
+
 // Chat with AI Coach
 export async function sendChatMessage(userId, message) {
   try {
+    const headers = await getAuthHeadersAsync();
     const response = await fetch(getApiUrl('/api/ai/chat/message'), {
       method: 'POST',
-      headers: getAuthHeaders(),
+      headers,
       credentials: 'include',
       body: JSON.stringify({ userId, message })
     });
@@ -37,8 +48,10 @@ export async function getChatHistory(userId, limit = 20, beforeTimestamp = null)
       url += `&before=${encodeURIComponent(beforeTimestamp)}`;
     }
     console.log('[API] getChatHistory URL:', url, 'before:', beforeTimestamp || 'none');
+    // Use async auth headers for native app support
+    const headers = await getAuthHeadersAsync();
     const response = await fetch(url, {
-      headers: getAuthHeaders(),
+      headers,
       credentials: 'include'
     });
     if (!response.ok) throw new Error('Failed to get history');

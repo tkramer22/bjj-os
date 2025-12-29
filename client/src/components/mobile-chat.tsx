@@ -7,7 +7,7 @@ import { MobileVoiceRecorder } from "./mobile-voice-recorder";
 import { getChatHistory } from "@/services/api";
 import { formatDateDivider, shouldShowDateDivider } from "@/lib/timestamps";
 import { triggerHaptic } from "@/lib/haptics";
-import { getApiUrl, isNativeApp } from "@/lib/capacitorAuth";
+import { getApiUrl, isNativeApp, getAuthToken } from "@/lib/capacitorAuth";
 import { useChatContext } from "@/contexts/ChatContext";
 
 interface Message {
@@ -300,9 +300,16 @@ What's on your mind?`,
     try {
       const streamUrl = getApiUrl('/api/ai/chat/claude/stream');
       
+      // Get auth token for native app auth (cookies don't work reliably on iOS)
+      const authToken = await getAuthToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+      
       const response = await fetch(streamUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         credentials: 'include',
         body: JSON.stringify({ message: messageText, userId }),
       });
