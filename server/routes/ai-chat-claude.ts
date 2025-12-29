@@ -681,75 +681,41 @@ export async function handleClaudeStream(req: any, res: any) {
             }
           }
           
-          // Stream new characters from mainResponse value
+          // ⚠️ DISABLED: Real-time character streaming was causing DUPLICATE MESSAGES
+          // The composed response is sent AFTER Claude finishes (with video token enrichment)
+          // Keeping the parsing logic to track state, but NOT sending to client here
           if (parserState === 'in_value' || parserState === 'unicode') {
             for (let i = lastStreamedIdx; i < accumulatedJson.length; i++) {
               const char = accumulatedJson[i];
               
               if (parserState === 'unicode') {
-                // Accumulating hex digits for \uXXXX
                 unicodeBuffer += char;
                 if (unicodeBuffer.length === 4) {
-                  // Parse the hex code and convert to character
-                  const codePoint = parseInt(unicodeBuffer, 16);
-                  const decoded = String.fromCharCode(codePoint);
                   unicodeBuffer = '';
                   parserState = 'in_value';
-                  
-                  // Send decoded Unicode character
-                  if (!firstTextSentTime) {
-                    firstTextSentTime = Date.now();
-                    console.log(`🚀 First text sent to client in ${firstTextSentTime - t6}ms`);
-                  }
-                  res.write(`data: ${JSON.stringify({ type: 'text', content: decoded })}\n\n`);
+                  // DISABLED: res.write - caused duplicate messages
                 }
                 lastStreamedIdx = i + 1;
                 continue;
               }
               
-              // parserState === 'in_value'
               if (escapeNext) {
                 escapeNext = false;
-                // Decode escape sequence
                 if (char === 'u') {
-                  // Start Unicode escape sequence
                   unicodeBuffer = '';
                   parserState = 'unicode';
                   lastStreamedIdx = i + 1;
                   continue;
                 }
-                
-                let decoded = '';
-                if (char === 'n') decoded = '\n';
-                else if (char === 't') decoded = '\t';
-                else if (char === 'r') decoded = '\r';
-                else if (char === '"') decoded = '"';
-                else if (char === '\\') decoded = '\\';
-                else if (char === 'b') decoded = '\b';
-                else if (char === 'f') decoded = '\f';
-                else decoded = char;
-                
-                // Send decoded character immediately
-                if (!firstTextSentTime) {
-                  firstTextSentTime = Date.now();
-                  console.log(`🚀 First text sent to client in ${firstTextSentTime - t6}ms`);
-                }
-                res.write(`data: ${JSON.stringify({ type: 'text', content: decoded })}\n\n`);
+                // DISABLED: res.write - caused duplicate messages
               } else if (char === '\\') {
                 escapeNext = true;
               } else if (char === '"') {
-                // End of string
                 parserState = 'done';
                 lastStreamedIdx = i + 1;
                 break;
-              } else {
-                // Regular character - send immediately
-                if (!firstTextSentTime) {
-                  firstTextSentTime = Date.now();
-                  console.log(`🚀 First text sent to client in ${firstTextSentTime - t6}ms`);
-                }
-                res.write(`data: ${JSON.stringify({ type: 'text', content: char })}\n\n`);
               }
+              // DISABLED: res.write for regular chars - caused duplicate messages
               
               lastStreamedIdx = i + 1;
             }
@@ -1026,17 +992,19 @@ export async function handleClaudeStream(req: any, res: any) {
       console.log(`[VIDEO TOKEN] ✅ Replaced ${replacements.length} video token(s) with full metadata`);
     }
     
-    // 🚀 FAST STREAMING: Send response in larger chunks with no artificial delays
+    // 🚀 FAST STREAMING: Send composed response with video token enrichment
+    // This is the ONLY streaming we should do - real-time streaming was disabled above
     const fullResponse = naturalResponse;
     const chunkSize = 50; // Larger chunks for faster delivery
+    
+    console.log('[STREAMING] Sending composed response with video tokens...');
     
     for (let i = 0; i < fullResponse.length; i += chunkSize) {
       const chunk = fullResponse.substring(i, i + chunkSize);
       res.write(`data: ${JSON.stringify({ chunk: chunk })}\n\n`);
-      // No artificial delay - send as fast as network allows
     }
     
-    console.log('✅ Fast stream complete. Response length:', fullResponse.length);
+    console.log('✅ Stream complete. Response length:', fullResponse.length);
     
     // Save to database (transactional - both user and AI messages)
     try {
