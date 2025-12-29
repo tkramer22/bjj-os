@@ -236,13 +236,19 @@ export default function App() {
             {/* Theme Settings */}
             <Route path="/theme-settings" component={ThemeSettings} />
             
-            {/* Mobile PWA Routes */}
+            {/* Mobile PWA Routes - NOT for native iOS app (uses /ios-* routes instead) */}
             <Route path="/mobile-onboarding" component={MobileOnboardingPage} />
             <Route path="/app">
-              {isAuthenticated ? <MobileCoachPage /> : <MobileOnboardingPage />}
+              {() => {
+                if (isNativeApp()) return null; // Native uses /ios-chat instead
+                return isAuthenticated ? <MobileCoachPage /> : <MobileOnboardingPage />;
+              }}
             </Route>
             <Route path="/app/chat">
-              {isAuthenticated ? <MobileCoachPage /> : <MobileOnboardingPage />}
+              {() => {
+                if (isNativeApp()) return null; // Native uses /ios-chat instead
+                return isAuthenticated ? <MobileCoachPage /> : <MobileOnboardingPage />;
+              }}
             </Route>
             <Route path="/app/saved">
               {isAuthenticated ? <MobileSavedPage /> : <MobileOnboardingPage />}

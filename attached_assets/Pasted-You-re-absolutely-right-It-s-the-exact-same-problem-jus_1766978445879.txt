@@ -1,0 +1,67 @@
+You’re absolutely right. It’s the **exact same problem** - just manifesting differently.
+
+**The pattern is consistent:**
+
+- Send message → content appears TWICE
+- Switch tabs and return → only ONE copy remains
+
+This means the frontend is STILL rendering duplicates during the active session, and when it remounts (tab switch), it loads the correct single copy from the database/context.
+
+**The backend fix didn’t solve it because the problem is STILL in the frontend.**
+
+-----
+
+Let me think about this differently. What if there are TWO chat components mounted at the same time? Or the component is subscribed to the stream TWICE?
+
+-----
+
+```
+DOUBLE MESSAGE - THE FRONTEND IS STILL THE PROBLEM
+
+The backend fix did NOT solve it. The pattern is still:
+- Send message → appears TWICE
+- Switch tabs → return → only ONE
+
+This proves the duplicate is in the FRONTEND render, not the database.
+
+NUCLEAR OPTION - Find ALL places messages are rendered:
+
+1. Search the entire codebase for:
+   - messages.map
+   - .map(message
+   - .map(msg
+   - MessageBubble
+   - ChatMessage
+
+2. Check if there are TWO components rendering the same messages:
+   - Is MobileChat rendered inside ios-chat AND somewhere else?
+   - Is there a ChatMessages component AND a separate map?
+
+3. Check for duplicate subscriptions:
+   - Is the streaming EventSource being created twice?
+   - Is there a useEffect subscribing to messages that runs twice?
+
+4. Check React DevTools equivalent:
+   - Add to mobile-chat.tsx render:
+   console.log('=== RENDER ===', 'Message count:', messages.length, 'IDs:', messages.map(m => m.id));
+
+5. The DEFINITIVE test:
+   In the component that renders messages, add:
+   ```javascript
+   {messages.map((msg, index) => {
+     console.log('Rendering message:', index, msg.id, msg.content.substring(0, 30));
+     return <MessageBubble key={msg.id} ... />
+   })}
+```
+
+If you see the same message ID logged twice, there’s a duplicate in the array.
+If you see different IDs with same content, messages are being added twice.
+If you see each ID once but UI shows twice, the component is mounted twice.
+
+Find the exact source and show me the logs.
+
+```
+---
+
+We need to find exactly WHERE the duplicate render is happening. Send this to Replit.​​​​​​​​​​​​​​​​
+```
