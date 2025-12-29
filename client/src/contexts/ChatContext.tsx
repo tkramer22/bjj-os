@@ -39,16 +39,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   // Wrap setMessages to always deduplicate
   const setMessages: React.Dispatch<React.SetStateAction<Message[]>> = useCallback((action) => {
     setMessagesInternal(prev => {
-      console.log('=== CHAT CONTEXT setMessages ===');
-      console.log('Previous message count:', prev.length);
-      console.log('Previous message IDs:', prev.map(m => m.id));
       const newMessages = typeof action === 'function' ? action(prev) : action;
-      console.log('New message count (before dedup):', newMessages.length);
-      console.log('New message IDs (before dedup):', newMessages.map(m => m.id));
-      const dedupedMessages = deduplicateMessages(newMessages);
-      console.log('Final message count (after dedup):', dedupedMessages.length);
-      console.log('Final message IDs (after dedup):', dedupedMessages.map(m => m.id));
-      return dedupedMessages;
+      return deduplicateMessages(newMessages);
     });
   }, []);
 
