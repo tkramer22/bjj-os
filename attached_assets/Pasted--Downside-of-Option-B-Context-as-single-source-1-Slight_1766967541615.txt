@@ -1,0 +1,158 @@
+**Downside of Option B (Context as single source):**
+
+1. **Slight perceived delay** - Message won’t appear instantly on send. User has to wait for the round-trip to context before seeing their own message. Could feel “laggy” compared to optimistic UI.
+1. **If stream fails** - User won’t see their message at all until it’s confirmed. With optimistic add, they at least see what they typed.
+1. **Dependent on context reliability** - If ChatContext has any bugs or delays, the UI feels broken.
+
+**However** - these downsides are minimal because:
+
+- The stream is fast (usually <500ms to start)
+- We already show “thinking” indicators
+- It’s better than showing duplicates
+
+-----
+
+**Alternative: Option C might be safer**
+
+Keep optimistic add BUT prevent the sync from adding duplicates:
+
+```typescript
+// On send - add with tempId
+const tempId = `temp-${Date.now()}`;
+setMessages(prev => [...prev, { id: tempId, content: userMessage, role: 'user' }]);
+
+// In sync useEffect - check if message already exists by content
+useEffect(() => {
+  const newMessages = contextMessages.filter(cm => 
+    !messages.some(m => m.content === cm.content && m.role === cm.role)
+  );
+  if (newMessages.length > 0) {
+    setMessages(contextMessages); // Replace with authoritative context
+  }
+}, [contextMessages]);
+```
+
+This gives instant feedback AND prevents duplicates.
+
+-----
+
+**Master Prompt:**
+
+```
+TWO FINAL FIXES
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 1: DOUBLE MESSAGE - ROOT CAUSE FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+The duplicate happens because:
+1. User sends → message added to LOCAL state (optimistic)
+2. Stream/API confirms → message added to CONTEXT
+3. useEffect syncs context → local = DUPLICATE
+
+When user switches tabs and returns, component remounts and loads only from 
+context = single message. This proves the duplicate is in local state.
+
+FIX - Choose ONE of these approaches:
+
+OPTION A - Context as single source (cleanest):
+Remove local messages state. Render directly from context.
+```typescript
+// Remove: const [messages, setMessages] = useState([]);
+// Remove: useEffect that syncs context to local
+// Use: const { messages } = useChatContext();
+// Render: messages.map(...)
+```
+
+OPTION B - Smart deduplication (keeps optimistic UI):
+When syncing context to local, replace entirely instead of merging:
+
+```typescript
+useEffect(() => {
+  // Don't merge - just use context as truth once it updates
+  if (contextMessages.length > 0) {
+    setMessages(contextMessages);
+  }
+}, [contextMessages]);
+
+// When sending, add temp message but let context overwrite
+const sendMessage = async (content) => {
+  const tempId = `temp-${Date.now()}`;
+  setMessages(prev => [...prev, { id: tempId, content, role: 'user' }]);
+  // API call... context will update and overwrite via useEffect
+};
+```
+
+Pick the approach that works best. Show me the exact code changes.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 2: PROFILE PAGE - EDITABLE USER IDENTITY
+═══════════════════════════════════════════════════════════════════════════════
+
+The Profile page should be about the USER’s BJJ identity - editable and personal.
+
+STRUCTURE:
+
+┌─────────────────────────────────────────────┐
+│  Profile                                    │
+├─────────────────────────────────────────────┤
+│  👤 [Profile Icon]                          │
+│                                             │
+│  Name                                       │
+│  [Todd Kramer] or [Tap to set]          >   │
+│                                             │
+│  Belt                                       │
+│  [Blue]                                  >   │
+│                                             │
+│  Weight                                     │
+│  [180 lbs]                               >   │
+│                                             │
+│  Height                                     │
+│  [5’10”] or [Tap to set]                 >   │
+│                                             │
+│  Style                                      │
+│  [Both]                                  >   │
+├─────────────────────────────────────────────┤
+│  ⚙️ App Settings                         >   │
+└─────────────────────────────────────────────┘
+
+BEHAVIOR:
+
+- Tapping any field opens edit modal or inline editor
+- Changes save to database via PUT /api/user/profile
+- Display updates immediately after save
+
+REMOVE:
+
+- “BJJ Practitioner” - show actual name or “Tap to set”
+- Email from main card (can be in App Settings)
+- Any non-essential clutter
+
+KEEP IN APP SETTINGS (separate page):
+
+- Email (read-only)
+- Subscription management
+- Push Notifications toggle
+- Dark Mode toggle
+- Sound Effects toggle
+- Haptic Feedback toggle
+- Terms of Service
+- Privacy Policy
+- Help & Support
+- Log Out
+
+The Profile is about WHO YOU ARE as a practitioner.
+App Settings is about how the APP behaves.
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+
+```
+---
+
+This gives Replit two clear options for the message fix and a complete spec for the Profile page. Ready to send?​​​​​​​​​​​​​​​​
+```

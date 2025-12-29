@@ -239,24 +239,25 @@ export function MobileChat() {
     };
   }, [messages.length]);
 
-  // ONE-TIME sync from context to local when history first loads on native
-  // This prevents flash when switching from local to context source
-  // CRITICAL: Use a ref to ensure this only happens ONCE per component lifecycle
-  const hasSyncedFromContext = useRef(false);
+  // OPTION B: Smart deduplication - Context is truth, replace local entirely when context updates
+  // This prevents duplicates: local has optimistic add, context confirms, we replace local with context
+  // The key insight: Don't MERGE - just REPLACE local with context once context updates
   useEffect(() => {
-    if (isNativeApp() && chatContext.historyLoaded && chatContext.messages.length > 0 && !hasSyncedFromContext.current) {
-      // Mark as synced BEFORE updating to prevent any race conditions
-      hasSyncedFromContext.current = true;
-      console.log('[MOBILE-CHAT] ONE-TIME sync from context:', chatContext.messages.length, 'messages');
-      setLocalMessages(chatContext.messages.map(m => ({
-        id: m.id,
-        sender: (m.role === 'user' ? 'user' : 'assistant') as "user" | "assistant",
-        message: m.content,
-        timestamp: new Date(m.timestamp),
-        videos: []
-      })));
-    }
-  }, [chatContext.historyLoaded, chatContext.messages.length]);
+    if (!isNativeApp()) return;
+    if (!chatContext.historyLoaded) return;
+    if (isStreaming.current) return; // Don't overwrite during streaming
+    
+    // When context updates (and we're not streaming), replace local entirely
+    // CRITICAL: Also sync empty arrays (for logout/reset scenarios)
+    console.log('[MOBILE-CHAT] Context → Local sync (replacing):', chatContext.messages.length, 'messages');
+    setLocalMessages(chatContext.messages.map(m => ({
+      id: m.id,
+      sender: (m.role === 'user' ? 'user' : 'assistant') as "user" | "assistant",
+      message: m.content,
+      timestamp: new Date(m.timestamp),
+      videos: []
+    })));
+  }, [chatContext.messages, chatContext.historyLoaded]);
 
   // Load chat history when we have a valid authenticated user ID
   // Re-load if the authenticated user changes (e.g., after auth restoration)

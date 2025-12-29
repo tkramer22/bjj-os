@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { 
-  ArrowLeft, Bell, Moon, Volume2, Vibrate, User, Award, Scale, 
+  ArrowLeft, Bell, Moon, Volume2, Vibrate, User, Award, Scale, Mail,
   CreditCard, FileText, Shield, HelpCircle, LogOut, ChevronRight,
   ExternalLink, Loader2
 } from "lucide-react";
@@ -246,7 +246,7 @@ export default function IOSSettingsPage() {
           </button>
         </div>
 
-        {/* Profile Info Section */}
+        {/* Account Section - Email (read-only) */}
         {user && (
           <>
             <h2 style={{ 
@@ -258,7 +258,7 @@ export default function IOSSettingsPage() {
               marginBottom: '12px',
               paddingLeft: '8px'
             }}>
-              Profile
+              Account
             </h2>
             <div style={{
               background: '#1A1A1D',
@@ -272,61 +272,13 @@ export default function IOSSettingsPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                borderBottom: '1px solid #2A2A2E',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <User size={18} color="#71717A" />
-                  <span style={{ fontSize: '15px', color: '#71717A' }}>Name</span>
+                  <Mail size={18} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Email</span>
                 </div>
-                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-name">
-                  {user.name || user.username || 'Not set'}
-                </span>
-              </div>
-
-              <div style={{
-                padding: '14px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                borderBottom: '1px solid #2A2A2E',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Award size={18} color="#71717A" />
-                  <span style={{ fontSize: '15px', color: '#71717A' }}>Belt</span>
-                </div>
-                <span style={{ fontSize: '15px', color: '#8B5CF6', textTransform: 'capitalize' }} data-testid="text-user-belt">
-                  {user.beltLevel || 'Not set'}
-                </span>
-              </div>
-
-              <div style={{
-                padding: '14px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                borderBottom: '1px solid #2A2A2E',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Scale size={18} color="#71717A" />
-                  <span style={{ fontSize: '15px', color: '#71717A' }}>Weight</span>
-                </div>
-                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-weight">
-                  {user.weight ? `${user.weight} lbs` : 'Not set'}
-                </span>
-              </div>
-
-              <div style={{
-                padding: '14px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <User size={18} color="#71717A" />
-                  <span style={{ fontSize: '15px', color: '#71717A' }}>Style</span>
-                </div>
-                <span style={{ fontSize: '15px', color: '#FFFFFF', textTransform: 'capitalize' }} data-testid="text-user-style">
-                  {user.style || 'Not set'}
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-user-email">
+                  {user.email || 'Not set'}
                 </span>
               </div>
             </div>
