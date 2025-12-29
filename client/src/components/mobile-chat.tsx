@@ -105,9 +105,17 @@ export function MobileChat() {
   // Separate function to sync local messages to context - called ONLY after streaming completes
   // This prevents the race condition where both local and context updates cause double rendering
   const syncToContext = useCallback((messagesToSync: Message[]) => {
-    if (!isNativeApp()) return;
+    console.log('=== SYNC TO CONTEXT ===');
+    console.log('isNativeApp:', isNativeApp());
+    console.log('Messages to sync count:', messagesToSync.length);
+    console.log('Messages to sync IDs:', messagesToSync.map(m => m.id));
     
-    console.log('[MOBILE-CHAT] Syncing to context:', messagesToSync.length, 'messages');
+    if (!isNativeApp()) {
+      console.log('>>> SKIPPED: not native app');
+      return;
+    }
+    
+    console.log('>>> EXECUTING: Setting context messages');
     chatContext.setMessages(messagesToSync.map(m => {
       // Safely handle timestamp: Date object, string, or undefined
       let timestampStr: string;
@@ -243,13 +251,31 @@ export function MobileChat() {
   // This prevents duplicates: local has optimistic add, context confirms, we replace local with context
   // The key insight: Don't MERGE - just REPLACE local with context once context updates
   useEffect(() => {
-    if (!isNativeApp()) return;
-    if (!chatContext.historyLoaded) return;
-    if (isStreaming.current) return; // Don't overwrite during streaming
+    console.log('=== SYNC EFFECT TRIGGERED ===');
+    console.log('isNativeApp:', isNativeApp());
+    console.log('historyLoaded:', chatContext.historyLoaded);
+    console.log('isStreaming.current:', isStreaming.current);
+    console.log('Context message count:', chatContext.messages.length);
+    console.log('Context message IDs:', chatContext.messages.map(m => m.id));
+    console.log('Local message count:', localMessagesRef.current.length);
+    console.log('Local message IDs:', localMessagesRef.current.map(m => m.id));
+    
+    if (!isNativeApp()) {
+      console.log('>>> SKIPPED: not native app');
+      return;
+    }
+    if (!chatContext.historyLoaded) {
+      console.log('>>> SKIPPED: history not loaded');
+      return;
+    }
+    if (isStreaming.current) {
+      console.log('>>> SKIPPED: currently streaming');
+      return; // Don't overwrite during streaming
+    }
     
     // When context updates (and we're not streaming), replace local entirely
     // CRITICAL: Also sync empty arrays (for logout/reset scenarios)
-    console.log('[MOBILE-CHAT] Context → Local sync (replacing):', chatContext.messages.length, 'messages');
+    console.log('>>> EXECUTING: Replacing local with context');
     setLocalMessages(chatContext.messages.map(m => ({
       id: m.id,
       sender: (m.role === 'user' ? 'user' : 'assistant') as "user" | "assistant",
@@ -509,8 +535,13 @@ What would you like to work on today?`,
     const messageText = String(text || "").trim();
     if (!messageText || isTyping) return;
 
+    console.log('=== HANDLE SEND START ===');
+    console.log('Current local message count:', localMessagesRef.current.length);
+    console.log('Current local message IDs:', localMessagesRef.current.map(m => m.id));
+
     // Mark streaming as started to use localMessages during the stream
     isStreaming.current = true;
+    console.log('isStreaming.current set to:', isStreaming.current);
     
     // Re-enable auto-scroll when sending new messages
     setShouldAutoScroll(true);
@@ -523,12 +554,17 @@ What would you like to work on today?`,
       timestamp: new Date(),
       videos: []
     };
+    console.log('Created user message with ID:', userMessage.id);
 
     // CRITICAL PERSISTENCE: Sync user message to context FIRST (before any React state)
     // This ensures the message is persisted even if React abandons the render or app is killed
     const messagesWithUser = [...localMessagesRef.current, userMessage];
+    console.log('messagesWithUser count:', messagesWithUser.length);
+    console.log('messagesWithUser IDs:', messagesWithUser.map(m => m.id));
+    
     if (isNativeApp()) {
       // Persist directly to chatContext BEFORE any state updates
+      console.log('>>> ADDING TO CONTEXT (user message)');
       chatContext.setMessages(messagesWithUser.map(m => ({
         id: m.id,
         role: m.sender === 'user' ? 'user' : 'assistant' as const,
@@ -537,6 +573,7 @@ What would you like to work on today?`,
       })));
     }
     // Then update local state (ref and React state)
+    console.log('>>> ADDING TO LOCAL STATE (user message)');
     setLocalMessages(messagesWithUser);
     setInputValue("");
     setIsTyping(true);
@@ -551,7 +588,9 @@ What would you like to work on today?`,
       timestamp: new Date(),
       videos: []
     };
+    console.log('Created assistant placeholder with ID:', assistantMessageId);
     // Add placeholder - don't sync to context yet (it will be synced when streaming completes)
+    console.log('>>> ADDING TO LOCAL STATE (assistant placeholder)');
     setLocalMessages(prev => [...prev, assistantMessage]);
 
     try {
@@ -699,13 +738,18 @@ What would you like to work on today?`,
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
+      console.log('=== HANDLE SEND FINALLY ===');
+      console.log('Local messages at finally:', localMessagesRef.current.length);
+      console.log('Local message IDs at finally:', localMessagesRef.current.map(m => m.id));
       // ALWAYS mark streaming complete and sync to context in finally block
       // This guarantees sync even if component unmounts or throws during streaming
       isStreaming.current = false;
+      console.log('isStreaming.current set to:', isStreaming.current);
       // Use ref to access current messages directly - works even during unmount
       syncToContext(localMessagesRef.current);
       // Guarantee thinking animation is always stopped
       stopThinkingAnimation();
+      console.log('=== HANDLE SEND COMPLETE ===');
     }
   };
 
