@@ -225,6 +225,9 @@ export const bjjUsers = pgTable("bjj_users", {
   preferredLanguage: text("preferred_language").default("en"), // en, pt, es
   languagePreferenceSet: boolean("language_preference_set").default(false),
   
+  // Unit Preference (for international users - Brazil, Europe, etc.)
+  unitPreference: text("unit_preference").default("imperial"), // imperial, metric
+  
   // Voice Settings (ElevenLabs TTS)
   voiceEnabled: boolean("voice_enabled").default(false), // Toggle voice output ON/OFF
   voiceId: text("voice_id").default("ErXwobaYiN019PkySvjV"), // Antoni (friendly), Adam: pNInz6obpgDQGcFmaJgB

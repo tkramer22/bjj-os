@@ -19,6 +19,7 @@ interface UserProfile {
   style?: string;
   weight?: number | string;
   height?: string;
+  unitPreference?: 'imperial' | 'metric';
 }
 
 type EditableField = 'name' | 'beltLevel' | 'weight' | 'height' | 'style' | null;
@@ -26,17 +27,19 @@ type EditableField = 'name' | 'beltLevel' | 'weight' | 'height' | 'style' | null
 const BELT_OPTIONS = ['white', 'blue', 'purple', 'brown', 'black'];
 const STYLE_OPTIONS = ['gi', 'no-gi', 'both'];
 
-// Generate weight options (100-300 lbs)
-const WEIGHT_OPTIONS = Array.from({ length: 201 }, (_, i) => 100 + i);
+// Generate weight options
+const WEIGHT_OPTIONS_LBS = Array.from({ length: 201 }, (_, i) => 100 + i); // 100-300 lbs
+const WEIGHT_OPTIONS_KG = Array.from({ length: 91 }, (_, i) => 45 + i); // 45-135 kg
 
-// Generate height options (4'0" to 7'0")
-const HEIGHT_OPTIONS: string[] = [];
+// Generate height options
+const HEIGHT_OPTIONS_IMPERIAL: string[] = [];
 for (let feet = 4; feet <= 7; feet++) {
   for (let inches = 0; inches < 12; inches++) {
-    HEIGHT_OPTIONS.push(`${feet}'${inches}"`);
+    HEIGHT_OPTIONS_IMPERIAL.push(`${feet}'${inches}"`);
     if (feet === 7 && inches === 0) break;
   }
 }
+const HEIGHT_OPTIONS_METRIC = Array.from({ length: 96 }, (_, i) => 120 + i); // 120-215 cm
 
 export default function IOSProfilePage() {
   const [, navigate] = useLocation();
@@ -47,10 +50,85 @@ export default function IOSProfilePage() {
   const heightPickerRef = useRef<HTMLDivElement>(null);
   const initialScrollSetRef = useRef<string | null>(null);
 
+  const { data: user, isLoading } = useQuery<UserProfile>({
+    queryKey: ["/api/auth/me"],
+  });
+
+  // Determine which unit system to use
+  const isMetric = user?.unitPreference === 'metric';
+  const weightOptions = isMetric ? WEIGHT_OPTIONS_KG : WEIGHT_OPTIONS_LBS;
+  const heightOptions = isMetric ? HEIGHT_OPTIONS_METRIC.map(cm => `${cm} cm`) : HEIGHT_OPTIONS_IMPERIAL;
+  const weightUnit = isMetric ? 'kg' : 'lbs';
+
+  // Convert weight for display based on unit preference
+  const getDisplayWeight = () => {
+    if (!user?.weight) return undefined;
+    const numericWeight = typeof user.weight === 'string' ? parseInt(user.weight) : user.weight;
+    if (isNaN(numericWeight)) return undefined;
+    return `${numericWeight} ${weightUnit}`;
+  };
+
+  // Handle unit toggle with conversion (clamped to valid ranges)
+  const handleUnitToggle = async (newUnit: 'imperial' | 'metric') => {
+    triggerHaptic('light');
+    
+    // Convert weight if exists
+    let updates: Partial<UserProfile> = { unitPreference: newUnit };
+    
+    if (user?.weight) {
+      const currentWeight = typeof user.weight === 'string' ? parseInt(user.weight) : user.weight;
+      if (!isNaN(currentWeight)) {
+        if (newUnit === 'metric' && !isMetric) {
+          // Converting lbs to kg (clamp to 45-135 kg range)
+          const convertedKg = Math.round(currentWeight * 0.453592);
+          updates.weight = Math.max(45, Math.min(135, convertedKg));
+        } else if (newUnit === 'imperial' && isMetric) {
+          // Converting kg to lbs (clamp to 100-300 lbs range)
+          const convertedLbs = Math.round(currentWeight * 2.20462);
+          updates.weight = Math.max(100, Math.min(300, convertedLbs));
+        }
+      }
+    }
+    
+    // Convert height if exists
+    if (user?.height) {
+      if (newUnit === 'metric' && !isMetric) {
+        // Converting feet/inches to cm (clamp to 120-215 cm range)
+        const match = user.height.match(/(\d+)'(\d+)"/);
+        if (match) {
+          const feet = parseInt(match[1]);
+          const inches = parseInt(match[2]);
+          const totalInches = feet * 12 + inches;
+          const cm = Math.round(totalInches * 2.54);
+          const clampedCm = Math.max(120, Math.min(215, cm));
+          updates.height = `${clampedCm} cm`;
+        }
+      } else if (newUnit === 'imperial' && isMetric) {
+        // Converting cm to feet/inches (clamp to 4'0" - 7'0" range)
+        const match = user.height.match(/(\d+)\s*cm/);
+        if (match) {
+          const cm = parseInt(match[1]);
+          // Clamp cm to valid range first (4'0" = 121.92cm, 7'0" = 213.36cm)
+          const clampedCm = Math.max(122, Math.min(213, cm));
+          const totalInches = Math.round(clampedCm / 2.54);
+          const feet = Math.floor(totalInches / 12);
+          const inches = totalInches % 12;
+          // Ensure feet is in valid range (4-7)
+          const clampedFeet = Math.max(4, Math.min(7, feet));
+          const finalInches = clampedFeet === 7 ? 0 : inches; // 7'0" is max
+          updates.height = `${clampedFeet}'${finalInches}"`;
+        }
+      }
+    }
+    
+    updateProfile.mutate(updates);
+  };
+
   // Set initial scroll position for weight picker (only once when opened)
   useEffect(() => {
     if (editingField === 'weight' && weightPickerRef.current && initialScrollSetRef.current !== 'weight') {
-      const index = WEIGHT_OPTIONS.indexOf(parseInt(editValue) || 180);
+      const numericWeight = parseInt(editValue) || (isMetric ? 80 : 180);
+      const index = weightOptions.indexOf(numericWeight);
       if (index >= 0) {
         setTimeout(() => {
           if (weightPickerRef.current) {
@@ -62,15 +140,19 @@ export default function IOSProfilePage() {
     } else if (editingField !== 'weight' && editingField !== 'height') {
       initialScrollSetRef.current = null;
     }
-  }, [editingField]);
+  }, [editingField, isMetric]);
 
   // Set initial scroll position for height picker (only once when opened)
   useEffect(() => {
     if (editingField === 'height' && heightPickerRef.current && initialScrollSetRef.current !== 'height') {
-      let index = HEIGHT_OPTIONS.indexOf(editValue);
+      let index = heightOptions.indexOf(editValue);
       if (index < 0) {
-        // Default to 5'10"
-        index = HEIGHT_OPTIONS.indexOf("5'10\"");
+        // Defaults
+        if (isMetric) {
+          index = heightOptions.indexOf("178 cm");
+        } else {
+          index = heightOptions.indexOf("5'10\"");
+        }
       }
       if (index >= 0) {
         setTimeout(() => {
@@ -83,11 +165,7 @@ export default function IOSProfilePage() {
     } else if (editingField !== 'weight' && editingField !== 'height') {
       initialScrollSetRef.current = null;
     }
-  }, [editingField]);
-
-  const { data: user, isLoading } = useQuery<UserProfile>({
-    queryKey: ["/api/auth/me"],
-  });
+  }, [editingField, isMetric]);
 
   const updateProfile = useMutation({
     mutationFn: async (updates: Partial<UserProfile>) => {
@@ -266,7 +344,7 @@ export default function IOSProfilePage() {
           />
           <ProfileRow 
             label="Weight" 
-            value={user?.weight ? `${user.weight} lbs` : undefined} 
+            value={getDisplayWeight()} 
             field="weight"
             placeholder="Tap to set"
           />
@@ -276,6 +354,50 @@ export default function IOSProfilePage() {
             field="height"
             placeholder="Tap to set"
           />
+          
+          {/* Unit Toggle */}
+          <div style={{
+            padding: '16px 0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: '15px', color: '#FFFFFF' }}>Units</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => handleUnitToggle('imperial')}
+                data-testid="button-unit-imperial"
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  background: !isMetric ? '#8B5CF6' : '#2A2A2E',
+                  color: !isMetric ? '#FFFFFF' : '#71717A',
+                }}
+              >
+                Imperial
+              </button>
+              <button
+                onClick={() => handleUnitToggle('metric')}
+                data-testid="button-unit-metric"
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  background: isMetric ? '#8B5CF6' : '#2A2A2E',
+                  color: isMetric ? '#FFFFFF' : '#71717A',
+                }}
+              >
+                Metric
+              </button>
+            </div>
+          </div>
           <div style={{ borderBottom: 'none' }}>
             <ProfileRow 
               label="Style" 
@@ -516,8 +638,8 @@ export default function IOSProfilePage() {
                       const itemHeight = 40;
                       const scrollTop = container.scrollTop;
                       const selectedIndex = Math.round(scrollTop / itemHeight);
-                      if (WEIGHT_OPTIONS[selectedIndex] !== undefined) {
-                        const newValue = String(WEIGHT_OPTIONS[selectedIndex]);
+                      if (weightOptions[selectedIndex] !== undefined) {
+                        const newValue = String(weightOptions[selectedIndex]);
                         // Only update if value actually changed to prevent re-scroll
                         if (newValue !== editValue) {
                           setEditValue(newValue);
@@ -525,7 +647,7 @@ export default function IOSProfilePage() {
                       }
                     }}
                   >
-                    {WEIGHT_OPTIONS.map((weight) => (
+                    {weightOptions.map((weight) => (
                       <div
                         key={weight}
                         onClick={() => setEditValue(String(weight))}
@@ -541,7 +663,7 @@ export default function IOSProfilePage() {
                           cursor: 'pointer',
                         }}
                       >
-                        {weight} lbs
+                        {weight} {weightUnit}
                       </div>
                     ))}
                   </div>
@@ -611,8 +733,8 @@ export default function IOSProfilePage() {
                       const itemHeight = 40;
                       const scrollTop = container.scrollTop;
                       const selectedIndex = Math.round(scrollTop / itemHeight);
-                      if (HEIGHT_OPTIONS[selectedIndex] !== undefined) {
-                        const newValue = HEIGHT_OPTIONS[selectedIndex];
+                      if (heightOptions[selectedIndex] !== undefined) {
+                        const newValue = heightOptions[selectedIndex];
                         // Only update if value actually changed to prevent re-scroll
                         if (newValue !== editValue) {
                           setEditValue(newValue);
@@ -620,7 +742,7 @@ export default function IOSProfilePage() {
                       }
                     }}
                   >
-                    {HEIGHT_OPTIONS.map((height) => (
+                    {heightOptions.map((height) => (
                       <div
                         key={height}
                         onClick={() => setEditValue(height)}
