@@ -39,11 +39,18 @@ export function ThumbnailImage({ thumbnailUrl, videoId, title, className = "" }:
   if (!currentUrl) {
     return (
       <AspectRatio ratio={16 / 9} className={className}>
-        <div className="w-full h-full bg-[#0A0A0B] rounded-lg flex items-center justify-center border border-[#1A1A1C]">
+        <div 
+          className="w-full h-full rounded-lg flex items-center justify-center border border-[#1A1A1C]"
+          style={{ background: 'linear-gradient(135deg, #0A0A0B 0%, #1A1A1C 50%, #0A0A0B 100%)' }}
+        >
           <img 
             src="/bjjos-logo.png" 
             alt="BJJ OS" 
-            className="h-8 w-auto opacity-60"
+            className="h-10 w-auto opacity-70"
+            onError={(e) => {
+              // Hide broken image icon if logo fails to load
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
           />
         </div>
       </AspectRatio>
@@ -56,9 +63,25 @@ export function ThumbnailImage({ thumbnailUrl, videoId, title, className = "" }:
     setIsLoading(true);
   };
 
+  // Handle load - check for YouTube's placeholder image (120x90 gray image)
+  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    // YouTube returns a 120x90 gray placeholder when thumbnail doesn't exist
+    // The maxresdefault returns 120x90 if video has no HD thumbnail
+    if (img.naturalWidth === 120 && img.naturalHeight === 90) {
+      // This is YouTube's "no thumbnail" placeholder - try next source
+      handleError();
+      return;
+    }
+    setIsLoading(false);
+  };
+
   return (
     <AspectRatio ratio={16 / 9} className={className}>
-      <div className="relative w-full h-full rounded-lg overflow-hidden bg-[#1A1A1C]">
+      <div 
+        className="relative w-full h-full rounded-lg overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, #0A0A0B 0%, #1A1A1C 50%, #0A0A0B 100%)' }}
+      >
         {/* Loading skeleton - dark background matching mobile theme */}
         {isLoading && (
           <div className="absolute inset-0 bg-[#2A2A2C] animate-pulse" />
@@ -73,7 +96,7 @@ export function ThumbnailImage({ thumbnailUrl, videoId, title, className = "" }:
             isLoading ? 'opacity-0' : 'opacity-100'
           }`}
           loading="lazy"
-          onLoad={() => setIsLoading(false)}
+          onLoad={handleLoad}
           onError={handleError}
         />
 

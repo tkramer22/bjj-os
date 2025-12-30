@@ -27,7 +27,7 @@ interface UserProfile {
 type EditableField = 'name' | 'beltLevel' | 'weight' | 'height' | 'style' | null;
 
 const BELT_OPTIONS = ['white', 'blue', 'purple', 'brown', 'black'];
-const STYLE_OPTIONS = ['gi', 'no-gi', 'both'];
+const STYLE_OPTIONS = ['gi', 'nogi', 'both'];
 
 // Generate weight options
 const WEIGHT_OPTIONS_LBS = Array.from({ length: 201 }, (_, i) => 100 + i); // 100-300 lbs
@@ -53,6 +53,8 @@ export default function IOSProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const weightPickerRef = useRef<HTMLDivElement>(null);
   const heightPickerRef = useRef<HTMLDivElement>(null);
+  const beltPickerRef = useRef<HTMLDivElement>(null);
+  const stylePickerRef = useRef<HTMLDivElement>(null);
   const initialScrollSetRef = useRef<string | null>(null);
 
   const { data: user, isLoading } = useQuery<UserProfile>({
@@ -167,10 +169,46 @@ export default function IOSProfilePage() {
         }, 50);
         initialScrollSetRef.current = 'height';
       }
-    } else if (editingField !== 'weight' && editingField !== 'height') {
+    } else if (!['weight', 'height', 'beltLevel', 'style'].includes(editingField || '')) {
       initialScrollSetRef.current = null;
     }
   }, [editingField, isMetric]);
+
+  // Set initial scroll position for belt picker (only once when opened)
+  useEffect(() => {
+    if (editingField === 'beltLevel' && beltPickerRef.current && initialScrollSetRef.current !== 'beltLevel') {
+      let index = BELT_OPTIONS.indexOf(editValue.toLowerCase());
+      if (index < 0) {
+        index = 0; // Default to white belt
+      }
+      if (index >= 0) {
+        setTimeout(() => {
+          if (beltPickerRef.current) {
+            beltPickerRef.current.scrollTop = index * 40;
+          }
+        }, 50);
+        initialScrollSetRef.current = 'beltLevel';
+      }
+    }
+  }, [editingField, editValue]);
+
+  // Set initial scroll position for style picker (only once when opened)
+  useEffect(() => {
+    if (editingField === 'style' && stylePickerRef.current && initialScrollSetRef.current !== 'style') {
+      let index = STYLE_OPTIONS.indexOf(editValue.toLowerCase());
+      if (index < 0) {
+        index = 0; // Default to gi
+      }
+      if (index >= 0) {
+        setTimeout(() => {
+          if (stylePickerRef.current) {
+            stylePickerRef.current.scrollTop = index * 40;
+          }
+        }, 50);
+        initialScrollSetRef.current = 'style';
+      }
+    }
+  }, [editingField, editValue]);
 
   const updateProfile = useMutation({
     mutationFn: async (updates: Partial<UserProfile>) => {
@@ -311,7 +349,12 @@ export default function IOSProfilePage() {
   const startEditing = (field: EditableField, currentValue: string) => {
     triggerHaptic('light');
     setEditingField(field);
-    setEditValue(currentValue || '');
+    // Normalize belt and style to lowercase to match picker options
+    if (field === 'beltLevel' || field === 'style') {
+      setEditValue((currentValue || '').toLowerCase());
+    } else {
+      setEditValue(currentValue || '');
+    }
   };
 
   const saveField = () => {
@@ -686,66 +729,203 @@ export default function IOSProfilePage() {
 
             {/* Input/Selector based on field type */}
             {editingField === 'beltLevel' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {BELT_OPTIONS.map(belt => (
-                  <button
-                    key={belt}
-                    onClick={() => setEditValue(belt)}
-                    data-testid={`option-belt-${belt}`}
+              <div>
+                {/* iOS-style picker wheel for belt */}
+                <div 
+                  style={{
+                    height: '200px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    background: '#0A0A0B',
+                    borderRadius: '12px',
+                    border: '1px solid #2A2A2E',
+                  }}
+                  data-testid="picker-belt"
+                >
+                  {/* Selection highlight */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: 0,
+                    right: 0,
+                    height: '40px',
+                    transform: 'translateY(-50%)',
+                    background: 'rgba(139, 92, 246, 0.2)',
+                    borderTop: '1px solid #8B5CF6',
+                    borderBottom: '1px solid #8B5CF6',
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                  }} />
+                  {/* Fade gradients */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '80px',
+                    background: 'linear-gradient(to bottom, #0A0A0B, transparent)',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: '80px',
+                    background: 'linear-gradient(to top, #0A0A0B, transparent)',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }} />
+                  {/* Scrollable list */}
+                  <div 
+                    ref={beltPickerRef}
                     style={{
-                      width: '100%',
-                      padding: '16px',
-                      background: editValue === belt ? '#2A2A2E' : 'transparent',
-                      border: editValue === belt ? '2px solid #8B5CF6' : '1px solid #2A2A2E',
-                      borderRadius: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      cursor: 'pointer',
+                      height: '100%',
+                      overflowY: 'scroll',
+                      scrollSnapType: 'y mandatory',
+                      paddingTop: '80px',
+                      paddingBottom: '80px',
+                    }}
+                    onScroll={(e) => {
+                      const container = e.currentTarget;
+                      const itemHeight = 40;
+                      const scrollTop = container.scrollTop;
+                      const selectedIndex = Math.round(scrollTop / itemHeight);
+                      if (BELT_OPTIONS[selectedIndex] !== undefined) {
+                        const newValue = BELT_OPTIONS[selectedIndex];
+                        if (newValue !== editValue) {
+                          setEditValue(newValue);
+                        }
+                      }
                     }}
                   >
-                    <div style={{
-                      width: '24px',
-                      height: '24px',
-                      borderRadius: '50%',
-                      background: getBeltColor(belt),
-                      border: belt === 'white' ? '1px solid #52525B' : 'none',
-                    }} />
-                    <span style={{ 
-                      color: '#FFFFFF', 
-                      fontSize: '16px',
-                      textTransform: 'capitalize',
-                    }}>
-                      {belt}
-                    </span>
-                  </button>
-                ))}
+                    {BELT_OPTIONS.map((belt) => (
+                      <div
+                        key={belt}
+                        onClick={() => setEditValue(belt)}
+                        data-testid={`option-belt-${belt}`}
+                        style={{
+                          height: '40px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '10px',
+                          fontSize: '20px',
+                          color: editValue === belt ? '#FFFFFF' : '#71717A',
+                          fontWeight: editValue === belt ? 600 : 400,
+                          scrollSnapAlign: 'center',
+                          cursor: 'pointer',
+                          textTransform: 'capitalize',
+                        }}
+                      >
+                        <div style={{
+                          width: '16px',
+                          height: '16px',
+                          borderRadius: '50%',
+                          background: getBeltColor(belt),
+                          border: belt === 'white' ? '1px solid #52525B' : 'none',
+                        }} />
+                        {belt}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : editingField === 'style' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {STYLE_OPTIONS.map(style => (
-                  <button
-                    key={style}
-                    onClick={() => setEditValue(style)}
-                    data-testid={`option-style-${style}`}
+              <div>
+                {/* iOS-style picker wheel for style */}
+                <div 
+                  style={{
+                    height: '200px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    background: '#0A0A0B',
+                    borderRadius: '12px',
+                    border: '1px solid #2A2A2E',
+                  }}
+                  data-testid="picker-style"
+                >
+                  {/* Selection highlight */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: 0,
+                    right: 0,
+                    height: '40px',
+                    transform: 'translateY(-50%)',
+                    background: 'rgba(139, 92, 246, 0.2)',
+                    borderTop: '1px solid #8B5CF6',
+                    borderBottom: '1px solid #8B5CF6',
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                  }} />
+                  {/* Fade gradients */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '80px',
+                    background: 'linear-gradient(to bottom, #0A0A0B, transparent)',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: '80px',
+                    background: 'linear-gradient(to top, #0A0A0B, transparent)',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }} />
+                  {/* Scrollable list */}
+                  <div 
+                    ref={stylePickerRef}
                     style={{
-                      width: '100%',
-                      padding: '16px',
-                      background: editValue === style ? '#2A2A2E' : 'transparent',
-                      border: editValue === style ? '2px solid #8B5CF6' : '1px solid #2A2A2E',
-                      borderRadius: '12px',
-                      cursor: 'pointer',
+                      height: '100%',
+                      overflowY: 'scroll',
+                      scrollSnapType: 'y mandatory',
+                      paddingTop: '80px',
+                      paddingBottom: '80px',
+                    }}
+                    onScroll={(e) => {
+                      const container = e.currentTarget;
+                      const itemHeight = 40;
+                      const scrollTop = container.scrollTop;
+                      const selectedIndex = Math.round(scrollTop / itemHeight);
+                      if (STYLE_OPTIONS[selectedIndex] !== undefined) {
+                        const newValue = STYLE_OPTIONS[selectedIndex];
+                        if (newValue !== editValue) {
+                          setEditValue(newValue);
+                        }
+                      }
                     }}
                   >
-                    <span style={{ 
-                      color: '#FFFFFF', 
-                      fontSize: '16px',
-                      textTransform: 'capitalize',
-                    }}>
-                      {style === 'no-gi' ? 'No-Gi' : style === 'both' ? 'Both' : 'Gi'}
-                    </span>
-                  </button>
-                ))}
+                    {STYLE_OPTIONS.map((style) => (
+                      <div
+                        key={style}
+                        onClick={() => setEditValue(style)}
+                        data-testid={`option-style-${style}`}
+                        style={{
+                          height: '40px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '20px',
+                          color: editValue === style ? '#FFFFFF' : '#71717A',
+                          fontWeight: editValue === style ? 600 : 400,
+                          scrollSnapAlign: 'center',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {style === 'nogi' ? 'No-Gi' : style === 'both' ? 'Both' : 'Gi'}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : editingField === 'weight' ? (
               <div>
