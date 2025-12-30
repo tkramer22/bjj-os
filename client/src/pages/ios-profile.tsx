@@ -195,42 +195,50 @@ export default function IOSProfilePage() {
   });
 
   const handleAvatarUpload = async (file: File) => {
+    // Check file size (2MB limit)
+    if (file.size > 2 * 1024 * 1024) {
+      console.error('File too large (max 2MB)');
+      triggerHaptic('error');
+      return;
+    }
+    
     setIsUploadingAvatar(true);
     setShowAvatarModal(false);
     
     try {
-      // Convert to base64 data URL
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64Url = e.target?.result as string;
-        
-        // Resize if too large (max 400px)
-        const resizedUrl = await resizeImage(base64Url, 400);
-        
-        // Upload to server
-        const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
-        const response = await fetch(getApiUrl('/api/auth/avatar'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}),
-          },
-          credentials: 'include',
-          body: JSON.stringify({ avatarUrl: resizedUrl }),
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to upload avatar');
-        }
-        
-        queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-        triggerHaptic('success');
-        setIsUploadingAvatar(false);
-      };
-      reader.readAsDataURL(file);
+      // Convert to base64 data URL using Promise wrapper
+      const base64Url = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      
+      // Resize if too large (max 400px)
+      const resizedUrl = await resizeImage(base64Url, 400);
+      
+      // Upload to server
+      const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
+      const response = await fetch(getApiUrl('/api/auth/avatar'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ avatarUrl: resizedUrl }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to upload avatar');
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      triggerHaptic('success');
     } catch (error) {
       console.error('Avatar upload error:', error);
       triggerHaptic('error');
+    } finally {
       setIsUploadingAvatar(false);
     }
   };
