@@ -11,6 +11,7 @@ import { composeNaturalResponse } from '../utils/composeResponse';
 import { validateResponse } from '../utils/validateResponse';
 import { searchVideos, fallbackSearch, formatVideosForPrompt, extractSearchIntent, getSessionContext, updateSessionContext } from '../videoSearch';
 import { processMessageForTechniqueExtraction } from '../technique-extraction';
+import { extractTechniqueRequests } from '../technique-extractor';
 import { professorOSCache } from '../services/professor-os-cache';
 import { detectTopicsFromMessage, synthesizeKnowledgeByTopic, formatSynthesizedKnowledge } from '../utils/knowledge-synthesizer';
 
@@ -1028,6 +1029,12 @@ export async function handleClaudeStream(req: any, res: any) {
       }
     }).catch(err => {
       console.error('❌ Technique extraction error (non-critical):', err);
+    });
+    
+    // PHASE 3C: Track technique requests for Meta Analyzer (async, non-blocking)
+    // This feeds the curation prioritization system
+    extractTechniqueRequests(userId.toString(), message, userProfile?.beltLevel, userProfile?.style).catch(err => {
+      console.error('❌ Meta tracker error (non-critical):', err);
     });
     
     res.write('data: [DONE]\n\n');
