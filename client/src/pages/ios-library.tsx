@@ -2,7 +2,8 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
 import { VideoPlayer } from "@/components/VideoPlayer";
-import { Search, Play, BookmarkCheck, Loader2, ChevronDown, RefreshCw } from "lucide-react";
+import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
+import { Search, Play, BookmarkCheck, Loader2, ChevronDown, RefreshCw, Brain } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 
 console.log('✅ iOS LIBRARY loaded');
@@ -35,6 +36,7 @@ export default function IOSLibraryPage() {
   const [selectedProfessor, setSelectedProfessor] = useState<string>("All");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string } | null>(null);
+  const [analysisVideoId, setAnalysisVideoId] = useState<number | null>(null);
   
   const queryClient = useQueryClient();
 
@@ -461,6 +463,29 @@ export default function IOSLibraryPage() {
                         {video.technique}
                       </span>
                     )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        triggerHaptic('light');
+                        setAnalysisVideoId(video.id);
+                      }}
+                      data-testid={`button-view-analysis-${video.id}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11px',
+                        color: '#8B5CF6',
+                        background: 'rgba(139, 92, 246, 0.15)',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Brain size={12} />
+                      Analysis
+                    </button>
                     {isVideoSaved(video.id) && (
                       <BookmarkCheck size={14} color="#22C55E" />
                     )}
@@ -481,6 +506,14 @@ export default function IOSLibraryPage() {
           title={currentVideo.title}
           instructor={currentVideo.instructor}
           onClose={() => setCurrentVideo(null)}
+        />
+      )}
+
+      {/* Video Analysis Modal */}
+      {analysisVideoId && (
+        <VideoAnalysisModal
+          videoId={analysisVideoId}
+          onClose={() => setAnalysisVideoId(null)}
         />
       )}
     </div>

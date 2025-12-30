@@ -1,7 +1,7 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { db } from "./db";
-import { insertRecipientSchema, recipients, smsSchedules, smsHistory, insertSmsScheduleSchema, bjjUsers, referralCodes, aiVideoKnowledge, aiUserFeedbackSignals, aiUserContext, aiFeatureFlags, aiReasoningTraces, aiConfidenceTracking, aiProblemSolutionMap, aiTechniqueRelationships, userSavedVideos, aiConversationLearning, adminChatHistory, videoCurationLog, userVideoFeedback, userFeedbackStats, instructorCredibility, featuredInstructors, techniqueChains, userSavedChains, chainFeedback, pushSubscriptions, flaggedAccounts, authorizedDevices, loginEvents, shortUrls, activityLog, videoAnalysisLog, userActivity, magicLinks, profQueries, videoInteractions, devOsMessages, curationRuns, videos, systemSnapshots, commandLog, combatSportsNews } from "@shared/schema";
+import { insertRecipientSchema, recipients, smsSchedules, smsHistory, insertSmsScheduleSchema, bjjUsers, referralCodes, aiVideoKnowledge, aiUserFeedbackSignals, aiUserContext, aiFeatureFlags, aiReasoningTraces, aiConfidenceTracking, aiProblemSolutionMap, aiTechniqueRelationships, userSavedVideos, aiConversationLearning, adminChatHistory, videoCurationLog, userVideoFeedback, userFeedbackStats, instructorCredibility, featuredInstructors, techniqueChains, userSavedChains, chainFeedback, pushSubscriptions, flaggedAccounts, authorizedDevices, loginEvents, shortUrls, activityLog, videoAnalysisLog, userActivity, magicLinks, profQueries, videoInteractions, devOsMessages, curationRuns, videos, systemSnapshots, commandLog, combatSportsNews, videoKnowledge } from "@shared/schema";
 import { logActivity, logSystemError } from "./activity-logger";
 import adminDashboardRouter from "./admin-dashboard-api";
 import analyticsRouter from "./analytics";
@@ -7272,6 +7272,117 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
+
+  // Get video analysis/knowledge for a specific video (user-facing)
+  app.get('/api/ai/videos/:id/analysis', async (req, res) => {
+    try {
+      const videoId = parseInt(req.params.id);
+      if (isNaN(videoId)) {
+        return res.status(400).json({ error: 'Invalid video ID' });
+      }
+      
+      // Get main video info from ai_video_knowledge
+      const [videoInfo] = await db.select({
+        id: aiVideoKnowledge.id,
+        title: aiVideoKnowledge.title,
+        techniqueName: aiVideoKnowledge.techniqueName,
+        instructorName: aiVideoKnowledge.instructorName,
+        youtubeId: aiVideoKnowledge.youtubeId,
+        thumbnailUrl: aiVideoKnowledge.thumbnailUrl,
+        duration: aiVideoKnowledge.duration,
+        difficultyScore: aiVideoKnowledge.difficultyScore,
+        giOrNogi: aiVideoKnowledge.giOrNogi,
+        qualityScore: aiVideoKnowledge.qualityScore,
+        positionCategory: aiVideoKnowledge.positionCategory,
+        techniqueType: aiVideoKnowledge.techniqueType,
+        beltLevel: aiVideoKnowledge.beltLevel,
+        keyTimestamps: aiVideoKnowledge.keyTimestamps,
+        keyDetails: aiVideoKnowledge.keyDetails,
+        commonMistakes: aiVideoKnowledge.commonMistakes,
+        problemsSolved: aiVideoKnowledge.problemsSolved,
+        prerequisites: aiVideoKnowledge.prerequisites,
+        setupTimestamp: aiVideoKnowledge.setupTimestamp,
+        executionTimestamp: aiVideoKnowledge.executionTimestamp,
+        troubleshootingTimestamp: aiVideoKnowledge.troubleshootingTimestamp,
+        commonMistakesTimestamp: aiVideoKnowledge.commonMistakesTimestamp,
+      })
+      .from(aiVideoKnowledge)
+      .where(eq(aiVideoKnowledge.id, videoId))
+      .limit(1);
+      
+      if (!videoInfo) {
+        return res.status(404).json({ error: 'Video not found' });
+      }
+      
+      // Get detailed extracted knowledge from video_knowledge table (Gemini analysis)
+      const techniques = await db.select({
+        id: videoKnowledge.id,
+        techniqueName: videoKnowledge.techniqueName,
+        positionContext: videoKnowledge.positionContext,
+        techniqueType: videoKnowledge.techniqueType,
+        skillLevel: videoKnowledge.skillLevel,
+        keyConcepts: videoKnowledge.keyConcepts,
+        instructorTips: videoKnowledge.instructorTips,
+        commonMistakes: videoKnowledge.commonMistakes,
+        timestampStart: videoKnowledge.timestampStart,
+        timestampEnd: videoKnowledge.timestampEnd,
+        whyItMatters: videoKnowledge.whyItMatters,
+        problemSolved: videoKnowledge.problemSolved,
+        setupsFrom: videoKnowledge.setupsFrom,
+        chainsTo: videoKnowledge.chainsTo,
+      })
+      .from(videoKnowledge)
+      .where(eq(videoKnowledge.videoId, videoId));
+      
+      // Combine into clean response
+      res.json({
+        video: {
+          id: videoInfo.id,
+          title: videoInfo.title || videoInfo.techniqueName,
+          techniqueName: videoInfo.techniqueName,
+          instructorName: videoInfo.instructorName || 'Unknown Instructor',
+          youtubeId: videoInfo.youtubeId,
+          thumbnailUrl: videoInfo.thumbnailUrl,
+          duration: formatDuration(videoInfo.duration),
+          difficultyScore: videoInfo.difficultyScore,
+          giOrNogi: videoInfo.giOrNogi || 'both',
+          qualityScore: videoInfo.qualityScore ? parseFloat(videoInfo.qualityScore.toString()) : null,
+          positionCategory: videoInfo.positionCategory,
+          techniqueType: videoInfo.techniqueType,
+          beltLevel: videoInfo.beltLevel,
+          keyTimestamps: videoInfo.keyTimestamps || [],
+          keyDetails: videoInfo.keyDetails || [],
+          commonMistakes: videoInfo.commonMistakes || [],
+          problemsSolved: videoInfo.problemsSolved || [],
+          prerequisites: videoInfo.prerequisites || [],
+          setupTimestamp: videoInfo.setupTimestamp,
+          executionTimestamp: videoInfo.executionTimestamp,
+          troubleshootingTimestamp: videoInfo.troubleshootingTimestamp,
+          commonMistakesTimestamp: videoInfo.commonMistakesTimestamp,
+        },
+        techniques: techniques.map(tech => ({
+          id: tech.id,
+          techniqueName: tech.techniqueName,
+          positionContext: tech.positionContext,
+          techniqueType: tech.techniqueType,
+          skillLevel: tech.skillLevel,
+          keyConcepts: tech.keyConcepts || [],
+          instructorTips: tech.instructorTips || [],
+          commonMistakes: tech.commonMistakes || [],
+          timestampStart: tech.timestampStart,
+          timestampEnd: tech.timestampEnd,
+          whyItMatters: tech.whyItMatters,
+          problemSolved: tech.problemSolved,
+          setupsFrom: tech.setupsFrom || [],
+          chainsTo: tech.chainsTo || [],
+        })),
+        hasGeminiAnalysis: techniques.length > 0,
+      });
+    } catch (error: any) {
+      console.error('Error fetching video analysis:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   // Get unique techniques for dropdown filter - WITH COUNTS
   app.get('/api/ai/techniques', async (req, res) => {
@@ -16628,7 +16739,6 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
   // GET: Get extracted knowledge for a specific video
   app.get('/api/admin/video-knowledge/:videoId', checkAdminAuth, async (req, res) => {
     try {
-      const { videoKnowledge } = await import('@shared/schema');
       const videoId = parseInt(req.params.videoId);
       
       const knowledge = await db.select()

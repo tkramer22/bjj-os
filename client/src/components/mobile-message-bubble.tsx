@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Bookmark, BookmarkCheck } from "lucide-react";
+import { Bookmark, BookmarkCheck, Brain, Star } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
 import { ThumbnailImage } from "@/components/ThumbnailImage";
 import { formatMessageTimestamp } from "@/lib/timestamps";
 import { Capacitor } from "@capacitor/core";
@@ -148,6 +149,7 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
   const [savedVideoIds, setSavedVideoIds] = useState<Set<number>>(new Set());
   const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string; startTime?: string } | null>(null);
   const [loadingVideos, setLoadingVideos] = useState<Set<number>>(new Set());
+  const [analysisVideoId, setAnalysisVideoId] = useState<number | null>(null);
   const { toast } = useToast();
   const userId = localStorage.getItem('mobileUserId') || '1';
 
@@ -396,29 +398,52 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
                       )}
                     </p>
                   </div>
-                  {/* Only show bookmark for enriched videos */}
+                  {/* Only show bookmark and analysis for enriched videos */}
                   {segment.video.videoId && (
-                    <button
-                      onClick={() => toggleSaveVideo(segment.video!.id)}
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        padding: "0.5rem",
-                        cursor: "pointer",
-                        color: savedVideoIds.has(segment.video.id) ? "#667eea" : "var(--mobile-text-secondary)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center"
-                      }}
-                      data-testid={`button-save-video-${segment.video.id}`}
-                      title={savedVideoIds.has(segment.video.id) ? "Remove from saved" : "Save video"}
-                    >
-                      {savedVideoIds.has(segment.video.id) ? (
-                        <BookmarkCheck size={20} />
-                      ) : (
-                        <Bookmark size={20} />
-                      )}
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <button
+                        onClick={() => setAnalysisVideoId(segment.video!.id)}
+                        style={{
+                          background: "rgba(139, 92, 246, 0.15)",
+                          border: "none",
+                          borderRadius: "6px",
+                          padding: "0.375rem 0.5rem",
+                          cursor: "pointer",
+                          color: "#8B5CF6",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          fontSize: "0.7rem",
+                          fontWeight: 500,
+                        }}
+                        data-testid={`button-analysis-video-${segment.video.id}`}
+                        title="View full analysis"
+                      >
+                        <Brain size={14} />
+                        Analysis
+                      </button>
+                      <button
+                        onClick={() => toggleSaveVideo(segment.video!.id)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          padding: "0.5rem",
+                          cursor: "pointer",
+                          color: savedVideoIds.has(segment.video.id) ? "#667eea" : "var(--mobile-text-secondary)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center"
+                        }}
+                        data-testid={`button-save-video-${segment.video.id}`}
+                        title={savedVideoIds.has(segment.video.id) ? "Remove from saved" : "Save video"}
+                      >
+                        {savedVideoIds.has(segment.video.id) ? (
+                          <BookmarkCheck size={20} />
+                        ) : (
+                          <Bookmark size={20} />
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -445,6 +470,14 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
           instructor={currentVideo.instructor}
           startTime={currentVideo.startTime}
           onClose={() => setCurrentVideo(null)}
+        />
+      )}
+
+      {/* Video Analysis Modal */}
+      {analysisVideoId && (
+        <VideoAnalysisModal
+          videoId={analysisVideoId}
+          onClose={() => setAnalysisVideoId(null)}
         />
       )}
     </div>
