@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Play } from "lucide-react";
+import bjjosLogo from "@assets/bjjos-logo.png";
 
 interface ThumbnailImageProps {
   thumbnailUrl?: string;
@@ -44,7 +45,7 @@ export function ThumbnailImage({ thumbnailUrl, videoId, title, className = "" }:
           style={{ background: 'linear-gradient(135deg, #0A0A0B 0%, #1A1A1C 50%, #0A0A0B 100%)' }}
         >
           <img 
-            src="/bjjos-logo.png" 
+            src={bjjosLogo} 
             alt="BJJ OS" 
             className="h-10 w-auto opacity-70"
             onError={(e) => {
