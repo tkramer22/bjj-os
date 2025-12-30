@@ -11,11 +11,20 @@ const JWT_SECRET = process.env.SESSION_SECRET || 'your-secret-key';
  */
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
-    // Read token from cookie (cookie-based JWT auth)
-    const token = req.cookies.sessionToken;
+    // Read token from cookie (cookie-based JWT auth) or Authorization header (mobile apps)
+    let token = req.cookies.sessionToken;
+    
+    // Fallback to Authorization header for mobile apps where cookies don't work
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+        console.log('[requireAuth] Using Bearer token from Authorization header');
+      }
+    }
     
     if (!token) {
-      console.log('[requireAuth] No sessionToken cookie found');
+      console.log('[requireAuth] No sessionToken cookie or Authorization header found');
       return res.status(401).json({ error: 'Authentication required' });
     }
     
