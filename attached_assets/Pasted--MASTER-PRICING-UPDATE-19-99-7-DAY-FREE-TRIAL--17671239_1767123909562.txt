@@ -1,0 +1,140 @@
+```
+MASTER PRICING UPDATE - $19.99 + 7-DAY FREE TRIAL
+
+═══════════════════════════════════════════════════════════════════════════════
+STRIPE PRICE ID UPDATE
+═══════════════════════════════════════════════════════════════════════════════
+
+New Stripe Price ID: price_1Sk8axlVkMlrxpuTGFjkXmyY
+Price: $19.99/month
+
+Search the ENTIRE codebase for the old $14.99 Stripe price ID and replace with:
+price_1Sk8axlVkMlrxpuTGFjkXmyY
+
+This includes:
+- Backend checkout session creation
+- Any environment variables
+- Any config files
+- Any hardcoded references
+
+═══════════════════════════════════════════════════════════════════════════════
+7-DAY FREE TRIAL IMPLEMENTATION
+═══════════════════════════════════════════════════════════════════════════════
+
+In the Stripe checkout session creation, ensure this is set:
+
+const session = await stripe.checkout.sessions.create({
+  mode: 'subscription',
+  line_items: [{
+    price: 'price_1Sk8axlVkMlrxpuTGFjkXmyY',
+    quantity: 1,
+  }],
+  subscription_data: {
+    trial_period_days: 7,
+  },
+  success_url: '...',
+  cancel_url: '...',
+});
+
+This ensures:
+- User enters credit card at signup
+- Card is VALIDATED but NOT CHARGED
+- User gets full access immediately
+- User is charged $19.99 on day 8
+
+═══════════════════════════════════════════════════════════════════════════════
+REFERRAL CODE = 30-DAY FREE TRIAL (1 MONTH FREE)
+═══════════════════════════════════════════════════════════════════════════════
+
+If a user signs up using a referral code, change trial_period_days from 7 to 30:
+
+subscription_data: {
+  trial_period_days: 30,
+}
+
+This gives referred users a full free month instead of 7 days.
+The referral commission system is already set up in admin - this just extends their trial.
+
+═══════════════════════════════════════════════════════════════════════════════
+WEBSITE PRICING COPY UPDATES
+═══════════════════════════════════════════════════════════════════════════════
+
+Search and replace ALL instances of "$14.99" with "$19.99"
+
+Update these locations:
+
+1. LANDING PAGE / HOMEPAGE
+- Hero section pricing
+- Pricing section/cards
+- Any "starting at" or "only $X/month" copy
+- Add "7-day free trial" badge/text near price
+
+2. SIGNUP / CHECKOUT FLOW
+- Pre-checkout pricing display
+- Checkout page should show:
+  - "$19.99/month"
+  - "7-day free trial"
+  - "You won't be charged until [date 7 days from now]"
+
+3. IN-APP REFERENCES
+- Settings page subscription info
+- Any upgrade prompts or paywalls
+- Subscription management screens
+
+4. FOOTER / LEGAL
+- Any pricing references in terms or FAQ
+
+═══════════════════════════════════════════════════════════════════════════════
+APP STORE PRICING (FOR SUBMISSION)
+═══════════════════════════════════════════════════════════════════════════════
+
+When submitting to App Store:
+- Subscription price: $19.99/month
+- Free trial: 7 days
+- This will be configured in App Store Connect
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing, test the following:
+
+1. WEBSITE
+- [ ] Landing page shows $19.99/month
+- [ ] Landing page mentions 7-day free trial
+
+2. SIGNUP FLOW (use Stripe test mode)
+- [ ] Checkout shows $19.99/month
+- [ ] Checkout shows 7-day free trial
+- [ ] Checkout shows "You won't be charged until [date]"
+- [ ] Use test card: 4242 4242 4242 4242
+- [ ] Confirm subscription is created with trial_end date 7 days out
+- [ ] Confirm NO charge is made at signup
+
+3. REFERRAL SIGNUP
+- [ ] Sign up with a referral code
+- [ ] Confirm trial is 30 days (not 7)
+- [ ] Confirm referrer gets credit
+
+4. IN-APP
+- [ ] Settings shows correct subscription price
+- [ ] Any upgrade prompts show $19.99
+
+═══════════════════════════════════════════════════════════════════════════════
+SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+OLD: $14.99/month, unclear trial
+NEW: $19.99/month, 7-day free trial (30 days with referral)
+
+Price ID: price_1Sk8axlVkMlrxpuTGFjkXmyY
+
+User experience:
+- Signs up, enters card
+- Card validated, NOT charged
+- Full access for 7 days
+- Charged $19.99 on day 8
+- If referred: charged on day 31
+
+Confirm all changes and test before pushing to production.
+```
