@@ -126,7 +126,7 @@ async function getStats(hoursAgo: number) {
   // Calculate revenue from recent subscriptions
   const recentRevenue = await db.select({ 
     total: sql<number>`COALESCE(SUM(CASE 
-      WHEN ${bjjUsers.subscriptionType} = 'monthly' THEN 14.99
+      WHEN ${bjjUsers.subscriptionType} = 'monthly' THEN 19.99
       WHEN ${bjjUsers.subscriptionType} = 'annual' THEN 149.00
       ELSE 0 
     END), 0)` 
@@ -167,7 +167,7 @@ async function calculateMRR() {
   let mrr = 0;
   activeSubscribers.forEach(sub => {
     if (sub.subscriptionType === 'monthly') {
-      mrr += 14.99;
+      mrr += 19.99;
     } else if (sub.subscriptionType === 'annual') {
       mrr += 149.00 / 12; // Convert annual to monthly
     }

@@ -48,7 +48,7 @@ async function getDailyStats(): Promise<DailyStats> {
     
     const userRow = userStatsResult.rows[0] as any || { new_signups: 0, total_users: 0, active_trials: 0, active_paid: 0 };
     const activePaid = parseInt(userRow.active_paid) || 0;
-    const mrr = activePaid * 14.99;
+    const mrr = activePaid * 19.99;
     
     // Video stats - query videos table
     let videoStats = { total: 0, today: 0, batches: 0 };

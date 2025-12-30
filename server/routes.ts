@@ -6290,11 +6290,11 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         }
         stripePriceId = process.env.STRIPE_PRICE_ID_SMS_ONLY;
       } else if (priceId === "monthly") {
-        // Full AI Package - $14.99/month
+        // Full AI Package - $19.99/month
         if (!process.env.STRIPE_PRICE_ID_MONTHLY) {
           return res.status(503).json({ 
             error: "Stripe checkout is not fully configured. Please contact support.",
-            details: "STRIPE_PRICE_ID_MONTHLY is missing. Admin: Create a $14.99/month price in Stripe and add STRIPE_PRICE_ID_MONTHLY to secrets."
+            details: "STRIPE_PRICE_ID_MONTHLY is missing. Admin: Create a $19.99/month price in Stripe and add STRIPE_PRICE_ID_MONTHLY to secrets."
           });
         }
         stripePriceId = process.env.STRIPE_PRICE_ID_MONTHLY;
@@ -6322,6 +6322,9 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         metadata.referral_code_id = referralData.id;
       }
 
+      // Determine trial days - 30 for referrals, 7 for regular signups
+      const trialDays = referralData ? 30 : 7;
+
       // Build checkout session data
       const sessionData: any = {
         mode: 'subscription',
@@ -6333,7 +6336,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           },
         ],
         subscription_data: {
-          trial_period_days: 7,
+          trial_period_days: trialDays,
           metadata,
         },
         metadata,
@@ -10178,7 +10181,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       
       // Calculate MRR
       const activeCount = Number(userStats.rows[0].active_users) || 0;
-      const mrr = activeCount * 14.99;
+      const mrr = activeCount * 19.99;
       
       // Format report
       const report = `📊 DAILY REPORT - ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
@@ -11482,7 +11485,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const mrr = await db.execute(sql`
         SELECT COALESCE(SUM(
           CASE 
-            WHEN subscription_type = 'monthly' THEN 14.99
+            WHEN subscription_type = 'monthly' THEN 19.99
             WHEN subscription_type = 'annual' THEN 149.99/12
             ELSE 0
           END
@@ -11749,7 +11752,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         db.execute(sql`
           SELECT COALESCE(SUM(
             CASE 
-              WHEN subscription_type = 'monthly' THEN 14.99
+              WHEN subscription_type = 'monthly' THEN 19.99
               WHEN subscription_type = 'yearly' THEN 149.99/12
               ELSE 0
             END
@@ -11862,7 +11865,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           COUNT(*) FILTER (WHERE subscription_status = 'trialing') as trial_users,
           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') as new_today,
           COALESCE(SUM(CASE 
-            WHEN subscription_status = 'active' AND subscription_type = 'monthly' THEN 14.99 
+            WHEN subscription_status = 'active' AND subscription_type = 'monthly' THEN 19.99 
             WHEN subscription_status = 'active' AND subscription_type = 'yearly' THEN 149.99/12
             ELSE 0 
           END), 0) as mrr

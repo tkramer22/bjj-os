@@ -64,7 +64,7 @@ export default function Terms() {
           <h2 className="legal-section-title">4. Subscription and Payment</h2>
           <div className="legal-subsection">
             <h3 className="legal-subsection-title">Pricing</h3>
-            <p className="legal-text">$14.99/month with 7-day free trial</p>
+            <p className="legal-text">$19.99/month with 7-day free trial</p>
           </div>
           <div className="legal-subsection">
             <h3 className="legal-subsection-title">Billing</h3>

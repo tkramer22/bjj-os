@@ -110,7 +110,7 @@ async function gatherComprehensiveStats(reportType: 'morning' | 'midday' | 'even
   `);
   const userRow = userStats.rows[0] as any;
   const activePaid = parseInt(userRow?.active_paid) || 0;
-  const mrr = activePaid * 14.99;
+  const mrr = activePaid * 19.99;
   
   // === USER ACTIVITY ===
   const activityStats = await db.execute(sql`

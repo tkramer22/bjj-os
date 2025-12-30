@@ -132,7 +132,7 @@ export default function PaymentPage() {
     );
   }
 
-  const monthlyPrice = "$14.99";
+  const monthlyPrice = "$19.99";
   const annualPrice = "$179.88";
   const monthlySavings = "$0";
   const annualSavings = "$0";

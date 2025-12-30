@@ -89,7 +89,7 @@ export default function PricingPage() {
         {/* Single Pricing Card */}
         <div className="pricing-single-card" data-testid="card-plan">
           <div className="plan-price-section">
-            <div className="plan-price">$14.99</div>
+            <div className="plan-price">$19.99</div>
             <div className="plan-period">/month</div>
           </div>
           

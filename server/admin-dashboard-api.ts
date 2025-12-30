@@ -104,8 +104,8 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
     const activePaidUsers = Number(allTimeRows[0]?.active_paid_users || 0);
     const activeTrials = Number(allTimeRows[0]?.active_trials || 0);
     
-    // MRR (Monthly Recurring Revenue) - assuming $14.99/month
-    const mrr = activePaidUsers * 14.99;
+    // MRR (Monthly Recurring Revenue) - assuming $19.99/month
+    const mrr = activePaidUsers * 19.99;
     
     // Churn rate (cancelled in last 30 days / active 30 days ago)
     const churnData = await db.execute(sql`

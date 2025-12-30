@@ -53,7 +53,7 @@ export async function getSystemHealth() {
     
     const activeSubs = parseInt(revenueStats.rows[0]?.active_subs || '0');
     const lifetimeUsers = parseInt(revenueStats.rows[0]?.lifetime_users || '0');
-    const mrr = (activeSubs * 14.99).toFixed(2);
+    const mrr = (activeSubs * 19.99).toFixed(2);
     
     return {
       database: {

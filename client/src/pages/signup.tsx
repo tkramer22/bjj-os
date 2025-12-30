@@ -359,7 +359,7 @@ export default function SignupPage() {
 
   const getPlanDisplay = () => {
     if (selectedPlan === "annual") return "Annual ($149.88/year)";
-    if (selectedPlan === "monthly") return "Monthly ($14.99/month)";
+    if (selectedPlan === "monthly") return "Monthly ($19.99/month)";
     return "Free Preview";
   };
 
@@ -394,7 +394,7 @@ export default function SignupPage() {
           <p className="signup-subheadline">
             {inviteValid 
               ? "You've been invited to BJJ OS with lifetime access" 
-              : "Start your 7-day free trial today • $14.99/month after trial"
+              : "Start your 7-day free trial today • $19.99/month after trial"
             }
           </p>
 
