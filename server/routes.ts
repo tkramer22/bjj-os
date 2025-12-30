@@ -8749,13 +8749,25 @@ Run another: https://bjjos.app/admin/command-center`
           break;
           
         case 'flush_cache':
-          // Clear all caches
-          const beforeSize = cache.keys().length;
+          // Clear all caches - using Upstash Redis compatible methods
           const beforeMemory = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
           
-          cache.flushAll();
+          // Get current cache stats before flush
+          let beforeCacheSize = 0;
+          try {
+            const stats = await cache.getStats();
+            beforeCacheSize = stats.dbsize || 0;
+          } catch (e) {
+            console.warn('[CACHE] Could not get stats:', e);
+          }
           
-          const afterSize = cache.keys().length;
+          // Invalidate known cache patterns (Upstash doesn't support flushAll directly in free tier)
+          await invalidateCache.videos();
+          
+          // Clear in-memory Professor OS cache
+          const { professorOSCache } = await import('./services/professor-os-cache');
+          professorOSCache.clear();
+          
           const afterMemory = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
           const memoryFreed = (parseFloat(beforeMemory) - parseFloat(afterMemory)).toFixed(1);
           
@@ -8768,20 +8780,19 @@ Run another: https://bjjos.app/admin/command-center`
                 title: 'Cache Cleared',
                 timestamp: new Date().toISOString(),
                 actions: [
-                  'Cleared video library cache',
-                  'Cleared dashboard metrics cache',
-                  'Cleared user session cache',
-                  'Forced database connection refresh'
+                  'Invalidated video library cache',
+                  'Cleared Professor OS response cache',
+                  'Cleared in-memory caches',
+                  'Forced cache refresh on next request'
                 ],
                 metrics: {
-                  'Items Cleared': beforeSize,
-                  'Memory Freed': `${memoryFreed} MB`,
-                  'Cache Keys Before': beforeSize,
-                  'Cache Keys After': afterSize
+                  'Redis Keys Before': beforeCacheSize,
+                  'Memory Before': `${beforeMemory} MB`,
+                  'Memory After': `${afterMemory} MB`,
+                  'Memory Freed': `${memoryFreed} MB`
                 },
                 changes: [
-                  { before: `${beforeSize} cached items`, after: `${afterSize} cached items` },
-                  { before: `${beforeMemory} MB used`, after: `${afterMemory} MB used` }
+                  { before: `${beforeMemory} MB heap`, after: `${afterMemory} MB heap` }
                 ]
               }
             }

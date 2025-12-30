@@ -58,7 +58,8 @@ const INSTRUCTOR_LIMIT = 10;
 const COOLDOWN_DAYS = 30;
 const MIN_DURATION_SECONDS = 120;
 const MAX_DURATION_SECONDS = 3600;
-const QUALITY_THRESHOLD = 7.0;
+const QUALITY_THRESHOLD_KNOWN = 6.5;
+const QUALITY_THRESHOLD_UNKNOWN = 7.0;
 const LOW_YIELD_THRESHOLD = 5;
 
 function calculateQualityScore(video: any): number {
@@ -268,7 +269,7 @@ async function runTechniqueFallbackSearch(result: CurationResult): Promise<void>
       
       const qualityScore = calculateQualityScore(video);
       
-      if (qualityScore < QUALITY_THRESHOLD) {
+      if (qualityScore < QUALITY_THRESHOLD_KNOWN) {
         result.skippedReasons['low_quality'] = (result.skippedReasons['low_quality'] || 0) + 1;
         continue;
       }
@@ -423,10 +424,10 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
             
             const qualityScore = calculateQualityScore(video);
             
-            if (qualityScore < QUALITY_THRESHOLD) {
+            if (qualityScore < QUALITY_THRESHOLD_UNKNOWN) {
               result.skippedReasons['low_quality'] = (result.skippedReasons['low_quality'] || 0) + 1;
               result.videosSkipped++;
-              console.log(`   ⏭️  Skip (score ${qualityScore.toFixed(1)} < ${QUALITY_THRESHOLD}): ${title.slice(0, 40)}...`);
+              console.log(`   ⏭️  Skip (score ${qualityScore.toFixed(1)} < ${QUALITY_THRESHOLD_UNKNOWN}): ${title.slice(0, 40)}...`);
               continue;
             }
             

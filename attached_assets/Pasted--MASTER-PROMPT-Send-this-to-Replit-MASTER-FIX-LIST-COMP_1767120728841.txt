@@ -1,0 +1,253 @@
+**MASTER PROMPT - Send this to Replit:**
+
+```
+MASTER FIX LIST - COMPLETE BEFORE APP STORE SUBMISSION
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 1: CURATION SYSTEM - 0% ACCEPTANCE RATE
+═══════════════════════════════════════════════════════════════════════════════
+
+Current curation analyzed 20 videos, rejected all 20. This wastes API quota.
+
+FIX THE QUALITY THRESHOLD:
+- Current threshold is too strict
+- Lower minimum quality score from 7.5 to 6.5 for known instructors
+- Lower minimum quality score from 8.0 to 7.0 for unknown instructors
+- Remove or relax any filters causing 100% rejection
+
+IMPLEMENT THE PROVEN CURATION METHOD:
+
+Step 1: Get instructors with low video counts
+SELECT instructor_name, COUNT(*) as count 
+FROM ai_video_knowledge 
+GROUP BY instructor_name 
+HAVING COUNT(*) < 50
+ORDER BY count ASC
+LIMIT 10;
+
+Step 2: For each instructor, run 5 searches:
+- "[instructor_name] jiu jitsu technique"
+- "[instructor_name] BJJ instructional"
+- "[instructor_name] guard pass"
+- "[instructor_name] submission"
+- "[instructor_name] tutorial"
+
+Step 3: Check for duplicates BEFORE analyzing (don't waste API):
+SELECT 1 FROM ai_video_knowledge WHERE youtube_url = [video_url];
+
+Step 4: Quality filter
+- 6.5+ for instructors already in database
+- 7.0+ for unknown instructors
+- Skip podcasts, interviews, competition-only, under 2 min, over 60 min
+
+Step 5: Auto-queue approved videos for Gemini processing
+
+SAFEGUARDS:
+- If instructor yields 0 videos after all 5 queries, mark as "fully_mined" for 30 days
+- If 3 consecutive instructors yield 0, switch to technique-based backup searches
+- If API quota exhausted (403), stop immediately and wait for reset
+- Email alert if acceptance rate stays below 5%
+
+SCHEDULE (EST):
+- 3:15 AM (after quota reset)
+- 9:00 AM
+- 3:00 PM
+- 9:00 PM
+
+EMAIL REPORT after every run to todd@bjjos.app:
+- Instructors targeted
+- Videos analyzed vs added
+- Rejection reasons breakdown
+- New library total
+- Next scheduled run
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 2: ADMIN DASHBOARD FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+FIX 1: USER ACTIVITY CHART
+Error: "The 'string' argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date"
+
+The backend is sending Date objects instead of strings. Fix:
+- Convert all dates to ISO strings before sending to frontend
+- Example: date.toISOString() instead of raw Date object
+
+FIX 2: TAKE_SNAPSHOT COMMAND
+Error: "Syntax error at or near 'desc'"
+- Fix the SQL query syntax in the snapshot function
+- Test and confirm it works
+
+FIX 3: FLUSH_CACHE COMMAND
+Error: "cache.keys is not a function"
+- Fix the cache implementation
+- Test and confirm it works
+
+FIX 4: USER REQUESTS NOT TRACKING (Meta Insights)
+- Recent Professor OS conversations are not being logged
+- Only showing stale data from months ago
+- Every time a user asks Professor OS about a technique, log it to the user_requests table with:
+  - technique name
+  - type
+  - belt level
+  - gi/nogi
+  - context (snippet of what they asked)
+  - timestamp
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 3: iOS APP - PROFILE PAGE NOT SAVING
+═══════════════════════════════════════════════════════════════════════════════
+
+All profile fields have UI but nothing saves:
+
+1. NAME
+   - No text input field appears when tapped
+   - Add a text input field
+   - Check button must save to database
+
+2. BELT
+   - Options appear, selection doesn't save
+   - Fix the save function
+
+3. WEIGHT
+   - Picker appears, selection doesn't save
+   - Fix the save function
+
+4. HEIGHT
+   - Picker appears, selection doesn't save
+   - Fix the save function
+
+5. STYLE
+   - Missing "Both" option - ADD IT (currently only Gi and No-Gi)
+   - Selection doesn't save
+   - Fix the save function
+
+6. X BUTTON BUG
+   - Currently logs user out
+   - Should just close/cancel the picker
+
+DEBUG THE SAVE FLOW:
+- Add console.logs to trace what happens when check is tapped
+- Is the API being called?
+- Is there an error response?
+- Is the database being updated?
+
+TEST EACH FIELD after fixing.
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 4: iOS APP - SETTINGS CONFIRMATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Under Data & Privacy, add confirmation dialogs:
+
+DELETE CHAT HISTORY - When tapped show:
+- Title: "Delete Chat History?"
+- Message: "This will permanently delete all your conversations with Professor OS. This cannot be undone."
+- Buttons: "Cancel" | "Delete" (red)
+
+RESET PROFESSOR OS MEMORY - When tapped show:
+- Title: "Reset Professor OS Memory?"
+- Message: "Professor OS will forget everything about your training history, goals, and preferences. You'll start fresh. This cannot be undone."
+- Buttons: "Cancel" | "Reset" (red)
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 5: iOS APP - PROFILE PHOTO
+═══════════════════════════════════════════════════════════════════════════════
+
+The purple person icon at top of Profile should be tappable:
+
+1. When tapped, show action sheet:
+   - "Choose from Library"
+   - "Take Photo"
+   - "Cancel"
+
+2. After selecting photo:
+   - Crop to circle
+   - Save to user profile
+   - Display instead of default icon
+
+3. Add "Remove Photo" option if photo exists
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 6: GEMINI PROCESSING STATUS
+═══════════════════════════════════════════════════════════════════════════════
+
+108 videos show as "pending" but may already be processed.
+
+Check and fix:
+SELECT status, COUNT(*) FROM video_watch_status GROUP BY status;
+
+If videos were processed but status not updated:
+UPDATE video_watch_status SET status = 'completed' WHERE processed_at IS NOT NULL AND status = 'pending';
+
+Sync the dashboard count with actual status.
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 7: PROFESSOR OS PERSONALITY UPDATE
+═══════════════════════════════════════════════════════════════════════════════
+
+Update the system prompt with these guidelines:
+
+CORE IDENTITY:
+- Experienced training partner who genuinely cares
+- Remembers everything about user's journey
+- Super knowledgeable, shares knowledge when asked - doesn't lecture unprompted
+- If user mentions their coach/professor, always show respect
+
+TONE:
+- Always supportive, never drill sergeant
+- Lighthearted honesty when needed, but gentle
+- Never push back on or challenge the user
+- Never criticize their approach
+- Avoid condescending phrases like "you're collecting techniques" or "you can keep doing X or you can do Y"
+
+EMOTIONAL CONTEXT:
+- When user expresses frustration or self-doubt: VALIDATE FIRST
+- Do NOT immediately diagnose or coach when they're venting
+- Keep responses SHORT when they're emotional
+- Ask what happened before offering solutions
+
+RESPONSE LENGTH:
+- Match length to input complexity
+- Casual check-ins = 2-3 sentences MAX
+- Technical questions = detailed answer OK
+- Vague inputs = ask clarifying question OR short diagnosis, not both
+
+VIDEO RECOMMENDATIONS:
+- 1 video standard, 2-3 OK when question has multiple dimensions
+- NEVER repeat same video twice in conversation
+- If referencing video already sent, say "Go back to that [Name] video I sent - the [timestamp] covers this"
+
+MEMORY:
+- Reference past conversations when genuinely useful, not to show off
+- Don't open with "As you mentioned last week..."
+- Track commitments and follow up naturally
+- If same problem mentioned 3+ times, gently notice the pattern
+
+═══════════════════════════════════════════════════════════════════════════════
+DO NOT BREAK THESE (CONFIRMED WORKING)
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Chat works
+✅ Text input scrolls up correctly
+✅ "Thinking, analyzing..." indicator shows
+✅ Videos tab - 2,564 videos loading
+✅ Terms of Service link
+✅ Privacy Policy link
+✅ Help & Support email
+✅ Curation Pipeline shows Active
+✅ Meta Insights - Techniques Tracked, Need Curation, Videos in Library
+✅ Test APIs - 4/4 available
+✅ Video thumbnails displaying
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER COMPLETING ALL FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Test curation - run manually and confirm videos are added (not 0%)
+2. Test profile - every field saves and persists
+3. Test settings confirmations - dialogs appear before destructive actions
+4. Test User Activity chart - loads without error
+5. Verify Gemini pending count is accurate
+
+Push to GitHub when complete. We are submitting to App Store today.
+```
