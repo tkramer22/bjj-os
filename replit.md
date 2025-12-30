@@ -34,6 +34,12 @@ The application uses a React TypeScript frontend and an Express.js backend with 
 - **Intelligent Curator V2**: Major upgrade to the video curation system with dynamic discovery capabilities, including a dynamic instructor pool, technique pool, over 800 query combinations, query rotation, deep discovery, intent-based sorting, smart duplicate handling, and auto-expansion for new instructors.
 - **Smart Video Search (Admin Dashboard)**: Dynamic instructor/technique dropdowns with video counts, fuzzy search, and quality/date range filters.
 - **Unified Curation System V3**: Simplified, search-based curation system with AI analysis for instructional content detection, a quality threshold of 7.0+, daily scheduled curation, rotation tracking, and Command Center integration with status-based email reports.
+- **Permanent Auto-Curation System**: "Set and forget" automated video discovery targeting underrepresented instructors (< 50 videos). Features:
+  - **5-Step Algorithm**: Get targets → 5 search patterns per instructor → Duplicate check before API → Quality filter (7.0+) → Save & queue for Gemini
+  - **4 Safeguards**: (1) fully_mined instructor cooldown (30 days), (2) technique fallback after 3 empty instructors, (3) quota exhaustion handling (403 detection), (4) low-yield email alerts (< 5 videos)
+  - **Self-Expanding Discovery**: New instructors found during Gemini processing automatically added to the curation pool
+  - **Schedule**: 4x daily (3:15am, 9am, 3pm, 9pm America/New_York timezone)
+  - **Notifications**: Email reports to todd@bjjos.app after each run, dedicated low-yield alerts when < 5 videos added
 - **Video Knowledge System V2**: Professor OS now "watches" every video using Gemini API to process YouTube videos natively and extract deeply structured BJJ knowledge for intelligent coaching. This includes comprehensive knowledge extraction (30+ fields covering categorization, instructor wisdom, problem-solving, technique chains, physical considerations, training context), intelligent knowledge retrieval, and integration into Professor OS recommendations.
 - **Professor OS Knowledge Embodiment V1**: Major enhancement to make Professor OS EMBODY its knowledge rather than just ACCESS it. Includes 5 layers:
   - **Layer 1 (Knowledge Embodiment)**: Reframes video knowledge from "database to search" to "knowledge I possess" - Claude believes it HAS the knowledge, not just access to it.
