@@ -455,6 +455,9 @@ What's on your mind?`,
             loadMoreMessages();
           }
         }}
+        style={{
+          paddingBottom: '180px',
+        }}
       >
         {isLoadingMore && (
           <div style={{ textAlign: 'center', padding: '12px', color: 'var(--mobile-text-secondary)' }}>
@@ -504,42 +507,54 @@ What's on your mind?`,
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="mobile-chat-input mobile-safe-area-bottom">
+      <div 
+        className="mobile-chat-input-container mobile-safe-area-bottom"
+        style={{
+          position: 'fixed',
+          bottom: '80px',
+          left: 0,
+          right: 0,
+          zIndex: 9998,
+          background: '#0A0A0B',
+          borderTop: '1px solid var(--mobile-border)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        }}
+      >
         <div style={{
           display: 'flex',
           alignItems: 'flex-end',
           gap: '8px',
           padding: '12px 16px',
-          background: 'var(--mobile-card-bg)',
-          borderTop: '1px solid var(--mobile-border)'
         }}>
           <MobileVoiceRecorder onRecordingComplete={handleVoiceComplete} />
           
           <div style={{
             flex: 1,
             display: 'flex',
-            alignItems: 'flex-end',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
             background: 'var(--mobile-input-bg)',
             borderRadius: '20px',
             padding: '8px 16px',
-            minHeight: '40px'
+            minHeight: '40px',
+            maxHeight: '150px',
           }}>
             <textarea
               ref={textareaRef}
               value={inputValue}
               onChange={(e) => {
                 setInputValue(e.target.value);
-                // Auto-expand textarea as user types
                 const target = e.target;
                 target.style.height = 'auto';
-                target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+                const newHeight = Math.min(target.scrollHeight, 120);
+                target.style.height = newHeight + 'px';
               }}
               onKeyPress={handleKeyPress}
               placeholder="Ask Professor OS..."
               disabled={isTyping}
               data-testid="input-chat-message"
               style={{
-                flex: 1,
+                width: '100%',
                 border: 'none',
                 background: 'transparent',
                 color: 'var(--mobile-text-primary)',
@@ -549,7 +564,8 @@ What's on your mind?`,
                 maxHeight: '120px',
                 minHeight: '24px',
                 lineHeight: '1.4',
-                overflow: 'auto'
+                overflowY: 'auto',
+                overflowX: 'hidden',
               }}
               rows={1}
             />
@@ -574,7 +590,8 @@ What's on your mind?`,
               alignItems: 'center',
               justifyContent: 'center',
               cursor: inputValue.trim() && !isTyping ? 'pointer' : 'default',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              flexShrink: 0,
             }}
           >
             <Send size={20} />
