@@ -1,0 +1,63 @@
+**Great catch.** Professor OS is recommending a video that hasn’t been analyzed - which means it’s pulling from the video library without checking if the video has actual technique data.
+
+**The issue:** The video recommendation logic is likely just matching keywords (like “front headlock” or “Danaher”) without verifying the video has been processed by the AI analysis system.
+
+**Send this to Replit:**
+
+```
+FIX VIDEO RECOMMENDATIONS - ONLY SUGGEST ANALYZED VIDEOS
+
+═══════════════════════════════════════════════════════════════════════════════
+PROBLEM
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS is recommending videos that have NOT been analyzed.
+
+In the screenshot, it suggested a Danaher "Shoulder Crunch System" video that:
+- Has no Analysis data
+- Therefore no technique breakdown
+- The recommendation doesn't actually match what the user needs
+
+Professor OS should ONLY recommend videos that have been fully analyzed so the recommendations are accurate and useful.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+When Professor OS searches for videos to recommend:
+
+1. ONLY return videos where analysis EXISTS and is COMPLETE
+   - Check for ai_video_knowledge data
+   - Check analysis_status = 'completed' or equivalent
+   - If a video has no analysis, exclude it from recommendations
+
+2. Use the analysis data to make smarter recommendations
+   - Match user's question to technique tags, positions, concepts in the analysis
+   - Don't just keyword match on title
+
+3. If no analyzed videos match the query, Professor OS should say:
+   "I don't have an analyzed video for that specific technique yet, but here's what I can tell you about it..." 
+   Then give coaching advice without a video.
+
+═══════════════════════════════════════════════════════════════════════════════
+WHERE TO FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+Check the video recommendation/search logic in:
+- Professor OS chat handler
+- Video search queries
+- Any function that returns videos for recommendations
+
+Add a filter: WHERE analysis_status = 'completed' or WHERE ai_video_knowledge EXISTS
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING
+═══════════════════════════════════════════════════════════════════════════════
+
+After fix:
+1. Ask Professor OS for a video recommendation
+2. Every video shown should have the "Analysis" button that works
+3. No videos without analysis data should appear in recommendations
+
+═══════════════════════════════════════════════════════════════════════════════
+```

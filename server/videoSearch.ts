@@ -1,6 +1,6 @@
 import { db } from './db';
-import { aiVideoKnowledge } from '../shared/schema';
-import { sql, desc, and, or, eq, ilike } from 'drizzle-orm';
+import { aiVideoKnowledge, videoKnowledge, videoWatchStatus } from '../shared/schema';
+import { sql, desc, and, or, eq, ilike, inArray, exists } from 'drizzle-orm';
 
 interface VideoSearchParams {
   userMessage: string;
@@ -638,6 +638,20 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     conditions.push(sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`);
     
     // ═══════════════════════════════════════════════════════════════════════════
+    // CRITICAL: ONLY RETURN FULLY ANALYZED VIDEOS
+    // Videos must have Gemini-extracted knowledge (videoKnowledge records) to be recommended
+    // This ensures recommendations are accurate and have actual technique data
+    // ═══════════════════════════════════════════════════════════════════════════
+    conditions.push(
+      exists(
+        db.select({ one: sql`1` })
+          .from(videoKnowledge)
+          .where(eq(videoKnowledge.videoId, aiVideoKnowledge.id))
+      )
+    );
+    console.log(`[VIDEO SEARCH] ✅ Filtering for FULLY ANALYZED videos only (with Gemini knowledge)`);
+    
+    // ═══════════════════════════════════════════════════════════════════════════
     // STEP 0: INSTRUCTOR FILTER (HIGHEST PRIORITY)
     // If user asks for a specific instructor, this MUST be the primary filter
     // ═══════════════════════════════════════════════════════════════════════════
@@ -847,6 +861,7 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     // ═══════════════════════════════════════════════════════════════════════════
     
     // INSTRUCTOR FALLBACK: If instructor search returned few results, lower quality threshold
+    // Still only return analyzed videos (with videoKnowledge records)
     if (videos.length < 3 && intent.requestedInstructor) {
       console.log(`[VIDEO SEARCH] ⚠️ Only ${videos.length} results for ${intent.requestedInstructor}, lowering quality threshold`);
       
@@ -854,21 +869,33 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
         .from(aiVideoKnowledge)
         .where(and(
           sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`,
-          ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`)
+          ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`),
+          exists(
+            db.select({ one: sql`1` })
+              .from(videoKnowledge)
+              .where(eq(videoKnowledge.videoId, aiVideoKnowledge.id))
+          )
         ))
         .orderBy(desc(aiVideoKnowledge.qualityScore))
         .limit(50);
         
-      console.log(`[VIDEO SEARCH] Instructor fallback search returned ${videos.length} videos`);
+      console.log(`[VIDEO SEARCH] Instructor fallback search returned ${videos.length} ANALYZED videos`);
     }
     
     // POSITION FALLBACK: Broaden within position category
+    // Still only return analyzed videos (with videoKnowledge records)
     if (videos.length < 3 && intent.positionCategory && !intent.requestedInstructor) {
       console.log(`[VIDEO SEARCH] ⚠️ Only ${videos.length} results, broadening WITHIN position: ${intent.positionCategory}`);
       
       // Keep position locked, but remove intent/technique restrictions
       const fallbackConditions: any[] = [
-        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
+        // CRITICAL: Only analyzed videos
+        exists(
+          db.select({ one: sql`1` })
+            .from(videoKnowledge)
+            .where(eq(videoKnowledge.videoId, aiVideoKnowledge.id))
+        )
       ];
       
       // Position variations (same as above)
@@ -891,7 +918,7 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
         .orderBy(desc(aiVideoKnowledge.qualityScore))
         .limit(50);
         
-      console.log(`[VIDEO SEARCH] Fallback search returned ${videos.length} videos`);
+      console.log(`[VIDEO SEARCH] Fallback search returned ${videos.length} ANALYZED videos`);
     }
     
     // Session focus boosting (keeps position-filtered results, just re-ranks)
@@ -957,17 +984,25 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
 export async function fallbackSearch(userMessage: string): Promise<VideoSearchResult> {
   const intent = extractSearchIntent(userMessage);
   
+  // CRITICAL: Only return videos with Gemini-extracted knowledge
+  const analyzedVideoFilter = exists(
+    db.select({ one: sql`1` })
+      .from(videoKnowledge)
+      .where(eq(videoKnowledge.videoId, aiVideoKnowledge.id))
+  );
+  
   let videos;
   
   // PRIORITY 0: Instructor filter is HIGHEST priority
   // If user asked for a specific instructor, search by instructor first
   if (intent.requestedInstructor) {
-    console.log(`[FALLBACK SEARCH] Using instructor filter: ${intent.requestedInstructor}`);
+    console.log(`[FALLBACK SEARCH] Using instructor filter: ${intent.requestedInstructor} (ANALYZED only)`);
     videos = await db.select()
       .from(aiVideoKnowledge)
       .where(and(
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
-        ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`)
+        ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`),
+        analyzedVideoFilter
       ))
       .orderBy(desc(aiVideoKnowledge.qualityScore))
       .limit(50);
@@ -975,12 +1010,13 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
   // PRIORITY 1: Position category is most specific - use it first
   // This prevents cross-contamination (e.g., half guard query returning leg lock videos)
   else if (intent.positionCategory) {
-    console.log(`[FALLBACK SEARCH] Using position category: ${intent.positionCategory}`);
+    console.log(`[FALLBACK SEARCH] Using position category: ${intent.positionCategory} (ANALYZED only)`);
     videos = await db.select()
       .from(aiVideoKnowledge)
       .where(and(
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 7.0`,
-        eq(aiVideoKnowledge.positionCategory, intent.positionCategory)
+        eq(aiVideoKnowledge.positionCategory, intent.positionCategory),
+        analyzedVideoFilter
       ))
       .orderBy(desc(aiVideoKnowledge.qualityScore))
       .limit(5);
@@ -988,20 +1024,21 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
   // PRIORITY 2: Use specific intent (pass, sweep, escape) with title matching
   // Avoid broad "attack"/"defense" categories that cause cross-contamination
   else if (intent.specificIntent && intent.specificIntent !== 'attack') {
-    console.log(`[FALLBACK SEARCH] Using specific intent: ${intent.specificIntent}`);
+    console.log(`[FALLBACK SEARCH] Using specific intent: ${intent.specificIntent} (ANALYZED only)`);
     const intentKeyword = intent.specificIntent;
     videos = await db.select()
       .from(aiVideoKnowledge)
       .where(and(
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 7.0`,
-        sql`${aiVideoKnowledge.title} ILIKE ${`%${intentKeyword}%`}`
+        sql`${aiVideoKnowledge.title} ILIKE ${`%${intentKeyword}%`}`,
+        analyzedVideoFilter
       ))
       .orderBy(desc(aiVideoKnowledge.qualityScore))
       .limit(5);
   }
   // PRIORITY 3: Use search terms from message for title matching
   else if (intent.searchTerms.length > 0) {
-    console.log(`[FALLBACK SEARCH] Using search terms: ${intent.searchTerms.join(', ')}`);
+    console.log(`[FALLBACK SEARCH] Using search terms: ${intent.searchTerms.join(', ')} (ANALYZED only)`);
     const termConditions = intent.searchTerms.map(term => 
       sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`
     );
@@ -1009,7 +1046,8 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
       .from(aiVideoKnowledge)
       .where(and(
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 7.0`,
-        or(...termConditions)
+        or(...termConditions),
+        analyzedVideoFilter
       ))
       .orderBy(desc(aiVideoKnowledge.qualityScore))
       .limit(5);
@@ -1020,7 +1058,7 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
     videos = [];
   }
   
-  console.log(`[FALLBACK SEARCH] Found ${videos.length} videos`);
+  console.log(`[FALLBACK SEARCH] Found ${videos.length} ANALYZED videos`);
   
   return { 
     videos, 

@@ -1,6 +1,6 @@
 import { db } from '../db';
-import { aiVideoKnowledge, bjjUsers, userVideoStats } from '@shared/schema';
-import { eq, and, gte, notInArray, sql, desc, or, inArray, isNull } from 'drizzle-orm';
+import { aiVideoKnowledge, bjjUsers, userVideoStats, videoKnowledge } from '@shared/schema';
+import { eq, and, gte, notInArray, sql, desc, or, inArray, isNull, exists } from 'drizzle-orm';
 import { VideoViewTrackingService } from './videoViewTracking';
 
 interface RecommendationContext {
@@ -38,6 +38,12 @@ export class VideoRecommendationService {
     // 2. Build query conditions
     const conditions = [
       eq(aiVideoKnowledge.status, 'active'),
+      // CRITICAL: Only recommend videos that have been fully analyzed by Gemini
+      exists(
+        db.select({ one: sql`1` })
+          .from(videoKnowledge)
+          .where(eq(videoKnowledge.videoId, aiVideoKnowledge.id))
+      )
     ];
 
     // Search by technique name or query
