@@ -142,6 +142,7 @@ export const bjjUsers = pgTable("bjj_users", {
   username: text("username").unique(), // lowercase, alphanumeric + underscores, 3-20 chars (optional at signup)
   displayName: text("display_name"), // Original input like "John Smith"
   name: text("name"), // Legacy field (kept for backward compatibility)
+  avatarUrl: text("avatar_url"), // Profile picture URL
   adminNotes: text("admin_notes"), // Admin notes about this user
   beltLevel: text("belt_level"), // white, blue, purple, brown, black
   style: text("style").default("both"), // gi, nogi, both

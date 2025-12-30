@@ -56,12 +56,15 @@ export default function IOSSettingsPage() {
 
   const deleteChatHistory = useMutation({
     mutationFn: async () => {
+      const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
       const response = await fetch(getApiUrl('/api/user/chat-history'), {
         method: 'DELETE',
         credentials: 'include',
+        headers: {
+          ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}),
+        },
       });
       if (!response.ok) throw new Error('Failed to delete chat history');
-      // 204 No Content - don't try to parse JSON
       return { success: true };
     },
     onSuccess: () => {
@@ -74,12 +77,15 @@ export default function IOSSettingsPage() {
 
   const resetProfile = useMutation({
     mutationFn: async () => {
+      const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
       const response = await fetch(getApiUrl('/api/user/reset-profile'), {
         method: 'DELETE',
         credentials: 'include',
+        headers: {
+          ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}),
+        },
       });
       if (!response.ok) throw new Error('Failed to reset profile');
-      // 204 No Content - don't try to parse JSON
       return { success: true };
     },
     onSuccess: () => {
@@ -750,7 +756,7 @@ export default function IOSSettingsPage() {
               marginBottom: '12px',
               color: '#FFFFFF'
             }}>
-              Reset Everything?
+              Reset Professor OS Memory?
             </h3>
             <p style={{ 
               fontSize: '14px', 
@@ -758,7 +764,7 @@ export default function IOSSettingsPage() {
               lineHeight: 1.5,
               marginBottom: '24px'
             }}>
-              This will delete ALL your data including conversations, your belt rank, goals, training preferences, and everything Professor OS has learned about you. You'll need to set up your profile again. This cannot be undone.
+              Professor OS will forget everything about your training history, goals, and preferences. You'll start fresh like a new user. This cannot be undone.
             </p>
             <div style={{ display: 'flex', gap: '12px' }}>
               <button
@@ -795,7 +801,7 @@ export default function IOSSettingsPage() {
                   opacity: resetProfile.isPending ? 0.5 : 1,
                 }}
               >
-                {resetProfile.isPending ? 'Resetting...' : 'Reset Everything'}
+                {resetProfile.isPending ? 'Resetting...' : 'Reset'}
               </button>
             </div>
           </div>

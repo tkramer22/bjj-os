@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
-import { User, Settings, ChevronRight, Loader2, X, Check } from "lucide-react";
+import { User, Settings, ChevronRight, Loader2, X, Check, Camera, Image, Trash2 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { apiRequest } from "@/lib/queryClient";
+import { getApiUrl } from "@/lib/capacitorAuth";
 
 console.log('✅ iOS PROFILE loaded');
 
@@ -20,6 +21,7 @@ interface UserProfile {
   weight?: number | string;
   height?: string;
   unitPreference?: 'imperial' | 'metric';
+  avatarUrl?: string;
 }
 
 type EditableField = 'name' | 'beltLevel' | 'weight' | 'height' | 'style' | null;
@@ -46,6 +48,9 @@ export default function IOSProfilePage() {
   const queryClient = useQueryClient();
   const [editingField, setEditingField] = useState<EditableField>(null);
   const [editValue, setEditValue] = useState('');
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const weightPickerRef = useRef<HTMLDivElement>(null);
   const heightPickerRef = useRef<HTMLDivElement>(null);
   const initialScrollSetRef = useRef<string | null>(null);
@@ -169,16 +174,126 @@ export default function IOSProfilePage() {
 
   const updateProfile = useMutation({
     mutationFn: async (updates: Partial<UserProfile>) => {
+      console.log('[PROFILE] Saving updates:', updates);
+      console.log('[PROFILE] Token in localStorage:', localStorage.getItem('sessionToken')?.substring(0, 20) + '...');
       const response = await apiRequest('PATCH', '/api/auth/profile', updates);
-      return response.json();
+      const result = await response.json();
+      console.log('[PROFILE] Save response:', result);
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('[PROFILE] Save SUCCESS:', data);
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setEditingField(null);
       setEditValue('');
       triggerHaptic('light');
     },
+    onError: (error) => {
+      console.error('[PROFILE] Save FAILED:', error);
+      triggerHaptic('error');
+    },
   });
+
+  const handleAvatarUpload = async (file: File) => {
+    setIsUploadingAvatar(true);
+    setShowAvatarModal(false);
+    
+    try {
+      // Convert to base64 data URL
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Url = e.target?.result as string;
+        
+        // Resize if too large (max 400px)
+        const resizedUrl = await resizeImage(base64Url, 400);
+        
+        // Upload to server
+        const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
+        const response = await fetch(getApiUrl('/api/auth/avatar'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}),
+          },
+          credentials: 'include',
+          body: JSON.stringify({ avatarUrl: resizedUrl }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to upload avatar');
+        }
+        
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+        triggerHaptic('success');
+        setIsUploadingAvatar(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      triggerHaptic('error');
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const resizeImage = (dataUrl: string, maxSize: number): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = document.createElement('img');
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > height) {
+          if (width > maxSize) {
+            height = Math.round(height * maxSize / width);
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = Math.round(width * maxSize / height);
+            height = maxSize;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = dataUrl;
+    });
+  };
+
+  const handleRemoveAvatar = async () => {
+    setShowAvatarModal(false);
+    setIsUploadingAvatar(true);
+    
+    try {
+      const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
+      const response = await fetch(getApiUrl('/api/auth/avatar'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ avatarUrl: null }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to remove avatar');
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      triggerHaptic('light');
+    } catch (error) {
+      console.error('Avatar remove error:', error);
+      triggerHaptic('error');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   const handleNavigate = (path: string) => {
     triggerHaptic('light');
@@ -310,18 +425,68 @@ export default function IOSProfilePage() {
           alignItems: 'center',
           marginBottom: '32px',
         }}>
-          <div style={{
-            width: '80px',
-            height: '80px',
-            borderRadius: '50%',
-            background: `linear-gradient(135deg, ${getBeltColor(user?.beltLevel)} 0%, #8B5CF6 100%)`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '12px',
-          }}>
-            <User size={36} color="#FFFFFF" />
-          </div>
+          <button
+            onClick={() => { triggerHaptic('light'); setShowAvatarModal(true); }}
+            data-testid="button-edit-avatar"
+            style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: user?.avatarUrl ? 'transparent' : `linear-gradient(135deg, ${getBeltColor(user?.beltLevel)} 0%, #8B5CF6 100%)`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '12px',
+              border: 'none',
+              cursor: 'pointer',
+              overflow: 'hidden',
+              position: 'relative',
+            }}
+          >
+            {isUploadingAvatar ? (
+              <Loader2 className="animate-spin" size={32} color="#8B5CF6" />
+            ) : user?.avatarUrl ? (
+              <img 
+                src={user.avatarUrl} 
+                alt="Profile" 
+                style={{ 
+                  width: '100%', 
+                  height: '100%', 
+                  objectFit: 'cover' 
+                }} 
+              />
+            ) : (
+              <User size={36} color="#FFFFFF" />
+            )}
+            {/* Camera badge */}
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              background: '#8B5CF6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px solid #0A0A0B',
+            }}>
+              <Camera size={12} color="#FFFFFF" />
+            </div>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleAvatarUpload(file);
+              e.target.value = '';
+            }}
+            data-testid="input-avatar-file"
+          />
         </div>
 
         {/* Editable Fields Card */}
@@ -784,6 +949,109 @@ export default function IOSProfilePage() {
                 }}
               />
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Avatar Options Modal */}
+      {showAvatarModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'flex-end',
+            zIndex: 1000,
+          }}
+          onClick={() => setShowAvatarModal(false)}
+          data-testid="modal-avatar-overlay"
+        >
+          <div 
+            style={{
+              width: '100%',
+              background: '#1A1A1D',
+              borderTopLeftRadius: '20px',
+              borderTopRightRadius: '20px',
+              padding: '20px',
+              paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ 
+              width: '36px', 
+              height: '4px', 
+              background: '#3A3A3C', 
+              borderRadius: '2px',
+              margin: '0 auto 20px',
+            }} />
+            
+            <button
+              onClick={() => { fileInputRef.current?.click(); setShowAvatarModal(false); }}
+              data-testid="button-choose-photo"
+              style={{
+                width: '100%',
+                padding: '16px',
+                background: '#2A2A2E',
+                border: 'none',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                cursor: 'pointer',
+                marginBottom: '8px',
+              }}
+            >
+              <Image size={20} color="#FFFFFF" />
+              <span style={{ color: '#FFFFFF', fontSize: '16px' }}>
+                Choose from Library
+              </span>
+            </button>
+
+            {user?.avatarUrl && (
+              <button
+                onClick={handleRemoveAvatar}
+                data-testid="button-remove-photo"
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  cursor: 'pointer',
+                  marginBottom: '8px',
+                }}
+              >
+                <Trash2 size={20} color="#DC2626" />
+                <span style={{ color: '#DC2626', fontSize: '16px' }}>
+                  Remove Photo
+                </span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setShowAvatarModal(false)}
+              data-testid="button-cancel-avatar"
+              style={{
+                width: '100%',
+                padding: '16px',
+                background: 'transparent',
+                border: 'none',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                marginTop: '8px',
+              }}
+            >
+              <span style={{ color: '#71717A', fontSize: '16px' }}>
+                Cancel
+              </span>
+            </button>
           </div>
         </div>
       )}

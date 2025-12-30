@@ -2985,15 +2985,22 @@ export function registerRoutes(app: Express): Server {
   // Get current user (updated for phone auth)
   app.get('/api/auth/me', async (req, res) => {
     try {
-      // Read token from cookie (set during login/signup)
-      const token = req.cookies.sessionToken;
+      // Support both cookie-based auth (web) and Bearer token auth (mobile)
+      let token = req.cookies.sessionToken;
+      
+      // Check for Bearer token in Authorization header (mobile app support)
+      const authHeader = req.headers.authorization;
+      if (!token && authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+        console.log('[/api/auth/me] Using Bearer token from Authorization header');
+      }
       
       if (!token) {
-        console.log('[/api/auth/me] No sessionToken cookie found');
+        console.log('[/api/auth/me] No sessionToken cookie or Bearer token found');
         return res.status(401).json({ error: 'Not authenticated' });
       }
       
-      console.log('[/api/auth/me] Token found in cookie, verifying...');
+      console.log('[/api/auth/me] Token found, verifying...');
       const decoded = jwt.verify(token, JWT_SECRET) as any;
       console.log('[/api/auth/me] Token verified, userId:', decoded.userId);
       
@@ -3003,6 +3010,8 @@ export function registerRoutes(app: Express): Server {
         email: bjjUsers.email,
         username: bjjUsers.username,
         name: bjjUsers.name,
+        displayName: bjjUsers.displayName,
+        avatarUrl: bjjUsers.avatarUrl,
         beltLevel: bjjUsers.beltLevel,
         style: bjjUsers.style,
         trainingFrequency: bjjUsers.trainingFrequency,
@@ -3019,6 +3028,7 @@ export function registerRoutes(app: Express): Server {
         gym: bjjUsers.gym,
         struggleTechnique: bjjUsers.struggleTechnique,
         injuries: bjjUsers.injuries,
+        unitPreference: bjjUsers.unitPreference,
         passwordHash: bjjUsers.passwordHash,
       })
         .from(bjjUsers)
@@ -3045,6 +3055,8 @@ export function registerRoutes(app: Express): Server {
         email: user.email,
         username: user.username,
         name: user.name,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
         beltLevel: user.beltLevel,
         style: user.style,
         trainingFrequency: user.trainingFrequency,
@@ -3061,6 +3073,7 @@ export function registerRoutes(app: Express): Server {
         gym: user.gym,
         struggleTechnique: user.struggleTechnique,
         injuries: user.injuries,
+        unitPreference: user.unitPreference,
         hasPassword: !!user.passwordHash,
       });
     } catch (error: any) {
@@ -3222,7 +3235,8 @@ export function registerRoutes(app: Express): Server {
         timezone,
         weeklyRecapEnabled,
         yearsTraining,
-        unitPreference
+        unitPreference,
+        avatarUrl
       } = req.body;
       
       console.log('[ONBOARDING] Received data:', req.body);
@@ -3296,6 +3310,7 @@ export function registerRoutes(app: Express): Server {
           ...(weeklyRecapEnabled !== undefined && { weeklyRecapEnabled }),
           ...(yearsTraining !== undefined && { yearsTraining }),
           ...(unitPreference !== undefined && { unitPreference }),
+          ...(avatarUrl !== undefined && { avatarUrl }),
           // Mark onboarding as complete if explicitly set
           ...(onboardingCompleted !== undefined && { 
             onboardingCompleted,
@@ -3330,6 +3345,41 @@ export function registerRoutes(app: Express): Server {
       res.json({ success: true, metrics: derivedMetrics });
     } catch (error: any) {
       console.error('Profile update error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Upload profile avatar (base64 data URL)
+  app.post('/api/auth/avatar', checkUserAuth, async (req: any, res) => {
+    try {
+      if (!req.user || !req.user.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      
+      const { avatarUrl } = req.body;
+      
+      // avatarUrl should be a data URL (data:image/jpeg;base64,...) or null to remove
+      if (avatarUrl !== null && avatarUrl !== undefined) {
+        // Validate it's a data URL or a valid URL
+        if (!avatarUrl.startsWith('data:image/') && !avatarUrl.startsWith('http')) {
+          return res.status(400).json({ error: 'Invalid avatar URL format' });
+        }
+        
+        // Limit size (base64 encoded images can be large)
+        if (avatarUrl.length > 2 * 1024 * 1024) { // 2MB limit
+          return res.status(400).json({ error: 'Avatar too large (max 2MB)' });
+        }
+      }
+      
+      await db.update(bjjUsers)
+        .set({ avatarUrl: avatarUrl || null })
+        .where(eq(bjjUsers.id, req.user.userId));
+      
+      console.log(`[AVATAR] Updated avatar for user ${req.user.userId}`);
+      
+      res.json({ success: true, avatarUrl: avatarUrl || null });
+    } catch (error: any) {
+      console.error('Avatar update error:', error);
       res.status(500).json({ error: error.message });
     }
   });
