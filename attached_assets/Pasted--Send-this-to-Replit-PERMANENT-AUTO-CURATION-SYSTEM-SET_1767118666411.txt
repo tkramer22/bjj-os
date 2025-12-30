@@ -1,0 +1,129 @@
+**Send this to Replit:**
+
+```
+PERMANENT AUTO-CURATION SYSTEM - SET AND FORGET
+
+This curation must work automatically forever without manual intervention.
+
+═══════════════════════════════════════════════════════════════════════════════
+THE ALGORITHM (NEVER CHANGE THIS LOGIC)
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 1: GET TARGETS (runs fresh every time)
+SELECT instructor_name, COUNT(*) as video_count 
+FROM ai_video_knowledge 
+GROUP BY instructor_name 
+HAVING COUNT(*) < 50
+ORDER BY COUNT(*) ASC
+LIMIT 10;
+
+This automatically evolves:
+- When an instructor hits 50 videos, they drop off the list
+- New instructors with low counts rise to the top
+- System always targets the most underrepresented instructors
+
+STEP 2: SEARCH PATTERN (5 queries per instructor)
+For each instructor from Step 1, run:
+1. "[instructor_name] jiu jitsu technique"
+2. "[instructor_name] BJJ instructional"
+3. "[instructor_name] guard pass"
+4. "[instructor_name] submission"
+5. "[instructor_name] tutorial"
+
+STEP 3: DUPLICATE CHECK BEFORE API CALL
+Before analyzing ANY video, check:
+SELECT 1 FROM ai_video_knowledge WHERE youtube_url = [video_url];
+
+If exists → SKIP (don't waste API on duplicates)
+If not exists → proceed to quality analysis
+
+STEP 4: QUALITY FILTER
+- Score 7.0+ for instructors already in database
+- Skip podcasts (check title for "podcast", "interview", "Q&A")
+- Skip competition-only footage (no instruction)
+- Skip videos under 2 minutes
+- Skip videos over 60 minutes (usually full instructionals we can't use)
+
+STEP 5: SAVE AND QUEUE
+For each approved video:
+1. Insert into ai_video_knowledge with full metadata
+2. Immediately queue for Gemini processing in video_watch_status
+3. Log the addition
+
+═══════════════════════════════════════════════════════════════════════════════
+SAFEGUARDS (PREVENT 0-VIDEO RUNS)
+═══════════════════════════════════════════════════════════════════════════════
+
+SAFEGUARD 1: If instructor search yields 0 new videos after all 5 queries
+→ Mark instructor as "fully_mined" with timestamp
+→ Skip this instructor for 30 days
+→ Move to next instructor
+
+SAFEGUARD 2: If 3 consecutive instructors yield 0 videos
+→ Switch to technique-based search as backup:
+   - "BJJ [random_technique] tutorial 2024"
+   - "how to [random_technique] jiu jitsu"
+→ Pull technique list from existing video categories
+
+SAFEGUARD 3: If API quota exhausted (403 error)
+→ Stop immediately
+→ Log timestamp
+→ Schedule retry for quota reset (midnight Pacific)
+→ Do NOT keep retrying and wasting cycles
+
+SAFEGUARD 4: Minimum yield check
+→ If a full curation cycle adds fewer than 5 videos
+→ Email alert: "Low yield curation - may need new instructor seeds"
+
+═══════════════════════════════════════════════════════════════════════════════
+SELF-EXPANDING INSTRUCTOR LIST
+═══════════════════════════════════════════════════════════════════════════════
+
+When Gemini processes a video and finds a NEW instructor name not in database:
+1. Check if instructor appears in 3+ videos from search results
+2. If yes → Auto-add to instructor pool with starting credibility of 70
+3. They become eligible for future instructor-focused searches
+4. System grows its own instructor list over time
+
+═══════════════════════════════════════════════════════════════════════════════
+SCHEDULE (ALL TIMES EST)
+═══════════════════════════════════════════════════════════════════════════════
+
+3:15 AM - Primary run (right after quota reset)
+9:00 AM - Morning run
+3:00 PM - Afternoon run  
+9:00 PM - Evening run
+
+Each run: 10 instructors × 5 searches = 50 searches max
+Expected yield: 20-50 videos per run if working correctly
+
+═══════════════════════════════════════════════════════════════════════════════
+EMAIL REPORT (AFTER EVERY RUN)
+═══════════════════════════════════════════════════════════════════════════════
+
+Send to: todd@bjjos.app
+
+Subject: "🎬 Curation Complete: +[X] videos"
+
+Body:
+- Timestamp
+- Instructors targeted (with before/after counts)
+- Videos analyzed vs added
+- Videos skipped (with reasons: duplicate, quality, too short, etc.)
+- New library total
+- Gemini queue status
+- Any errors or warnings
+- Next scheduled run
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENT AND CONFIRM
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Build this as a permanent cron job system
+2. Create the "fully_mined" tracking table if needed
+3. Test with a dry run (show what WOULD happen without actually running)
+4. Confirm all 4 scheduled times are set
+5. Confirm email notifications are configured
+
+This system should run forever without needing manual prompts.
+```

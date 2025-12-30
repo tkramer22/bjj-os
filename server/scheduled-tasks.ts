@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { runAlertMonitor } from './alert-monitor-service';
 import { sendHourlyDigest } from './hourly-digest-service';
 import { processBatch as processVideoKnowledgeBatch } from './video-knowledge-service';
+import { runPermanentAutoCuration } from './permanent-auto-curation';
 
 /**
  * SCHEDULED TASKS COORDINATOR
@@ -90,6 +91,56 @@ export function initScheduledTasks() {
   console.log(`  ✅ Video Knowledge Processing: Every 30 sec (20 videos/batch, ${keyMode})`);
   
   // ═══════════════════════════════════════════════════════════════
+  // PERMANENT AUTO-CURATION - 4x daily (EST/EDT times with timezone)
+  // Automatically curates videos targeting underrepresented instructors
+  // Using America/New_York timezone to handle DST automatically
+  // ═══════════════════════════════════════════════════════════════
+  
+  const cronOptions = { timezone: 'America/New_York' };
+  
+  // 3:15 AM EST/EDT - Primary run (right after YouTube quota reset at midnight PT)
+  cron.schedule('15 3 * * *', async () => {
+    console.log('🤖 [AUTO-CURATION] Starting 3:15 AM EST/EDT run...');
+    try {
+      await runPermanentAutoCuration();
+    } catch (error) {
+      console.error('❌ [AUTO-CURATION] 3:15 AM run failed:', error);
+    }
+  }, cronOptions);
+  
+  // 9:00 AM EST/EDT - Morning run
+  cron.schedule('0 9 * * *', async () => {
+    console.log('🤖 [AUTO-CURATION] Starting 9:00 AM EST/EDT run...');
+    try {
+      await runPermanentAutoCuration();
+    } catch (error) {
+      console.error('❌ [AUTO-CURATION] 9:00 AM run failed:', error);
+    }
+  }, cronOptions);
+  
+  // 3:00 PM EST/EDT - Afternoon run
+  cron.schedule('0 15 * * *', async () => {
+    console.log('🤖 [AUTO-CURATION] Starting 3:00 PM EST/EDT run...');
+    try {
+      await runPermanentAutoCuration();
+    } catch (error) {
+      console.error('❌ [AUTO-CURATION] 3:00 PM run failed:', error);
+    }
+  }, cronOptions);
+  
+  // 9:00 PM EST/EDT - Evening run
+  cron.schedule('0 21 * * *', async () => {
+    console.log('🤖 [AUTO-CURATION] Starting 9:00 PM EST/EDT run...');
+    try {
+      await runPermanentAutoCuration();
+    } catch (error) {
+      console.error('❌ [AUTO-CURATION] 9:00 PM run failed:', error);
+    }
+  }, cronOptions);
+  
+  console.log('  ✅ Permanent Auto-Curation: 4x daily (3:15am, 9am, 3pm, 9pm America/New_York)');
+  
+  // ═══════════════════════════════════════════════════════════════
   // INITIAL RUN - Run alert monitor on startup
   // ═══════════════════════════════════════════════════════════════
   setTimeout(async () => {
@@ -155,8 +206,13 @@ export function getSchedulerStatus() {
       },
       {
         name: 'Video Knowledge Processing',
-        schedule: 'Every 5 minutes',
+        schedule: 'Every 30 seconds',
         enabled: isInitialized && !!process.env.GEMINI_API_KEY
+      },
+      {
+        name: 'Permanent Auto-Curation',
+        schedule: '4x daily (3:15am, 9am, 3pm, 9pm EST)',
+        enabled: isInitialized && !!process.env.YOUTUBE_API_KEY
       }
     ]
   };

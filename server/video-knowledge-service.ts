@@ -491,6 +491,16 @@ export async function processVideoKnowledge(videoId: number): Promise<{ success:
     
     console.log(`[PROCESS] Successfully processed video ${video.id}: ${extractionResult.techniques!.length} techniques`);
     
+    // Self-expanding instructor discovery - check if a new instructor should be added to the pool
+    if (video.instructorName) {
+      try {
+        const { discoverNewInstructor } = await import('./permanent-auto-curation');
+        await discoverNewInstructor(video.instructorName, video.channelName || '');
+      } catch (e) {
+        // Non-critical - don't fail video processing if discovery fails
+      }
+    }
+    
     return {
       success: true,
       techniquesAdded: extractionResult.techniques!.length

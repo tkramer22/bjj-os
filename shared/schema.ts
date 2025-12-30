@@ -2872,6 +2872,29 @@ export const insertCurationRunSchema = createInsertSchema(curationRuns).omit({
 export type InsertCurationRun = z.infer<typeof insertCurationRunSchema>;
 export type CurationRun = typeof curationRuns.$inferSelect;
 
+// Fully Mined Instructors - Track instructors that have been exhausted for curation
+export const fullyMinedInstructors = pgTable("fully_mined_instructors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  instructorName: text("instructor_name").notNull().unique(),
+  minedAt: timestamp("mined_at").defaultNow().notNull(),
+  cooldownUntil: timestamp("cooldown_until").notNull(),
+  consecutiveEmptyRuns: integer("consecutive_empty_runs").default(1),
+  lastVideoCount: integer("last_video_count"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  instructorIdx: index("idx_mined_instructor").on(table.instructorName),
+  cooldownIdx: index("idx_mined_cooldown").on(table.cooldownUntil),
+}));
+
+export const insertFullyMinedInstructorSchema = createInsertSchema(fullyMinedInstructors).omit({
+  id: true,
+  minedAt: true,
+  createdAt: true,
+});
+
+export type InsertFullyMinedInstructor = z.infer<typeof insertFullyMinedInstructorSchema>;
+export type FullyMinedInstructor = typeof fullyMinedInstructors.$inferSelect;
+
 // Search Queries Log - Detailed log of each search executed
 export const searchQueriesLog = pgTable("search_queries_log", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
