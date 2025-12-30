@@ -10489,6 +10489,40 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
+  // Transcribe audio using OpenAI Whisper API (AUTHENTICATED)
+  app.post('/api/voice/transcribe', checkUserAuth, upload.single('audio'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'Audio file is required' });
+      }
+
+      const userId = req.user?.userId;
+      console.log(`[WHISPER] User ${userId} - Received audio file: ${req.file.originalname}, size: ${req.file.size} bytes`);
+
+      const { transcribeAudioBuffer } = await import('./whisper');
+      
+      const result = await transcribeAudioBuffer(
+        req.file.buffer,
+        req.file.originalname || 'recording.webm'
+      );
+
+      const previewText = result?.text ? result.text.substring(0, 50) : '(empty)';
+      console.log(`[WHISPER] User ${userId} - Transcription complete: "${previewText}..."`);
+
+      res.json({
+        text: result?.text || '',
+        duration: result?.duration || 0,
+      });
+
+    } catch (error: any) {
+      console.error('[WHISPER] Transcription error:', error);
+      res.status(500).json({ 
+        error: 'Failed to transcribe audio',
+        details: error.message 
+      });
+    }
+  });
+
   // ═══════════════════════════════════════════════════════════════════════════════
   // VIDEO TRACKING & INTELLIGENT RECOMMENDATIONS
   // ═══════════════════════════════════════════════════════════════════════════════

@@ -408,9 +408,10 @@ What's on your mind?`,
     }
   };
 
-  const handleVoiceComplete = (transcript: string) => {
+  const handleVoiceTranscription = (transcript: string) => {
     if (transcript) {
-      handleSend(transcript);
+      setInputValue(transcript);
+      textareaRef.current?.focus();
     }
   };
 
@@ -570,7 +571,7 @@ What's on your mind?`,
           gap: '8px',
           padding: '12px 16px',
         }}>
-          <MobileVoiceRecorder onRecordingComplete={handleVoiceComplete} />
+          <MobileVoiceRecorder onTranscriptionComplete={handleVoiceTranscription} disabled={isTyping} />
           
           <div style={{
             flex: 1,
