@@ -956,11 +956,12 @@ export function registerRoutes(app: Express): Server {
     console.log(`[AUTH] Cookies available:`, Object.keys(req.cookies || {}).join(', ') || 'NONE');
     console.log(`[AUTH] sessionToken cookie:`, req.cookies?.sessionToken ? 'EXISTS' : 'MISSING');
     
-    // Check for email-based session token in Authorization header (NEW)
+    // Check for Bearer token in Authorization header (mobile apps)
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const sessionToken = authHeader.substring(7);
       
+      // First try: Look up in userSessions table (email-based auth)
       try {
         const { userSessions } = await import('@shared/schema');
         const now = new Date();
@@ -984,6 +985,50 @@ export function registerRoutes(app: Express): Server {
         }
       } catch (error) {
         console.log(`[AUTH] Email session check failed:`, error);
+      }
+      
+      // Second try: Decode as JWT directly (mobile apps send JWT in Bearer header)
+      try {
+        const decoded: any = jwt.verify(sessionToken, JWT_SECRET);
+        if (decoded.userId) {
+          // SECURITY: Validate device fingerprint for Bearer JWTs too
+          if (decoded.deviceFingerprint) {
+            const [device] = await db.select({
+              id: authorizedDevices.id,
+              userId: authorizedDevices.userId,
+              fingerprint: authorizedDevices.fingerprint,
+              isActive: authorizedDevices.isActive,
+            })
+              .from(authorizedDevices)
+              .where(and(
+                eq(authorizedDevices.userId, decoded.userId),
+                eq(authorizedDevices.fingerprint, decoded.deviceFingerprint)
+              ))
+              .limit(1);
+            
+            // Block if device exists but is explicitly deactivated
+            if (device && !device.isActive) {
+              console.log(`[AUTH] ⚠️ Bearer JWT: Blocked revoked device: ${decoded.userId}`);
+              return res.status(403).json({ 
+                error: "Device access revoked. Please log in again.",
+                deviceRevoked: true
+              });
+            }
+            
+            // Allow through if device exists and is active, or if no device record (email-based auth users)
+            req.user = { userId: decoded.userId };
+            console.log(`[AUTH] ✅ Bearer JWT authenticated (fingerprint verified): ${decoded.userId}`);
+            return next();
+          } else {
+            // No fingerprint in JWT - this is a legacy token, allow for backward compatibility
+            // but mark in logs for monitoring
+            req.user = { userId: decoded.userId };
+            console.log(`[AUTH] ⚠️ Bearer JWT authenticated (no fingerprint, legacy token): ${decoded.userId}`);
+            return next();
+          }
+        }
+      } catch (jwtError) {
+        console.log(`[AUTH] Bearer JWT verification failed`);
       }
     }
     
@@ -3176,7 +3221,8 @@ export function registerRoutes(app: Express): Server {
         gym,
         timezone,
         weeklyRecapEnabled,
-        yearsTraining
+        yearsTraining,
+        unitPreference
       } = req.body;
       
       console.log('[ONBOARDING] Received data:', req.body);
@@ -3249,6 +3295,7 @@ export function registerRoutes(app: Express): Server {
           ...(timezone !== undefined && { timezone }),
           ...(weeklyRecapEnabled !== undefined && { weeklyRecapEnabled }),
           ...(yearsTraining !== undefined && { yearsTraining }),
+          ...(unitPreference !== undefined && { unitPreference }),
           // Mark onboarding as complete if explicitly set
           ...(onboardingCompleted !== undefined && { 
             onboardingCompleted,

@@ -1,15 +1,19 @@
 import jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
+import { db } from '../db';
+import { authorizedDevices } from '../../shared/schema';
+import { eq, and } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.SESSION_SECRET || 'your-secret-key';
 
 /**
  * JWT Authentication Middleware
  * 
- * Verifies sessionToken cookie and attaches userId to req.user
+ * Verifies sessionToken cookie or Bearer token and attaches userId to req.user
+ * Validates device fingerprint when present for security
  * Returns 401 if token is missing or invalid
  */
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
     // Read token from cookie (cookie-based JWT auth) or Authorization header (mobile apps)
     let token = req.cookies.sessionToken;
@@ -30,6 +34,29 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     
     // Verify JWT token
     const decoded = jwt.verify(token, JWT_SECRET) as any;
+    
+    // SECURITY: Validate device fingerprint when present
+    if (decoded.deviceFingerprint) {
+      const [device] = await db.select({
+        id: authorizedDevices.id,
+        isActive: authorizedDevices.isActive,
+      })
+        .from(authorizedDevices)
+        .where(and(
+          eq(authorizedDevices.userId, decoded.userId),
+          eq(authorizedDevices.fingerprint, decoded.deviceFingerprint)
+        ))
+        .limit(1);
+      
+      // Block if device exists but is explicitly deactivated
+      if (device && !device.isActive) {
+        console.log(`[requireAuth] ⚠️ Blocked revoked device: ${decoded.userId}`);
+        return res.status(403).json({ 
+          error: "Device access revoked. Please log in again.",
+          deviceRevoked: true
+        });
+      }
+    }
     
     // Attach user info to request
     req.user = { userId: decoded.userId };
