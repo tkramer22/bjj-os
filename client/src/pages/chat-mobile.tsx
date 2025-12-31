@@ -61,9 +61,17 @@ export default function ChatPage() {
   }, [chatHistory]);
 
   // Auto-scroll to bottom
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    scrollToBottom("auto");
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom(isTyping ? "smooth" : "auto");
+  }, [messages, isTyping]);
 
   // Streaming message handler (SSE for instant first-token delivery)
   const handleSendMessage = async () => {
@@ -312,6 +320,7 @@ export default function ChatPage() {
               className="chat-input"
               rows={1}
               data-testid="input-message"
+              style={{ borderRadius: '24px', paddingLeft: '16px', paddingRight: '16px' }}
             />
             <button
               onClick={handleVoiceInput}

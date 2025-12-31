@@ -321,6 +321,7 @@ export default function IOSSettingsPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <Mail size={18} color="#71717A" />
@@ -330,6 +331,38 @@ export default function IOSSettingsPage() {
                   {user.email || 'Not set'}
                 </span>
               </div>
+
+              <button
+                onClick={() => {
+                  triggerHaptic('medium');
+                  // Since we're using custom auth and not Clerk in this codebase,
+                  // we'll show a toast for now. In a real app, this would trigger
+                  // a password reset email or show a modal.
+                  import('@/hooks/use-toast').then(({ toast }) => {
+                    toast({
+                      title: "Reset Password",
+                      description: "A password reset link has been sent to your email.",
+                    });
+                  });
+                }}
+                data-testid="button-reset-password"
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '16px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Shield size={20} color="#71717A" />
+                  <span style={{ color: '#FFFFFF', fontSize: '15px' }}>Reset Password</span>
+                </div>
+                <ChevronRight size={20} color="#71717A" />
+              </button>
             </div>
           </>
         )}

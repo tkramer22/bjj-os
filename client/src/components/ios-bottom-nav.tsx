@@ -56,6 +56,8 @@ export function IOSBottomNav() {
               fontSize: '11px',
               fontWeight: isActive ? 600 : 400,
               WebkitTapHighlightColor: 'rgba(139, 92, 246, 0.3)',
+              background: isActive ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
+              borderRadius: '12px',
             }}
           >
             <Icon 
