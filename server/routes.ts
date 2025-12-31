@@ -2073,7 +2073,8 @@ export function registerRoutes(app: Express): Server {
         .set({ 
           subscriptionType: 'free',
           subscriptionStatus: 'inactive',
-          isLifetimeUser: false
+          isLifetimeUser: false,
+          updatedAt: new Date()
         })
         .where(eq(bjjUsers.id, userId));
 

@@ -364,20 +364,21 @@ export default function AdminUsers() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Switch
-                            checked={user.isLifetimeUser || false}
+                            checked={user.subscriptionType === 'lifetime'}
                             onCheckedChange={(checked) => {
-                              toggleLifetimeBypassMutation.mutate({
-                                userId: user.id,
-                                enable: checked
-                              });
+                              if (checked) {
+                                grantLifetimeMutation.mutate({ email: user.email });
+                              } else {
+                                revokeLifetimeMutation.mutate({ userId: user.id });
+                              }
                             }}
-                            disabled={toggleLifetimeBypassMutation.isPending}
+                            disabled={grantLifetimeMutation.isPending || revokeLifetimeMutation.isPending}
                             data-testid={`toggle-lifetime-bypass-${user.id}`}
                           />
-                          {user.isLifetimeUser && (
+                          {user.subscriptionType === 'lifetime' && (
                             <Badge variant="default" className="text-xs">
-                              <Key className="w-3 h-3 mr-1" />
-                              ENABLED
+                              <Star className="w-3 h-3 mr-1 text-yellow-500" />
+                              LIFETIME
                             </Badge>
                           )}
                         </div>
