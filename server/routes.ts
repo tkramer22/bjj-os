@@ -2165,8 +2165,20 @@ export function registerRoutes(app: Express): Server {
       const tokenExpiry = isNativeIOSApp ? '3650d' : rememberMe ? '365d' : '30d';
       const cookieMaxAge = isNativeIOSApp ? 3650 * 24 * 60 * 60 * 1000 : rememberMe ? 365 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
 
-      // Find user by email
-      const [user] = await db.select()
+      // Find user by email - select only essential columns to avoid schema mismatch issues
+      const [user] = await db.select({
+        id: bjjUsers.id,
+        email: bjjUsers.email,
+        passwordHash: bjjUsers.passwordHash,
+        isAdmin: bjjUsers.isAdmin,
+        onboardingCompleted: bjjUsers.onboardingCompleted,
+        subscriptionType: bjjUsers.subscriptionType,
+        subscriptionStatus: bjjUsers.subscriptionStatus,
+        displayName: bjjUsers.displayName,
+        username: bjjUsers.username,
+        beltLevel: bjjUsers.beltLevel,
+        maxDevices: bjjUsers.maxDevices,
+      })
         .from(bjjUsers)
         .where(eq(bjjUsers.email, email.toLowerCase()))
         .limit(1);
