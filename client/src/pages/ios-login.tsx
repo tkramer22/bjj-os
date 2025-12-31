@@ -147,7 +147,8 @@ export default function IOSLoginPage() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
             <Input
-              type="email"
+              type="text"
+              inputMode="email"
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

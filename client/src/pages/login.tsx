@@ -350,7 +350,8 @@ export default function LoginPage() {
                 <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                 <input
                   id="email"
-                  type="email"
+                  type="text"
+                  inputMode="email"
                   className={`form-input pl-11 ${error ? 'error' : ''}`}
                   placeholder="you@example.com"
                   value={email}
