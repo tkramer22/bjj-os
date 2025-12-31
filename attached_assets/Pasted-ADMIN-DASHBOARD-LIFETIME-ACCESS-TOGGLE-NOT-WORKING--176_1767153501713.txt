@@ -1,0 +1,92 @@
+ADMIN DASHBOARD - LIFETIME ACCESS TOGGLE NOT WORKING
+
+═══════════════════════════════════════════════════════════════════════════════
+PROBLEM
+═══════════════════════════════════════════════════════════════════════════════
+
+On the admin dashboard Users page, the "Lifetime Access" toggle button does not work.
+
+When I click the toggle to grant lifetime access to a user (e.g., toddcramer@icloud.com):
+- Toggle doesn't change state
+- User doesn't get lifetime access
+- Nothing happens
+
+═══════════════════════════════════════════════════════════════════════════════
+REQUIRED FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Make the toggle button functional
+2. When toggled ON:
+   - Update user's subscription_status to "lifetime" in database
+   - Set subscription_end_date to NULL (never expires)
+   - Toggle should visually show ON state
+   - Show success toast: "Lifetime access granted to [email]"
+
+3. When toggled OFF:
+   - Revert user to previous subscription status (or "expired")
+   - Toggle should visually show OFF state
+   - Show success toast: "Lifetime access removed from [email]"
+
+4. Toggle state should reflect current database value on page load
+
+═══════════════════════════════════════════════════════════════════════════════
+DATABASE UPDATE
+═══════════════════════════════════════════════════════════════════════════════
+
+When granting lifetime access:
+
+UPDATE users 
+SET subscription_status = 'lifetime',
+    subscription_tier = 'lifetime',
+    subscription_end_date = NULL,
+    updated_at = NOW()
+WHERE email = '[user_email]';
+
+When removing lifetime access:
+
+UPDATE users 
+SET subscription_status = 'expired',
+    subscription_tier = NULL,
+    updated_at = NOW()
+WHERE email = '[user_email]';
+
+═══════════════════════════════════════════════════════════════════════════════
+API ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+POST /api/admin/users/lifetime-access
+
+Request body:
+{
+  "userId": 123,
+  "email": "user@example.com",
+  "grantLifetime": true  // or false to revoke
+}
+
+Response:
+{
+  "success": true,
+  "message": "Lifetime access granted",
+  "user": { ...updated user object }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+FRONTEND TOGGLE COMPONENT
+═══════════════════════════════════════════════════════════════════════════════
+
+The toggle should:
+1. Show loading spinner while API call is in progress
+2. Optimistically update UI, then revert if API fails
+3. Be disabled while loading
+4. Show error toast if API call fails
+
+Test after fixing:
+1. Find a user without lifetime access
+2. Click toggle to grant lifetime
+3. Verify toggle shows ON
+4. Refresh page - verify toggle still shows ON
+5. Click toggle to revoke
+6. Verify toggle shows OFF
+7. Refresh page - verify toggle still shows OFF
+
+FIX THIS NOW.

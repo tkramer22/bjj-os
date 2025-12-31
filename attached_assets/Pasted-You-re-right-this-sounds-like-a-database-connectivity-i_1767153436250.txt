@@ -1,0 +1,202 @@
+You’re right - this sounds like a database connectivity issue since you recovered the database from 24 hours ago. The authentication system may be pointing to old credentials or the connection is broken.
+
+-----
+
+```
+CRITICAL: LOGIN/AUTHENTICATION COMPLETELY BROKEN
+
+═══════════════════════════════════════════════════════════════════════════════
+SYMPTOMS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Cannot log in with existing credentials (password that always worked)
+2. Password reset emails are NOT sending
+3. This started after database was restored from 24-hour backup
+
+═══════════════════════════════════════════════════════════════════════════════
+LIKELY CAUSE: DATABASE CONNECTION ISSUE
+═══════════════════════════════════════════════════════════════════════════════
+
+The database was deleted and restored. This could have broken:
+- DATABASE_URL environment variable
+- SUPABASE_DATABASE_URL (if using Supabase)
+- Connection pool settings
+- Password hashes may have been lost/corrupted in restore
+
+═══════════════════════════════════════════════════════════════════════════════
+DIAGNOSTIC STEPS - RUN THESE FIRST
+═══════════════════════════════════════════════════════════════════════════════
+
+1. CHECK DATABASE CONNECTION:
+```bash
+# Test if database is reachable
+node -e "const { Pool } = require('pg'); const pool = new Pool({connectionString: process.env.DATABASE_URL}); pool.query('SELECT NOW()').then(r => console.log('DB Connected:', r.rows[0])).catch(e => console.log('DB Error:', e.message))"
+```
+
+1. CHECK IF USER EXISTS:
+
+```sql
+SELECT id, email, password_hash, created_at, updated_at 
+FROM users 
+WHERE email = 'toddcramer@icloud.com';
+```
+
+1. CHECK ENVIRONMENT VARIABLES:
+
+```bash
+echo $DATABASE_URL
+echo $SUPABASE_DATABASE_URL
+echo $TWILIO_ACCOUNT_SID
+echo $TWILIO_AUTH_TOKEN
+echo $TWILIO_PHONE_NUMBER
+```
+
+1. CHECK SERVER LOGS FOR AUTH ERRORS:
+
+```bash
+# Look for login attempt errors
+grep -i "auth\|login\|password\|error" logs/*.log | tail -50
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 1: VERIFY DATABASE CONNECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+After database restore, the connection string may have changed.
+
+Check .env file has correct values:
+
+- DATABASE_URL=postgresql://…
+- SUPABASE_DATABASE_URL=postgresql://… (if using Supabase)
+
+If database was restored to a new instance, UPDATE these values.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 2: PASSWORD RESET EMAIL (TWILIO)
+═══════════════════════════════════════════════════════════════════════════════
+
+Password reset uses Twilio/SendGrid for email. Check:
+
+1. Are Twilio credentials still valid?
+1. Is the email sending function throwing errors?
+1. Check Twilio dashboard for failed sends
+
+Test email sending:
+
+```javascript
+// Test Twilio email
+const sendTestEmail = async () => {
+  try {
+    const result = await sendPasswordResetEmail('toddcramer@icloud.com', 'test-token');
+    console.log('Email sent:', result);
+  } catch (error) {
+    console.error('Email failed:', error);
+  }
+};
+sendTestEmail();
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 3: MANUALLY RESET ADMIN PASSWORD
+═══════════════════════════════════════════════════════════════════════════════
+
+If email won’t send, manually reset password in database:
+
+```javascript
+const bcrypt = require('bcrypt');
+const newPassword = 'YourNewPassword123!'; // Change this
+const hash = await bcrypt.hash(newPassword, 10);
+
+// Then run SQL:
+UPDATE users 
+SET password_hash = '[paste hash here]',
+    updated_at = NOW()
+WHERE email = 'toddcramer@icloud.com';
+```
+
+Or create an admin endpoint to force-reset:
+
+POST /api/admin/force-reset-password
+{
+“email”: “toddcramer@icloud.com”,
+“newPassword”: “YourNewPassword123!”
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 4: CHECK AUTH MIDDLEWARE
+═══════════════════════════════════════════════════════════════════════════════
+
+The login endpoint needs to:
+
+1. Query database for user by email
+1. Compare password hash with bcrypt
+1. Generate JWT token
+1. Return token to frontend
+
+Add logging to see where it fails:
+
+```javascript
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  console.log('Login attempt for:', email);
+  
+  try {
+    // 1. Find user
+    const user = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    console.log('User found:', user.rows.length > 0);
+    
+    if (!user.rows[0]) {
+      console.log('User not found');
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    // 2. Check password
+    const validPassword = await bcrypt.compare(password, user.rows[0].password_hash);
+    console.log('Password valid:', validPassword);
+    
+    if (!validPassword) {
+      console.log('Invalid password');
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    // 3. Generate token
+    const token = jwt.sign({ userId: user.rows[0].id }, process.env.JWT_SECRET);
+    console.log('Login successful');
+    
+    res.json({ token, user: user.rows[0] });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+IMMEDIATE ACTION
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Run diagnostic queries above
+1. Check server logs for specific error
+1. Verify DATABASE_URL is correct
+1. If needed, manually reset password via SQL
+1. Test login again
+
+REPORT BACK what the diagnostics show - specifically:
+
+- Can you connect to database?
+- Does the user exist?
+- What error appears in server logs?
+
+FIX THIS NOW - THIS IS BLOCKING ALL ACCESS.
+
+```
+---
+
+Copy that to Replit. This should diagnose whether it's:
+- Database connection broken
+- User data lost in restore
+- Twilio/email not working
+- Auth middleware issue
+
+What does Replit show when you try to log in? Any error message on screen?​​​​​​​​​​​​​​​​
+```
