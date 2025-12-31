@@ -1,0 +1,472 @@
+# BJJ OS - MASTER DATABASE RECOVERY PROMPT
+
+## Everything Lost in the Last 24 Hours - RESTORE ALL
+
+-----
+
+**CRITICAL CONTEXT:** The database was accidentally deleted and recovered to a state from 24 hours ago. All work done in the past 24 hours needs to be restored. This prompt covers EVERYTHING that was implemented and needs to be re-implemented.
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## PRIORITY 1: iOS APP - PROFILE PAGE FIXES
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+### PROFILE FIELDS NOT SAVING
+
+All profile fields have UI but NOTHING saves to database:
+
+**1. NAME**
+
+- When tapped, no text input field appears
+- Need to show a text input where user can TYPE their name
+- Check button must save to database
+- Currently shows “BJJ Practitioner” - should show actual name
+
+**2. BELT LEVEL**
+
+- Convert to CAROUSEL/SCROLL PICKER (same style as Height/Weight)
+- Options: White | Blue | Purple | Brown | Black
+- Selection does not save - FIX THE SAVE FUNCTION
+- After selecting and tapping check, value should persist
+
+**3. WEIGHT**
+
+- Picker wheel appears but selection doesn’t save
+- FIX THE SAVE FUNCTION
+- Support Imperial (lbs) and Metric (kg) based on user preference
+
+**4. HEIGHT**
+
+- Picker wheel appears but selection doesn’t save
+- FIX THE SAVE FUNCTION
+- Support Imperial (ft/in) and Metric (cm) based on user preference
+
+**5. TRAINING STYLE**
+
+- Currently only shows “Gi” and “No-Gi”
+- **ADD “BOTH” OPTION** - this is MISSING
+- Convert to CAROUSEL/SCROLL PICKER (same component as Height/Weight)
+- Options in carousel: Gi | No-Gi | Both
+- Selection does not save - FIX THE SAVE FUNCTION
+
+**6. X BUTTON BUG**
+
+- Currently the X button LOGS USER OUT
+- Should just close/cancel the picker without saving
+- DO NOT log user out
+
+**DEBUG THE SAVE FLOW:**
+
+```javascript
+// Add console.logs to trace:
+// 1. Is the API being called when check is tapped?
+// 2. Is there an error in the response?
+// 3. Is the database being updated?
+// 4. Is the UI refreshing after save?
+```
+
+**TEST EACH FIELD AFTER FIXING:**
+
+1. Open profile
+1. Tap field
+1. Make selection
+1. Tap check
+1. Navigate away from profile
+1. Return to profile
+1. Verify selection persisted
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## PRIORITY 2: iOS APP - SETTINGS/DATA & PRIVACY
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+Under Data & Privacy section, add CONFIRMATION DIALOGS before destructive actions:
+
+**DELETE CHAT HISTORY**
+When tapped, show alert:
+
+- Title: “Delete Chat History?”
+- Message: “This will permanently delete all your conversations with Professor OS. This cannot be undone.”
+- Buttons: “Cancel” (default) | “Delete” (destructive/red)
+
+**RESET PROFESSOR OS MEMORY**
+When tapped, show alert:
+
+- Title: “Reset Professor OS Memory?”
+- Message: “Professor OS will forget everything about your training history, goals, and preferences. You’ll start fresh. This cannot be undone.”
+- Buttons: “Cancel” (default) | “Reset” (destructive/red)
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## PRIORITY 3: iOS APP - PROFILE PHOTO
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+The purple person icon at top of Profile should be tappable:
+
+1. When tapped, show action sheet:
+- “Choose from Library”
+- “Take Photo”
+- “Cancel”
+1. After selection:
+- Crop to circle
+- Upload to server
+- Save URL to user profile
+- Display instead of default icon
+1. Add camera icon overlay on the profile picture to indicate it’s tappable
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## PRIORITY 4: PROFESSOR OS 1.2 PERSONALITY UPDATE
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+**CRITICAL: The personality IS the product. This must be fixed.**
+
+Current Professor OS is being condescending and harsh. Examples of BAD responses:
+
+- “Let me guess - you didn’t watch the Lachlan video I already sent you three times”
+- “If you’re just asking because you’re procrastinating on drilling”
+- Guilt-tripping about not training
+- Questioning user’s motives
+
+**PROFESSOR OS 1.2 - THE NEW PERSONALITY:**
+
+```
+You are Professor OS - a warm, encouraging, and knowledgeable BJJ coach. 
+
+YOUR PERSONALITY:
+- Supportive and positive - celebrate progress, never shame
+- Witty and playful - use humor to make learning fun
+- Helpful first - ALWAYS provide what the user asks for
+- Knowledgeable but humble - share expertise without being condescending
+- Like a favorite training partner who happens to know everything
+- Casually drops impressive knowledge that surprises users
+- Makes users think "Holy shit, this thing knows WAY more than I expected"
+
+NEVER:
+- Guilt trip users about not drilling
+- Question their motives for asking
+- Be condescending or judgmental
+- Refuse requests or lecture them
+- Assume they're procrastinating
+- Say "Let me guess..."
+- Say "You haven't drilled..."
+- Say "I've told you this before..."
+
+ALWAYS:
+- Answer their question FIRST
+- Be enthusiastic about helping
+- Offer encouragement
+- Make BJJ fun and accessible
+- End with engagement: "Want more options?" / "Want the details?"
+- Celebrate EVERY win genuinely
+
+RESPONSE LENGTH:
+- Medium length, not essays
+- 2-3 paragraphs max unless they ask for more
+- End with a question or offer to go deeper
+
+CASUAL EXPERTISE EXAMPLES:
+- "Fun fact - that grip you're using is actually how Marcelo set up most of his guillotines"
+- "The reason that pass feels unstoppable is hip angle. Once you see it, you can't unsee it."
+- "That sweep works because of leverage physics - your hips are the fulcrum."
+
+CONNECT THE DOTS:
+- "You know what's interesting? That knee shield problem you had last week and this pass you just got hit with - same root cause."
+- "The coyote you hit today actually opens up a whole leg lock game if you want to go there."
+```
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## PRIORITY 5: ADMIN DASHBOARD - CURATION SYSTEM FIX
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+**PROBLEM:** Curation shows 0% acceptance rate - rejecting ALL videos
+
+Dashboard shows:
+
+- Discovered: 0
+- Analyzed: 20
+- Accepted: 0 ❌
+- Rejected: 20
+- Acceptance Rate: 0.0%
+- Warning: “Too strict - might miss good content”
+
+**ROOT CAUSE:** Quality threshold is too strict, rejecting everything.
+
+**FIX THE QUALITY THRESHOLD:**
+
+Current system is likely requiring:
+
+- Transcripts (most videos don’t have them)
+- Too high quality score (7.5+ is too strict)
+
+**CORRECT CONFIGURATION:**
+
+```javascript
+// Quality thresholds - LOWER THESE
+const QUALITY_THRESHOLD = 6.5;  // Was 7.5, too strict
+const MIN_DURATION = 180;       // 3 minutes
+const MAX_DURATION = 2400;      // 40 minutes
+const MIN_VIEWS = 1000;         // Was higher
+
+// Transcripts should be OPTIONAL, not required
+// If transcript exists → use it for bonus analysis
+// If no transcript → still evaluate using other factors
+
+// 8-Dimensional scoring (transcript NOT required):
+// 1. Title/description quality
+// 2. YouTube metrics (views, likes)
+// 3. Instructor credibility
+// 4. Video duration
+// 5. Channel quality
+// 6. Upload recency
+// 7. Engagement ratio
+// 8. Content relevance
+```
+
+**TARGET ACCEPTANCE RATE: 2-5%**
+
+- <2% = Too strict (wasting API calls)
+- 2-5% = OPTIMAL
+- 5-10% = Getting loose
+- 10% = Too loose
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## PRIORITY 6: ADMIN DASHBOARD - COMMAND CENTER FIXES
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+**BROKEN COMMANDS TO FIX:**
+
+**1. TAKE_SNAPSHOT**
+
+- Error: “Syntax error at or near ‘desc’”
+- Fix the SQL query syntax in the snapshot function
+- Test and confirm it works
+
+**2. FLUSH_CACHE**
+
+- Error: “cache.keys is not a function”
+- Fix the cache implementation
+- Test and confirm it works
+
+**3. USER ACTIVITY CHART**
+
+- Error: “Data supplied to the chart is expected to be an array of numbers and/or objects with numeric value properties. Received an instance of Date”
+- Backend is sending Date objects instead of strings
+- Fix: Convert all dates to ISO strings before sending to frontend
+- Example: `date.toISOString()` instead of raw Date object
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## PRIORITY 7: ADMIN DASHBOARD - META INSIGHTS / USER REQUESTS
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+Recent Professor OS conversations are NOT being logged to user_requests table.
+Only showing stale data from months ago.
+
+**FIX:** Every time a user asks Professor OS about a technique, log it:
+
+```javascript
+// Log to user_requests table
+await db.query(`
+  INSERT INTO user_requests (
+    user_id,
+    technique_name,
+    technique_type,
+    belt_level,
+    gi_nogi,
+    context,
+    created_at
+  ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+`, [userId, techniqueName, type, beltLevel, giNogi, contextSnippet]);
+```
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## PRIORITY 8: iOS APP - VIDEO THUMBNAIL FALLBACK
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+When Professor OS recommends a video in chat on iOS:
+
+- Thumbnail area shows blank/white space
+- Just a play button, NO image
+- The BJJ OS logo fallback is NOT working
+
+**FIX:**
+
+1. Check if YouTube thumbnail URL is being passed to iOS component
+1. Check if image is failing to load (CORS, URL format, etc.)
+1. Ensure BJJ OS logo fallback triggers when thumbnail fails
+1. Use high-res YouTube thumbnail: `https://img.youtube.com/vi/{VIDEO_ID}/maxresdefault.jpg`
+1. Fallback chain: maxresdefault → hqdefault → BJJ OS logo
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## PRIORITY 9: iOS APP - CHAT PERSISTENCE
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+**PROBLEM:** Messages disappear when switching tabs
+
+When user:
+
+1. Sends message in chat
+1. Switches to another tab (Library, Profile)
+1. Returns to chat tab
+1. Previous messages are GONE
+
+**FIX:**
+
+- Chat history must persist across tab switches
+- Load last 20 messages on component mount
+- Store messages in proper state management (React Query or Context)
+- Ensure database persistence for chat history
+- Messages should persist even after logout/login
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## PRIORITY 10: PRICING UPDATE
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+Confirm pricing is set correctly:
+
+- **$19.99/month** (was $14.99, updated to $19.99)
+- **7-day free trial** (requires credit card upfront)
+- **Referral code = 30-day free trial**
+- **Referrer gets 20% lifetime commission**
+
+Stripe Price ID: `price_1Sk8axlVkMlrxpuTGFjkXmyY`
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## PRIORITY 11: VIDEO ANALYSIS DISPLAY IN CHAT
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+When Professor OS recommends a video, there should be a “View Analysis” button that shows the Gemini-extracted data:
+
+- Technique breakdowns
+- Timestamps
+- Instructor methodology
+- Key concepts
+- Common mistakes addressed
+
+This data exists in the `ai_video_knowledge` table with 33 fields per video.
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## ABSOLUTE RULES - DO NOT VIOLATE
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+❌ NEVER delete data from database
+❌ NEVER run destructive operations without explicit confirmation
+❌ NEVER auto-remove or bulk delete anything
+✅ Filter/hide unwanted data instead of deleting
+✅ Flag for review instead of auto-removing
+✅ Always ask to verify before any database modification
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## FILES TO UPDATE (iOS-specific)
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+All iOS fixes should target these files:
+
+- `ios-profile.tsx` or similar iOS-specific components
+- `ios-chat.tsx` or `IOSChatPage.tsx`
+- `ios-settings.tsx`
+- NOT the mobile-web components
+
+The app has THREE versions:
+
+1. Web desktop
+1. Mobile web (mobile-*.tsx)
+1. iOS native (ios-*.tsx) ← Target these for iOS fixes
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## AFTER ALL FIXES
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+```bash
+# Build and sync for iOS
+npm run build
+npx cap sync ios
+
+# Push to GitHub
+git add -A
+git commit -m "RECOVERY: Restore all features from last 24 hours - Profile, Professor OS 1.2, Curation, Admin fixes"
+git push origin main
+```
+
+-----
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+## VERIFICATION CHECKLIST
+
+## ════════════════════════════════════════════════════════════════════════════════
+
+After implementing, verify each fix:
+
+- [ ] Profile: Name field saves
+- [ ] Profile: Belt picker (carousel) saves
+- [ ] Profile: Weight picker saves
+- [ ] Profile: Height picker saves
+- [ ] Profile: Style includes “Both” option and saves
+- [ ] Profile: X button closes picker (doesn’t logout)
+- [ ] Settings: Delete Chat History shows confirmation
+- [ ] Settings: Reset Memory shows confirmation
+- [ ] Professor OS: Warm, encouraging tone (test with “What should I work on today?”)
+- [ ] Curation: Acceptance rate > 0% (not rejecting everything)
+- [ ] Admin: take_snapshot command works
+- [ ] Admin: flush_cache command works
+- [ ] Admin: User Activity chart displays correctly
+- [ ] Chat: Messages persist when switching tabs
+- [ ] Chat: Video thumbnails display (or fallback to logo)
+- [ ] Pricing: Shows $19.99/month
+
+-----
+
+**IMPLEMENT ALL OF THE ABOVE NOW.**
