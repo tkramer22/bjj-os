@@ -1,11 +1,10 @@
 import { db } from '../server/db';
-import { aiVideoKnowledge, videoKnowledge } from '../shared/schema';
-import { eq, isNull, exists, sql, inArray } from 'drizzle-orm';
+import { aiVideoKnowledge, videoKnowledge, videoWatchStatus, userVideoStats } from '../shared/schema';
+import { inArray, sql } from 'drizzle-orm';
 
 async function cleanupUnscannedVideos() {
   console.log('Starting Gemini video cleanup...');
   
-  // Find videos without Gemini data
   const unscannedVideos = await db.select({ id: aiVideoKnowledge.id })
     .from(aiVideoKnowledge)
     .where(
@@ -20,12 +19,19 @@ async function cleanupUnscannedVideos() {
   if (unscannedVideos.length > 0) {
     const ids = unscannedVideos.map(v => v.id);
     
-    // Delete in batches of 50
     for (let i = 0; i < ids.length; i += 50) {
       const batch = ids.slice(i, i + 50);
-      await db.delete(aiVideoKnowledge)
-        .where(inArray(aiVideoKnowledge.id, batch));
-      console.log(`Deleted batch of ${batch.length} videos`);
+      
+      // Delete from ALL possible dependent tables
+      try {
+        await db.execute(sql`DELETE FROM video_watch_status WHERE video_id IN (${sql.join(batch, sql`, `)})`);
+        await db.execute(sql`DELETE FROM video_engagement WHERE video_id IN (${sql.join(batch, sql`, `)})`);
+        await db.execute(sql`DELETE FROM user_video_stats WHERE video_id IN (${sql.join(batch, sql`, `)})`);
+        await db.execute(sql`DELETE FROM ai_video_knowledge WHERE id IN (${sql.join(batch, sql`, `)})`);
+        console.log(`Deleted batch of ${batch.length} videos`);
+      } catch (e) {
+        console.error('Batch delete failed, skipping:', e.message);
+      }
     }
   }
   
