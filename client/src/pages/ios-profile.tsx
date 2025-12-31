@@ -514,17 +514,16 @@ export default function IOSProfilePage() {
               position: 'absolute',
               bottom: 0,
               right: 0,
-              width: '32px',
-              height: '32px',
+              width: '24px',
+              height: '24px',
               borderRadius: '50%',
               background: '#8B5CF6',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              border: '2px solid #FFFFFF',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              border: '2px solid #0A0A0B',
             }}>
-              <Camera size={16} color="#FFFFFF" />
+              <Camera size={12} color="#FFFFFF" />
             </div>
           </button>
           <input
@@ -796,7 +795,6 @@ export default function IOSProfilePage() {
                       if (BELT_OPTIONS[selectedIndex] !== undefined) {
                         const newValue = BELT_OPTIONS[selectedIndex];
                         if (newValue !== editValue) {
-                          triggerHaptic('light');
                           setEditValue(newValue);
                         }
                       }
@@ -901,7 +899,6 @@ export default function IOSProfilePage() {
                       if (STYLE_OPTIONS[selectedIndex] !== undefined) {
                         const newValue = STYLE_OPTIONS[selectedIndex];
                         if (newValue !== editValue) {
-                          triggerHaptic('light');
                           setEditValue(newValue);
                         }
                       }
@@ -998,7 +995,6 @@ export default function IOSProfilePage() {
                         const newValue = String(weightOptions[selectedIndex]);
                         // Only update if value actually changed to prevent re-scroll
                         if (newValue !== editValue) {
-                          triggerHaptic('light');
                           setEditValue(newValue);
                         }
                       }
@@ -1094,7 +1090,6 @@ export default function IOSProfilePage() {
                         const newValue = heightOptions[selectedIndex];
                         // Only update if value actually changed to prevent re-scroll
                         if (newValue !== editValue) {
-                          triggerHaptic('light');
                           setEditValue(newValue);
                         }
                       }
