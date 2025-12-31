@@ -11821,7 +11821,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       
       // Determine curation pipeline status
       const videoCount = Number(totalVideosRows[0]?.count || 0);
-      const TARGET_VIDEO_COUNT = 2000;
+      const TARGET_VIDEO_COUNT = 10000;
       const targetReached = videoCount >= TARGET_VIDEO_COUNT;
       
       // Curation status: "active", "paused_target_reached", or "offline"

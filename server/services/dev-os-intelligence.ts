@@ -123,8 +123,8 @@ export async function getSystemSnapshot() {
     videos: {
       total: totalVideos,
       addedToday: videosAddedToday,
-      target: 2000,
-      progress: (totalVideos / 2000 * 100).toFixed(1) + '%'
+      target: 10000,
+      progress: (totalVideos / 10000 * 100).toFixed(1) + '%'
     },
     revenue: {
       mrr,

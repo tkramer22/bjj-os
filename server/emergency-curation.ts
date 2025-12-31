@@ -15,7 +15,7 @@ import { eq } from 'drizzle-orm';
 import { getSetting, updateSetting } from './curation-controller';
 
 const MAX_DAILY_API_QUOTA = 9000; // Stop at 9k to leave 1k buffer
-const TARGET_VIDEOS = 2000;
+const TARGET_VIDEOS = 10000;
 const BATCH_SIZE = 50;
 const DELAY_BETWEEN_BATCHES = 30000; // 30 seconds
 
