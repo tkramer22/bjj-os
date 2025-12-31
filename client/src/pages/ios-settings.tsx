@@ -274,7 +274,7 @@ export default function IOSSettingsPage() {
           )}
 
           <button
-            onClick={() => handleOpenExternal('https://bjjos.app/settings/subscription')}
+            onClick={() => handleNavigate('/ios-subscription')}
             data-testid="button-manage-subscription"
             style={{
               width: '100%',
@@ -288,7 +288,7 @@ export default function IOSSettingsPage() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <ExternalLink size={20} color="#8B5CF6" />
+              <CreditCard size={20} color="#8B5CF6" />
               <span style={{ fontSize: '15px', color: '#8B5CF6' }}>Manage Subscription</span>
             </div>
             <ChevronRight size={20} color="#8B5CF6" />
