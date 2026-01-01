@@ -1,13 +1,10 @@
-import { useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 
 export default function IOSPrivacyPage() {
-  const [, navigate] = useLocation();
-
   const handleBack = () => {
     triggerHaptic('light');
-    navigate('/ios-profile');
+    window.history.back();
   };
 
   return (

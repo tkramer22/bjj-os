@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
 import { ArrowLeft, Mail, MessageCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 
@@ -36,12 +35,11 @@ const faqs: FAQItem[] = [
 ];
 
 export default function IOSHelpPage() {
-  const [, navigate] = useLocation();
   const [expandedFAQ, setExpandedFAQ] = useState<number | null>(null);
 
   const handleBack = () => {
     triggerHaptic('light');
-    navigate('/ios-profile');
+    window.history.back();
   };
 
   const toggleFAQ = (index: number) => {
