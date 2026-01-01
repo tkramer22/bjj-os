@@ -10,27 +10,15 @@ interface FAQItem {
 const faqs: FAQItem[] = [
   {
     question: "How does Professor OS work?",
-    answer: "Professor OS is an AI-powered BJJ coach that uses advanced language models to provide personalized training advice. It learns from your conversations and adapts its recommendations based on your skill level, training goals, and areas you want to improve."
+    answer: "Professor OS is your AI coach with perfect memory. It learns your game - your strengths, struggles, and goals. The more you share about your training, the smarter it gets. It draws from over 2,500 analyzed technique videos to give you personalized recommendations with exact timestamps."
   },
   {
     question: "Can I cancel my subscription anytime?",
-    answer: "Yes! You can cancel your subscription at any time from the Profile page. You'll continue to have access until the end of your current billing period. No refunds are provided for partial periods."
+    answer: "Yes. Cancel anytime with no questions asked. Your subscription stays active until the end of your billing period."
   },
   {
-    question: "How do I change my belt level?",
-    answer: "Your belt level can be updated during onboarding or by contacting support. Belt level helps Professor OS tailor advice to your experience level."
-  },
-  {
-    question: "Are the video recommendations from real instructors?",
-    answer: "Yes! We curate technique videos from verified, high-quality BJJ instructors. Our AI analyzes and categorizes thousands of instructional videos to recommend the most relevant content for your training needs."
-  },
-  {
-    question: "Is my conversation data private?",
-    answer: "Your privacy is important to us. Conversations are used to improve your experience and enhance our AI. We do not share individual conversations with third parties. See our Privacy Policy for full details."
-  },
-  {
-    question: "What if I'm injured - can Professor OS help?",
-    answer: "Professor OS can suggest modified training approaches and techniques that may work around certain limitations. However, always consult a medical professional for injury advice. Our AI is for educational purposes only."
+    question: "Is my data private?",
+    answer: "Yes. Your conversations are private and only used to improve your coaching experience. You can delete your chat history or reset Professor OS memory anytime in Settings."
   },
 ];
 
