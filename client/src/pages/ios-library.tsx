@@ -8,6 +8,7 @@ import { triggerHaptic } from "@/lib/haptics";
 import { shareVideo } from "@/lib/share";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { decodeHTML } from "@/lib/htmlDecode";
 
 console.log('✅ iOS LIBRARY loaded');
 
@@ -485,7 +486,7 @@ export default function IOSLibraryPage() {
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                   }}>
-                    {video.title}
+                    {decodeHTML(video.title)}
                   </div>
                   <div style={{
                     fontSize: '13px',
@@ -500,17 +501,6 @@ export default function IOSLibraryPage() {
                     gap: '8px',
                     marginTop: '8px',
                   }}>
-                    {video.technique && (
-                      <span style={{
-                        fontSize: '11px',
-                        color: '#71717A',
-                        background: '#2A2A2E',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                      }}>
-                        {video.technique}
-                      </span>
-                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -535,10 +525,36 @@ export default function IOSLibraryPage() {
                       Analysis
                     </button>
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleSave(video.id);
+                      }}
+                      data-testid={`button-save-video-${video.id}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11px',
+                        color: isVideoSaved(video.id) ? '#22C55E' : '#71717A',
+                        background: isVideoSaved(video.id) ? 'rgba(34, 197, 94, 0.15)' : 'rgba(39, 39, 42, 0.5)',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {isVideoSaved(video.id) ? (
+                        <BookmarkCheck size={12} />
+                      ) : (
+                        <Bookmark size={12} />
+                      )}
+                      {isVideoSaved(video.id) ? 'Saved' : 'Save'}
+                    </button>
+                    <button
                       onClick={async (e) => {
                         e.stopPropagation();
                         triggerHaptic('light');
-                        await shareVideo(video.title, video.instructor, video.youtubeId);
+                        await shareVideo(decodeHTML(video.title), video.instructor, video.youtubeId);
                       }}
                       data-testid={`button-share-video-${video.id}`}
                       style={{
@@ -556,32 +572,6 @@ export default function IOSLibraryPage() {
                     >
                       <Share2 size={12} />
                       Share
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleSave(video.id);
-                      }}
-                      data-testid={`button-save-video-${video.id}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '11px',
-                        color: isVideoSaved(video.id) ? '#22C55E' : '#71717A',
-                        background: isVideoSaved(video.id) ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        border: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {isVideoSaved(video.id) ? (
-                        <BookmarkCheck size={12} />
-                      ) : (
-                        <Bookmark size={12} />
-                      )}
-                      {isVideoSaved(video.id) ? 'Saved' : 'Save'}
                     </button>
                   </div>
                 </div>

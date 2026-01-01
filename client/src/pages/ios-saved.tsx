@@ -1,12 +1,14 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
-import { Bookmark, Search, Loader2, Play, X, ChevronDown, RefreshCw, Brain, Share2 } from "lucide-react";
+import { Bookmark, BookmarkCheck, Search, Loader2, Play, X, ChevronDown, RefreshCw, Brain, Share2 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { shareVideo } from "@/lib/share";
+import { decodeHTML } from "@/lib/htmlDecode";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 console.log('✅ iOS SAVED loaded');
 
@@ -42,6 +44,27 @@ export default function IOSSavedPage() {
   });
 
   const savedVideos = savedData?.videos || [];
+
+  // Unsave video mutation
+  const unsaveVideoMutation = useMutation({
+    mutationFn: async ({ videoId }: { videoId: number }) => {
+      return apiRequest('DELETE', `/api/ai/saved-videos/${videoId}`, { userId: user?.id });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/ai/saved-videos/${user?.id}`] });
+      toast({ title: "Removed", description: "Video removed from saved" });
+      triggerHaptic('light');
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to remove video", variant: "destructive" });
+      triggerHaptic('error');
+    }
+  });
+
+  const handleUnsave = (videoId: number) => {
+    if (!user?.id) return;
+    unsaveVideoMutation.mutate({ videoId });
+  };
 
   // Pull-to-refresh handler
   const handleRefresh = useCallback(async () => {
@@ -473,7 +496,7 @@ export default function IOSSavedPage() {
                       WebkitLineClamp: 2,
                       WebkitBoxOrient: 'vertical',
                     }}>
-                      {video.title}
+                      {decodeHTML(video.title)}
                     </div>
                     <div style={{
                       fontSize: '13px',
@@ -487,17 +510,6 @@ export default function IOSSavedPage() {
                       gap: '8px',
                       marginTop: '4px',
                     }}>
-                      {(video.techniqueType || video.category) && (
-                        <span style={{
-                          fontSize: '11px',
-                          color: '#71717A',
-                          background: '#2A2A2E',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                        }}>
-                          {video.techniqueType || video.category}
-                        </span>
-                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -522,12 +534,34 @@ export default function IOSSavedPage() {
                         Analysis
                       </button>
                       <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUnsave(video.id);
+                        }}
+                        data-testid={`button-unsave-video-${video.id}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '11px',
+                          color: '#22C55E',
+                          background: 'rgba(34, 197, 94, 0.15)',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <BookmarkCheck size={12} />
+                        Saved
+                      </button>
+                      <button
                         onClick={async (e) => {
                           e.stopPropagation();
                           triggerHaptic('light');
                           const videoId = extractVideoId(video.videoUrl);
                           if (videoId) {
-                            await shareVideo(video.title, video.instructor, videoId);
+                            await shareVideo(decodeHTML(video.title), video.instructor, videoId);
                           }
                         }}
                         data-testid={`button-share-video-${video.id}`}

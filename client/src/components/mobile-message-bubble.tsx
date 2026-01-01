@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { Bookmark, BookmarkCheck, Brain, Star } from "lucide-react";
+import { Bookmark, BookmarkCheck, Brain, Share2, Star } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
 import { ThumbnailImage } from "@/components/ThumbnailImage";
 import { formatMessageTimestamp } from "@/lib/timestamps";
+import { decodeHTML } from "@/lib/htmlDecode";
+import { shareVideo } from "@/lib/share";
+import { triggerHaptic } from "@/lib/haptics";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
 
@@ -406,7 +409,7 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap"
                     }}>
-                      {segment.video.title}
+                      {decodeHTML(segment.video.title)}
                     </p>
                     <p style={{ 
                       fontSize: "0.75rem", 
@@ -428,7 +431,7 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
                       )}
                     </p>
                   </div>
-                  {/* Only show bookmark and analysis for enriched videos */}
+                  {/* Only show buttons for enriched videos */}
                   {segment.video.videoId && (
                     <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                       <button
@@ -450,16 +453,16 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
                         title="View full analysis"
                       >
                         <Brain size={14} />
-                        Analysis
                       </button>
                       <button
                         onClick={() => toggleSaveVideo(segment.video!.id)}
                         style={{
-                          background: "transparent",
+                          background: savedVideoIds.has(segment.video.id) ? "rgba(34, 197, 94, 0.15)" : "rgba(39, 39, 42, 0.5)",
                           border: "none",
-                          padding: "0.5rem",
+                          borderRadius: "6px",
+                          padding: "0.375rem 0.5rem",
                           cursor: "pointer",
-                          color: savedVideoIds.has(segment.video.id) ? "#667eea" : "var(--mobile-text-secondary)",
+                          color: savedVideoIds.has(segment.video.id) ? "#22C55E" : "var(--mobile-text-secondary)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center"
@@ -468,10 +471,31 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
                         title={savedVideoIds.has(segment.video.id) ? "Remove from saved" : "Save video"}
                       >
                         {savedVideoIds.has(segment.video.id) ? (
-                          <BookmarkCheck size={20} />
+                          <BookmarkCheck size={14} />
                         ) : (
-                          <Bookmark size={20} />
+                          <Bookmark size={14} />
                         )}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          triggerHaptic('light');
+                          await shareVideo(decodeHTML(segment.video!.title), segment.video!.instructor, segment.video!.videoId);
+                        }}
+                        style={{
+                          background: "rgba(16, 185, 129, 0.15)",
+                          border: "none",
+                          borderRadius: "6px",
+                          padding: "0.375rem 0.5rem",
+                          cursor: "pointer",
+                          color: "#10B981",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center"
+                        }}
+                        data-testid={`button-share-video-${segment.video.id}`}
+                        title="Share video"
+                      >
+                        <Share2 size={14} />
                       </button>
                     </div>
                   )}

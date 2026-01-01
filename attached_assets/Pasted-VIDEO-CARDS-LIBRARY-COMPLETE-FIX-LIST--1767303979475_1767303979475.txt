@@ -1,0 +1,166 @@
+VIDEO CARDS & LIBRARY - COMPLETE FIX LIST
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL FIXES for video cards across all pages:
+- Video Library
+- Chat video cards
+- Saved video cards
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: SHARE BUTTON DOESN'T WORK
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Share button on video cards fails. Native iOS share sheet does not open.
+
+FIX: Implement Capacitor Share plugin properly.
+
+import { Share } from '@capacitor/share';
+
+const handleShare = async (video) => {
+  try {
+    await Share.share({
+      title: video.title,
+      text: `${video.title} by ${video.instructor}
+
+🎥 ${video.youtubeUrl}
+
+https://bjjos.app
+
+BJJ OS gives you a full breakdown of every video - key timestamps, instructor tips, common mistakes. No more scrubbing through 20-minute videos to find the good stuff: https://bjjos.app`,
+      dialogTitle: 'Share this technique'
+    });
+  } catch (error) {
+    console.error('Share failed:', error);
+  }
+};
+
+If not installed:
+npm install @capacitor/share
+npx cap sync ios
+
+Test: Tap Share → iOS native share sheet opens with iMessage, AirDrop, etc.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: RESTRUCTURE VIDEO CARD BUTTONS
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Current layout has metadata tag (defense/attack/concept) in button row.
+Looks cramped and mixes metadata with actions.
+
+CURRENT: [defense] [🧠 Analysis] [↗️ Share]
+
+NEW: [🧠 Analysis] [🔖 Save] [↗️ Share]
+
+CHANGES:
+1. REMOVE metadata tag from button row (defense, attack, concept, etc.)
+2. ADD Save button with bookmark icon (same icon as Saved tab in toolbar)
+3. Keep Analysis button with brain icon
+4. Keep Share button with share icon
+
+Metadata tag (defense/attack/concept) now ONLY appears in Analysis view.
+
+APPLY TO:
+- Video Library cards
+- Chat video cards  
+- Saved video cards
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: SAVE BUTTON FUNCTIONALITY
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Save functionality is broken. Shows "Please try again" error.
+
+FIX THE SAVE FUNCTION:
+1. Debug why save is failing - check console errors
+2. Verify saved_videos table exists with correct schema
+3. Verify user_id and video_id are passed correctly
+4. Implement proper error handling
+
+SAVE BUTTON BEHAVIOR:
+
+| Location | State | Icon | Tap Action |
+|----------|-------|------|------------|
+| Video Library | Not saved | Outline bookmark | Saves video, icon fills in |
+| Video Library | Already saved | Filled bookmark | Unsaves video, icon outlines |
+| Chat cards | Not saved | Outline bookmark | Saves video, icon fills in |
+| Chat cards | Already saved | Filled bookmark | Unsaves video, icon outlines |
+| Saved tab | All saved | Filled bookmark | Unsaves, removes from list |
+
+VISUAL FEEDBACK:
+- Haptic feedback on tap (ImpactStyle.Light)
+- Icon toggles immediately (outline ↔ filled)
+- Brief confirmation (optional toast: "Saved" / "Removed")
+
+ICON: Use the SAME bookmark icon that appears in the bottom navigation toolbar for the "Saved" tab. Consistency is important.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 4: HTML ENCODING BUG
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Apostrophes showing as "&#39;" in video titles.
+Example: "Gordon Ryan&#39;s Easy to Learn..." instead of "Gordon Ryan's Easy to Learn..."
+
+FIX: Decode HTML entities before displaying video titles.
+
+Option A - Use a decode function:
+const decodeHTML = (html) => {
+  const txt = document.createElement('textarea');
+  txt.innerHTML = html;
+  return txt.value;
+};
+
+Option B - Use a library like 'he':
+npm install he
+import he from 'he';
+const title = he.decode(video.title);
+
+Option C - Fix at data source:
+- When storing video data, ensure titles are stored decoded
+- Or decode when fetching from database/API
+
+Apply to all places where video titles are displayed.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 5: REMOVE BOOKMARK ICON FROM THUMBNAIL (IF EXISTS)
+═══════════════════════════════════════════════════════════════════════════════
+
+If there is currently a bookmark/favorite icon overlaid on the video thumbnail:
+- REMOVE it
+- Save functionality is now handled by the Save button in the button row
+- Keeps thumbnails clean
+
+═══════════════════════════════════════════════════════════════════════════════
+SUMMARY OF VIDEO CARD LAYOUT
+═══════════════════════════════════════════════════════════════════════════════
+
+THUMBNAIL | TITLE
+          | Instructor Name
+          |
+          | [🧠 Analysis] [🔖 Save] [↗️ Share]
+
+- Three action buttons only
+- No metadata tags in this row
+- Save icon matches toolbar Saved icon
+- Save icon state: outline (not saved) / filled (saved)
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES - TEST CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Share button → Opens native iOS share sheet
+□ Share text includes video title, instructor, YouTube URL, bjjos.app (twice)
+□ Video cards show only 3 buttons: Analysis, Save, Share
+□ No metadata tag in button row
+□ Save button shows outline when not saved
+□ Save button shows filled when saved
+□ Tap Save → Video saves, icon fills, appears in Saved tab
+□ Tap filled Save → Video unsaves, icon outlines, removes from Saved tab
+□ Apostrophes display correctly (no &#39;)
+□ All above works in: Video Library, Chat cards, Saved tab
+
+Then sync:
+npm run build
+npx cap sync ios
+
+Rebuild in Xcode and test on physical device.
+═══════════════════════════════════════════════════════════════════════════════
