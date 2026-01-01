@@ -104,7 +104,23 @@ const COMBAT_SPORTS_KEYWORDS = [
   'last match', 'recent match', 'who won', 'results', 'bracket'
 ];
 
-// PRIORITY 2: Core BJJ technique keywords
+// PRIORITY 2: Conversational acknowledgments (always valid, not off-topic)
+const CONVERSATIONAL_PHRASES = [
+  'thank you', 'thanks', 'thx', 'ty',
+  'got it', 'ok', 'okay', 'k', 'alright', 'cool', 'nice', 'awesome', 'great', 'perfect',
+  'will do', 'sounds good', 'makes sense', 'understood', 'roger', 'bet',
+  'appreciate it', 'appreciate that', 'helpful', 'this helps', 'that helps',
+  'good to know', 'noted', 'dope', 'sick', 'fire', 'lit', 'word',
+  'lol', 'haha', 'lmao', 'hahaha',
+  'yes', 'yeah', 'yep', 'yup', 'ya', 'yea',
+  'no', 'nope', 'nah',
+  'sure', 'absolutely', 'definitely', 'for sure',
+  'hello', 'hi', 'hey', 'yo', 'sup', 'what\'s up', 'whats up',
+  'bye', 'later', 'peace', 'see ya', 'talk later',
+  'oss', 'osss', 'ossss', 'porra' // BJJ greetings
+];
+
+// PRIORITY 3: Core BJJ technique keywords
 const BJJ_TECHNIQUE_KEYWORDS = [
   'guard', 'pass', 'sweep', 'submission', 'mount', 'side control', 'back',
   'choke', 'armbar', 'triangle', 'kimura', 'americana', 'omoplata',
@@ -129,7 +145,7 @@ interface TopicDetectionResult {
 }
 
 function detectTopicType(message: string): TopicDetectionResult {
-  const messageLower = message.toLowerCase();
+  const messageLower = message.toLowerCase().trim();
   const result: TopicDetectionResult = {
     isOffTopic: true,
     isCombatSports: false,
@@ -151,7 +167,28 @@ function detectTopicType(message: string): TopicDetectionResult {
     return result;
   }
   
-  // PRIORITY 2: Check BJJ technique keywords
+  // PRIORITY 2: Check conversational acknowledgments (short messages that are valid)
+  // For very short messages, check if the entire message is an acknowledgment
+  const cleanMessage = messageLower.replace(/[^\w\s]/g, '').trim();
+  for (const phrase of CONVERSATIONAL_PHRASES) {
+    if (cleanMessage === phrase || messageLower.includes(phrase)) {
+      result.isOffTopic = false;
+      result.detectedKeywords.push(phrase);
+      console.log('💬 [TOPIC DETECTION] Conversational phrase detected:', phrase);
+      return result;
+    }
+  }
+  
+  // Check for emoji-only messages (thumbs up, fist bump, etc.) - these are valid
+  const emojiPattern = /^[\p{Emoji}\s]+$/u;
+  if (emojiPattern.test(message.trim())) {
+    result.isOffTopic = false;
+    result.detectedKeywords.push('emoji');
+    console.log('👍 [TOPIC DETECTION] Emoji message detected');
+    return result;
+  }
+  
+  // PRIORITY 3: Check BJJ technique keywords
   for (const keyword of BJJ_TECHNIQUE_KEYWORDS) {
     if (messageLower.includes(keyword)) {
       result.isOffTopic = false;

@@ -1,0 +1,235 @@
+Here’s the comprehensive prompt for all chat and analysis page issues:
+
+-----
+
+```
+CHAT & ANALYSIS PAGE - COMPLETE FIX LIST
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL FIXES NEEDED - These are blocking good user experience.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: PROFESSOR OS BREAKS ON SIMPLE MESSAGES
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: User says "Thank you" and Professor OS responds with:
+"I had trouble with that message. Could you try rephrasing?"
+
+This is unacceptable. Simple conversational messages must work.
+
+FIX: Add handling for simple acknowledgments in Professor OS:
+
+Messages like:
+- "Thank you" / "Thanks" / "Thx"
+- "Got it" / "Ok" / "Okay" / "K"
+- "Cool" / "Nice" / "Awesome"
+- "Will do" / "Sounds good"
+- "👍" / "🤙" / "💪"
+
+Should get warm, natural responses like:
+- "Anytime! Let me know how it goes."
+- "You got it. Good luck on the mats!"
+- "🤙 Go get after it."
+- "Anytime. Hit me up after you drill it."
+- "Let's go! Tell me how training goes."
+
+These should NEVER return an error or "trouble with that message."
+
+Add this to the Professor OS system prompt or handle in the chat logic before sending to AI.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: SAVE VIDEO BROKEN
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: When user taps "Save" on a video card, shows "Please try again" error.
+Video does not save to the Saved library.
+
+FIX:
+1. Debug the save function - check console for actual error
+2. Verify saved_videos table exists and has correct schema
+3. Verify user_id is being passed correctly
+4. Verify video_id is being passed correctly
+5. Add proper error handling with specific error messages
+6. On success: Show confirmation (checkmark, "Saved!", haptic feedback)
+7. On failure: Show specific error, not generic "Please try again"
+
+Test: Save a video → Navigate to Saved tab → Video should appear
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: BOOKMARK ICON ON VIDEO THUMBNAIL DOESN'T WORK
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Tapping the bookmark/favorite icon on video thumbnail does nothing.
+
+FIX:
+1. Ensure onClick handler is attached to bookmark icon
+2. Should trigger same save function as "Save" button
+3. Add haptic feedback on tap
+4. Icon should toggle state (outline → filled) when saved
+5. If already saved, tapping should unsave (with confirmation)
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 4: KEYBOARD COVERS INPUT FIELD (PHYSICAL DEVICE)
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: On physical iPhone, when keyboard appears, it covers the 
+"Ask Professor OS" input field. User cannot see what they're typing.
+
+FIX: Use Capacitor Keyboard plugin to handle this:
+
+import { Keyboard } from '@capacitor/keyboard';
+
+// Listen for keyboard show
+Keyboard.addListener('keyboardWillShow', (info) => {
+  // Adjust view/scroll position
+  document.body.style.marginBottom = `${info.keyboardHeight}px`;
+  // Or scroll the chat container up
+});
+
+// Listen for keyboard hide
+Keyboard.addListener('keyboardWillHide', () => {
+  document.body.style.marginBottom = '0px';
+});
+
+If not installed:
+npm install @capacitor/keyboard
+npx cap sync ios
+
+Alternative CSS fix:
+- Ensure chat container has proper padding-bottom
+- Use viewport units that account for keyboard
+- Set input to position: fixed with proper bottom spacing
+
+The input field MUST remain visible and usable when keyboard is open.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 5: CONTENT CUT OFF UNDER INPUT BAR
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: In both Chat and Analysis pages, content at the bottom gets hidden 
+under the "Ask Professor OS" input bar.
+
+FIX:
+1. Add padding-bottom to scrollable content area
+2. Padding should equal height of input bar + navigation bar + safe area
+3. Approximately 140-160px padding-bottom
+4. Ensure content can scroll fully without being hidden
+
+Test: Scroll to absolute bottom of content - all text should be visible above input bar.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 6: NO SHARE BUTTON ON ANALYSIS PAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: Video Analysis page has no share button. User should be able to 
+share from this view too.
+
+FIX:
+1. Add share icon to Analysis page header (near the X close button)
+2. Or add share button below the video thumbnail
+3. Uses same share function with same copy:
+
+"{Title} by {Instructor}
+
+🎥 {YouTube URL}
+
+https://bjjos.app
+
+BJJ OS gives you a full breakdown of every video - key timestamps, instructor tips, common mistakes. No more scrubbing through 20-minute videos to find the good stuff: https://bjjos.app"
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 7: PURPLE TIMESTAMP BACKGROUND IN ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM: The timestamp buttons (e.g., "00:25") have purple background. 
+Looks sloppy and inconsistent.
+
+FIX:
+- Remove purple background from timestamp buttons
+- Keep text only, or use subtle styling (outline or muted background)
+- Should look clean and minimal, not attention-grabbing
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 8: UI/UX CHANGES FROM PREVIOUS PROMPT DIDN'T STICK
+═══════════════════════════════════════════════════════════════════════════════
+
+The following UI/UX improvements were requested but not implemented:
+
+CHAT INPUT BAR:
+- Microphone icon on left (for voice input, future feature - can be placeholder)
+- Text input in middle
+- Send arrow icon on right
+- Subtle border or elevation to separate from messages
+- Rounded corners on input field
+
+MESSAGE STYLING:
+- User messages: Purple (consider slightly muted/premium purple, not harsh)
+- Professor OS messages: Dark with "OS" badge or small logo icon
+- Timestamps under messages should be smaller/more subtle
+- Bottom padding so messages don't hide under input bar
+
+GENERAL:
+- No white bars anywhere
+- Consistent dark theme throughout
+- Premium, clean feel
+
+Please implement these UI improvements to the chat interface.
+
+═══════════════════════════════════════════════════════════════════════════════
+QUESTION: ARE TAGS NEEDED ON ANALYSIS PAGE?
+═══════════════════════════════════════════════════════════════════════════════
+
+Currently showing: "No-Gi", "All Levels", "general"
+
+Consider:
+- Is this information useful to the user in this context?
+- Does it clutter the view?
+- Could be removed or moved lower in the analysis
+
+Recommend: Remove or minimize - the rating and techniques are more valuable.
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+HIGH PRIORITY (Blocking):
+1. Professor OS "Thank you" handling
+2. Save video functionality
+3. Keyboard covering input field
+4. Content cut off under input bar
+
+MEDIUM PRIORITY (UX Polish):
+5. Bookmark icon functionality
+6. Share button on Analysis page
+7. Purple timestamp styling
+8. UI/UX improvements (input bar, message styling)
+
+LOW PRIORITY (Cosmetic):
+9. Tags on Analysis page
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES - TEST CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Send "Thank you" to Professor OS → Get warm response
+□ Send "Got it" → Get natural response
+□ Tap Save on video → Video saves, appears in Saved tab
+□ Tap bookmark icon on thumbnail → Video saves
+□ Open keyboard on physical device → Input field stays visible
+□ Scroll to bottom of chat → All content visible above input bar
+□ Scroll to bottom of Analysis → All content visible above input bar
+□ Share from Analysis page → Share sheet opens
+□ Timestamps in Analysis → No purple background, clean styling
+□ Chat UI → Input bar has proper styling, messages look premium
+
+Then sync:
+npm run build
+npx cap sync ios
+
+Rebuild in Xcode and test on physical device.
+═══════════════════════════════════════════════════════════════════════════════
+```
+
+-----
+
+**Ready to send?**

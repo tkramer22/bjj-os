@@ -1,12 +1,13 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
-import { Search, Play, BookmarkCheck, Loader2, ChevronDown, RefreshCw, Brain, Share2 } from "lucide-react";
+import { Search, Play, BookmarkCheck, Bookmark, Loader2, ChevronDown, RefreshCw, Brain, Share2 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { shareVideo } from "@/lib/share";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 console.log('✅ iOS LIBRARY loaded');
 
@@ -78,6 +79,50 @@ export default function IOSLibraryPage() {
   });
 
   const savedVideoIds = savedVideosData?.videos?.map(v => String(v.id)) || [];
+
+  // Save/unsave video mutations
+  const saveVideoMutation = useMutation({
+    mutationFn: async ({ videoId }: { videoId: number }) => {
+      return apiRequest('POST', '/api/ai/saved-videos', { userId: user?.id, videoId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/ai/saved-videos/${user?.id}`] });
+      toast({ title: "Saved!", description: "Video added to your library" });
+      triggerHaptic('success');
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to save video", variant: "destructive" });
+      triggerHaptic('error');
+    }
+  });
+
+  const unsaveVideoMutation = useMutation({
+    mutationFn: async ({ videoId }: { videoId: number }) => {
+      return apiRequest('DELETE', `/api/ai/saved-videos/${videoId}`, { userId: user?.id });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/ai/saved-videos/${user?.id}`] });
+      toast({ title: "Removed", description: "Video removed from saved" });
+      triggerHaptic('light');
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to remove video", variant: "destructive" });
+      triggerHaptic('error');
+    }
+  });
+
+  const handleToggleSave = (videoId: number) => {
+    if (!user?.id) {
+      toast({ title: "Sign in required", description: "Please sign in to save videos", variant: "destructive" });
+      return;
+    }
+    
+    if (isVideoSaved(videoId)) {
+      unsaveVideoMutation.mutate({ videoId });
+    } else {
+      saveVideoMutation.mutate({ videoId });
+    }
+  };
 
   // CASCADING FILTERS: Filter videos by one selection to compute the other dropdown's options
   
@@ -512,9 +557,32 @@ export default function IOSLibraryPage() {
                       <Share2 size={12} />
                       Share
                     </button>
-                    {isVideoSaved(video.id) && (
-                      <BookmarkCheck size={14} color="#22C55E" />
-                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleSave(video.id);
+                      }}
+                      data-testid={`button-save-video-${video.id}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11px',
+                        color: isVideoSaved(video.id) ? '#22C55E' : '#71717A',
+                        background: isVideoSaved(video.id) ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {isVideoSaved(video.id) ? (
+                        <BookmarkCheck size={12} />
+                      ) : (
+                        <Bookmark size={12} />
+                      )}
+                      {isVideoSaved(video.id) ? 'Saved' : 'Save'}
+                    </button>
                   </div>
                 </div>
               </button>

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, Star, Clock, AlertTriangle, Lightbulb, Target, ChevronRight, Loader2, Brain, Dumbbell } from "lucide-react";
+import { X, Star, Clock, AlertTriangle, Lightbulb, Target, ChevronRight, Loader2, Brain, Dumbbell, Share2 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
+import { shareVideo } from "@/lib/share";
 
 interface VideoAnalysis {
   video: {
@@ -207,24 +208,47 @@ export function VideoAnalysisModal({ videoId, onClose, onTimestampClick }: Video
             <Brain size={24} color="#8B5CF6" />
             <span style={{ fontWeight: 600, fontSize: '18px', color: '#fff' }}>Video Analysis</span>
           </div>
-          <button
-            onClick={onClose}
-            data-testid="button-close-analysis"
-            style={{
-              background: '#1A1A1D',
-              border: 'none',
-              borderRadius: '50%',
-              width: '36px',
-              height: '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#71717A',
-            }}
-          >
-            <X size={20} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={async () => {
+                triggerHaptic('light');
+                await shareVideo(video.title, video.instructorName, video.youtubeId);
+              }}
+              data-testid="button-share-analysis"
+              style={{
+                background: '#1A1A1D',
+                border: 'none',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#71717A',
+              }}
+            >
+              <Share2 size={18} />
+            </button>
+            <button
+              onClick={onClose}
+              data-testid="button-close-analysis"
+              style={{
+                background: '#1A1A1D',
+                border: 'none',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#71717A',
+              }}
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
@@ -386,11 +410,11 @@ export function VideoAnalysisModal({ videoId, onClose, onTimestampClick }: Video
                       <button
                         onClick={() => handleTimestampTap(tech.timestampStart!)}
                         style={{
-                          background: '#8B5CF6',
-                          border: 'none',
+                          background: '#1A1A1D',
+                          border: '1px solid #2A2A2E',
                           borderRadius: '6px',
                           padding: '4px 10px',
-                          color: '#fff',
+                          color: '#8B5CF6',
                           fontSize: '12px',
                           cursor: 'pointer',
                           display: 'flex',

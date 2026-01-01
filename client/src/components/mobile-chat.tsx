@@ -9,6 +9,8 @@ import { formatDateDivider, shouldShowDateDivider } from "@/lib/timestamps";
 import { triggerHaptic } from "@/lib/haptics";
 import { getApiUrl, isNativeApp, getAuthToken } from "@/lib/capacitorAuth";
 import { useChatContext } from "@/contexts/ChatContext";
+import { Keyboard } from '@capacitor/keyboard';
+import { Capacitor } from '@capacitor/core';
 
 interface Message {
   id: string;
@@ -47,10 +49,31 @@ export function MobileChat() {
   const [oldestMessageTimestamp, setOldestMessageTimestamp] = useState<string | null>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [thinkingStatus, setThinkingStatus] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const thinkingStatusRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Handle keyboard show/hide for iOS native
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const showListener = Keyboard.addListener('keyboardWillShow', (info) => {
+      setKeyboardHeight(info.keyboardHeight);
+      // Scroll to bottom when keyboard appears
+      setTimeout(() => scrollToBottom(true), 100);
+    });
+
+    const hideListener = Keyboard.addListener('keyboardWillHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showListener.then(l => l.remove());
+      hideListener.then(l => l.remove());
+    };
+  }, []);
 
   // Get authenticated user from API
   const { data: currentUser, isLoading: isLoadingUser } = useQuery<AuthUser>({
@@ -472,7 +495,7 @@ What's on your mind?`,
           }
         }}
         style={{
-          paddingBottom: '180px',
+          paddingBottom: keyboardHeight > 0 ? keyboardHeight + 100 : 180,
         }}
       >
         {isLoadingMore && (
@@ -571,13 +594,14 @@ What's on your mind?`,
         className="mobile-chat-input-container mobile-safe-area-bottom"
         style={{
           position: 'fixed',
-          bottom: '80px',
+          bottom: keyboardHeight > 0 ? keyboardHeight : 80,
           left: 0,
           right: 0,
           zIndex: 9998,
           background: '#0A0A0B',
           borderTop: '1px solid var(--mobile-border)',
-          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          paddingBottom: keyboardHeight > 0 ? 0 : 'env(safe-area-inset-bottom, 0px)',
+          transition: 'bottom 0.25s ease-out',
         }}
       >
         <div style={{
