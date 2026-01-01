@@ -440,19 +440,20 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
                           background: "rgba(139, 92, 246, 0.15)",
                           border: "none",
                           borderRadius: "6px",
-                          padding: "0.375rem 0.5rem",
+                          padding: "0.25rem 0.5rem",
                           cursor: "pointer",
                           color: "#8B5CF6",
                           display: "flex",
                           alignItems: "center",
-                          gap: "4px",
-                          fontSize: "0.7rem",
+                          gap: "3px",
+                          fontSize: "0.65rem",
                           fontWeight: 500,
                         }}
                         data-testid={`button-analysis-video-${segment.video.id}`}
                         title="View full analysis"
                       >
-                        <Brain size={14} />
+                        <Brain size={12} />
+                        Analysis
                       </button>
                       <button
                         onClick={() => toggleSaveVideo(segment.video!.id)}
@@ -460,21 +461,24 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
                           background: savedVideoIds.has(segment.video.id) ? "rgba(34, 197, 94, 0.15)" : "rgba(39, 39, 42, 0.5)",
                           border: "none",
                           borderRadius: "6px",
-                          padding: "0.375rem 0.5rem",
+                          padding: "0.25rem 0.5rem",
                           cursor: "pointer",
                           color: savedVideoIds.has(segment.video.id) ? "#22C55E" : "var(--mobile-text-secondary)",
                           display: "flex",
                           alignItems: "center",
-                          justifyContent: "center"
+                          gap: "3px",
+                          fontSize: "0.65rem",
+                          fontWeight: 500,
                         }}
                         data-testid={`button-save-video-${segment.video.id}`}
                         title={savedVideoIds.has(segment.video.id) ? "Remove from saved" : "Save video"}
                       >
                         {savedVideoIds.has(segment.video.id) ? (
-                          <BookmarkCheck size={14} />
+                          <BookmarkCheck size={12} />
                         ) : (
-                          <Bookmark size={14} />
+                          <Bookmark size={12} />
                         )}
+                        {savedVideoIds.has(segment.video.id) ? "Saved" : "Save"}
                       </button>
                       <button
                         onClick={async () => {
@@ -485,17 +489,20 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
                           background: "rgba(16, 185, 129, 0.15)",
                           border: "none",
                           borderRadius: "6px",
-                          padding: "0.375rem 0.5rem",
+                          padding: "0.25rem 0.5rem",
                           cursor: "pointer",
                           color: "#10B981",
                           display: "flex",
                           alignItems: "center",
-                          justifyContent: "center"
+                          gap: "3px",
+                          fontSize: "0.65rem",
+                          fontWeight: 500,
                         }}
                         data-testid={`button-share-video-${segment.video.id}`}
                         title="Share video"
                       >
-                        <Share2 size={14} />
+                        <Share2 size={12} />
+                        Share
                       </button>
                     </div>
                   )}
