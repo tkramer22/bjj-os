@@ -101,8 +101,25 @@ export class IntelligenceSchedulers {
 
     this.tasks.push(patternTask);
 
+    // 5. Daily Data Aggregation Jobs (2:00 AM EST - off-peak)
+    // Aggregates technique journeys, learning profiles, ecosystem data
+    const dataAggregationTask = cron.schedule('0 2 * * *', async () => {
+      console.log('[SCHEDULER] Running daily data aggregation jobs...');
+      try {
+        const { runAllDailyAggregations } = await import('./utils/data-aggregation');
+        await runAllDailyAggregations();
+      } catch (error: any) {
+        console.error('[SCHEDULER] ❌ Daily data aggregation failed:', error.message);
+      }
+    }, {
+      timezone: 'America/New_York'
+    });
+
+    this.tasks.push(dataAggregationTask);
+
     console.log(`[SCHEDULERS] ✅ Started ${this.tasks.length} schedulers`);
     console.log('[SCHEDULERS] Schedule:');
+    console.log('  - 2:00 AM EST: Daily Data Aggregation (technique journeys, learning profiles, ecosystem)');
     console.log('  - 6:00 AM EST: Daily Combat Sports Scraping');
     console.log('  - 7:00 AM EST: Daily Population Intelligence Aggregation');
     console.log('  - 8:00 AM EST (Sunday): Weekly Cognitive Profile Updates');

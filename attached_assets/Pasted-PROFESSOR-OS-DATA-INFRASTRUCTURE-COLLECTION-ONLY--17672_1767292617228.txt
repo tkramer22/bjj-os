@@ -1,0 +1,265 @@
+PROFESSOR OS - DATA INFRASTRUCTURE (COLLECTION ONLY)
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL INSTRUCTION:
+This prompt sets up DATA COLLECTION ONLY.
+DO NOT modify Professor OS responses in any way.
+DO NOT inject any new context into Professor OS.
+DO NOT change how Professor OS behaves.
+
+Professor OS 1.2 personality was just implemented and must remain unchanged.
+We are ONLY building database infrastructure to collect data silently.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: CREATE THESE DATABASE TABLES
+═══════════════════════════════════════════════════════════════════════════════
+
+Create these tables if they don't already exist:
+
+TABLE: conversation_extracted_data
+- id (UUID, primary key)
+- user_id (FK to users)
+- conversation_id (FK)
+- message_id (FK)
+- extracted_at (timestamp, default now)
+- techniques_mentioned (JSON array)
+- techniques_succeeded (JSON array)
+- techniques_failed (JSON array)
+- problems_mentioned (JSON array)
+- wins_mentioned (JSON array)
+- training_partners_mentioned (JSON array)
+- injuries_mentioned (JSON array)
+- emotional_state (text: frustrated, excited, casual, analytical, neutral)
+- questions_asked (JSON array)
+- question_depth (integer 1-10)
+- vocabulary_complexity (integer 1-10)
+- videos_recommended (JSON array)
+- timestamps_referenced (JSON array)
+- raw_user_message (text)
+- raw_ai_response (text)
+
+TABLE: technique_journey
+- id (UUID, primary key)
+- user_id (FK to users)
+- technique_name (text)
+- first_mentioned (timestamp)
+- times_mentioned (integer, default 1)
+- times_succeeded (integer, default 0)
+- times_failed (integer, default 0)
+- last_mentioned (timestamp)
+- status (text: learning, improving, clicked, mastered, abandoned)
+- days_to_first_success (integer, nullable)
+- created_at (timestamp)
+- updated_at (timestamp)
+
+TABLE: training_partner_data
+- id (UUID, primary key)
+- user_id (FK to users)
+- partner_name (text)
+- first_mentioned (timestamp)
+- times_mentioned (integer, default 1)
+- context_notes (JSON array)
+- user_success_against (integer, default 0)
+- user_failures_against (integer, default 0)
+- partner_style_notes (text, nullable)
+- last_mentioned (timestamp)
+- created_at (timestamp)
+
+TABLE: injury_tracking
+- id (UUID, primary key)
+- user_id (FK to users)
+- body_part (text)
+- first_mentioned (timestamp)
+- times_mentioned (integer, default 1)
+- severity_indicators (JSON array)
+- training_frequency_at_time (integer, nullable)
+- status (text: active, monitoring, resolved, recurring)
+- last_mentioned (timestamp)
+- resolved_date (timestamp, nullable)
+- created_at (timestamp)
+
+TABLE: video_recommendation_log
+- id (UUID, primary key)
+- user_id (FK to users)
+- conversation_id (FK)
+- video_id (FK to videos, nullable)
+- video_title (text)
+- instructor_name (text)
+- timestamp_given (text, nullable)
+- problem_it_solved (text)
+- recommended_at (timestamp)
+- user_response (text: positive, negative, neutral, unknown)
+- user_watched (boolean, nullable)
+- follow_up_success (boolean, nullable)
+- days_to_outcome (integer, nullable)
+
+TABLE: user_engagement_patterns
+- id (UUID, primary key)
+- user_id (FK to users)
+- date (date)
+- messages_sent (integer)
+- total_words_sent (integer)
+- average_message_length (integer)
+- hours_active (JSON array)
+- days_since_previous (integer)
+- session_duration_seconds (integer, nullable)
+- emotional_trend (text: improving, stable, declining)
+- created_at (timestamp)
+
+TABLE: user_learning_profile
+- id (UUID, primary key)
+- user_id (FK to users, unique)
+- learning_style (text: conceptual, tactical, visual, drilling_focused)
+- preferred_response_length (text: short, medium, long)
+- vocabulary_level (text: beginner, intermediate, advanced)
+- question_complexity_trend (text: improving, stable, declining)
+- preferred_instructors (JSON array)
+- optimal_contact_time (JSON)
+- engagement_score (integer 1-100)
+- churn_risk_score (integer 1-100)
+- created_at (timestamp)
+- updated_at (timestamp)
+
+TABLE: breakthrough_tracking
+- id (UUID, primary key)
+- user_id (FK to users)
+- technique_name (text)
+- struggle_started (timestamp)
+- breakthrough_date (timestamp)
+- days_to_breakthrough (integer)
+- what_helped (JSON)
+- user_profile_at_breakthrough (JSON)
+- signals_before_breakthrough (JSON)
+- created_at (timestamp)
+
+TABLE: ecosystem_technique_data
+- id (UUID, primary key)
+- technique_name (text)
+- belt_level (text)
+- body_type (text: tall_light, tall_heavy, short_light, short_heavy, average)
+- style (text: gi, nogi, both)
+- success_count (integer)
+- failure_count (integer)
+- success_rate (decimal)
+- avg_days_to_success (decimal)
+- sample_size (integer)
+- top_videos_that_helped (JSON array)
+- top_timestamps_that_helped (JSON array)
+- common_problems (JSON array)
+- common_solutions (JSON array)
+- updated_at (timestamp)
+
+TABLE: ecosystem_problem_solutions
+- id (UUID, primary key)
+- problem_description (text)
+- problem_category (text)
+- solution_that_worked (text)
+- video_that_helped (FK, nullable)
+- timestamp_that_helped (text, nullable)
+- user_profile_type (JSON)
+- success_count (integer)
+- sample_size (integer)
+- confidence_score (decimal)
+- updated_at (timestamp)
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: DATA EXTRACTION (Run AFTER every conversation - ASYNC)
+═══════════════════════════════════════════════════════════════════════════════
+
+IMPORTANT: This runs AFTER Professor OS responds. 
+It does NOT affect the response. It only extracts and stores data.
+Must be ASYNCHRONOUS - never slow down user experience.
+
+After each conversation turn, extract from the user's message:
+
+1. TECHNIQUE EXTRACTION
+   Scan for technique names (triangle, armbar, sweep, pass, guard, mount, etc.)
+   Classify each as: mentioned, attempted, succeeded, or failed
+   - Succeeded indicators: "hit", "got", "landed", "finally", "first time"
+   - Failed indicators: "got caught", "couldn't", "stuffed", "defended"
+   Store in: conversation_extracted_data
+   Update: technique_journey table
+
+2. PROBLEM EXTRACTION
+   Look for: "can't", "keep getting", "struggling", "stuck", "frustrated"
+   Extract: What technique/position/situation
+   Store in: conversation_extracted_data.problems_mentioned
+
+3. WIN EXTRACTION
+   Look for: "hit", "got", "landed", "finally", "worked", "clicked", "!"
+   Extract: What technique/position succeeded
+   Store in: conversation_extracted_data.wins_mentioned
+   Update: technique_journey (increment times_succeeded)
+   If first success after failures: Create breakthrough_tracking entry
+
+4. TRAINING PARTNER EXTRACTION
+   Look for names in training context ("rolled with Mike", "Sarah passed me")
+   Store in: training_partner_data
+   Update: times_mentioned, context_notes
+
+5. INJURY EXTRACTION
+   Look for: body part + pain words ("shoulder hurts", "knee sore")
+   Store in: injury_tracking
+   Update: times_mentioned, severity_indicators
+
+6. EMOTIONAL STATE DETECTION
+   Classify as: frustrated, excited, analytical, casual, or neutral
+   Store in: conversation_extracted_data.emotional_state
+
+7. VIDEO RECOMMENDATION LOGGING
+   When Professor OS recommends a video in its response:
+   Log: video_id, title, instructor, timestamp, problem context
+   Store in: video_recommendation_log
+
+8. ENGAGEMENT TRACKING
+   Log: message count, word count, time of day, days since last conversation
+   Store in: user_engagement_patterns
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: DAILY AGGREGATION JOBS (Run once daily, off-peak)
+═══════════════════════════════════════════════════════════════════════════════
+
+JOB 1: Update technique_journey
+- Aggregate technique data from conversation_extracted_data
+- Update status: learning → improving → clicked → mastered
+- Calculate days_to_first_success for breakthroughs
+
+JOB 2: Update user_learning_profile
+- Calculate vocabulary_level trend
+- Calculate question_complexity_trend
+- Calculate engagement_score
+- Calculate churn_risk_score
+
+JOB 3: Update ecosystem_technique_data
+- Aggregate success/failure across ALL users
+- Segment by belt_level, body_type, style
+- Calculate success_rates per segment
+
+JOB 4: Update ecosystem_problem_solutions
+- Find problems that got solved (user stopped mentioning)
+- Log what video/advice preceded the solution
+- Build confidence_score based on sample_size
+
+JOB 5: Update video_recommendation_log outcomes
+- For recommendations 7+ days old with unknown outcome
+- Check if user mentioned success with that technique
+- Update follow_up_success field
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL REMINDERS
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ DO: Create all database tables
+✅ DO: Extract data after every conversation
+✅ DO: Run daily aggregation jobs
+✅ DO: Store everything silently in background
+
+❌ DO NOT: Modify Professor OS system prompt
+❌ DO NOT: Inject any new context into Professor OS
+❌ DO NOT: Change how Professor OS responds
+❌ DO NOT: Slow down the user experience
+
+Professor OS 1.2 personality MUST remain exactly as implemented.
+This is DATA COLLECTION ONLY.
+
+═══════════════════════════════════════════════════════════════════════════════

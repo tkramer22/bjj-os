@@ -5,7 +5,10 @@ import {
   userPatternInterventions, 
   userInjuryProfile,
   userTechniqueEcosystem,
-  conversationStructuredData
+  conversationStructuredData,
+  videoRecommendationLog,
+  userEngagementPatterns,
+  breakthroughTracking
 } from '@shared/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
@@ -314,6 +317,202 @@ export async function saveExtractedData(
 }
 
 /**
+ * Extract video recommendations from Professor OS response
+ * Parses [VIDEO: Title by Instructor] and [VIDEO: Title by Instructor | START: 4:32] patterns
+ */
+export function extractVideoRecommendations(osResponse: string): Array<{
+  title: string;
+  instructor: string;
+  timestamp: string | null;
+}> {
+  const videoPattern = /\[VIDEO:\s*([^\]|]+?)(?:\s*\|\s*START:\s*(\d+:\d+))?\]/g;
+  const recommendations: Array<{ title: string; instructor: string; timestamp: string | null }> = [];
+  
+  let match;
+  while ((match = videoPattern.exec(osResponse)) !== null) {
+    const fullTitle = match[1].trim();
+    const timestamp = match[2] || null;
+    
+    // Parse "Title by Instructor" format
+    const byMatch = fullTitle.match(/^(.+?)\s+by\s+(.+)$/i);
+    if (byMatch) {
+      recommendations.push({
+        title: byMatch[1].trim(),
+        instructor: byMatch[2].trim(),
+        timestamp
+      });
+    } else {
+      recommendations.push({
+        title: fullTitle,
+        instructor: 'Unknown',
+        timestamp
+      });
+    }
+  }
+  
+  return recommendations;
+}
+
+/**
+ * Log video recommendations to video_recommendation_log table
+ */
+export async function logVideoRecommendations(
+  userId: string,
+  conversationId: string | null,
+  osResponse: string,
+  problemContext: string | null = null
+): Promise<void> {
+  const recommendations = extractVideoRecommendations(osResponse);
+  
+  if (recommendations.length === 0) return;
+  
+  console.log(`[DATA EXTRACTION] Logging ${recommendations.length} video recommendations for user:`, userId);
+  
+  for (const rec of recommendations) {
+    try {
+      await db.insert(videoRecommendationLog).values({
+        userId,
+        conversationId,
+        videoTitle: rec.title,
+        instructorName: rec.instructor,
+        timestampGiven: rec.timestamp,
+        problemItSolved: problemContext,
+        userResponse: 'unknown'
+      });
+    } catch (error) {
+      console.error('[DATA EXTRACTION] Failed to log video recommendation:', error);
+    }
+  }
+}
+
+/**
+ * Track user engagement patterns for the day
+ */
+export async function trackUserEngagement(
+  userId: string,
+  userMessage: string,
+  emotionalTone: string
+): Promise<void> {
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const wordCount = userMessage.split(/\s+/).filter(w => w.length > 0).length;
+  const currentHour = new Date().getHours();
+  
+  try {
+    // Try to find existing record for today
+    const existing = await db.query.userEngagementPatterns.findFirst({
+      where: and(
+        eq(userEngagementPatterns.userId, userId),
+        eq(userEngagementPatterns.date, today)
+      )
+    });
+    
+    if (existing) {
+      // Update existing record
+      const currentHours = (existing.hoursActive as number[]) || [];
+      if (!currentHours.includes(currentHour)) {
+        currentHours.push(currentHour);
+      }
+      
+      const newMessageCount = (existing.messagesSent || 0) + 1;
+      const newWordCount = (existing.totalWordsSent || 0) + wordCount;
+      
+      await db.update(userEngagementPatterns)
+        .set({
+          messagesSent: newMessageCount,
+          totalWordsSent: newWordCount,
+          averageMessageLength: Math.round(newWordCount / newMessageCount),
+          hoursActive: currentHours,
+          emotionalTrend: emotionalTone
+        })
+        .where(eq(userEngagementPatterns.id, existing.id));
+    } else {
+      // Calculate days since previous engagement
+      const lastEngagement = await db.query.userEngagementPatterns.findFirst({
+        where: eq(userEngagementPatterns.userId, userId),
+        orderBy: (patterns, { desc }) => [desc(patterns.date)]
+      });
+      
+      let daysSincePrevious = 0;
+      if (lastEngagement?.date) {
+        const lastDate = new Date(lastEngagement.date);
+        const todayDate = new Date(today);
+        daysSincePrevious = Math.floor((todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+      }
+      
+      // Create new record for today
+      await db.insert(userEngagementPatterns).values({
+        userId,
+        date: today,
+        messagesSent: 1,
+        totalWordsSent: wordCount,
+        averageMessageLength: wordCount,
+        hoursActive: [currentHour],
+        daysSincePrevious,
+        emotionalTrend: emotionalTone
+      });
+    }
+  } catch (error) {
+    console.error('[DATA EXTRACTION] Failed to track engagement:', error);
+  }
+}
+
+/**
+ * Detect and track breakthroughs when user reports success after struggling
+ */
+export async function detectBreakthrough(
+  userId: string,
+  techniqueName: string,
+  extracted: ExtractedData
+): Promise<void> {
+  // Check if user had success with a technique they previously struggled with
+  const hasSuccess = extracted.successes.some(s => 
+    s.toLowerCase().includes(techniqueName.toLowerCase())
+  );
+  
+  if (!hasSuccess) return;
+  
+  try {
+    // Check if they had previous problems with this technique
+    const previousProblems = await db.query.userPatternInterventions.findFirst({
+      where: and(
+        eq(userPatternInterventions.userId, userId),
+        sql`${userPatternInterventions.description} ILIKE ${'%' + techniqueName + '%'}`
+      )
+    });
+    
+    if (previousProblems) {
+      // This is a breakthrough!
+      const daysToBreakthrough = previousProblems.firstDetected 
+        ? Math.floor((Date.now() - previousProblems.firstDetected.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+      
+      await db.insert(breakthroughTracking).values({
+        userId,
+        techniqueName,
+        struggleStarted: previousProblems.firstDetected,
+        breakthroughDate: new Date(),
+        daysToBreakthrough,
+        whatHelped: { source: 'conversation_analysis' },
+        signalsBeforeBreakthrough: { previousOccurrences: previousProblems.occurrenceCount }
+      });
+      
+      // Mark the problem as addressed
+      await db.update(userPatternInterventions)
+        .set({
+          addressed: true,
+          addressedAt: new Date(),
+          resolution: 'User reported success - breakthrough detected'
+        })
+        .where(eq(userPatternInterventions.id, previousProblems.id));
+      
+      console.log(`[DATA EXTRACTION] Breakthrough detected for ${techniqueName}!`);
+    }
+  } catch (error) {
+    console.error('[DATA EXTRACTION] Failed to detect breakthrough:', error);
+  }
+}
+
+/**
  * Main function: Extract and save data from a conversation
  * This runs asynchronously AFTER the user receives their response (non-blocking)
  */
@@ -325,8 +524,30 @@ export async function extractAndSaveConversationData(
 ): Promise<void> {
   try {
     console.log('[DATA EXTRACTION] Starting extraction for user:', userId);
+    
+    // Extract structured data using Claude
     const extracted = await extractStructuredData(userMessage, osResponse);
+    
+    // Save all extracted data (existing functionality)
     await saveExtractedData(userId, conversationId, extracted);
+    
+    // NEW: Log video recommendations
+    const problemContext = extracted.problems.length > 0 
+      ? extracted.problems[0].problem_type 
+      : null;
+    await logVideoRecommendations(userId, conversationId, osResponse, problemContext);
+    
+    // NEW: Track user engagement patterns
+    await trackUserEngagement(userId, userMessage, extracted.emotional_tone);
+    
+    // NEW: Detect breakthroughs for each successful technique
+    for (const technique of extracted.techniques) {
+      if (technique.successful) {
+        await detectBreakthrough(userId, technique.technique_name, extracted);
+      }
+    }
+    
+    console.log('[DATA EXTRACTION] All extraction and tracking complete');
   } catch (error) {
     console.error('[DATA EXTRACTION] Extraction failed:', error);
     // Don't throw - this is a background process

@@ -6316,3 +6316,92 @@ export const insertInstructorVerifiedCredentialsSchema = createInsertSchema(inst
 
 export type InsertInstructorVerifiedCredentials = z.infer<typeof insertInstructorVerifiedCredentialsSchema>;
 export type InstructorVerifiedCredentials = typeof instructorVerifiedCredentials.$inferSelect;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROFESSOR OS DATA INFRASTRUCTURE - COLLECTION ONLY (January 2026)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Video Recommendation Log - Track every video recommendation and outcome
+export const videoRecommendationLog = pgTable("video_recommendation_log", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => bjjUsers.id, { onDelete: 'cascade' }),
+  conversationId: varchar("conversation_id"),
+  videoId: integer("video_id"),
+  videoTitle: text("video_title").notNull(),
+  instructorName: text("instructor_name"),
+  timestampGiven: text("timestamp_given"),
+  problemItSolved: text("problem_it_solved"),
+  recommendedAt: timestamp("recommended_at").defaultNow().notNull(),
+  userResponse: text("user_response").default("unknown"),
+  userWatched: boolean("user_watched"),
+  followUpSuccess: boolean("follow_up_success"),
+  daysToOutcome: integer("days_to_outcome"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("video_rec_log_user_idx").on(table.userId),
+  videoIdx: index("video_rec_log_video_idx").on(table.videoId),
+  recommendedIdx: index("video_rec_log_recommended_idx").on(table.recommendedAt.desc()),
+}));
+
+export const insertVideoRecommendationLogSchema = createInsertSchema(videoRecommendationLog).omit({
+  id: true,
+  createdAt: true,
+  recommendedAt: true,
+});
+
+export type InsertVideoRecommendationLog = z.infer<typeof insertVideoRecommendationLogSchema>;
+export type VideoRecommendationLog = typeof videoRecommendationLog.$inferSelect;
+
+// User Engagement Patterns - Daily engagement metrics
+export const userEngagementPatterns = pgTable("user_engagement_patterns", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => bjjUsers.id, { onDelete: 'cascade' }),
+  date: date("date").notNull(),
+  messagesSent: integer("messages_sent").default(0),
+  totalWordsSent: integer("total_words_sent").default(0),
+  averageMessageLength: integer("average_message_length"),
+  hoursActive: jsonb("hours_active"),
+  daysSincePrevious: integer("days_since_previous"),
+  sessionDurationSeconds: integer("session_duration_seconds"),
+  emotionalTrend: text("emotional_trend"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("user_engagement_user_idx").on(table.userId),
+  dateIdx: index("user_engagement_date_idx").on(table.date.desc()),
+  userDateUnique: index("user_engagement_user_date_idx").on(table.userId, table.date),
+}));
+
+export const insertUserEngagementPatternsSchema = createInsertSchema(userEngagementPatterns).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertUserEngagementPatterns = z.infer<typeof insertUserEngagementPatternsSchema>;
+export type UserEngagementPatterns = typeof userEngagementPatterns.$inferSelect;
+
+// Breakthrough Tracking - Track technique breakthroughs
+export const breakthroughTracking = pgTable("breakthrough_tracking", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => bjjUsers.id, { onDelete: 'cascade' }),
+  techniqueName: text("technique_name").notNull(),
+  struggleStarted: timestamp("struggle_started"),
+  breakthroughDate: timestamp("breakthrough_date").notNull(),
+  daysToBreakthrough: integer("days_to_breakthrough"),
+  whatHelped: jsonb("what_helped"),
+  userProfileAtBreakthrough: jsonb("user_profile_at_breakthrough"),
+  signalsBeforeBreakthrough: jsonb("signals_before_breakthrough"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("breakthrough_user_idx").on(table.userId),
+  techniqueIdx: index("breakthrough_technique_idx").on(table.techniqueName),
+  dateIdx: index("breakthrough_date_idx").on(table.breakthroughDate.desc()),
+}));
+
+export const insertBreakthroughTrackingSchema = createInsertSchema(breakthroughTracking).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertBreakthroughTracking = z.infer<typeof insertBreakthroughTrackingSchema>;
+export type BreakthroughTracking = typeof breakthroughTracking.$inferSelect;
+

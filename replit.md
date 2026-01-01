@@ -48,6 +48,12 @@ The application uses a React TypeScript frontend and an Express.js backend with 
   - **Layer 3 (Contextual Injection)**: Detects BJJ topics from user messages and injects ONLY relevant synthesized knowledge into the prompt (instead of generic video lists).
   - **Layer 4 (Expert Reasoning Patterns)**: Teaches Claude the 5-step reasoning process of an expert coach: Diagnose → Strategic Context → Personalize → Synthesize → Actionable Specifics.
   - **Layer 5 (Learning Loop)**: `server/utils/coaching-learning-loop.ts` - Tracks coaching outcomes, analyzes user response sentiment, detects success reports, and builds aggregate insights for population-level learning.
+- **Professor OS Data Infrastructure (January 2026)**: Collection-only system that tracks user data asynchronously AFTER AI responses are delivered. Does NOT modify Professor OS responses. Includes:
+  - **Video Recommendation Tracking**: Parses [VIDEO: Title by Instructor] and [VIDEO: Title | START: 4:32] tokens from AI responses, logs to `videoRecommendationLog` with problem context.
+  - **Engagement Pattern Tracking**: Tracks daily metrics per user (messages sent, word count, hours active, emotional trend, days since previous session) in `userEngagementPatterns`.
+  - **Breakthrough Detection**: When user reports success with a technique they previously struggled with, logs breakthrough with days-to-success metric in `breakthroughTracking`.
+  - **5 Daily Aggregation Jobs** (2:00 AM EST): (1) Aggregate technique journeys and update learning curves, (2) Update user learning profiles (vocabulary level, churn risk), (3) Aggregate ecosystem technique data across all users, (4) Aggregate problem→solution mappings, (5) Update video recommendation outcomes.
+  - **Async Integration**: Uses dynamic import in `server/routes/ai-chat-claude.ts` (Phase 3D) to run after [DONE] is sent - completely non-blocking.
 
 ### System Design Choices
 The architecture emphasizes full automation for user management, scheduled content delivery, and interactive onboarding. It uses a database-driven personalization approach, a 6-stage multi-stage analysis pipeline for content quality, and an adaptive learning system. The application employs a secure referral architecture and a multi-interface architecture with a unified Vite/React app serving public, admin, and mobile PWA experiences with route-based separation. Database connection pooling is managed via Neon.

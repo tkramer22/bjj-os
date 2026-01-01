@@ -1037,6 +1037,16 @@ export async function handleClaudeStream(req: any, res: any) {
       console.error('❌ Meta tracker error (non-critical):', err);
     });
     
+    // PHASE 3D: Extract structured data for Professor OS Data Infrastructure (async, non-blocking)
+    // This tracks video recommendations, engagement patterns, breakthroughs, etc.
+    import('../utils/data-extraction').then(({ extractAndSaveConversationData }) => {
+      extractAndSaveConversationData(userId.toString(), message, fullResponse, null).catch(err => {
+        console.error('❌ Data extraction error (non-critical):', err);
+      });
+    }).catch(err => {
+      console.error('❌ Failed to load data extraction module:', err);
+    });
+    
     res.write('data: [DONE]\n\n');
     res.end();
     
