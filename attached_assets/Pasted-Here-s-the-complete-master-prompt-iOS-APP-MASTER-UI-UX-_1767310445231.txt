@@ -1,0 +1,247 @@
+Here’s the complete master prompt:
+
+-----
+
+```
+iOS APP - MASTER UI/UX + SAVE FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+TARGET: iOS APP (Capacitor)
+
+APPLY TO:
+- client/src/pages/ios-chat.tsx
+- client/src/components/mobile-chat.tsx
+- Related iOS styling and components
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 1: SAVE VIDEO BROKEN
+═══════════════════════════════════════════════════════════════════════════════
+
+Error: "Failed to save video. Please try again."
+
+User taps Save/Bookmark on video card → error appears.
+
+DEBUG AND FIX:
+1. Check the save video API endpoint - what error is thrown?
+2. Check the database - is the saved_videos table accessible?
+3. Check the request - is user ID and video ID being sent correctly?
+4. Show server logs when save is attempted
+5. Fix the endpoint so videos save successfully
+
+SAVE BUTTON BEHAVIOR:
+- Tap bookmark → saves video → icon fills in (visual confirmation)
+- Tap again → removes from saved → icon returns to outline
+- Saved videos appear in Saved tab
+- Works on: Chat video cards, Videos page, Saved page
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 2: CHAT INPUT FIELD STYLING
+═══════════════════════════════════════════════════════════════════════════════
+
+INPUT FIELD:
+- Background: #111113
+- Border: 1px solid #333333
+- Border radius: 24px (ROUNDED - more rounded than current)
+- Padding: 12px 20px
+- Font size: 16px (prevents iOS zoom)
+- Color: white 100%
+- Placeholder: "Ask Professor OS..." (white 60%)
+- Min height: 48px
+- Max height: 150px (expands as user types)
+
+MULTILINE:
+- Input grows vertically as user types (1 → 2 → 3 → 4 lines max)
+- ALL typed text remains visible
+- Scroll if exceeds max height
+- User always sees what they're typing
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 3: INPUT BAR LAYOUT
+═══════════════════════════════════════════════════════════════════════════════
+
+LAYOUT (left to right):
+[ 🎤 Mic ] [ ------- Input Field ------- ] [ ➤ Send ]
+
+MIC BUTTON (LEFT):
+- Size: 44px × 44px
+- Background: transparent
+- Border: none or subtle
+- Border radius: 50% (circular)
+- Icon: microphone (white 70%)
+
+SEND BUTTON (RIGHT):
+- Size: 44px × 44px
+- Background: #2563EB (blue) when text entered
+- Background: #333333 (gray) when empty
+- Border radius: 50% (circular)
+- Icon: arrow/send (white)
+
+INPUT CONTAINER:
+- Position: fixed bottom, above bottom nav
+- Background: #0A0A0B
+- Border-top: 1px solid #1A1A1C
+- Padding: 12px 16px
+- Safe area: padding-bottom: calc(12px + env(safe-area-inset-bottom))
+- Z-index: 1000
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 4: KEYBOARD HANDLING
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL: When user taps to type, keyboard must NOT cover the input field.
+
+```javascript
+import { Keyboard } from '@capacitor/keyboard';
+
+useEffect(() => {
+  Keyboard.addListener('keyboardWillShow', (info) => {
+    const container = document.querySelector('.chat-messages-container');
+    if (container) {
+      container.style.paddingBottom = `${info.keyboardHeight}px`;
+    }
+    scrollToBottom();
+  });
+
+  Keyboard.addListener('keyboardWillHide', () => {
+    const container = document.querySelector('.chat-messages-container');
+    if (container) {
+      container.style.paddingBottom = '0px';
+    }
+  });
+
+  return () => Keyboard.removeAllListeners();
+}, []);
+```
+
+If not installed:
+npm install @capacitor/keyboard
+npx cap sync ios
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 5: TIMESTAMP DISPLAY
+═══════════════════════════════════════════════════════════════════════════════
+
+DATE DIVIDERS (centered, between messages when day changes):
+
+- “Today” - messages from today
+- “Yesterday” - messages from yesterday
+- “Dec 28” - older messages (short date format)
+
+Styling:
+
+- Font size: 12px
+- Color: white 50%
+- Centered
+- Margin: 16px top and bottom
+
+TIME DISPLAY:
+
+- ONLY the last message shows the actual time
+- Format: “6:14 PM”
+- Small, subtle (12px, white 50%)
+- Below the message bubble
+
+EXAMPLE:
+
+```
+        ─── Yesterday ───
+
+[User message]
+[Professor OS response]
+
+        ─── Today ───
+
+[User message]
+[Professor OS response]
+                                    6:14 PM  ← only last message
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 6: SHARE FUNCTIONALITY
+═══════════════════════════════════════════════════════════════════════════════
+
+Share button must work on ALL video cards:
+
+- Chat page (Professor OS recommendations)
+- Videos page (library)
+- Saved page
+
+```javascript
+import { Share } from '@capacitor/share';
+
+const handleShare = async (video) => {
+  await Share.share({
+    title: video.title,
+    text: `${video.title} by ${video.instructor}\n\n🎥 ${video.youtubeUrl}\n\nRecommended by Professor OS\nhttps://bjjos.app`,
+    dialogTitle: 'Share this technique'
+  });
+};
+```
+
+If not installed:
+npm install @capacitor/share
+npx cap sync ios
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 7: CHAT PERSISTENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+When user switches tabs (Chat → Videos → back to Chat):
+
+- ALL messages must remain visible
+- Scroll position at bottom (most recent)
+- No loading delay - instant display
+- Never lose conversation history
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 8: MESSAGE BUBBLE STYLING
+═══════════════════════════════════════════════════════════════════════════════
+
+USER MESSAGES (right side):
+
+- Background: #2563EB (blue)
+- Color: white
+- Border radius: 16px 16px 4px 16px
+- Max width: 75%
+- Padding: 12px 16px
+
+PROFESSOR OS MESSAGES (left side):
+
+- Background: #1A1A1C (dark gray)
+- Color: white 90%
+- Border radius: 16px 16px 16px 4px
+- Max width: 85%
+- Padding: 12px 16px
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Save video → works, no error, icon fills in
+□ Input field is rounded (24px border radius)
+□ Mic button on LEFT
+□ Send button on RIGHT
+□ Tap input → keyboard opens → input VISIBLE above keyboard
+□ Type long message → input expands, all text visible
+□ Date dividers: “Today” / “Yesterday” / “Dec 28”
+□ Only LAST message shows time (e.g., “6:14 PM”)
+□ Share button → native iOS share sheet opens
+□ Switch tabs → return to Chat → messages still there
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER ALL FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+npx cap sync ios
+
+git add -A
+git commit -m “iOS: Save fix, chat UI polish, timestamps, keyboard handling”
+git push origin main
+═══════════════════════════════════════════════════════════════════════════════
+
+```
+---
+
+**Ready to send?**
+```

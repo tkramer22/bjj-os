@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bookmark, BookmarkCheck, Brain, Share2, Star } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -155,7 +155,29 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
   const [loadingVideos, setLoadingVideos] = useState<Set<number>>(new Set());
   const [analysisVideoId, setAnalysisVideoId] = useState<number | null>(null);
   const { toast } = useToast();
-  const userId = localStorage.getItem('mobileUserId') || '1';
+  const userId = localStorage.getItem('mobileUserId') || '';
+
+  // Fetch user's saved videos on mount to populate the saved state
+  useEffect(() => {
+    if (!userId) return;
+    
+    const fetchSavedVideos = async () => {
+      try {
+        const response = await fetch(`/api/ai/saved-videos/${userId}`);
+        if (response.ok) {
+          const data = await response.json();
+          // API returns { videos: [...] } with id as string
+          const savedVideos = data.videos || [];
+          const ids = new Set<number>(savedVideos.map((v: { id: string }) => parseInt(v.id, 10)));
+          setSavedVideoIds(ids);
+        }
+      } catch (error) {
+        console.error('Failed to fetch saved videos:', error);
+      }
+    };
+    
+    fetchSavedVideos();
+  }, [userId]);
 
   // Search database for video and play in-app if found, otherwise open browser
   const handleUnenrichedVideoClick = async (video: { id: number; title: string; instructor: string; startTime?: string }) => {
@@ -202,37 +224,49 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
 
 
   const toggleSaveVideo = async (videoId: number) => {
+    if (!userId) {
+      toast({
+        variant: "destructive",
+        title: "Not logged in",
+        description: "Please log in to save videos.",
+      });
+      return;
+    }
+
     const isSaved = savedVideoIds.has(videoId);
     
     try {
       if (isSaved) {
-        await apiRequest("DELETE", `/api/ai/saved-videos/${videoId}`, { userId: parseInt(userId) });
+        await apiRequest("DELETE", `/api/ai/saved-videos/${videoId}`, { userId });
         setSavedVideoIds(prev => {
           const newSet = new Set(prev);
           newSet.delete(videoId);
           return newSet;
         });
+        triggerHaptic('light');
         toast({
           title: "Video removed",
           description: "Video removed from saved videos",
         });
       } else {
         await apiRequest("POST", "/api/ai/saved-videos", {
-          userId: parseInt(userId),
-          videoId: String(videoId),
+          userId,
+          videoId: videoId,
         });
         setSavedVideoIds(prev => new Set(prev).add(videoId));
+        triggerHaptic('success');
         toast({
           title: "Video saved",
           description: "Video added to your saved videos",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Save video error:', error);
+      triggerHaptic('error');
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to save video. Please try again.",
+        description: error.message || "Failed to save video. Please try again.",
       });
     }
   };
