@@ -5,6 +5,7 @@ export interface ShareOptions {
   title: string;
   text?: string;
   url?: string;
+  dialogTitle?: string;
 }
 
 export async function shareContent(options: ShareOptions): Promise<boolean> {
@@ -14,7 +15,7 @@ export async function shareContent(options: ShareOptions): Promise<boolean> {
         title: options.title,
         text: options.text,
         url: options.url,
-        dialogTitle: 'Share',
+        dialogTitle: options.dialogTitle || 'Share',
       });
       return true;
     } else {
@@ -44,12 +45,12 @@ export async function shareContent(options: ShareOptions): Promise<boolean> {
 
 export async function shareVideo(title: string, instructor: string, videoId: string): Promise<boolean> {
   const url = `https://www.youtube.com/watch?v=${videoId}`;
-  const text = `Check out this BJJ technique: ${title} by ${instructor}`;
+  const text = `${title} by ${instructor}\n\n🎥 ${url}\n\nDiscover 2,500+ analyzed BJJ techniques at https://bjjos.app`;
   
   return shareContent({
-    title: `${title} - ${instructor}`,
+    title: title,
     text,
-    url,
+    dialogTitle: 'Share this technique',
   });
 }
 

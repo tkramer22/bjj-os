@@ -1,0 +1,117 @@
+Good catch on both. Here’s the fix prompt:
+
+-----
+
+```
+BUG FIXES - SHARE BUTTON & LOGIN ERROR MESSAGES
+═══════════════════════════════════════════════════════════════════════════════
+
+TWO ISSUES TO FIX:
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: SHARE BUTTON NOT WORKING
+═══════════════════════════════════════════════════════════════════════════════
+
+Current: Share button appears on video cards but nothing happens when tapped.
+Expected: Should open iOS native share sheet.
+
+FIX:
+
+Use Capacitor Share plugin:
+
+import { Share } from '@capacitor/share';
+
+const handleShare = async (video) => {
+  await Share.share({
+    title: video.title,
+    text: `${video.title}\n\n🎥 ${video.youtubeUrl}\n\nDiscover 2,500+ analyzed BJJ techniques at https://bjjos.app`,
+    dialogTitle: 'Share this technique'
+  });
+};
+
+On share button tap:
+1. Haptic feedback (ImpactStyle.Light)
+2. Call handleShare(video)
+3. iOS share sheet opens with pre-filled text
+
+If Capacitor Share plugin is not installed:
+npm install @capacitor/share
+npx cap sync ios
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: LOGIN ERROR MESSAGES NOT USER-FRIENDLY
+═══════════════════════════════════════════════════════════════════════════════
+
+Current: Shows technical error strings like "string didn't go through" or raw error messages.
+Expected: User-friendly error messages.
+
+FIX:
+
+Replace ALL technical error messages with user-friendly versions:
+
+ERROR MAPPING:
+
+| Technical Error | User-Friendly Message |
+|-----------------|----------------------|
+| Invalid credentials | "Incorrect email or password" |
+| User not found | "Incorrect email or password" |
+| Wrong password | "Incorrect email or password" |
+| Network error | "Connection error. Please try again." |
+| Timeout | "Connection timed out. Please try again." |
+| Email already exists | "An account with this email already exists" |
+| Invalid email format | "Please enter a valid email address" |
+| Password too short | "Password must be at least 8 characters" |
+| Any other error | "Something went wrong. Please try again." |
+
+IMPORTANT SECURITY NOTE:
+Never specify whether email OR password was wrong - always say "Incorrect email or password"
+This prevents attackers from knowing if an email exists in the system.
+
+ERROR DISPLAY:
+- Red background or red text (subtle, not jarring)
+- Clear, readable font
+- Appears below the input field or in a toast
+- Disappears when user starts typing again
+
+Example implementation:
+
+try {
+  await login(email, password);
+} catch (error) {
+  let userMessage = "Something went wrong. Please try again.";
+  
+  if (error.code === 'auth/invalid-credential' || 
+      error.code === 'auth/wrong-password' ||
+      error.code === 'auth/user-not-found') {
+    userMessage = "Incorrect email or password";
+  } else if (error.code === 'auth/network-request-failed') {
+    userMessage = "Connection error. Please try again.";
+  } else if (error.code === 'auth/too-many-requests') {
+    userMessage = "Too many attempts. Please try again later.";
+  }
+  
+  setErrorMessage(userMessage);
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES:
+═══════════════════════════════════════════════════════════════════════════════
+
+Test:
+1. Share button → Should open iOS share sheet with video title and bjjos.app link
+2. Wrong password → Should show "Incorrect email or password"
+3. Wrong email → Should show "Incorrect email or password"
+4. No internet → Should show "Connection error. Please try again."
+
+Then sync:
+npm run build
+npx cap sync ios
+git add -A
+git commit -m "Fix: Share button functionality, user-friendly login errors"
+git push origin main
+═══════════════════════════════════════════════════════════════════════════════
+```
+
+-----
+
+**Send when ready.** These are quick fixes that significantly improve user experience.​​​​​​​​​​​​​​​​

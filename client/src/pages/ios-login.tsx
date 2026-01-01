@@ -56,7 +56,26 @@ export default function IOSLoginPage() {
           triggerHaptic('warning');
           return;
         }
-        setError(data.error || "Invalid email or password");
+        
+        // Map technical errors to user-friendly messages
+        const errorLower = (data.error || '').toLowerCase();
+        let userMessage = "Something went wrong. Please try again.";
+        
+        if (errorLower.includes('invalid') || errorLower.includes('credentials') || 
+            errorLower.includes('password') || errorLower.includes('not found') ||
+            errorLower.includes('incorrect') || errorLower.includes('wrong')) {
+          userMessage = "Incorrect email or password";
+        } else if (errorLower.includes('network') || errorLower.includes('fetch')) {
+          userMessage = "Connection error. Please try again.";
+        } else if (errorLower.includes('timeout')) {
+          userMessage = "Connection timed out. Please try again.";
+        } else if (errorLower.includes('already exists') || errorLower.includes('duplicate')) {
+          userMessage = "An account with this email already exists";
+        } else if (errorLower.includes('too many') || errorLower.includes('rate limit')) {
+          userMessage = "Too many attempts. Please try again later.";
+        }
+        
+        setError(userMessage);
         triggerHaptic('error');
         return;
       }
@@ -85,13 +104,18 @@ export default function IOSLoginPage() {
         setLocation("/ios-chat");
       }
     } catch (err: any) {
-      setError(err.message || "Something went wrong. Please try again.");
+      // Network/connection errors get user-friendly messages
+      let userMessage = "Something went wrong. Please try again.";
+      const errorMsg = (err.message || '').toLowerCase();
+      
+      if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('failed to fetch')) {
+        userMessage = "Connection error. Please try again.";
+      } else if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
+        userMessage = "Connection timed out. Please try again.";
+      }
+      
+      setError(userMessage);
       triggerHaptic('error');
-      toast({
-        title: "Error",
-        description: err.message || "Failed to sign in",
-        variant: "destructive",
-      });
     } finally {
       setIsLoading(false);
     }
