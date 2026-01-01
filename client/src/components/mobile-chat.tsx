@@ -102,6 +102,7 @@ export function MobileChat() {
     }
   }, [messages.length, isTyping, shouldAutoScroll]);
 
+  // CRITICAL: Always scroll to bottom when returning to chat tab
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && messages.length > 0) {
@@ -115,8 +116,21 @@ export function MobileChat() {
       }
     };
 
+    // Listen for iOS tab navigation return event
+    const handleChatReturn = () => {
+      if (messages.length > 0) {
+        // Use multiple requestAnimationFrame to ensure DOM is ready
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            scrollToBottom(true);
+          });
+        });
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('ios-chat-return', handleChatReturn);
     
     if (messages.length > 0) {
       requestAnimationFrame(() => scrollToBottom(true));
@@ -125,6 +139,7 @@ export function MobileChat() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('ios-chat-return', handleChatReturn);
     };
   }, [messages.length]);
 
@@ -578,11 +593,13 @@ What's on your mind?`,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-end',
-            background: 'var(--mobile-input-bg)',
-            borderRadius: '20px',
-            padding: '8px 16px',
-            minHeight: '40px',
+            background: '#1C1C1E',
+            borderRadius: '22px',
+            padding: '10px 16px',
+            minHeight: '44px',
             maxHeight: '150px',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
           }}>
             <textarea
               ref={textareaRef}
@@ -621,22 +638,25 @@ What's on your mind?`,
             disabled={!inputValue.trim() || isTyping}
             data-testid="button-send-message"
             style={{
-              width: '40px',
-              height: '40px',
+              width: '44px',
+              height: '44px',
               borderRadius: '50%',
               border: 'none',
               background: inputValue.trim() && !isTyping 
-                ? 'var(--mobile-primary)' 
-                : 'var(--mobile-input-bg)',
+                ? '#8B5CF6' 
+                : '#1C1C1E',
               color: inputValue.trim() && !isTyping 
                 ? 'white' 
-                : 'var(--mobile-text-secondary)',
+                : '#6B7280',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: inputValue.trim() && !isTyping ? 'pointer' : 'default',
-              transition: 'all 0.2s',
+              transition: 'all 0.2s ease',
               flexShrink: 0,
+              boxShadow: inputValue.trim() && !isTyping 
+                ? '0 4px 12px rgba(139, 92, 246, 0.4)' 
+                : 'none',
             }}
           >
             <Send size={20} />

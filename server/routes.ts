@@ -15364,6 +15364,150 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
   });
 
   // ═══════════════════════════════════════════════════════════════════
+  // USER SUBSCRIPTION MANAGEMENT
+  // ═══════════════════════════════════════════════════════════════════
+  
+  // Get subscription details for the current user
+  app.get('/api/subscription', checkUserAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userId;
+      
+      const [user] = await db.select({
+        id: bjjUsers.id,
+        email: bjjUsers.email,
+        stripeSubscriptionId: bjjUsers.stripeSubscriptionId,
+        subscriptionTier: bjjUsers.subscriptionTier,
+        subscriptionStatus: bjjUsers.subscriptionStatus,
+        subscriptionEndDate: bjjUsers.subscriptionEndDate,
+        referralCode: bjjUsers.referralCode,
+        hasHadTrial: bjjUsers.hasHadTrial,
+      })
+        .from(bjjUsers)
+        .where(eq(bjjUsers.id, userId))
+        .limit(1);
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      let subscriptionDetails: any = {
+        type: 'none',
+        status: user.subscriptionStatus || 'none',
+        tier: user.subscriptionTier || 'free',
+      };
+      
+      // Check for lifetime access
+      if (user.subscriptionTier === 'lifetime' || user.subscriptionStatus === 'lifetime') {
+        subscriptionDetails = {
+          type: 'lifetime',
+          status: 'active',
+          tier: 'lifetime',
+          billingDate: null,
+          cancelAtPeriodEnd: false
+        };
+      }
+      // Check for active Stripe subscription
+      else if (user.stripeSubscriptionId) {
+        try {
+          const stripeSubscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+          
+          subscriptionDetails = {
+            type: stripeSubscription.trial_end && stripeSubscription.trial_end > Math.floor(Date.now() / 1000) 
+              ? 'trial' 
+              : 'paying',
+            status: stripeSubscription.status,
+            tier: 'pro',
+            billingDate: new Date(stripeSubscription.current_period_end * 1000).toISOString(),
+            cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
+            trialEnd: stripeSubscription.trial_end 
+              ? new Date(stripeSubscription.trial_end * 1000).toISOString() 
+              : null
+          };
+          
+          // Check if this is a referral trial (30 days)
+          if (user.referralCode && subscriptionDetails.type === 'trial') {
+            subscriptionDetails.type = 'referral';
+          }
+        } catch (stripeError: any) {
+          console.error('[SUBSCRIPTION] Stripe fetch error:', stripeError.message);
+        }
+      }
+      // No active subscription
+      else if (!user.subscriptionTier || user.subscriptionTier === 'free' || user.subscriptionStatus === 'canceled') {
+        subscriptionDetails = {
+          type: 'none',
+          status: user.subscriptionStatus || 'none',
+          tier: 'free',
+          billingDate: null,
+          cancelAtPeriodEnd: false
+        };
+      }
+      
+      res.json(subscriptionDetails);
+    } catch (error: any) {
+      console.error('[SUBSCRIPTION] Error getting details:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // Cancel subscription (at period end - user keeps access until billing date)
+  app.post('/api/subscription/cancel', checkUserAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userId;
+      
+      const [user] = await db.select({
+        id: bjjUsers.id,
+        email: bjjUsers.email,
+        stripeSubscriptionId: bjjUsers.stripeSubscriptionId,
+        subscriptionTier: bjjUsers.subscriptionTier,
+      })
+        .from(bjjUsers)
+        .where(eq(bjjUsers.id, userId))
+        .limit(1);
+      
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+      
+      // Cannot cancel lifetime subscriptions
+      if (user.subscriptionTier === 'lifetime') {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Lifetime memberships cannot be cancelled' 
+        });
+      }
+      
+      // Must have an active Stripe subscription to cancel
+      if (!user.stripeSubscriptionId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'No active subscription to cancel' 
+        });
+      }
+      
+      console.log(`[SUBSCRIPTION] User ${userId} (${user.email}) cancelling subscription`);
+      
+      // Cancel at period end (user keeps access until billing date)
+      const updatedSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        cancel_at_period_end: true
+      });
+      
+      const accessUntil = new Date(updatedSubscription.current_period_end * 1000);
+      
+      console.log(`[SUBSCRIPTION] Cancelled at period end: ${accessUntil.toISOString()}`);
+      
+      res.json({
+        success: true,
+        accessUntil: accessUntil.toISOString(),
+        message: `Subscription cancelled. You have access until ${accessUntil.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`
+      });
+    } catch (error: any) {
+      console.error('[SUBSCRIPTION] Cancel error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════
   // ADMIN: FLAGGED ACCOUNTS REVIEW
   // ═══════════════════════════════════════════════════════════════════
   

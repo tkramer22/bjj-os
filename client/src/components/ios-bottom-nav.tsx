@@ -13,8 +13,12 @@ export function IOSBottomNav() {
     { path: "/ios-profile", icon: User, label: "Profile" },
   ];
 
-  const handleNavClick = () => {
+  const handleNavClick = (path: string) => {
     triggerHaptic('light');
+    // Dispatch custom event when navigating to chat so chat can scroll to bottom
+    if (path === '/ios-chat') {
+      window.dispatchEvent(new CustomEvent('ios-chat-return'));
+    }
   };
 
   return (
@@ -43,7 +47,7 @@ export function IOSBottomNav() {
           <Link
             key={item.path}
             href={item.path}
-            onClick={handleNavClick}
+            onClick={() => handleNavClick(item.path)}
             data-testid={`nav-${item.label.toLowerCase().replace(' ', '-')}`}
             style={{
               display: 'flex',

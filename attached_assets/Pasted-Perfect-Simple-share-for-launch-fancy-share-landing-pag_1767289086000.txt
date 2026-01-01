@@ -1,0 +1,383 @@
+Perfect. Simple share for launch, fancy share landing page later.
+
+Here’s the **COMPLETE MASTER PROMPT** for Replit:
+
+-----
+
+```
+BJJ OS - iOS APP COMPLETE UI/UX OVERHAUL
+========================================
+
+This prompt covers all UI/UX improvements needed to make the iOS app feel like a premium $19.99/month native app, not a web wrapper.
+
+═══════════════════════════════════════════════════════════════════════════════
+1. CHAT - ALWAYS START AT BOTTOM
+═══════════════════════════════════════════════════════════════════════════════
+
+When user navigates away from Chat tab and returns:
+- Chat MUST automatically scroll to the BOTTOM (most recent message)
+- User should NEVER have to manually scroll down to continue conversation
+- This should happen on EVERY return to Chat tab (from Videos, Saved, or Profile)
+- Implementation: On Chat component mount/focus, call scrollToEnd() or equivalent
+
+═══════════════════════════════════════════════════════════════════════════════
+2. CHAT INPUT BAR REDESIGN
+═══════════════════════════════════════════════════════════════════════════════
+
+Current: Flat, basic text field that blends into background
+
+Premium redesign:
+- Rounded pill shape (border-radius: 24px)
+- Slightly lighter background than page (#2a2a2a on #1a1a1a)
+- Subtle border (1px solid #3a3a3a)
+- Microphone icon INSIDE field on LEFT (gray, subtle)
+- Send button OUTSIDE field on RIGHT as circle
+- Send button states:
+  - Empty input: Gray outline circle, disabled
+  - Text entered: Filled purple circle (#8B5CF6), enabled
+- Placeholder text: "Ask Professor OS..." in gray (#888)
+- Height: ~48px
+
+Layout:
+┌──────────────────────────────────────────┐
+│  🎤 │ Ask Professor OS...           │ ⬆️ │
+└──────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+3. MESSAGE BUBBLES REDESIGN
+═══════════════════════════════════════════════════════════════════════════════
+
+USER MESSAGES (right-aligned):
+- Background: Purple (#8B5CF6)
+- Text: White
+- Alignment: Right
+- Border radius: 16px (less on bottom-right corner: 4px)
+- Padding: 12px 16px
+- Max width: 80% of screen
+- Subtle shadow: 0 2px 4px rgba(0,0,0,0.2)
+
+AI MESSAGES (left-aligned):
+- Background: Dark gray (#2a2a2a)
+- Text: White/light gray
+- Alignment: Left
+- Border radius: 16px (less on bottom-left corner: 4px)
+- Padding: 12px 16px
+- Max width: 85% of screen
+- Subtle shadow: 0 2px 8px rgba(0,0,0,0.3)
+
+TIMESTAMPS:
+- Smaller font size (11px)
+- Lighter gray (#666)
+- Below the message bubble
+
+═══════════════════════════════════════════════════════════════════════════════
+4. TIMESTAMP GROUPING IN CHAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Group messages by day with centered date labels:
+- "Today"
+- "Yesterday"  
+- "December 28" (for older dates)
+
+Show time (e.g., "11:54 AM") only on:
+- First message of a new time block (if messages are 30+ min apart)
+- Not on every single message
+
+Example:
+                    ── Today ──
+                              [User message 10:30 AM]
+[AI response]
+[AI response]
+                              [User message 11:45 AM]
+[AI response]
+
+═══════════════════════════════════════════════════════════════════════════════
+5. iOS STATUS BAR
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL: Enable iOS status bar display
+
+In capacitor.config.ts or equivalent:
+- Enable status bar
+- Style: Light (white text for dark background)
+- User must see: Time, WiFi/cellular signal, battery
+
+This is essential for native app feel.
+
+═══════════════════════════════════════════════════════════════════════════════
+6. HAPTIC FEEDBACK - ADD EVERYWHERE
+═══════════════════════════════════════════════════════════════════════════════
+
+Use Capacitor Haptics plugin:
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
+
+Add haptic feedback (ImpactStyle.Light) on:
+- Bottom navigation tab taps (Chat, Videos, Saved, Profile)
+- Send message button tap
+- Profile picker scrolling (belt, weight, height, style) - on each value change
+- Save/bookmark video tap
+- Unsave/remove video tap
+- Any button tap throughout app
+- Toggle switches
+- Back button taps
+
+Implementation:
+Haptics.impact({ style: ImpactStyle.Light });
+
+═══════════════════════════════════════════════════════════════════════════════
+7. VIDEO CARDS - POLISH
+═══════════════════════════════════════════════════════════════════════════════
+
+Add to all video cards (Library, Saved, Chat recommendations):
+- Subtle shadow: box-shadow: 0 2px 8px rgba(0,0,0,0.3)
+- Consistent border radius on all cards (12px)
+- FIX: Videos showing "0:00" duration - must show actual video duration
+- Ensure bookmark/save icon is clearly visible (top-right of thumbnail or card)
+
+═══════════════════════════════════════════════════════════════════════════════
+8. SETTINGS PAGE - COMPLETE STRUCTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+[Back arrow]                                    (haptic on tap)
+
+SUBSCRIPTION
+├── Displays based on user type (see section 9 below)
+
+ACCOUNT  
+├── Email (display only)
+├── Change Password (tappable → modal or page)
+└── Sign Out (tappable → confirmation → signs out)
+
+APP SETTINGS
+├── Notifications (toggle)
+├── Daily Technique Delivery (toggle)
+├── Voice Input (toggle) ← NEW
+│   └── Subtitle: "Use microphone with Whisper AI"
+│   └── Default: ON
+│   └── When toggled: Request mic permission if needed
+└── Dark Mode (toggle)
+
+SUPPORT
+├── Help Center (tappable → opens help content or link)
+├── Contact Support (tappable → opens email or form)
+└── Rate BJJ OS (tappable → opens App Store review)
+
+VISUAL NOTES:
+- Remove redundant "Profile" title at top (if present)
+- Section headers (SUBSCRIPTION, ACCOUNT, etc): smaller font, muted color
+- Add proper top padding below back arrow
+- Chevrons (>) on tappable rows - keep subtle
+
+═══════════════════════════════════════════════════════════════════════════════
+9. SUBSCRIPTION DISPLAY - BY USER TYPE
+═══════════════════════════════════════════════════════════════════════════════
+
+Display different content based on subscription status:
+
+TYPE 1 - LIFETIME MEMBER:
+┌─────────────────────────────────────┐
+│ Plan: Lifetime Member               │
+│ No charge - Forever                 │
+│                                     │
+│ (No buttons)                        │
+└─────────────────────────────────────┘
+
+TYPE 2 - REFERRAL USER (30-day free trial):
+┌─────────────────────────────────────┐
+│ Plan: Monthly ($19.99/month)        │
+│ 🎉 Referral Bonus Active            │
+│ 30 days free                        │
+│ First billing date: [DATE]          │
+│                                     │
+│ [Cancel Subscription]               │
+└─────────────────────────────────────┘
+
+TYPE 3 - PAYING SUBSCRIBER:
+┌─────────────────────────────────────┐
+│ Plan: Monthly - $19.99/month        │
+│ Next billing date: [DATE]           │
+│ Auto-renews on [DATE]               │
+│                                     │
+│ [Cancel Subscription]               │
+└─────────────────────────────────────┘
+
+TYPE 4 - NO ACTIVE PLAN:
+┌─────────────────────────────────────┐
+│ No active subscription              │
+│                                     │
+│ (No buttons, no "visit website")    │
+└─────────────────────────────────────┘
+
+IMPORTANT: 
+- NO "Manage Subscription" button
+- NO "visit bjjos.app" text anywhere
+- Everything stays in-app
+- Cancel button must actually work (see section 10)
+
+═══════════════════════════════════════════════════════════════════════════════
+10. CANCEL SUBSCRIPTION - STRIPE INTEGRATION
+═══════════════════════════════════════════════════════════════════════════════
+
+The Cancel Subscription button MUST actually cancel via Stripe API.
+
+FLOW:
+1. User taps "Cancel Subscription"
+2. Confirmation modal appears:
+   "Are you sure you want to cancel?"
+   "You'll retain access until [BILLING DATE]"
+   [Keep Subscription]  [Yes, Cancel]
+3. User confirms
+4. App calls backend: POST /api/subscription/cancel
+5. Backend calls Stripe: stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true })
+6. Success response returned
+7. Show success message: "Subscription cancelled. You have access until [DATE]"
+8. UI updates to show cancelled status
+
+BACKEND ENDPOINT NEEDED:
+POST /api/subscription/cancel
+- Validates user authentication
+- Gets user's Stripe subscription ID from database
+- Calls Stripe API to cancel at period end
+- Updates user record in database
+- Returns: { success: true, accessUntil: "2025-02-01" }
+
+ERROR HANDLING:
+- If Stripe call fails: Show error message, don't update UI
+- If no subscription found: Show appropriate message
+
+═══════════════════════════════════════════════════════════════════════════════
+11. EMPTY STATES
+═══════════════════════════════════════════════════════════════════════════════
+
+SAVED VIDEOS (0 videos):
+┌─────────────────────────────────────┐
+│                                     │
+│         [BJJ OS Logo/Icon]          │
+│                                     │
+│      No saved videos yet            │
+│                                     │
+│  Tap the bookmark icon on any       │
+│  video to save it here              │
+│                                     │
+└─────────────────────────────────────┘
+
+SEARCH (0 results):
+┌─────────────────────────────────────┐
+│                                     │
+│  No videos found for "[query]"      │
+│                                     │
+│  Try a different search or          │
+│  ask Professor OS for help          │
+│                                     │
+└─────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+12. KEYBOARD HANDLING (CHAT)
+═══════════════════════════════════════════════════════════════════════════════
+
+When keyboard opens on Chat page:
+- Chat input bar moves UP with keyboard (stays visible above keyboard)
+- Chat messages scroll so user can see latest messages
+- User can still see what they're replying to
+- Tapping outside keyboard (on chat area) dismisses keyboard
+
+Ensure no content is hidden behind keyboard.
+
+═══════════════════════════════════════════════════════════════════════════════
+13. SHARE FEATURE
+═══════════════════════════════════════════════════════════════════════════════
+
+Add Share button on:
+- Video cards (Library and Saved)
+- Analysis popup
+
+SHARE BUTTON TAP:
+1. Haptic feedback
+2. Opens iOS native share sheet
+3. Pre-filled content:
+
+"[Video Title]
+
+🎥 [YouTube URL]
+
+Discover 2,500+ analyzed BJJ techniques at https://bjjos.app"
+
+IMPLEMENTATION:
+Use Capacitor Share plugin:
+import { Share } from '@capacitor/share';
+
+await Share.share({
+  title: videoTitle,
+  text: `${videoTitle}\n\n🎥 ${youtubeUrl}\n\nDiscover 2,500+ analyzed BJJ techniques at https://bjjos.app`,
+  dialogTitle: 'Share this technique'
+});
+
+═══════════════════════════════════════════════════════════════════════════════
+14. VISUAL FEEDBACK - TOASTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Show brief toast notifications for actions:
+
+SAVE VIDEO:
+- Haptic (Light)
+- Toast: "Video saved" (2 seconds, bottom of screen, above nav)
+- Bookmark icon fills in
+
+UNSAVE VIDEO:
+- Haptic (Light)  
+- Toast: "Video removed" (2 seconds)
+- Bookmark icon empties
+
+SHARE:
+- Haptic (Light)
+- Native share sheet handles feedback
+
+Toast style:
+- Dark background with white text
+- Rounded corners (8px)
+- Subtle shadow
+- Appears from bottom, fades out
+
+═══════════════════════════════════════════════════════════════════════════════
+15. PROFESSOR OS AVATAR
+═══════════════════════════════════════════════════════════════════════════════
+
+In chat, Professor OS messages should show:
+- BJJ OS logo or custom Professor OS avatar (not generic gray circle)
+- Consistent size (32-36px)
+- Displayed to the left of AI messages
+
+User avatar:
+- If photo uploaded: Show user's photo
+- If no photo: Show initials in colored circle (e.g., "TD" for Todd)
+
+═══════════════════════════════════════════════════════════════════════════════
+SUMMARY - PRIORITY ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+HIGH PRIORITY (Core functionality):
+1. Chat scroll to bottom on return
+2. Cancel subscription Stripe integration
+3. iOS status bar
+4. Keyboard handling
+
+MEDIUM PRIORITY (Premium feel):
+5. Chat input bar redesign
+6. Message bubbles redesign
+7. Haptic feedback everywhere
+8. Video card polish (shadows, fix 0:00 duration)
+9. Settings page structure with Voice Input toggle
+
+LOWER PRIORITY (Polish):
+10. Timestamp grouping
+11. Empty states
+12. Share feature
+13. Toast notifications
+14. Professor OS avatar
+
+═══════════════════════════════════════════════════════════════════════════════
+```
+
+-----
+
+**Ready to paste into Replit.** Want me to send this as a standalone copyable message?​​​​​​​​​​​​​​​​

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   ArrowLeft, Bell, Moon, Volume2, Vibrate, User, Award, Scale, Mail,
   CreditCard, FileText, Shield, HelpCircle, LogOut, ChevronRight,
-  ExternalLink, Loader2, Trash2, RotateCcw
+  ExternalLink, Loader2, Trash2, RotateCcw, Mic
 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { clearAuth, isNativeApp, getApiUrl } from "@/lib/capacitorAuth";
@@ -22,6 +22,15 @@ interface UserProfile {
   isPro?: boolean;
   isLifetime?: boolean;
   subscriptionEndDate?: string;
+}
+
+interface SubscriptionDetails {
+  type: 'lifetime' | 'referral' | 'paying' | 'trial' | 'none';
+  status: string;
+  tier: string;
+  billingDate: string | null;
+  cancelAtPeriodEnd: boolean;
+  trialEnd?: string | null;
 }
 
 function formatDate(dateString: string | null | undefined): string {
@@ -46,12 +55,18 @@ export default function IOSSettingsPage() {
   const [darkMode, setDarkMode] = useState(true);
   const [sound, setSound] = useState(true);
   const [haptics, setHaptics] = useState(true);
+  const [voiceInput, setVoiceInput] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   
   const { data: user } = useQuery<UserProfile>({
     queryKey: ['/api/auth/me'],
+  });
+
+  const { data: subscription, isLoading: isLoadingSubscription } = useQuery<SubscriptionDetails>({
+    queryKey: ['/api/subscription'],
   });
 
   const deleteChatHistory = useMutation({
@@ -98,6 +113,31 @@ export default function IOSSettingsPage() {
     },
   });
 
+  const cancelSubscription = useMutation({
+    mutationFn: async () => {
+      const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
+      const response = await fetch(getApiUrl('/api/subscription/cancel'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}),
+        },
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to cancel subscription');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/subscription'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      setShowCancelModal(false);
+      triggerHaptic('success');
+    },
+  });
+
   const handleBack = () => {
     triggerHaptic('light');
     navigate('/ios-profile');
@@ -136,9 +176,16 @@ export default function IOSSettingsPage() {
   };
 
   const getSubscriptionLabel = () => {
-    if (user?.isLifetime) return 'Lifetime';
-    if (user?.isPro) return 'Pro';
+    if (subscription?.type === 'lifetime') return 'Lifetime Member';
+    if (subscription?.type === 'referral') return 'Referral Trial';
+    if (subscription?.type === 'trial') return 'Free Trial';
+    if (subscription?.type === 'paying') return 'Monthly ($19.99/month)';
     return 'Free';
+  };
+
+  const canCancelSubscription = () => {
+    return (subscription?.type === 'paying' || subscription?.type === 'trial' || subscription?.type === 'referral') 
+      && !subscription?.cancelAtPeriodEnd;
   };
 
   const ToggleSwitch = ({ 
@@ -235,12 +282,13 @@ export default function IOSSettingsPage() {
           border: '1px solid #2A2A2E',
           marginBottom: '24px',
         }}>
+          {/* Plan row */}
           <div style={{
             padding: '16px 20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: '1px solid #2A2A2E',
+            borderBottom: subscription?.type !== 'none' ? '1px solid #2A2A2E' : 'none',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <CreditCard size={20} color="#71717A" />
@@ -248,14 +296,54 @@ export default function IOSSettingsPage() {
             </div>
             <span style={{ 
               fontSize: '15px', 
-              color: user?.isPro || user?.isLifetime ? '#22C55E' : '#FFFFFF',
+              color: subscription?.type === 'lifetime' || subscription?.type === 'paying' ? '#22C55E' : '#FFFFFF',
               fontWeight: 600
             }} data-testid="text-plan">
-              {getSubscriptionLabel()}
+              {isLoadingSubscription ? '...' : getSubscriptionLabel()}
             </span>
           </div>
 
-          {user?.subscriptionEndDate && !user?.isLifetime && (
+          {/* Lifetime: No charge forever */}
+          {subscription?.type === 'lifetime' && (
+            <div style={{
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+              <span style={{ fontSize: '14px', color: '#22C55E' }}>No charge - Forever</span>
+            </div>
+          )}
+
+          {/* Referral Trial: Show bonus info */}
+          {subscription?.type === 'referral' && (
+            <>
+              <div style={{
+                padding: '12px 20px',
+                background: 'rgba(139, 92, 246, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <span style={{ fontSize: '14px', color: '#8B5CF6' }}>Referral Bonus Active - 30 days free</span>
+              </div>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <span style={{ fontSize: '15px', color: '#71717A' }}>First billing date</span>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-billing-date">
+                  {formatDate(subscription?.billingDate)}
+                </span>
+              </div>
+            </>
+          )}
+
+          {/* Paying subscriber: Show billing info */}
+          {(subscription?.type === 'paying' || subscription?.type === 'trial') && (
             <div style={{
               padding: '16px 20px',
               display: 'flex',
@@ -263,36 +351,63 @@ export default function IOSSettingsPage() {
               justifyContent: 'space-between',
               borderBottom: '1px solid #2A2A2E',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <CreditCard size={20} color="#71717A" />
-                <span style={{ fontSize: '15px', color: '#71717A' }}>Renews</span>
-              </div>
-              <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-renews">
-                {formatDate(user.subscriptionEndDate)}
+              <span style={{ fontSize: '15px', color: '#71717A' }}>
+                {subscription?.cancelAtPeriodEnd ? 'Access until' : 'Next billing date'}
+              </span>
+              <span style={{ fontSize: '15px', color: subscription?.cancelAtPeriodEnd ? '#F59E0B' : '#FFFFFF' }} data-testid="text-billing-date">
+                {formatDate(subscription?.billingDate)}
               </span>
             </div>
           )}
 
-          <button
-            onClick={() => handleOpenExternal('https://bjjos.app/settings/subscription')}
-            data-testid="button-manage-subscription"
-            style={{
-              width: '100%',
-              background: 'transparent',
-              border: 'none',
+          {/* Cancelled status */}
+          {subscription?.cancelAtPeriodEnd && (
+            <div style={{
+              padding: '12px 20px',
+              background: 'rgba(245, 158, 11, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}>
+              <span style={{ fontSize: '14px', color: '#F59E0B' }}>Subscription cancelled - access ends on billing date</span>
+            </div>
+          )}
+
+          {/* Cancel button (for paying/trial users only) */}
+          {canCancelSubscription() && (
+            <button
+              onClick={() => {
+                triggerHaptic('medium');
+                setShowCancelModal(true);
+              }}
+              data-testid="button-cancel-subscription"
+              style={{
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                borderTop: '1px solid #2A2A2E',
+              }}
+            >
+              <span style={{ fontSize: '15px', color: '#EF4444' }}>Cancel Subscription</span>
+            </button>
+          )}
+
+          {/* No active plan */}
+          {subscription?.type === 'none' && (
+            <div style={{
               padding: '16px 20px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <ExternalLink size={20} color="#8B5CF6" />
-              <span style={{ fontSize: '15px', color: '#8B5CF6' }}>Manage Subscription</span>
+              justifyContent: 'center',
+            }}>
+              <span style={{ fontSize: '14px', color: '#71717A' }}>No active subscription</span>
             </div>
-            <ChevronRight size={20} color="#8B5CF6" />
-          </button>
+          )}
         </div>
 
         {/* Account Section - Email (read-only) */}
@@ -412,6 +527,7 @@ export default function IOSSettingsPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            borderBottom: '1px solid #2A2A2E',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <Vibrate size={20} color="#71717A" />
@@ -421,6 +537,28 @@ export default function IOSSettingsPage() {
               enabled={haptics} 
               onToggle={() => toggleSetting(setHaptics, haptics)}
               testId="toggle-haptics"
+            />
+          </div>
+
+          <div style={{
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Mic size={20} color="#71717A" />
+              <div>
+                <span style={{ fontSize: '15px' }}>Voice Input</span>
+                <p style={{ fontSize: '12px', color: '#71717A', margin: '2px 0 0 0' }}>
+                  Use microphone with Whisper AI
+                </p>
+              </div>
+            </div>
+            <ToggleSwitch 
+              enabled={voiceInput} 
+              onToggle={() => toggleSetting(setVoiceInput, voiceInput)}
+              testId="toggle-voice-input"
             />
           </div>
         </div>
@@ -802,6 +940,93 @@ export default function IOSSettingsPage() {
                 }}
               >
                 {resetProfile.isPending ? 'Resetting...' : 'Reset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Subscription Confirmation Modal */}
+      {showCancelModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+          onClick={() => setShowCancelModal(false)}
+          data-testid="modal-cancel-subscription-overlay"
+        >
+          <div 
+            style={{
+              background: '#1A1A1D',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '320px',
+              width: '100%',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ 
+              fontSize: '18px', 
+              fontWeight: 600, 
+              marginBottom: '12px',
+              color: '#FFFFFF'
+            }}>
+              Cancel Subscription?
+            </h3>
+            <p style={{ 
+              fontSize: '14px', 
+              color: '#A1A1AA', 
+              lineHeight: 1.5,
+              marginBottom: '24px'
+            }}>
+              Are you sure you want to cancel? You'll retain access until {formatDate(subscription?.billingDate)}.
+            </p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowCancelModal(false)}
+                data-testid="button-keep-subscription"
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: '#8B5CF6',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Keep Subscription
+              </button>
+              <button
+                onClick={() => cancelSubscription.mutate()}
+                disabled={cancelSubscription.isPending}
+                data-testid="button-confirm-cancel-subscription"
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: '#2A2A2E',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  opacity: cancelSubscription.isPending ? 0.5 : 1,
+                }}
+              >
+                {cancelSubscription.isPending ? 'Cancelling...' : 'Yes, Cancel'}
               </button>
             </div>
           </div>
