@@ -534,6 +534,7 @@ What's on your mind?`,
                 message={msg.message}
                 timestamp={msg.timestamp}
                 videos={msg.videos}
+                isLastMessage={index === messages.length - 1}
               />
             </div>
           );
@@ -617,13 +618,12 @@ What's on your mind?`,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-end',
-            background: '#1C1C1E',
-            borderRadius: '22px',
-            padding: '10px 16px',
-            minHeight: '44px',
+            background: '#111113',
+            borderRadius: '24px',
+            padding: '12px 56px 12px 20px',
+            minHeight: '48px',
             maxHeight: '150px',
-            border: '1px solid rgba(255,255,255,0.08)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            border: '1px solid #333333',
           }}>
             <textarea
               ref={textareaRef}
@@ -667,8 +667,8 @@ What's on your mind?`,
               borderRadius: '50%',
               border: 'none',
               background: inputValue.trim() && !isTyping 
-                ? '#8B5CF6' 
-                : '#1C1C1E',
+                ? '#2563EB' 
+                : '#333333',
               color: inputValue.trim() && !isTyping 
                 ? 'white' 
                 : '#6B7280',

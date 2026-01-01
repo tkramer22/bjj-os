@@ -27,6 +27,7 @@ interface MessageBubbleProps {
   sender: "user" | "assistant";
   timestamp: Date;
   videos?: any[];
+  isLastMessage?: boolean;
 }
 
 // Helper function to parse [VIDEO:...] tokens from message content
@@ -148,7 +149,7 @@ function parseVideoTokens(content: string): { text: string; video?: { id: number
   }
 }
 
-export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbleProps) {
+export function MobileMessageBubble({ message, sender, timestamp, isLastMessage = false }: MessageBubbleProps) {
   const [savedVideoIds, setSavedVideoIds] = useState<Set<number>>(new Set());
   const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string; startTime?: string } | null>(null);
   const [loadingVideos, setLoadingVideos] = useState<Set<number>>(new Set());
@@ -512,16 +513,18 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
           )}
         </div>
       ))}
-      <span 
-        style={{ 
-          fontSize: "0.75rem", 
-          opacity: 0.85,
-          display: "block",
-          marginTop: "0.5rem"
-        }}
-      >
-        {formatMessageTimestamp(timestamp)}
-      </span>
+      {isLastMessage && (
+        <span 
+          style={{ 
+            fontSize: "0.75rem", 
+            opacity: 0.5,
+            display: "block",
+            marginTop: "0.5rem"
+          }}
+        >
+          {formatMessageTimestamp(timestamp)}
+        </span>
+      )}
 
         {/* Video Player Modal */}
         {currentVideo && (
