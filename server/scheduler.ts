@@ -708,50 +708,29 @@ View library: https://bjjos.app/admin/videos`
   // cron.schedule('20 21 * * *', async () => await runAggressiveCuration(9, '9:20 PM'));
   
   // ════════════════════════════════════════════════════════════════════
-  // 🚀 CONTENT-FIRST SCHEDULED CURATION (NEW - Dec 27, 2025)
-  // Runs 4x daily using the proven Content-First curation method
+  // 🚫 CONTENT-FIRST CURATION - DISABLED (Conflicts with Permanent Auto-Curation)
+  // REASON: Running multiple curation systems exhausts YouTube API quota by mid-morning
+  // SOLUTION: Using only Permanent Auto-Curation in scheduled-tasks.ts (4x daily)
   // ════════════════════════════════════════════════════════════════════
   
-  const runScheduledContentFirstCuration = async (runLabel: string) => {
-    try {
-      console.log(`🚀 [SCHEDULED CURATION] ${runLabel} - Starting Content-First curation`);
-      const { runContentFirstCuration } = await import('./content-first-curation');
-      const result = await runContentFirstCuration(12, 5); // 12 techniques, 5 videos each = 60 videos analyzed
-      console.log(`✅ [SCHEDULED CURATION] ${runLabel} - Complete: ${result.videosSaved} videos saved, ${result.newInstructorsDiscovered} new instructors`);
-    } catch (error: any) {
-      console.error(`❌ [SCHEDULED CURATION] ${runLabel} - Error:`, error.message || error);
-    }
-  };
+  // const runScheduledContentFirstCuration = async (runLabel: string) => {
+  //   try {
+  //     console.log(`🚀 [SCHEDULED CURATION] ${runLabel} - Starting Content-First curation`);
+  //     const { runContentFirstCuration } = await import('./content-first-curation');
+  //     const result = await runContentFirstCuration(12, 5);
+  //     console.log(`✅ [SCHEDULED CURATION] ${runLabel} - Complete: ${result.videosSaved} videos saved`);
+  //   } catch (error: any) {
+  //     console.error(`❌ [SCHEDULED CURATION] ${runLabel} - Error:`, error.message || error);
+  //   }
+  // };
   
-  // Run 1/4: 6:00 AM EST (after quota reset at 3:05 AM)
-  cron.schedule('0 6 * * *', async () => {
-    await runScheduledContentFirstCuration('6:00 AM EST - Run 1/4');
-  }, {
-    timezone: 'America/New_York'
-  });
+  // DISABLED: Runs 1-4 (using Permanent Auto-Curation instead)
+  // cron.schedule('0 6 * * *', async () => await runScheduledContentFirstCuration('6:00 AM EST'), { timezone: 'America/New_York' });
+  // cron.schedule('0 10 * * *', async () => await runScheduledContentFirstCuration('10:00 AM EST'), { timezone: 'America/New_York' });
+  // cron.schedule('0 14 * * *', async () => await runScheduledContentFirstCuration('2:00 PM EST'), { timezone: 'America/New_York' });
+  // cron.schedule('0 18 * * *', async () => await runScheduledContentFirstCuration('6:00 PM EST'), { timezone: 'America/New_York' });
   
-  // Run 2/4: 10:00 AM EST
-  cron.schedule('0 10 * * *', async () => {
-    await runScheduledContentFirstCuration('10:00 AM EST - Run 2/4');
-  }, {
-    timezone: 'America/New_York'
-  });
-  
-  // Run 3/4: 2:00 PM EST
-  cron.schedule('0 14 * * *', async () => {
-    await runScheduledContentFirstCuration('2:00 PM EST - Run 3/4');
-  }, {
-    timezone: 'America/New_York'
-  });
-  
-  // Run 4/4: 6:00 PM EST
-  cron.schedule('0 18 * * *', async () => {
-    await runScheduledContentFirstCuration('6:00 PM EST - Run 4/4');
-  }, {
-    timezone: 'America/New_York'
-  });
-  
-  console.log('🚀 [SCHEDULED CURATION] Content-First curation ENABLED - 4 runs daily (6AM, 10AM, 2PM, 6PM EST)');
+  console.log('🚫 [SCHEDULED CURATION] Content-First curation DISABLED - Using Permanent Auto-Curation only');
   
   // Job 10: Comprehensive Admin Email Reports - 3x Daily
   // All times in America/New_York timezone
@@ -935,65 +914,33 @@ View library: https://bjjos.app/admin/videos`
   // });
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 🚀 INTELLIGENT CURATOR V2 - 4-HOUR AUTOMATED CURATION
+  // 🚫 INTELLIGENT CURATOR V2 - DISABLED (Conflicts with Permanent Auto-Curation)
   // ═══════════════════════════════════════════════════════════════════════════════
-  // Runs every 4 hours: 6AM, 10AM, 2PM, 6PM, 10PM, 2AM ET
-  // Features: Dynamic instructor/technique pools, 800+ query combos, auto-expand
+  // REASON: Running 6 additional curation runs exhausts YouTube API quota by mid-morning
+  // SOLUTION: Using only Permanent Auto-Curation in scheduled-tasks.ts (4x daily)
   // ═══════════════════════════════════════════════════════════════════════════════
-  cron.schedule('0 6,10,14,18,22,2 * * *', async () => {
-    if (schedulerDisabled) {
-      console.log('[V2 CURATION] Skipping - scheduler disabled');
-      return;
-    }
-    
-    const startTime = Date.now();
-    try {
-      console.log('═══════════════════════════════════════════════════════════════════════════════');
-      console.log('🚀 [V2 CURATION] Scheduled Intelligent Curator V2 run starting...');
-      console.log('═══════════════════════════════════════════════════════════════════════════════');
-      
-      const { runCurationV2 } = await import('./intelligent-curator-v2');
-      const result = await runCurationV2('scheduled');
-      
-      console.log(`[V2 CURATION] Completed: ${result.videosApproved} approved, ${result.newInstructorsDiscovered} new instructors`);
-      recordSuccess();
-      
-      // Send HTML email notification for scheduled runs
-      try {
-        const { sendCurationResultsEmail } = await import('./curation-email-notifications');
-        await sendCurationResultsEmail({
-          runType: 'scheduled',
-          videosAnalyzed: result.videosAnalyzed,
-          videosAdded: result.videosApproved,
-          videosSkipped: result.videosFound - result.videosApproved,
-          errors: result.errors,
-          duration: Date.now() - startTime
-        });
-      } catch (emailErr) {
-        console.error('[V2 CURATION] Email error:', emailErr);
-      }
-    } catch (error) {
-      console.error('[V2 CURATION] Scheduled run error:', error);
-      recordFailure();
-      
-      // Send error notification
-      try {
-        const { sendCurationResultsEmail } = await import('./curation-email-notifications');
-        await sendCurationResultsEmail({
-          runType: 'scheduled',
-          videosAnalyzed: 0,
-          videosAdded: 0,
-          videosSkipped: 0,
-          errors: [error instanceof Error ? error.message : 'Unknown error'],
-          duration: Date.now() - startTime
-        });
-      } catch (emailErr) {
-        console.error('[V2 CURATION] Error notification email failed:', emailErr);
-      }
-    }
-  }, {
-    timezone: 'America/New_York'
-  });
+  // cron.schedule('0 6,10,14,18,22,2 * * *', async () => {
+  //   if (schedulerDisabled) {
+  //     console.log('[V2 CURATION] Skipping - scheduler disabled');
+  //     return;
+  //   }
+  //   
+  //   const startTime = Date.now();
+  //   try {
+  //     console.log('🚀 [V2 CURATION] Scheduled Intelligent Curator V2 run starting...');
+  //     const { runCurationV2 } = await import('./intelligent-curator-v2');
+  //     const result = await runCurationV2('scheduled');
+  //     console.log(`[V2 CURATION] Completed: ${result.videosApproved} approved`);
+  //     recordSuccess();
+  //   } catch (error) {
+  //     console.error('[V2 CURATION] Scheduled run error:', error);
+  //     recordFailure();
+  //   }
+  // }, {
+  //   timezone: 'America/New_York'
+  // });
+  
+  console.log('🚫 [V2 CURATION] Intelligent Curator V2 DISABLED - Using Permanent Auto-Curation only');
   
   // ═══════════════════════════════════════════════════════════════════════════════
   // 📊 DAILY SUMMARY EMAIL - 9PM EST
@@ -1018,149 +965,43 @@ View library: https://bjjos.app/admin/videos`
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 🎯 DAILY INSTRUCTOR-FOCUSED CURATION - 3:10 AM ET (12:10 AM PT)
+  // 🚫 DAILY INSTRUCTOR-FOCUSED CURATION - DISABLED (Conflicts with Permanent Auto-Curation)
   // ═══════════════════════════════════════════════════════════════════════════════
-  // NEW DEFAULT: Only curates from EXISTING instructors in the database
-  // - Targets 15 instructors with lowest video counts
-  // - 5 search patterns per instructor
-  // - Early exit after 2 successful approvals per instructor
-  // - NO NEW INSTRUCTORS ALLOWED
+  // REASON: This creates an additional curation run that exhausts YouTube API quota
+  // SOLUTION: Permanent Auto-Curation in scheduled-tasks.ts already targets underrepresented instructors
   // ═══════════════════════════════════════════════════════════════════════════════
-  cron.schedule('10 3 * * *', async () => {
-    if (schedulerDisabled) {
-      console.log('[INSTRUCTOR CURATION] Skipping - scheduler disabled');
-      return;
-    }
-    
-    try {
-      console.log('═══════════════════════════════════════════════════════════════════════════════');
-      console.log('🎯 [INSTRUCTOR CURATION] Daily Instructor-Focused Curation starting (Midnight PT + 10min)...');
-      console.log('═══════════════════════════════════════════════════════════════════════════════');
-      
-      const { executeInstructorCurationWithTracking } = await import('./instructor-curation');
-      
-      // Run curation on 15 instructors with lowest video counts
-      const result = await executeInstructorCurationWithTracking(15, 'scheduled-daily');
-      
-      if (result.success && result.results) {
-        const r = result.results;
-        console.log(`[INSTRUCTOR CURATION] Completed: ${r.videosAdded} added from ${r.instructorsProcessed} instructors`);
-        recordSuccess();
-        
-        // Send email notification
-        try {
-          const { Resend } = await import('resend');
-          const resend = new Resend(process.env.RESEND_API_KEY);
-          
-          const approvalRate = r.videosAnalyzed > 0 
-            ? Math.round(r.videosAdded / r.videosAnalyzed * 100)
-            : 0;
-          
-          await resend.emails.send({
-            from: 'BJJ OS <noreply@bjjos.app>',
-            to: ['todd@bjjos.app'],
-            subject: `✅ Daily Instructor Curation: +${r.videosAdded} videos`,
-            text: `Daily Instructor-Focused Curation Complete!
-
-🎯 ONLY EXISTING INSTRUCTORS CURATED
-
-📊 Results:
-- Instructors processed: ${r.instructorsProcessed}
-- Videos analyzed: ${r.videosAnalyzed}
-- Videos approved: ${r.videosAdded}
-- Videos rejected: ${r.videosRejected}
-- Approval rate: ${approvalRate}%
-- YouTube quota used: ~${r.quotaUsed} units
-
-View library: https://bjjos.app/admin/videos`
-          });
-        } catch (emailErr) {
-          console.error('[INSTRUCTOR CURATION] Email error:', emailErr);
-        }
-      } else {
-        console.error('[INSTRUCTOR CURATION] Failed:', result.error);
-        recordFailure();
-        
-        // Send error email
-        try {
-          const { Resend } = await import('resend');
-          const resend = new Resend(process.env.RESEND_API_KEY);
-          
-          await resend.emails.send({
-            from: 'BJJ OS <noreply@bjjos.app>',
-            to: ['todd@bjjos.app'],
-            subject: '❌ Daily Instructor Curation Failed',
-            text: `Instructor curation failed:\n\n${result.error || 'Unknown error'}\n\nCheck logs for details.`
-          });
-        } catch (emailErr) {
-          console.error('[INSTRUCTOR CURATION] Error email failed:', emailErr);
-        }
-      }
-    } catch (error) {
-      console.error('[INSTRUCTOR CURATION] Daily run error:', error);
-      recordFailure();
-    }
-  }, {
-    timezone: 'America/New_York'
-  });
+  // cron.schedule('10 3 * * *', async () => {
+  //   ... DISABLED - see permanent-auto-curation.ts instead
+  // }, { timezone: 'America/New_York' });
+  
+  console.log('🚫 [INSTRUCTOR CURATION] DISABLED - Using Permanent Auto-Curation only');
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 🌙 NIGHTLY TOPIC ROTATION CURATION - 2:00 AM EST
+  // 🚫 NIGHTLY TOPIC ROTATION CURATION - DISABLED (Conflicts with Permanent Auto-Curation)
   // ═══════════════════════════════════════════════════════════════════════════════
-  // Runs daily at 2 AM EST with topic rotation:
-  // Sun: escapes, Mon: submissions, Tue: guard, Wed: passing
-  // Thu: takedowns, Fri: gi, Sat: nogi
-  // Bypasses video count target for targeted content enrichment
+  // REASON: This creates an additional curation run that exhausts YouTube API quota
+  // SOLUTION: Permanent Auto-Curation in scheduled-tasks.ts handles all curation needs
   // ═══════════════════════════════════════════════════════════════════════════════
-  cron.schedule('0 2 * * *', async () => {
-    if (schedulerDisabled) {
-      console.log('[NIGHTLY CURATION] Skipping - scheduler disabled');
-      return;
-    }
-    
-    try {
-      console.log('═══════════════════════════════════════════════════════════════════════════════');
-      console.log('🌙 [NIGHTLY CURATION] Starting daily topic rotation curation...');
-      console.log('═══════════════════════════════════════════════════════════════════════════════');
-      
-      const { runNightlyCuration, getTodaysTopic } = await import('./targeted-topic-curation');
-      
-      const todaysTopic = getTodaysTopic();
-      console.log(`[NIGHTLY CURATION] Today's focus: ${todaysTopic.name.toUpperCase()} (Day ${todaysTopic.dayOfWeek})`);
-      
-      const result = await runNightlyCuration();
-      
-      console.log(`[NIGHTLY CURATION] Completed: ${result.videosAdded} added, ${result.videosRejected} rejected`);
-      recordSuccess();
-    } catch (error) {
-      console.error('[NIGHTLY CURATION] Error:', error);
-      recordFailure();
-      
-      try {
-        const { Resend } = await import('resend');
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        
-        await resend.emails.send({
-          from: 'BJJ OS <noreply@bjjos.app>',
-          to: ['todd@bjjos.app'],
-          subject: '❌ Nightly Curation Failed',
-          text: `Nightly curation failed:\n\n${error instanceof Error ? error.message : 'Unknown error'}\n\nCheck logs for details.`
-        });
-      } catch (emailErr) {
-        console.error('[NIGHTLY CURATION] Error email failed:', emailErr);
-      }
-    }
-  }, {
-    timezone: 'America/New_York'
-  });
+  // cron.schedule('0 2 * * *', async () => {
+  //   ... DISABLED - see permanent-auto-curation.ts instead
+  // }, { timezone: 'America/New_York' });
+  
+  console.log('🚫 [NIGHTLY CURATION] DISABLED - Using Permanent Auto-Curation only');
 
   console.log('[ADMIN EMAIL V2] Comprehensive admin email reports started - 3x daily (7AM, 1PM, 8PM EST) to todd@bjjos.app');
   console.log('[REFERRAL] Weekly referral emails scheduler started - Mondays at 8 AM ET');
   console.log('[REFERRAL] Daily payout processing scheduler started - 9 AM ET (Net 60 terms)');
   console.log('[QUOTA RESET] Daily YouTube quota reset scheduler started - 3:05 AM ET');
   console.log('🚨 [AUTO-RECOVERY] DISABLED - Use manual recovery via Command Center');
-  console.log('🚀 [V2 CURATION] Intelligent Curator V2 scheduled - Every 4 hours (6AM, 10AM, 2PM, 6PM, 10PM, 2AM ET)');
-  console.log('🎯 [INSTRUCTOR CURATION] Daily instructor-focused curation - 3:10 AM ET (12:10 AM PT) - ONLY EXISTING INSTRUCTORS');
-  console.log('🌙 [NIGHTLY CURATION] Daily topic rotation - 2:00 AM EST (Sun=escapes, Mon=submissions, Tue=guard, Wed=passing, Thu=takedowns, Fri=gi, Sat=nogi)');
+  console.log('═══════════════════════════════════════════════════════════════════════════════');
+  console.log('📺 YOUTUBE API QUOTA OPTIMIZATION (January 2026)');
+  console.log('═══════════════════════════════════════════════════════════════════════════════');
+  console.log('  ✅ ACTIVE: Permanent Auto-Curation - 4x daily (3:15am, 9am, 3pm, 9pm EST)');
+  console.log('  🚫 DISABLED: Content-First Curation (was 4 runs/day - conflicts)');
+  console.log('  🚫 DISABLED: V2 Intelligent Curator (was 6 runs/day - conflicts)');
+  console.log('  🚫 DISABLED: Instructor-Focused Curation (redundant)');
+  console.log('  🚫 DISABLED: Nightly Topic Rotation (redundant)');
+  console.log('  📊 Result: 4 runs/day (down from 14+) = quota lasts all day');
+  console.log('═══════════════════════════════════════════════════════════════════════════════');
   console.log('📊 [DAILY SUMMARY] Daily summary email scheduled - 9PM EST to todd@bjjos.app');
 }
