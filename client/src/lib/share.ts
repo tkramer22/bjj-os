@@ -45,7 +45,7 @@ export async function shareContent(options: ShareOptions): Promise<boolean> {
 
 export async function shareVideo(title: string, instructor: string, videoId: string): Promise<boolean> {
   const url = `https://www.youtube.com/watch?v=${videoId}`;
-  const text = `${title} by ${instructor}\n\n🎥 ${url}\n\nDiscover 2,500+ analyzed BJJ techniques at https://bjjos.app`;
+  const text = `${title} by ${instructor}\n\n🎥 ${url}\n\nhttps://bjjos.app\n\nBJJ OS gives you a full breakdown of every video - key timestamps, instructor tips, common mistakes. No more scrubbing through 20-minute videos to find the good stuff: https://bjjos.app`;
   
   return shareContent({
     title: title,
