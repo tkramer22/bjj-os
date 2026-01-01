@@ -236,8 +236,38 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
   const segments = parseVideoTokens(message || '');
 
   return (
-    <div className={`mobile-message-bubble ${sender}`} data-testid={`message-${sender}`}>
-      {segments.map((segment, index) => (
+    <div 
+      style={{ 
+        display: 'flex', 
+        alignItems: 'flex-start', 
+        gap: '8px',
+        flexDirection: sender === 'user' ? 'row-reverse' : 'row',
+        width: '100%',
+      }}
+    >
+      {sender === 'assistant' && (
+        <div 
+          style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            fontSize: '14px',
+            fontWeight: 600,
+            color: 'white',
+            boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
+          }}
+          data-testid="avatar-professor-os"
+        >
+          OS
+        </div>
+      )}
+      <div className={`mobile-message-bubble ${sender}`} data-testid={`message-${sender}`}>
+        {segments.map((segment, index) => (
         <div key={index}>
           {segment.text && <p style={{ marginBottom: "0.5rem", whiteSpace: "pre-line" }}>{segment.text}</p>}
           {segment.video && (
@@ -462,24 +492,25 @@ export function MobileMessageBubble({ message, sender, timestamp }: MessageBubbl
         {formatMessageTimestamp(timestamp)}
       </span>
 
-      {/* Video Player Modal */}
-      {currentVideo && (
-        <VideoPlayer
-          videoId={currentVideo.videoId}
-          title={currentVideo.title}
-          instructor={currentVideo.instructor}
-          startTime={currentVideo.startTime}
-          onClose={() => setCurrentVideo(null)}
-        />
-      )}
+        {/* Video Player Modal */}
+        {currentVideo && (
+          <VideoPlayer
+            videoId={currentVideo.videoId}
+            title={currentVideo.title}
+            instructor={currentVideo.instructor}
+            startTime={currentVideo.startTime}
+            onClose={() => setCurrentVideo(null)}
+          />
+        )}
 
-      {/* Video Analysis Modal */}
-      {analysisVideoId && (
-        <VideoAnalysisModal
-          videoId={analysisVideoId}
-          onClose={() => setAnalysisVideoId(null)}
-        />
-      )}
+        {/* Video Analysis Modal */}
+        {analysisVideoId && (
+          <VideoAnalysisModal
+            videoId={analysisVideoId}
+            onClose={() => setAnalysisVideoId(null)}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -3,8 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
-import { Bookmark, Search, Loader2, Play, X, ChevronDown, RefreshCw, Brain } from "lucide-react";
+import { Bookmark, Search, Loader2, Play, X, ChevronDown, RefreshCw, Brain, Share2 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
+import { shareVideo } from "@/lib/share";
+import { useToast } from "@/hooks/use-toast";
 
 console.log('✅ iOS SAVED loaded');
 
@@ -28,6 +30,7 @@ export default function IOSSavedPage() {
   const [analysisVideoId, setAnalysisVideoId] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: user } = useQuery<{ id: number }>({
     queryKey: ["/api/auth/me"],
@@ -517,6 +520,32 @@ export default function IOSSavedPage() {
                       >
                         <Brain size={12} />
                         Analysis
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          triggerHaptic('light');
+                          const videoId = extractVideoId(video.videoUrl);
+                          if (videoId) {
+                            await shareVideo(video.title, video.instructor, videoId);
+                          }
+                        }}
+                        data-testid={`button-share-video-${video.id}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '11px',
+                          color: '#10B981',
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Share2 size={12} />
+                        Share
                       </button>
                     </div>
                   </div>

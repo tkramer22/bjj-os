@@ -3,8 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
-import { Search, Play, BookmarkCheck, Loader2, ChevronDown, RefreshCw, Brain } from "lucide-react";
+import { Search, Play, BookmarkCheck, Loader2, ChevronDown, RefreshCw, Brain, Share2 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
+import { shareVideo } from "@/lib/share";
+import { useToast } from "@/hooks/use-toast";
 
 console.log('✅ iOS LIBRARY loaded');
 
@@ -39,6 +41,7 @@ export default function IOSLibraryPage() {
   const [analysisVideoId, setAnalysisVideoId] = useState<number | null>(null);
   
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: user } = useQuery<{ id: string }>({
     queryKey: ["/api/auth/me"],
@@ -485,6 +488,29 @@ export default function IOSLibraryPage() {
                     >
                       <Brain size={12} />
                       Analysis
+                    </button>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        triggerHaptic('light');
+                        await shareVideo(video.title, video.instructor, video.youtubeId);
+                      }}
+                      data-testid={`button-share-video-${video.id}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11px',
+                        color: '#10B981',
+                        background: 'rgba(16, 185, 129, 0.15)',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Share2 size={12} />
+                      Share
                     </button>
                     {isVideoSaved(video.id) && (
                       <BookmarkCheck size={14} color="#22C55E" />

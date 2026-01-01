@@ -56,16 +56,18 @@ export function MobileVideoCard({
         >
           <Play fill="white" color="white" size={24} />
         </div>
-        {duration && (
+        {duration && duration !== "0:00" && duration !== "0:0" && (
           <div
             style={{
               position: "absolute",
               bottom: "0.5rem",
               right: "0.5rem",
-              background: "rgba(0, 0, 0, 0.8)",
-              padding: "0.25rem 0.5rem",
-              borderRadius: "4px",
-              fontSize: "0.75rem",
+              background: "rgba(0, 0, 0, 0.85)",
+              padding: "4px 8px",
+              borderRadius: "6px",
+              fontSize: "12px",
+              fontWeight: 500,
+              color: "#FFFFFF",
             }}
           >
             {duration}
