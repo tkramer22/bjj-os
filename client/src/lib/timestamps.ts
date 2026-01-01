@@ -39,7 +39,12 @@ export function formatDateDivider(timestamp: Date): string {
   } else if (isYesterday(date)) {
     return 'Yesterday';
   } else {
-    return format(date, 'MMMM d, yyyy');
+    // Use short month format: "Dec 28" for this year, "Dec 28, 2024" for previous years
+    const now = new Date();
+    if (date.getFullYear() === now.getFullYear()) {
+      return format(date, 'MMM d');
+    }
+    return format(date, 'MMM d, yyyy');
   }
 }
 
