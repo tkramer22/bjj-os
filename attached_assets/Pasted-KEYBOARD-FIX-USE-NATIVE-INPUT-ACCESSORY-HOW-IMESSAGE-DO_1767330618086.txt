@@ -1,0 +1,101 @@
+KEYBOARD FIX - USE NATIVE INPUT ACCESSORY (HOW IMESSAGE DOES IT)
+
+═══════════════════════════════════════════════════════════════════════════════
+THE REAL SOLUTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Chat apps don't "push content up" - they attach the input bar TO the keyboard.
+The input is a "keyboard accessory view" that moves WITH the keyboard.
+
+This requires a native plugin.
+
+═══════════════════════════════════════════════════════════════════════════════
+INSTALL THE PLUGIN
+═══════════════════════════════════════════════════════════════════════════════
+
+npm install capacitor-keyboard-accessory
+
+Then in capacitor.config.ts, add to plugins:
+
+plugins: {
+  KeyboardAccessory: {
+    // Input bar will attach to keyboard
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+IF THAT PLUGIN DOESN'T EXIST, TRY
+═══════════════════════════════════════════════════════════════════════════════
+
+npm install @capawesome/capacitor-keyboard
+
+OR
+
+npm install @capacitor-community/keyboard
+
+And configure for accessory mode.
+
+═══════════════════════════════════════════════════════════════════════════════
+ALTERNATIVE: MODIFY NATIVE iOS CODE DIRECTLY
+═══════════════════════════════════════════════════════════════════════════════
+
+In Xcode, open ios/App/App/AppDelegate.swift
+
+Add this to make the WebView scroll when keyboard appears:
+
+import UIKit
+import Capacitor
+
+@UIApplicationMain
+class AppDelegate: UIResponder, UIApplicationDelegate {
+
+    var window: UIWindow?
+
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        
+        // Enable keyboard to push content up
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillShow),
+            name: UIResponder.keyboardWillShowNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillHide),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+        
+        return true
+    }
+    
+    @objc func keyboardWillShow(notification: NSNotification) {
+        if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+            if let webView = (window?.rootViewController as? CAPBridgeViewController)?.webView {
+                webView.scrollView.contentInset.bottom = keyboardFrame.height
+                webView.scrollView.verticalScrollIndicatorInsets.bottom = keyboardFrame.height
+            }
+        }
+    }
+    
+    @objc func keyboardWillHide(notification: NSNotification) {
+        if let webView = (window?.rootViewController as? CAPBridgeViewController)?.webView {
+            webView.scrollView.contentInset.bottom = 0
+            webView.scrollView.verticalScrollIndicatorInsets.bottom = 0
+        }
+    }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+THIS IS THE NATIVE FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+This modifies how iOS handles the keyboard at the native level - not JavaScript.
+
+After editing AppDelegate.swift:
+1. Clean build in Xcode (Shift + Cmd + K)
+2. Build and run on device
+
+The WebView will now add bottom padding when keyboard appears.
