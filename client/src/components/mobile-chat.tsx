@@ -9,6 +9,7 @@ import { formatDateDivider, shouldShowDateDivider } from "@/lib/timestamps";
 import { triggerHaptic } from "@/lib/haptics";
 import { getApiUrl, isNativeApp, getAuthToken } from "@/lib/capacitorAuth";
 import { useChatContext } from "@/contexts/ChatContext";
+import { Capacitor } from "@capacitor/core";
 
 interface Message {
   id: string;
@@ -47,10 +48,41 @@ export function MobileChat() {
   const [oldestMessageTimestamp, setOldestMessageTimestamp] = useState<string | null>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [thinkingStatus, setThinkingStatus] = useState<string | null>(null);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const thinkingStatusRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputContainerRef = useRef<HTMLDivElement>(null);
+
+  // VisualViewport listener for keyboard detection (fallback for iOS)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const handleResize = () => {
+      const offset = window.innerHeight - viewport.height;
+      console.log('[KEYBOARD] VisualViewport offset:', offset);
+      setKeyboardOffset(offset > 50 ? offset : 0); // Only set if significant (keyboard open)
+      
+      // Scroll input into view when keyboard opens
+      if (offset > 50 && inputContainerRef.current) {
+        setTimeout(() => {
+          inputContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 100);
+      }
+    };
+
+    viewport.addEventListener('resize', handleResize);
+    viewport.addEventListener('scroll', handleResize);
+    
+    return () => {
+      viewport.removeEventListener('resize', handleResize);
+      viewport.removeEventListener('scroll', handleResize);
+    };
+  }, []);
 
   // Get authenticated user from API
   const { data: currentUser, isLoading: isLoadingUser } = useQuery<AuthUser>({
@@ -592,12 +624,16 @@ What are you working on right now?`,
       </div>
 
       <div 
+        ref={inputContainerRef}
         className="mobile-chat-input-container mobile-safe-area-bottom"
         style={{
           flexShrink: 0,
           background: '#0A0A0B',
           borderTop: '1px solid var(--mobile-border)',
-          paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+          paddingBottom: keyboardOffset > 0 
+            ? `${keyboardOffset + 12}px` 
+            : 'calc(12px + env(safe-area-inset-bottom, 0px))',
+          transition: 'padding-bottom 0.25s ease-out',
         }}
       >
         <div style={{
