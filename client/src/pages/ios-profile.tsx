@@ -56,6 +56,10 @@ export default function IOSProfilePage() {
   const beltPickerRef = useRef<HTMLDivElement>(null);
   const stylePickerRef = useRef<HTMLDivElement>(null);
   const initialScrollSetRef = useRef<string | null>(null);
+  const lastBeltIndex = useRef<number>(-1);
+  const lastStyleIndex = useRef<number>(-1);
+  const lastWeightIndex = useRef<number>(-1);
+  const lastHeightIndex = useRef<number>(-1);
 
   const { data: user, isLoading } = useQuery<UserProfile>({
     queryKey: ["/api/auth/me"],
@@ -792,12 +796,10 @@ export default function IOSProfilePage() {
                       const itemHeight = 40;
                       const scrollTop = container.scrollTop;
                       const selectedIndex = Math.round(scrollTop / itemHeight);
-                      if (BELT_OPTIONS[selectedIndex] !== undefined) {
-                        const newValue = BELT_OPTIONS[selectedIndex];
-                        if (newValue !== editValue) {
-                          triggerHaptic('light');
-                          setEditValue(newValue);
-                        }
+                      if (BELT_OPTIONS[selectedIndex] !== undefined && selectedIndex !== lastBeltIndex.current) {
+                        triggerHaptic('light');
+                        lastBeltIndex.current = selectedIndex;
+                        setEditValue(BELT_OPTIONS[selectedIndex]);
                       }
                     }}
                   >
@@ -897,12 +899,10 @@ export default function IOSProfilePage() {
                       const itemHeight = 40;
                       const scrollTop = container.scrollTop;
                       const selectedIndex = Math.round(scrollTop / itemHeight);
-                      if (STYLE_OPTIONS[selectedIndex] !== undefined) {
-                        const newValue = STYLE_OPTIONS[selectedIndex];
-                        if (newValue !== editValue) {
-                          triggerHaptic('light');
-                          setEditValue(newValue);
-                        }
+                      if (STYLE_OPTIONS[selectedIndex] !== undefined && selectedIndex !== lastStyleIndex.current) {
+                        triggerHaptic('light');
+                        lastStyleIndex.current = selectedIndex;
+                        setEditValue(STYLE_OPTIONS[selectedIndex]);
                       }
                     }}
                   >
@@ -993,13 +993,10 @@ export default function IOSProfilePage() {
                       const itemHeight = 40;
                       const scrollTop = container.scrollTop;
                       const selectedIndex = Math.round(scrollTop / itemHeight);
-                      if (weightOptions[selectedIndex] !== undefined) {
-                        const newValue = String(weightOptions[selectedIndex]);
-                        // Only update if value actually changed to prevent re-scroll
-                        if (newValue !== editValue) {
-                          triggerHaptic('light');
-                          setEditValue(newValue);
-                        }
+                      if (weightOptions[selectedIndex] !== undefined && selectedIndex !== lastWeightIndex.current) {
+                        triggerHaptic('light');
+                        lastWeightIndex.current = selectedIndex;
+                        setEditValue(String(weightOptions[selectedIndex]));
                       }
                     }}
                   >
@@ -1089,13 +1086,10 @@ export default function IOSProfilePage() {
                       const itemHeight = 40;
                       const scrollTop = container.scrollTop;
                       const selectedIndex = Math.round(scrollTop / itemHeight);
-                      if (heightOptions[selectedIndex] !== undefined) {
-                        const newValue = heightOptions[selectedIndex];
-                        // Only update if value actually changed to prevent re-scroll
-                        if (newValue !== editValue) {
-                          triggerHaptic('light');
-                          setEditValue(newValue);
-                        }
+                      if (heightOptions[selectedIndex] !== undefined && selectedIndex !== lastHeightIndex.current) {
+                        triggerHaptic('light');
+                        lastHeightIndex.current = selectedIndex;
+                        setEditValue(heightOptions[selectedIndex]);
                       }
                     }}
                   >
