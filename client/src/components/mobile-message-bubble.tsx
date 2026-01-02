@@ -441,17 +441,17 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                       fontSize: "0.875rem",
                       marginBottom: "0.25rem",
                       overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap"
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      lineHeight: "1.3"
                     }}>
                       {decodeHTML(segment.video.title)}
                     </p>
                     <p style={{ 
                       fontSize: "0.75rem", 
                       color: "var(--mobile-text-secondary)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap"
+                      lineHeight: "1.4"
                     }}>
                       {segment.video.instructor}
                       {segment.video.videoId && ` • ${segment.video.duration}`}

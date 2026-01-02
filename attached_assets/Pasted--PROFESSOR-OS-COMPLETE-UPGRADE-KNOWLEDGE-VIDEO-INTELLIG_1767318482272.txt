@@ -1,0 +1,200 @@
+```
+PROFESSOR OS COMPLETE UPGRADE - KNOWLEDGE + VIDEO INTELLIGENCE
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: VIDEO CARD TITLES TRUNCATED
+═══════════════════════════════════════════════════════════════════════════════
+
+In the chat, video cards show:
+- "Sid..." instead of "Side Control to Mounted Guillotine"
+- "Marc..." instead of "Marcelo Garcia"
+
+The title and instructor name are being cut off too aggressively.
+
+FIX: In the VideoCard component used in chat messages:
+- Allow title to wrap to 2 lines before truncating
+- Show full instructor name (don't truncate)
+- If space is tight, truncate title but NEVER instructor name
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: VIDEO TIMING - DETECT INTENT
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT PROBLEM:
+User: "Any vids or pointers"
+Professor OS: [3 screens of coaching text]
+User: "Some videos too pls"
+THEN videos appear
+
+FIX: Detect video intent and lead with videos when appropriate.
+
+In the message analysis, add video intent detection:
+
+const videoIntentKeywords = [
+  'video', 'vid', 'vids', 'show me', 'send me', 'any tutorials',
+  'watch', 'clip', 'footage', 'demonstrate', 'visual'
+];
+
+const hasVideoIntent = videoIntentKeywords.some(keyword => 
+  message.toLowerCase().includes(keyword)
+);
+
+Add to system prompt instruction:
+
+"VIDEO INTENT DETECTION:
+If the user asks for videos (uses words like 'video', 'vid', 'show me', 'send me', 'tutorials'):
+- Lead with 1-2 relevant videos FIRST
+- THEN add coaching context about what to focus on in each video
+- Keep the teaching, but videos come first when explicitly requested"
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: ALWAYS OFFER VIDEO OPTION
+═══════════════════════════════════════════════════════════════════════════════
+
+If Professor OS responds WITHOUT a video, it should offer one.
+
+Add to system prompt:
+
+"VIDEO OFFERING:
+If you teach a concept without including a video, end with an offer:
+- 'Want me to pull up a video showing this?'
+- 'I can show you exactly what I mean - want the visual?'
+- 'There's a great breakdown of this by [instructor] - interested?'
+
+The user should always know videos are available. Don't assume they know to ask."
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 4: TIMESTAMP PRECISION
+═══════════════════════════════════════════════════════════════════════════════
+
+We have timestamps with descriptions for each video in the Gemini data.
+
+Add to system prompt:
+
+"TIMESTAMP PRECISION:
+When recommending a video, include the specific timestamp that answers their question:
+- 'Skip to 4:32 - that's exactly where he shows the grip break'
+- 'Start at 2:15 where she addresses the common mistake you're making'
+- 'The key detail is at 6:40'
+
+Don't just link the video. Point them to the EXACT moment."
+
+When building video context for the prompt, include timestamps field:
+
+VIDEO: [title] by [instructor]
+URL: [youtube_url]
+KEY TIMESTAMPS:
+- 2:15: Setting up the grip
+- 4:32: The finish detail
+- 6:40: Common mistake correction
+[rest of fields...]
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 5: INSTRUCTOR COMPARISON
+═══════════════════════════════════════════════════════════════════════════════
+
+When we have multiple videos on the same technique from different instructors, surface this.
+
+Add to system prompt:
+
+"INSTRUCTOR COMPARISON:
+When relevant, show how different instructors approach the same technique:
+- 'Danaher focuses on the angle, Marcelo emphasizes timing - here's both'
+- 'Lachlan breaks this down conceptually, Gordon shows the competition application'
+- 'These two approach it differently - [instructor A] does X, [instructor B] does Y'
+
+This shows depth. Users love seeing different perspectives from elite instructors."
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 6: COMMON MISTAKES INTEGRATION
+═══════════════════════════════════════════════════════════════════════════════
+
+We have common_mistakes field from Gemini analysis. Use it naturally.
+
+Add to system prompt:
+
+"COMMON MISTAKES:
+Weave in common mistakes naturally - this is insider knowledge:
+- 'The mistake most people make is...'
+- '90% of people fail here because...'
+- 'The detail everyone misses is...'
+
+Pull from the common_mistakes field in video knowledge. Users feel like they're getting secrets."
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 7: CHAIN AWARENESS
+═══════════════════════════════════════════════════════════════════════════════
+
+We have chains_to and chains_from fields showing technique connections.
+
+Add to system prompt:
+
+"CHAIN AWARENESS:
+Show how techniques connect - a coach sees the whole game:
+- 'This chains into the darce if they defend by pulling their head out'
+- 'If this fails, you're already set up for [next technique]'
+- 'This works best after [previous technique] because...'
+
+Techniques don't exist in isolation. Show the connections."
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 8: COUNTER-INTELLIGENCE OFFERS
+═══════════════════════════════════════════════════════════════════════════════
+
+Proactively offer defensive knowledge.
+
+Add to system prompt:
+
+"COUNTER-INTELLIGENCE:
+When teaching an attack, offer the defensive side:
+- 'You should also know how people defend this - want that?'
+- 'The von flue counter is coming when you drill this - want to see how to prevent it?'
+- 'I can also show you what to do when this fails - interested?'
+
+A coach who thinks ahead. Offer, don't wait for them to ask."
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 9: PROGRESSIVE DEPTH OFFERS
+═══════════════════════════════════════════════════════════════════════════════
+
+Surface the depth that users don't know exists.
+
+Add to system prompt:
+
+"PROGRESSIVE DEPTH:
+Users don't know how deep the knowledge goes. Offer to go deeper:
+- 'Want me to break down the grip mechanics specifically?'
+- 'I can show you 3 variations of this finish - interested?'
+- 'There's a competition-level detail here - want it?'
+
+Be on the offering side. Surface the value."
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing, test these scenarios:
+
+1. "Show me some guillotine videos"
+   Expected: 1-2 videos FIRST, then context about each
+
+2. "How do I finish the guillotine?"
+   Expected: Coaching with common mistakes, then offers video + timestamp
+
+3. "I'm training guillotines with JT tomorrow"
+   Expected: Coaching, comparison to other instructors, chains_to mention, 
+   offers counter-intelligence and video
+
+4. Video cards should show full instructor name and readable title
+
+═══════════════════════════════════════════════════════════════════════════════
+FILES TO MODIFY
+═══════════════════════════════════════════════════════════════════════════════
+
+1. server/routes.ts - buildSystemPrompt() - Add all new instructions
+2. server/routes.ts - fetchRelevantVideos() - Include timestamps in video data
+3. client/src/components/VideoCard.tsx (or equivalent in chat) - Fix truncation
+4. Message analysis - Add video intent detection
+
+This applies to ALL platforms (iOS, mobile web, desktop) since they share the backend.
+```
