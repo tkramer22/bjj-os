@@ -273,8 +273,24 @@ export default function IOSSettingsPage() {
           border: '1px solid #2A2A2E',
           marginBottom: '24px',
         }}>
+          {/* LOADING STATE */}
+          {isLoadingSubscription && (
+            <div style={{
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <CreditCard size={20} color="#71717A" />
+                <span style={{ fontSize: '15px', color: '#71717A' }}>Plan</span>
+              </div>
+              <span style={{ fontSize: '15px', color: '#71717A' }}>Loading...</span>
+            </div>
+          )}
+
           {/* TYPE 1: LIFETIME MEMBER */}
-          {subscription?.type === 'lifetime' && (
+          {!isLoadingSubscription && subscription?.type === 'lifetime' && (
             <>
               <div style={{
                 padding: '16px 20px',
@@ -304,7 +320,7 @@ export default function IOSSettingsPage() {
           )}
 
           {/* TYPE 2: 7-DAY TRIAL */}
-          {subscription?.type === 'trial' && !subscription?.cancelAtPeriodEnd && (
+          {!isLoadingSubscription && subscription?.type === 'trial' && !subscription?.cancelAtPeriodEnd && (
             <>
               <div style={{
                 padding: '16px 20px',
@@ -364,7 +380,7 @@ export default function IOSSettingsPage() {
           )}
 
           {/* TYPE 3: 30-DAY REFERRAL TRIAL */}
-          {subscription?.type === 'referral' && !subscription?.cancelAtPeriodEnd && (
+          {!isLoadingSubscription && subscription?.type === 'referral' && !subscription?.cancelAtPeriodEnd && (
             <>
               <div style={{
                 padding: '16px 20px',
@@ -424,7 +440,7 @@ export default function IOSSettingsPage() {
           )}
 
           {/* TYPE 4: PAYING SUBSCRIBER */}
-          {subscription?.type === 'paying' && !subscription?.cancelAtPeriodEnd && (
+          {!isLoadingSubscription && subscription?.type === 'paying' && !subscription?.cancelAtPeriodEnd && (
             <>
               <div style={{
                 padding: '16px 20px',
@@ -484,7 +500,7 @@ export default function IOSSettingsPage() {
           )}
 
           {/* TYPE 5: CANCELLED (still has access) */}
-          {subscription?.cancelAtPeriodEnd && subscription?.type !== 'lifetime' && (
+          {!isLoadingSubscription && subscription?.cancelAtPeriodEnd && subscription?.type !== 'lifetime' && (
             <>
               <div style={{
                 padding: '16px 20px',
@@ -527,8 +543,8 @@ export default function IOSSettingsPage() {
             </>
           )}
 
-          {/* TYPE 6: NO SUBSCRIPTION (needs to subscribe) */}
-          {subscription?.type === 'none' && (
+          {/* TYPE 6: NO SUBSCRIPTION or UNKNOWN (fallback) */}
+          {!isLoadingSubscription && (subscription?.type === 'none' || (!subscription?.type && !subscription?.cancelAtPeriodEnd)) && (
             <>
               <div style={{
                 padding: '16px 20px',

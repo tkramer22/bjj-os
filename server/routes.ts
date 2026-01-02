@@ -15380,7 +15380,6 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         subscriptionStatus: bjjUsers.subscriptionStatus,
         subscriptionEndDate: bjjUsers.subscriptionEndDate,
         referralCode: bjjUsers.referralCode,
-        hasHadTrial: bjjUsers.hasHadTrial,
       })
         .from(bjjUsers)
         .where(eq(bjjUsers.id, userId))
