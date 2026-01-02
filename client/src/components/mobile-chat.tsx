@@ -57,15 +57,22 @@ export function MobileChat() {
 
   // Handle keyboard show/hide for iOS native
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
+    if (!Capacitor.isNativePlatform()) {
+      console.log('[KEYBOARD] Not native platform, skipping keyboard listeners');
+      return;
+    }
+
+    console.log('[KEYBOARD] Setting up keyboard listeners for iOS native');
 
     const showListener = Keyboard.addListener('keyboardWillShow', (info) => {
+      console.log('[KEYBOARD] keyboardWillShow fired, height:', info.keyboardHeight);
       setKeyboardHeight(info.keyboardHeight);
       // Scroll to bottom when keyboard appears
       setTimeout(() => scrollToBottom(true), 100);
     });
 
     const hideListener = Keyboard.addListener('keyboardWillHide', () => {
+      console.log('[KEYBOARD] keyboardWillHide fired');
       setKeyboardHeight(0);
     });
 

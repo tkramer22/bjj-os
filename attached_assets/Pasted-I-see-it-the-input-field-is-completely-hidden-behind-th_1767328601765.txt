@@ -1,0 +1,89 @@
+I see it - the input field is completely hidden behind the keyboard. The fix didn’t take effect.
+
+-----
+
+```
+KEYBOARD FIX NOT WORKING - CHAT INPUT STILL HIDDEN
+
+═══════════════════════════════════════════════════════════════════════════════
+THE PROBLEM
+═══════════════════════════════════════════════════════════════════════════════
+
+When keyboard opens in chat, the input field is BEHIND the keyboard.
+User cannot see the "Ask Professor OS..." input area at all.
+
+The previous fix did not work.
+
+═══════════════════════════════════════════════════════════════════════════════
+CHECK THESE THINGS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Is capacitor.config.ts set correctly?
+   plugins: {
+     Keyboard: {
+       resize: 'none'
+     }
+   }
+
+2. Is the Keyboard listener actually running in the chat component?
+   Add a console.log to verify:
+   
+   Keyboard.addListener('keyboardWillShow', (info) => {
+     console.log('Keyboard height:', info.keyboardHeight);
+     // rest of code
+   });
+
+3. Is the chat input container actually using the --keyboard-height variable?
+
+═══════════════════════════════════════════════════════════════════════════════
+ALTERNATIVE FIX - MORE RELIABLE
+═══════════════════════════════════════════════════════════════════════════════
+
+Instead of CSS variables, directly adjust the container style:
+
+const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+useEffect(() => {
+  Keyboard.addListener('keyboardWillShow', (info) => {
+    setKeyboardHeight(info.keyboardHeight);
+  });
+
+  Keyboard.addListener('keyboardWillHide', () => {
+    setKeyboardHeight(0);
+  });
+
+  return () => {
+    Keyboard.removeAllListeners();
+  };
+}, []);
+
+Then in the JSX, apply directly to the chat container:
+
+<div 
+  className="chat-container"
+  style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
+>
+  {/* messages */}
+  <input className="chat-input" ... />
+</div>
+
+Or position the input fixed above keyboard:
+
+<div 
+  className="chat-input-wrapper"
+  style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
+>
+  <input ... />
+</div>
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFY IT WORKS
+═══════════════════════════════════════════════════════════════════════════════
+
+After fix:
+1. Open chat
+2. Tap input field
+3. Keyboard opens
+4. Input field should be VISIBLE above the keyboard
+5. User can see what they're typing
+```
