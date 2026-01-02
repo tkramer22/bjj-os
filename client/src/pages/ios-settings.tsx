@@ -64,6 +64,7 @@ export default function IOSSettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelModalMode, setCancelModalMode] = useState<'confirm' | 'lifetime' | 'already_cancelled'>('confirm');
   
   const { data: user } = useQuery<UserProfile>({
     queryKey: ['/api/auth/me'],
@@ -172,6 +173,18 @@ export default function IOSSettingsPage() {
     } else {
       window.open(url, '_blank');
     }
+  };
+
+  const handleCancelButtonClick = () => {
+    triggerHaptic('medium');
+    if (subscription?.type === 'lifetime') {
+      setCancelModalMode('lifetime');
+    } else if (subscription?.cancelAtPeriodEnd) {
+      setCancelModalMode('already_cancelled');
+    } else {
+      setCancelModalMode('confirm');
+    }
+    setShowCancelModal(true);
   };
 
   const toggleSetting = (setter: (v: boolean) => void, currentValue: boolean) => {
@@ -352,30 +365,12 @@ export default function IOSSettingsPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                borderBottom: '1px solid #2A2A2E',
               }}>
                 <span style={{ fontSize: '15px', color: '#71717A' }}>First billing</span>
                 <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-billing-date">
                   {formatDate(subscription?.trialEnd || subscription?.billingDate)}
                 </span>
               </div>
-              <button
-                onClick={() => { triggerHaptic('medium'); setShowCancelModal(true); }}
-                data-testid="button-cancel-subscription"
-                style={{
-                  width: '100%',
-                  background: 'transparent',
-                  border: 'none',
-                  padding: '16px 20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  borderTop: '1px solid #2A2A2E',
-                }}
-              >
-                <span style={{ fontSize: '15px', color: '#EF4444' }}>Cancel Subscription</span>
-              </button>
             </>
           )}
 
@@ -412,30 +407,12 @@ export default function IOSSettingsPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                borderBottom: '1px solid #2A2A2E',
               }}>
                 <span style={{ fontSize: '15px', color: '#71717A' }}>First billing</span>
                 <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-billing-date">
                   {formatDate(subscription?.trialEnd || subscription?.billingDate)}
                 </span>
               </div>
-              <button
-                onClick={() => { triggerHaptic('medium'); setShowCancelModal(true); }}
-                data-testid="button-cancel-subscription"
-                style={{
-                  width: '100%',
-                  background: 'transparent',
-                  border: 'none',
-                  padding: '16px 20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  borderTop: '1px solid #2A2A2E',
-                }}
-              >
-                <span style={{ fontSize: '15px', color: '#EF4444' }}>Cancel Subscription</span>
-              </button>
             </>
           )}
 
@@ -472,30 +449,12 @@ export default function IOSSettingsPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                borderBottom: '1px solid #2A2A2E',
               }}>
                 <span style={{ fontSize: '15px', color: '#71717A' }}>Next billing</span>
                 <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-billing-date">
                   {formatDate(subscription?.billingDate)}
                 </span>
               </div>
-              <button
-                onClick={() => { triggerHaptic('medium'); setShowCancelModal(true); }}
-                data-testid="button-cancel-subscription"
-                style={{
-                  width: '100%',
-                  background: 'transparent',
-                  border: 'none',
-                  padding: '16px 20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  borderTop: '1px solid #2A2A2E',
-                }}
-              >
-                <span style={{ fontSize: '15px', color: '#EF4444' }}>Cancel Subscription</span>
-              </button>
             </>
           )}
 
@@ -561,6 +520,27 @@ export default function IOSSettingsPage() {
                 </span>
               </div>
             </>
+          )}
+
+          {/* UNIVERSAL CANCEL BUTTON - Always visible */}
+          {!isLoadingSubscription && subscription?.type && subscription?.type !== 'none' && (
+            <button
+              onClick={handleCancelButtonClick}
+              data-testid="button-cancel-subscription"
+              style={{
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                borderTop: '1px solid #2A2A2E',
+              }}
+            >
+              <span style={{ fontSize: '15px', color: '#EF4444' }}>Cancel Subscription</span>
+            </button>
           )}
 
         </div>
@@ -1102,7 +1082,7 @@ export default function IOSSettingsPage() {
         </div>
       )}
 
-      {/* Cancel Subscription Confirmation Modal */}
+      {/* Cancel Subscription Modal - Handles all subscription types */}
       {showCancelModal && (
         <div 
           style={{
@@ -1131,60 +1111,143 @@ export default function IOSSettingsPage() {
             }}
             onClick={e => e.stopPropagation()}
           >
-            <h3 style={{ 
-              fontSize: '18px', 
-              fontWeight: 600, 
-              marginBottom: '12px',
-              color: '#FFFFFF'
-            }}>
-              Cancel Subscription?
-            </h3>
-            <p style={{ 
-              fontSize: '14px', 
-              color: '#A1A1AA', 
-              lineHeight: 1.5,
-              marginBottom: '24px'
-            }}>
-              Are you sure you want to cancel? You'll retain access until {formatDate(subscription?.billingDate)}.
-            </p>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={() => setShowCancelModal(false)}
-                data-testid="button-keep-subscription"
-                style={{
-                  flex: 1,
-                  padding: '14px',
-                  background: '#8B5CF6',
-                  border: 'none',
-                  borderRadius: '12px',
-                  color: '#FFFFFF',
-                  fontSize: '15px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Keep Subscription
-              </button>
-              <button
-                onClick={() => cancelSubscription.mutate()}
-                disabled={cancelSubscription.isPending}
-                data-testid="button-confirm-cancel-subscription"
-                style={{
-                  flex: 1,
-                  padding: '14px',
-                  background: '#2A2A2E',
-                  border: 'none',
-                  borderRadius: '12px',
-                  color: '#FFFFFF',
-                  fontSize: '15px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  opacity: cancelSubscription.isPending ? 0.5 : 1,
-                }}
-              >
-                {cancelSubscription.isPending ? 'Cancelling...' : 'Yes, Cancel'}
-              </button>
-            </div>
+            {/* LIFETIME MEMBER - Info message */}
+            {cancelModalMode === 'lifetime' && (
+              <>
+                <h3 style={{ 
+                  fontSize: '18px', 
+                  fontWeight: 600, 
+                  marginBottom: '12px',
+                  color: '#FFFFFF'
+                }}>
+                  Lifetime Membership
+                </h3>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#A1A1AA', 
+                  lineHeight: 1.5,
+                  marginBottom: '24px'
+                }}>
+                  You have a lifetime membership. There's nothing to cancel.
+                </p>
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  data-testid="button-ok-lifetime"
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    background: '#8B5CF6',
+                    border: 'none',
+                    borderRadius: '12px',
+                    color: '#FFFFFF',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  OK
+                </button>
+              </>
+            )}
+
+            {/* ALREADY CANCELLED - Info message */}
+            {cancelModalMode === 'already_cancelled' && (
+              <>
+                <h3 style={{ 
+                  fontSize: '18px', 
+                  fontWeight: 600, 
+                  marginBottom: '12px',
+                  color: '#FFFFFF'
+                }}>
+                  Already Cancelled
+                </h3>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#A1A1AA', 
+                  lineHeight: 1.5,
+                  marginBottom: '24px'
+                }}>
+                  Your subscription is already cancelled. You have access until {formatDate(subscription?.billingDate)}.
+                </p>
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  data-testid="button-ok-cancelled"
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    background: '#8B5CF6',
+                    border: 'none',
+                    borderRadius: '12px',
+                    color: '#FFFFFF',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  OK
+                </button>
+              </>
+            )}
+
+            {/* TRIAL / PAYING - Confirmation modal */}
+            {cancelModalMode === 'confirm' && (
+              <>
+                <h3 style={{ 
+                  fontSize: '18px', 
+                  fontWeight: 600, 
+                  marginBottom: '12px',
+                  color: '#FFFFFF'
+                }}>
+                  Cancel Subscription?
+                </h3>
+                <p style={{ 
+                  fontSize: '14px', 
+                  color: '#A1A1AA', 
+                  lineHeight: 1.5,
+                  marginBottom: '24px'
+                }}>
+                  Are you sure? You'll keep access until {formatDate(subscription?.trialEnd || subscription?.billingDate)}.
+                </p>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    onClick={() => setShowCancelModal(false)}
+                    data-testid="button-keep-subscription"
+                    style={{
+                      flex: 1,
+                      padding: '14px',
+                      background: '#8B5CF6',
+                      border: 'none',
+                      borderRadius: '12px',
+                      color: '#FFFFFF',
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Keep Subscription
+                  </button>
+                  <button
+                    onClick={() => cancelSubscription.mutate()}
+                    disabled={cancelSubscription.isPending}
+                    data-testid="button-confirm-cancel-subscription"
+                    style={{
+                      flex: 1,
+                      padding: '14px',
+                      background: '#2A2A2E',
+                      border: 'none',
+                      borderRadius: '12px',
+                      color: '#FFFFFF',
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      opacity: cancelSubscription.isPending ? 0.5 : 1,
+                    }}
+                  >
+                    {cancelSubscription.isPending ? 'Cancelling...' : 'Yes, Cancel'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
