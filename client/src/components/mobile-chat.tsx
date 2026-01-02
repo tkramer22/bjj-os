@@ -67,8 +67,10 @@ export function MobileChat() {
     const showListener = Keyboard.addListener('keyboardWillShow', (info) => {
       console.log('[KEYBOARD] keyboardWillShow fired, height:', info.keyboardHeight);
       setKeyboardHeight(info.keyboardHeight);
-      // Scroll to bottom when keyboard appears
-      setTimeout(() => scrollToBottom(true), 100);
+      // Scroll to bottom when keyboard appears - multiple attempts for reliability
+      setTimeout(() => scrollToBottom(true), 50);
+      setTimeout(() => scrollToBottom(true), 150);
+      setTimeout(() => scrollToBottom(true), 300);
     });
 
     const hideListener = Keyboard.addListener('keyboardWillHide', () => {
@@ -81,6 +83,16 @@ export function MobileChat() {
       hideListener.then(l => l.remove());
     };
   }, []);
+
+  // Scroll to bottom whenever keyboard height changes
+  useEffect(() => {
+    if (keyboardHeight > 0) {
+      console.log('[KEYBOARD] Height changed, scrolling to bottom:', keyboardHeight);
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+  }, [keyboardHeight]);
 
   // Get authenticated user from API
   const { data: currentUser, isLoading: isLoadingUser } = useQuery<AuthUser>({
@@ -619,14 +631,15 @@ What are you working on right now?`,
         className="mobile-chat-input-container mobile-safe-area-bottom"
         style={{
           position: 'fixed',
-          bottom: keyboardHeight > 0 ? keyboardHeight : 80,
+          bottom: 0,
           left: 0,
           right: 0,
-          zIndex: 9998,
+          zIndex: 9999,
           background: '#0A0A0B',
           borderTop: '1px solid var(--mobile-border)',
-          paddingBottom: keyboardHeight > 0 ? 0 : 'env(safe-area-inset-bottom, 0px)',
-          transition: 'bottom 0.25s ease-out',
+          paddingBottom: keyboardHeight > 0 ? '12px' : 'calc(12px + env(safe-area-inset-bottom, 0px))',
+          transform: keyboardHeight > 0 ? `translateY(-${keyboardHeight}px)` : 'translateY(-80px)',
+          transition: 'transform 0.25s ease-out',
         }}
       >
         <div style={{

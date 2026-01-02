@@ -1,0 +1,86 @@
+I see - the input field is still hidden. The fix didn’t push it up enough. Let’s be more aggressive.
+
+-----
+
+```
+KEYBOARD FIX - INPUT STILL HIDDEN - NEEDS MORE AGGRESSIVE FIX
+
+═══════════════════════════════════════════════════════════════════════════════
+THE PROBLEM
+═══════════════════════════════════════════════════════════════════════════════
+
+The chat input is STILL behind the keyboard. User cannot see where they type.
+
+The previous fix hid the bottom nav but didn't properly reposition the input.
+
+═══════════════════════════════════════════════════════════════════════════════
+MORE AGGRESSIVE FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+The input container needs to be FIXED positioned at the bottom, and move UP 
+by the exact keyboard height when keyboard opens.
+
+.chat-input-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: #1a1a1a; /* match app background */
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  transition: transform 0.25s ease-out;
+}
+
+When keyboard opens, apply transform:
+
+const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+Keyboard.addListener('keyboardWillShow', (info) => {
+  setKeyboardHeight(info.keyboardHeight);
+});
+
+Keyboard.addListener('keyboardWillHide', () => {
+  setKeyboardHeight(0);
+});
+
+In JSX:
+<div 
+  className="chat-input-container"
+  style={{ 
+    transform: keyboardHeight > 0 ? `translateY(-${keyboardHeight}px)` : 'translateY(0)'
+  }}
+>
+  <input placeholder="Ask Professor OS..." ... />
+</div>
+
+═══════════════════════════════════════════════════════════════════════════════
+ALSO IMPORTANT
+═══════════════════════════════════════════════════════════════════════════════
+
+The chat messages container needs bottom padding so messages don't get hidden 
+behind the fixed input:
+
+.chat-messages {
+  padding-bottom: 100px; /* height of input container + buffer */
+}
+
+When keyboard opens, scroll to bottom so latest messages are visible:
+
+useEffect(() => {
+  if (keyboardHeight > 0) {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }
+}, [keyboardHeight]);
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFY ON DEVICE
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Open chat
+2. Tap input field
+3. Keyboard opens
+4. Input field should be VISIBLE directly above keyboard
+5. Can see what you're typing
+6. Messages scroll up so you can see recent messages too
+```
