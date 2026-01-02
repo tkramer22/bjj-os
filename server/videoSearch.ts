@@ -800,34 +800,61 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // STEP 3: MANDATORY TECHNIQUE TERM MATCHING
+    // STEP 3: MANDATORY TECHNIQUE TERM MATCHING - SEARCH ALL GEMINI FIELDS
     // ═══════════════════════════════════════════════════════════════════════════
-    // FIX: When user asks for "guillotine videos", the video MUST contain "guillotine"
-    // in at least one of: title, techniqueName, tags, OR Gemini-analyzed fields.
-    // This prevents leg lock/buggy choke videos from appearing in guillotine searches.
+    // The REAL value of Gemini analysis is finding content by what's IN the video,
+    // not just the title. A video called "Front Headlock System" should still appear
+    // for "guillotine" if Gemini found guillotine content in it.
+    // 
+    // This searches ALL fields where technique info might be stored:
+    // From aiVideoKnowledge: title, techniqueName, tags, specificTechnique, 
+    //                        problemsSolved, keyDetails, relatedTechniques
+    // From videoKnowledge (Gemini): techniqueName, positionContext, keyConcepts,
+    //                               instructorTips, commonMistakes, fullSummary,
+    //                               problemSolved, setupsFrom, chainsTo, counters
     // ═══════════════════════════════════════════════════════════════════════════
     if (intent.searchTerms.length > 0 && !intent.positionCategory) {
       // For EACH search term, create a MANDATORY match requirement
       // All terms must match (AND), but each term can match any field (OR)
       for (const term of intent.searchTerms) {
         const termMatchConditions: any[] = [
-          // Primary fields - fast, always checked
+          // ═══════════════════════════════════════════════════════════════════
+          // LEVEL 1: ai_video_knowledge fields (fast, direct lookup)
+          // ═══════════════════════════════════════════════════════════════════
           sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`,
           sql`${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`}`,
           sql`COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`}`,
-          // Also check specific_technique field
           sql`COALESCE(${aiVideoKnowledge.specificTechnique}, '') ILIKE ${`%${term}%`}`,
-          // Gemini-analyzed fields (optional, but helps find correctly tagged content)
+          // JSONB fields that might contain technique names
+          sql`COALESCE(${aiVideoKnowledge.problemsSolved}::text, '') ILIKE ${`%${term}%`}`,
+          sql`COALESCE(${aiVideoKnowledge.keyDetails}::text, '') ILIKE ${`%${term}%`}`,
+          sql`COALESCE(${aiVideoKnowledge.relatedTechniques}::text, '') ILIKE ${`%${term}%`}`,
+          
+          // ═══════════════════════════════════════════════════════════════════
+          // LEVEL 2: video_knowledge (Gemini-analyzed deep knowledge)
+          // This is WHERE THE REAL VALUE IS - Gemini extracts techniques that
+          // aren't even mentioned in the title!
+          // ═══════════════════════════════════════════════════════════════════
           exists(
             db.select({ one: sql`1` })
               .from(videoKnowledge)
               .where(and(
                 eq(videoKnowledge.videoId, aiVideoKnowledge.id),
                 or(
+                  // Core technique fields
                   sql`${videoKnowledge.techniqueName} ILIKE ${`%${term}%`}`,
-                  sql`${videoKnowledge.positionContext} ILIKE ${`%${term}%`}`,
-                  sql`array_to_string(${videoKnowledge.keyConcepts}, ' ') ILIKE ${`%${term}%`}`,
-                  sql`${videoKnowledge.fullSummary} ILIKE ${`%${term}%`}`
+                  sql`COALESCE(${videoKnowledge.positionContext}, '') ILIKE ${`%${term}%`}`,
+                  // Instructor teaching content
+                  sql`array_to_string(COALESCE(${videoKnowledge.keyConcepts}, '{}'), ' ') ILIKE ${`%${term}%`}`,
+                  sql`array_to_string(COALESCE(${videoKnowledge.instructorTips}, '{}'), ' ') ILIKE ${`%${term}%`}`,
+                  sql`array_to_string(COALESCE(${videoKnowledge.commonMistakes}, '{}'), ' ') ILIKE ${`%${term}%`}`,
+                  // Summary and problem solving
+                  sql`COALESCE(${videoKnowledge.fullSummary}, '') ILIKE ${`%${term}%`}`,
+                  sql`COALESCE(${videoKnowledge.problemSolved}, '') ILIKE ${`%${term}%`}`,
+                  // Technique chains and relationships
+                  sql`array_to_string(COALESCE(${videoKnowledge.setupsFrom}, '{}'), ' ') ILIKE ${`%${term}%`}`,
+                  sql`array_to_string(COALESCE(${videoKnowledge.chainsTo}, '{}'), ' ') ILIKE ${`%${term}%`}`,
+                  sql`array_to_string(COALESCE(${videoKnowledge.counters}, '{}'), ' ') ILIKE ${`%${term}%`}`
                 )
               ))
           )
@@ -835,7 +862,7 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
         
         // MANDATORY: Video MUST match this term in at least one field
         conditions.push(or(...termMatchConditions));
-        console.log(`[VIDEO SEARCH] 🔒 MANDATORY MATCH: "${term}" must appear in title/techniqueName/tags/Gemini fields`);
+        console.log(`[VIDEO SEARCH] 🔒 MANDATORY MATCH: "${term}" - searching ALL Gemini fields`);
       }
     }
     
@@ -913,7 +940,7 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     // ═══════════════════════════════════════════════════════════════════════════
     
     // INSTRUCTOR FALLBACK: If instructor search returned few results, lower quality threshold
-    // IMPORTANT: Retain technique filters to avoid generic compilations
+    // IMPORTANT: Retain technique filters and search ALL Gemini fields
     if (videos.length < 3 && intent.requestedInstructor) {
       console.log(`[VIDEO SEARCH] ⚠️ Only ${videos.length} results for ${intent.requestedInstructor}, lowering quality threshold`);
       
@@ -922,18 +949,42 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
         ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`)
       ];
       
-      // RETAIN technique filters - don't drop back to generic instructor compilations
+      // RETAIN technique filters - search ALL Gemini fields just like primary search
       if (intent.searchTerms.length > 0) {
         for (const term of intent.searchTerms) {
           const termMatchConditions: any[] = [
+            // aiVideoKnowledge fields
             sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`,
             sql`${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`}`,
             sql`COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`}`,
-            sql`COALESCE(${aiVideoKnowledge.specificTechnique}, '') ILIKE ${`%${term}%`}`
+            sql`COALESCE(${aiVideoKnowledge.specificTechnique}, '') ILIKE ${`%${term}%`}`,
+            sql`COALESCE(${aiVideoKnowledge.problemsSolved}::text, '') ILIKE ${`%${term}%`}`,
+            sql`COALESCE(${aiVideoKnowledge.keyDetails}::text, '') ILIKE ${`%${term}%`}`,
+            sql`COALESCE(${aiVideoKnowledge.relatedTechniques}::text, '') ILIKE ${`%${term}%`}`,
+            // videoKnowledge (Gemini) fields
+            exists(
+              db.select({ one: sql`1` })
+                .from(videoKnowledge)
+                .where(and(
+                  eq(videoKnowledge.videoId, aiVideoKnowledge.id),
+                  or(
+                    sql`${videoKnowledge.techniqueName} ILIKE ${`%${term}%`}`,
+                    sql`COALESCE(${videoKnowledge.positionContext}, '') ILIKE ${`%${term}%`}`,
+                    sql`array_to_string(COALESCE(${videoKnowledge.keyConcepts}, '{}'), ' ') ILIKE ${`%${term}%`}`,
+                    sql`array_to_string(COALESCE(${videoKnowledge.instructorTips}, '{}'), ' ') ILIKE ${`%${term}%`}`,
+                    sql`array_to_string(COALESCE(${videoKnowledge.commonMistakes}, '{}'), ' ') ILIKE ${`%${term}%`}`,
+                    sql`COALESCE(${videoKnowledge.fullSummary}, '') ILIKE ${`%${term}%`}`,
+                    sql`COALESCE(${videoKnowledge.problemSolved}, '') ILIKE ${`%${term}%`}`,
+                    sql`array_to_string(COALESCE(${videoKnowledge.setupsFrom}, '{}'), ' ') ILIKE ${`%${term}%`}`,
+                    sql`array_to_string(COALESCE(${videoKnowledge.chainsTo}, '{}'), ' ') ILIKE ${`%${term}%`}`,
+                    sql`array_to_string(COALESCE(${videoKnowledge.counters}, '{}'), ' ') ILIKE ${`%${term}%`}`
+                  )
+                ))
+            )
           ];
           fallbackConditions.push(or(...termMatchConditions));
         }
-        console.log(`[VIDEO SEARCH] Instructor fallback RETAINING technique filters: [${intent.searchTerms.join(', ')}]`);
+        console.log(`[VIDEO SEARCH] Instructor fallback searching ALL Gemini fields: [${intent.searchTerms.join(', ')}]`);
       }
       
       videos = await db.select()
