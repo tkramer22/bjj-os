@@ -420,7 +420,8 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                     )}
                   </button>
                 )}
-                <div style={{ padding: "0.75rem", display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                <div style={{ padding: "0.75rem" }}>
+                  {/* Title and instructor - full width */}
                   <div 
                     onClick={() => {
                       if (segment.video!.videoId) {
@@ -434,7 +435,7 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                         handleUnenrichedVideoClick(segment.video!);
                       }
                     }}
-                    style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                    style={{ cursor: "pointer", marginBottom: segment.video.videoId ? "0.5rem" : 0 }}
                   >
                     <p style={{ 
                       fontWeight: "600", 
@@ -444,14 +445,18 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                       display: "-webkit-box",
                       WebkitLineClamp: 2,
                       WebkitBoxOrient: "vertical",
-                      lineHeight: "1.3"
+                      lineHeight: "1.3",
+                      wordBreak: "break-word"
                     }}>
                       {decodeHTML(segment.video.title)}
                     </p>
                     <p style={{ 
                       fontSize: "0.75rem", 
                       color: "var(--mobile-text-secondary)",
-                      lineHeight: "1.4"
+                      lineHeight: "1.4",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis"
                     }}>
                       {segment.video.instructor}
                       {segment.video.videoId && ` • ${segment.video.duration}`}
@@ -466,22 +471,22 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                       )}
                     </p>
                   </div>
-                  {/* Only show buttons for enriched videos */}
+                  {/* Buttons row - below text */}
                   {segment.video.videoId && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                       <button
                         onClick={() => setAnalysisVideoId(segment.video!.id)}
                         style={{
                           background: "rgba(139, 92, 246, 0.15)",
                           border: "none",
                           borderRadius: "6px",
-                          padding: "0.25rem 0.5rem",
+                          padding: "0.35rem 0.6rem",
                           cursor: "pointer",
                           color: "#8B5CF6",
                           display: "flex",
                           alignItems: "center",
-                          gap: "3px",
-                          fontSize: "0.65rem",
+                          gap: "4px",
+                          fontSize: "0.7rem",
                           fontWeight: 500,
                         }}
                         data-testid={`button-analysis-video-${segment.video.id}`}
@@ -496,13 +501,13 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                           background: savedVideoIds.has(segment.video.id) ? "rgba(34, 197, 94, 0.15)" : "rgba(39, 39, 42, 0.5)",
                           border: "none",
                           borderRadius: "6px",
-                          padding: "0.25rem 0.5rem",
+                          padding: "0.35rem 0.6rem",
                           cursor: "pointer",
                           color: savedVideoIds.has(segment.video.id) ? "#22C55E" : "var(--mobile-text-secondary)",
                           display: "flex",
                           alignItems: "center",
-                          gap: "3px",
-                          fontSize: "0.65rem",
+                          gap: "4px",
+                          fontSize: "0.7rem",
                           fontWeight: 500,
                         }}
                         data-testid={`button-save-video-${segment.video.id}`}
@@ -524,13 +529,13 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                           background: "rgba(16, 185, 129, 0.15)",
                           border: "none",
                           borderRadius: "6px",
-                          padding: "0.25rem 0.5rem",
+                          padding: "0.35rem 0.6rem",
                           cursor: "pointer",
                           color: "#10B981",
                           display: "flex",
                           alignItems: "center",
-                          gap: "3px",
-                          fontSize: "0.65rem",
+                          gap: "4px",
+                          fontSize: "0.7rem",
                           fontWeight: 500,
                         }}
                         data-testid={`button-share-video-${segment.video.id}`}

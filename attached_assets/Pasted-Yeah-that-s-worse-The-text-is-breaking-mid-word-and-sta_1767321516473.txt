@@ -1,0 +1,95 @@
+Yeah, that’s worse. The text is breaking mid-word and stacking vertically:
+
+```
+Side
+Sma...
+Rafae
+l
+Lovat
+o Jr.
+•
+full
+```
+
+That’s unreadable. The previous truncation (“Sid… Marc…”) was better than this.
+
+-----
+
+```
+FIX VIDEO CARD TEXT - BROKEN LAYOUT
+
+═══════════════════════════════════════════════════════════════════════════════
+THE PROBLEM
+═══════════════════════════════════════════════════════════════════════════════
+
+Video card text is breaking mid-word and stacking vertically:
+
+"Side
+Sma..."
+"Rafae
+l
+Lovat
+o Jr."
+
+This is WORSE than before. Text is wrapping character-by-character.
+
+═══════════════════════════════════════════════════════════════════════════════
+THE FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+In the VideoCard component used in chat messages:
+
+OPTION A - Horizontal layout (preferred):
+- Title and instructor on TOP of the thumbnail, not beside it
+- Full width for text
+- Buttons below thumbnail
+
+OPTION B - Fix current layout:
+- Give the text column MORE width (at least 60% of card width)
+- Title: max 2 lines, then truncate with "..."
+- Instructor: single line, never truncate (instructor names are important)
+- Use CSS: word-wrap: break-word (not break-all)
+- Use CSS: white-space: normal (allow natural word wrapping)
+
+═══════════════════════════════════════════════════════════════════════════════
+CORRECT TEXT DISPLAY
+═══════════════════════════════════════════════════════════════════════════════
+
+Should look like:
+
+"Side Smash from Headquarters"  (or "Side Smash from Head..." if too long)
+"Rafael Lovato Jr."
+[Analysis] [Save] [Share]
+
+NOT:
+
+"Side
+Sma..."
+"Rafae
+l
+Lovat
+o Jr."
+
+═══════════════════════════════════════════════════════════════════════════════
+CSS FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+.video-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-wrap: break-word;
+  /* NOT word-break: break-all */
+}
+
+.video-card-instructor {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Never break instructor name mid-word */
+}
+
+Roll back whatever change caused this and implement properly.
+```
