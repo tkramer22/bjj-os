@@ -99,23 +99,23 @@ export default function PricingPage() {
           <div className="features-list">
             <div className="feature-item" data-testid="feature-coaching">
               <span className="feature-check">&#10003;</span>
-              <span>Unlimited Professor OS coaching</span>
+              <span>Unlimited Prof. OS coaching</span>
             </div>
             <div className="feature-item" data-testid="feature-videos">
               <span className="feature-check">&#10003;</span>
-              <span>Full video library (thousands of curated techniques, adding more daily)</span>
+              <span>2,700+ videos — analyzed, timestamped, searchable</span>
             </div>
-            <div className="feature-item" data-testid="feature-recommendations">
+            <div className="feature-item" data-testid="feature-library">
               <span className="feature-check">&#10003;</span>
-              <span>Personalized recommendations</span>
+              <span>Your personal video library</span>
             </div>
             <div className="feature-item" data-testid="feature-memory">
               <span className="feature-check">&#10003;</span>
               <span>Training memory that learns your game</span>
             </div>
-            <div className="feature-item" data-testid="feature-support">
+            <div className="feature-item" data-testid="feature-daily">
               <span className="feature-check">&#10003;</span>
-              <span>Priority support</span>
+              <span>New content added daily</span>
             </div>
           </div>
 

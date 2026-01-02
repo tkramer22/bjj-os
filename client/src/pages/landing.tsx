@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { SiInstagram } from "react-icons/si";
+import { ChevronDown } from "lucide-react";
 
 export default function Landing() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    // Intersection Observer for scroll fade-ins
     const sections = document.querySelectorAll('section:not(.landing-hero)');
     
     const observerOptions = {
@@ -28,35 +28,6 @@ export default function Landing() {
     sections.forEach(section => {
       observer.observe(section);
     });
-
-    // Mouse tracking for cursor glow (comparison section)
-    const comparisonSection = document.querySelector('.landing-comparison');
-    
-    if (comparisonSection) {
-      const handleMouseMove = (e: Event) => {
-        const mouseEvent = e as unknown as MouseEvent;
-        const rect = comparisonSection.getBoundingClientRect();
-        const x = ((mouseEvent.clientX - rect.left) / rect.width) * 100;
-        const y = ((mouseEvent.clientY - rect.top) / rect.height) * 100;
-        
-        (comparisonSection as HTMLElement).style.setProperty('--mouse-x', `${x}%`);
-        (comparisonSection as HTMLElement).style.setProperty('--mouse-y', `${y}%`);
-      };
-      
-      const handleMouseLeave = () => {
-        (comparisonSection as HTMLElement).style.setProperty('--mouse-x', '50%');
-        (comparisonSection as HTMLElement).style.setProperty('--mouse-y', '50%');
-      };
-      
-      comparisonSection.addEventListener('mousemove', handleMouseMove as EventListener);
-      comparisonSection.addEventListener('mouseleave', handleMouseLeave as EventListener);
-      
-      return () => {
-        observer.disconnect();
-        comparisonSection.removeEventListener('mousemove', handleMouseMove as EventListener);
-        comparisonSection.removeEventListener('mouseleave', handleMouseLeave as EventListener);
-      };
-    }
 
     return () => {
       observer.disconnect();
@@ -92,21 +63,19 @@ export default function Landing() {
         </div>
       </nav>
 
-      {/* Hero Section - ELEVATED */}
+      {/* Hero Section - Screen 1 */}
       <section className="landing-hero hero-section">
         <div className="landing-hero-content">
           <h1 className="landing-hero-headline">
-            Stop training blindly.
+            A training partner who's studied
             <br />
-            Start training with intelligence.
+            2,700+ instructionals.
           </h1>
           
-          <p className="landing-hero-paragraph">
-            Prof. OS autonomously searches and analyzes BJJ instructional content every day—finding videos buried deep in YouTube you'd never discover, rating quality, verifying instructor credentials, timestamping the exact moments that matter. The database grows continuously, learning which instruction actually works. No more 20-minute tutorials. No more sifting through beginners teaching beginners. Just the best instruction, curated and ready.
-          </p>
-          
-          <p className="landing-hero-paragraph">
-            It learns your game at every level. Beginners discover why they keep getting caught in the same submissions. Intermediates identify which techniques work for their body type and which don't. Advanced players track success rates across hundreds of positions, spot subtle patterns in their competition footage, and compare their game against population data from thousands of grapplers—insights no single coach could provide. The intelligence scales with you.
+          <p className="landing-hero-subhead">
+            You train. It remembers.
+            <br />
+            You ask. It knows.
           </p>
           
           <button 
@@ -114,107 +83,89 @@ export default function Landing() {
             onClick={() => setLocation('/pricing')}
             data-testid="button-start-trial"
           >
-            Start 7-Day Trial
+            Start 7-Day Free Trial
           </button>
           
-          <p className="landing-trust-line">
-            Used by white belts learning fundamentals to black belts preparing for Worlds
+          <p className="landing-price-note">
+            $19.99/month · Cancel anytime
           </p>
         </div>
-      </section>
-
-      {/* With/Without Comparison */}
-      <section className="landing-comparison comparison-section">
-        <div className="landing-comparison-content">
-          <div className="landing-comparison-grid">
-            <div className="landing-comparison-column landing-without-column">
-              <h3 className="landing-comparison-header">WITHOUT PROF. OS</h3>
-              <div className="landing-comparison-items">
-                <p className="landing-without-item"><span className="landing-without-indicator">—</span> Forget techniques from class by next session</p>
-                <p className="landing-without-item"><span className="landing-without-indicator">—</span> Watch random YouTube for hours hoping something sticks</p>
-                <p className="landing-without-item"><span className="landing-without-indicator">—</span> Wonder if you're actually improving</p>
-                <p className="landing-without-item"><span className="landing-without-indicator">—</span> Repeat the same mistakes for months</p>
-              </div>
-            </div>
-            
-            <div className="landing-comparison-column landing-with-column">
-              <h3 className="landing-comparison-header landing-with-header">WITH PROF. OS</h3>
-              <div className="landing-comparison-items">
-                <p className="landing-with-item"><span className="landing-with-indicator">✓</span> Remember every technique, tracked with full context</p>
-                <p className="landing-with-item"><span className="landing-with-indicator">✓</span> Get the exact video you need—saved and organized by technique and instructor</p>
-                <p className="landing-with-item"><span className="landing-with-indicator">✓</span> Know exactly what to drill next session</p>
-                <p className="landing-with-item"><span className="landing-with-indicator">✓</span> Build a complete model of your game over time</p>
-              </div>
-            </div>
-          </div>
+        
+        {/* Scroll indicator */}
+        <div className="landing-scroll-indicator">
+          <ChevronDown className="landing-scroll-icon" />
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="landing-how-it-works how-it-works-section">
-        <div className="landing-how-content">
-          <h2 className="landing-section-header">THREE STEPS TO SMARTER TRAINING</h2>
+      {/* Screen 2: The Intelligence - PRIMARY VISUAL WEIGHT */}
+      <section className="landing-intelligence intelligence-section">
+        <div className="landing-intelligence-content">
+          <h2 className="landing-section-header">NOT A SEARCH ENGINE.</h2>
           
-          <div className="landing-steps-grid">
-            <div className="landing-step step-card">
-              <div className="landing-step-number">1.</div>
-              <h3 className="landing-step-title">LOG YOUR SESSIONS</h3>
-              <p className="landing-step-subtitle">(30 seconds)</p>
-              <p className="landing-step-description">
-                Voice or text. "Drilled triangles, got swept from half guard twice."
-              </p>
+          <p className="landing-intelligence-body">
+            Prof. OS has analyzed every video—techniques, timestamps, key details.
+          </p>
+          
+          <div className="landing-conversation-snippet">
+            <p className="landing-conversation-quote">
+              "Why do I keep losing the underhook?"
+            </p>
+          </div>
+          
+          <p className="landing-intelligence-body">
+            Get breakdowns from multiple world-class coaches—each linked to the exact timestamp you need.
+          </p>
+        </div>
+      </section>
+
+      {/* Screen 3: The Library - SECONDARY VISUAL WEIGHT */}
+      <section className="landing-library library-section">
+        <div className="landing-library-content">
+          <h2 className="landing-section-header">YOUR VIDEO LIBRARY</h2>
+          
+          <p className="landing-library-body">
+            2,700+ videos searchable by technique, position, or instructor. Save what matters. Build your collection.
+          </p>
+          
+          <p className="landing-library-note">
+            Growing daily.
+          </p>
+        </div>
+      </section>
+
+      {/* Screen 4: Proof + Final CTA */}
+      <section className="landing-proof proof-section">
+        <div className="landing-proof-content">
+          <div className="landing-checklist">
+            <div className="landing-check-item">
+              <span className="landing-check-icon">✓</span>
+              <span>2,700+ videos analyzed</span>
             </div>
-            
-            <div className="landing-step step-card">
-              <div className="landing-step-number">2.</div>
-              <h3 className="landing-step-title">GET PERSONALIZED COACHING</h3>
-              <p className="landing-step-description">
-                Prof. OS analyzes your patterns, recommends what to work on, suggests specific videos.
-              </p>
+            <div className="landing-check-item">
+              <span className="landing-check-icon">✓</span>
+              <span>200+ elite instructors</span>
             </div>
-            
-            <div className="landing-step step-card">
-              <div className="landing-step-number">3.</div>
-              <h3 className="landing-step-title">WATCH IT GET SMARTER</h3>
-              <p className="landing-step-description">
-                The more you use it, the better it understands your game. Intelligence that compounds.
-              </p>
+            <div className="landing-check-item">
+              <span className="landing-check-icon">✓</span>
+              <span>New content added daily</span>
+            </div>
+            <div className="landing-check-item">
+              <span className="landing-check-icon">✓</span>
+              <span>Every session remembered</span>
+            </div>
+            <div className="landing-check-item">
+              <span className="landing-check-icon">✓</span>
+              <span>Your library, your way</span>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Video Library Callout */}
-      <section className="landing-video-library video-library-section">
-        <div className="landing-video-content">
-          <h2 className="landing-video-library-header">YOUR PERSONAL VIDEO LIBRARY</h2>
-          <p className="landing-video-description">
-            Save any video Prof. OS recommends. They're automatically organized by technique and instructor—not a messy pile of bookmarks. Curated, timestamped, ready when you need them.
-          </p>
-        </div>
-      </section>
-
-      {/* Final CTA - ELEVATED */}
-      <section className="landing-final-cta final-cta-section">
-        <div className="landing-final-content">
-          <h2 className="landing-final-headline">
-            Start your 7-day trial.
-          </h2>
-          <p className="landing-final-subheadline">
-            No commitment. Cancel anytime.
-          </p>
           
           <button 
             className="landing-cta-button cta-button"
             onClick={() => setLocation('/pricing')}
             data-testid="button-start-trial-footer"
           >
-            Start 7-Day Trial
+            Start 7-Day Free Trial
           </button>
-          
-          <p className="landing-final-footer">
-            You'll log your first session in under 60 seconds.
-          </p>
         </div>
       </section>
 
@@ -222,12 +173,11 @@ export default function Landing() {
       <footer className="landing-footer">
         <div className="landing-footer-content">
           <div className="landing-footer-links">
-            <span className="landing-footer-coming-soon">
-              Mobile App <span className="landing-coming-soon-label">(Coming Soon)</span>
-            </span>
-            <a href="mailto:support@bjjos.app" className="landing-footer-link footer-link" data-testid="link-support">support@bjjos.app</a>
             <a href="/privacy" className="landing-footer-link footer-link" data-testid="link-privacy">Privacy Policy</a>
+            <span className="landing-footer-separator">·</span>
             <a href="/terms" className="landing-footer-link footer-link" data-testid="link-terms">Terms of Service</a>
+            <span className="landing-footer-separator">·</span>
+            <a href="mailto:support@bjjos.app" className="landing-footer-link footer-link" data-testid="link-support">support@bjjos.app</a>
           </div>
           <a 
             href="https://instagram.com/bjjosapp" 
@@ -260,22 +210,18 @@ export default function Landing() {
           --blue-hover-2: #1E40AF;
           --purple-hover-2: #5B21B6;
           --green: #22C55E;
-          --green-dim: rgba(34, 197, 94, 0.1);
-          --green-glow: rgba(34, 197, 94, 0.3);
           --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
           --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
           
-          /* Typography Scale - 5 Levels */
-          --text-hero: clamp(48px, 8vw, 72px);
-          --text-section: clamp(24px, 4vw, 36px);
-          --text-subhead: clamp(16px, 2.5vw, 20px);
+          /* Typography Scale */
+          --text-hero: clamp(36px, 7vw, 56px);
+          --text-section: clamp(20px, 4vw, 28px);
+          --text-subhead: clamp(18px, 3vw, 24px);
           --text-body: clamp(16px, 2vw, 18px);
-          --text-small: clamp(12px, 1.5vw, 14px);
+          --text-small: clamp(13px, 1.5vw, 15px);
         }
 
         /* ==================== MOTION SYSTEM ==================== */
-        
-        /* Respect reduced motion preference */
         @media (prefers-reduced-motion: reduce) {
           *,
           *::before,
@@ -287,35 +233,30 @@ export default function Landing() {
           }
         }
 
-        /* Smooth scroll */
         html {
           scroll-behavior: smooth;
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
         }
 
-        /* Sections start invisible and below */
         section {
           opacity: 0;
           transform: translateY(20px);
           transition: opacity 0.6s ease, transform 0.6s ease;
         }
 
-        /* Hero is immediately visible */
         .hero-section {
           opacity: 1 !important;
           transform: translateY(0) !important;
           transition: none !important;
         }
 
-        /* Visible state (triggered by Intersection Observer) */
         section.visible {
           opacity: 1;
           transform: translateY(0);
           will-change: auto;
         }
 
-        /* Gradient animation on buttons */
         .cta-button {
           background-size: 200% 200%;
           animation: gradient-shift 8s ease infinite;
@@ -336,11 +277,9 @@ export default function Landing() {
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
           text-rendering: optimizeLegibility;
-          font-feature-settings: "liga" 1, "kern" 1;
           position: relative;
         }
 
-        /* Subtle grain texture overlay */
         .landing-page::before {
           content: '';
           position: fixed;
@@ -375,7 +314,7 @@ export default function Landing() {
         .landing-nav-content {
           max-width: 1200px;
           margin: 0 auto;
-          padding: 0 40px;
+          padding: 0 24px;
           height: 100%;
           display: flex;
           justify-content: space-between;
@@ -393,14 +332,14 @@ export default function Landing() {
         }
 
         .landing-logo-img {
-          height: 36px;
+          height: 32px;
           width: auto;
         }
 
         .landing-nav-right {
           display: flex;
           align-items: center;
-          gap: 24px;
+          gap: 16px;
         }
 
         .landing-nav-login {
@@ -412,7 +351,7 @@ export default function Landing() {
           color: var(--gray-light);
           cursor: pointer;
           transition: color 150ms ease;
-          padding: 16px;
+          padding: 12px;
           user-select: none;
         }
 
@@ -426,9 +365,9 @@ export default function Landing() {
           border-radius: 0;
           font-family: var(--font-sans);
           font-weight: 600;
-          font-size: 15px;
+          font-size: 14px;
           color: var(--white);
-          padding: 12px 24px;
+          padding: 10px 20px;
           cursor: pointer;
           transition: background 150ms ease;
           user-select: none;
@@ -445,45 +384,44 @@ export default function Landing() {
           transform: translateY(1px);
         }
 
-        /* ==================== HERO SECTION (ELEVATED) ==================== */
+        /* ==================== HERO SECTION ==================== */
         .landing-hero {
-          background: var(--black-elevated);
-          padding: calc(140px + 72px) 40px 140px;
+          background: var(--black);
+          min-height: 100vh;
+          min-height: 100dvh;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          padding: 100px 24px 60px;
           position: relative;
+          text-align: center;
         }
 
         .landing-hero-content {
-          max-width: 1200px;
+          max-width: 800px;
           margin: 0 auto;
         }
 
-        /* LEVEL 1: Hero - Largest */
         .landing-hero-headline {
           font-family: var(--font-mono);
           font-size: var(--text-hero);
           font-weight: 700;
-          line-height: 1.05;
-          letter-spacing: -0.03em;
+          line-height: 1.15;
+          letter-spacing: -0.02em;
           color: var(--white);
-          max-width: 900px;
-          margin: 0 auto 48px;
+          margin: 0 0 32px;
           user-select: text;
         }
 
-        /* LEVEL 4: Body - Comfortable reading */
-        .landing-hero-paragraph {
+        .landing-hero-subhead {
           font-family: var(--font-sans);
-          font-size: var(--text-body);
+          font-size: var(--text-subhead);
           font-weight: 400;
-          line-height: 1.75;
+          line-height: 1.6;
           color: var(--gray-light);
-          max-width: 720px;
-          margin: 0 auto 28px;
+          margin: 0 0 48px;
           user-select: text;
-        }
-
-        .landing-hero-paragraph:last-of-type {
-          margin-bottom: 72px;
         }
 
         .landing-cta-button {
@@ -498,7 +436,7 @@ export default function Landing() {
           padding: 18px 48px;
           cursor: pointer;
           transition: background 150ms ease;
-          margin: 0 auto 20px;
+          margin: 0 auto 16px;
           display: block;
           user-select: none;
           will-change: transform;
@@ -515,328 +453,198 @@ export default function Landing() {
           transform: translateY(1px);
         }
 
-        .landing-cta-button:focus-visible {
-          box-shadow: 
-            0 0 0 2px var(--black),
-            0 0 0 4px var(--blue),
-            0 0 0 6px var(--purple);
-          outline: none;
-        }
-
-        /* LEVEL 5: Small - Captions */
-        .landing-trust-line {
+        .landing-price-note {
           font-family: var(--font-sans);
           font-size: var(--text-small);
           font-weight: 400;
           color: var(--gray-medium);
           line-height: 1.5;
           text-align: center;
-          max-width: 600px;
-          margin: 0 auto;
-          user-select: text;
-        }
-
-        /* ==================== COMPARISON SECTION ==================== */
-        .landing-comparison {
-          background: var(--black);
-          padding: 120px 40px;
-          margin-top: 0;
-          position: relative;
-          overflow: hidden;
-        }
-
-        /* Cursor glow effect */
-        .landing-comparison::before {
-          content: '';
-          position: absolute;
-          width: 100%;
-          height: 100%;
-          top: 0;
-          left: 0;
-          background: radial-gradient(
-            circle 200px at var(--mouse-x, 50%) var(--mouse-y, 50%),
-            rgba(37, 99, 235, 0.03),
-            transparent 80%
-          );
-          pointer-events: none;
-          transition: opacity 0.3s ease;
-          opacity: 0;
-          z-index: 0;
-        }
-
-        .landing-comparison:hover::before {
-          opacity: 1;
-        }
-
-        .landing-comparison-content {
-          max-width: 1000px;
-          margin: 0 auto;
-          position: relative;
-          z-index: 1;
-        }
-
-        .landing-comparison-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 100px;
-          position: relative;
-        }
-
-        /* Vertical divider line (desktop only) */
-        .landing-comparison-grid::before {
-          content: '';
-          position: absolute;
-          left: 50%;
-          top: 60px;
-          bottom: 0;
-          width: 1px;
-          background: var(--gray-dark);
-          transform: translateX(-50%);
-        }
-
-        /* LEVEL 3: Sub-headlines */
-        .landing-comparison-header {
-          font-family: var(--font-mono);
-          font-size: var(--text-subhead);
-          font-weight: 700;
-          color: var(--gray-dim);
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          margin: 0 0 40px;
-        }
-
-        .landing-with-header {
-          color: var(--white);
-        }
-
-        .landing-comparison-items {
-          display: flex;
-          flex-direction: column;
-          gap: 28px;
-        }
-
-        .landing-comparison-items p {
-          font-family: var(--font-sans);
-          font-size: var(--text-body);
-          line-height: 1.6;
           margin: 0;
-          user-select: text;
-          display: flex;
-          align-items: flex-start;
-          gap: 14px;
         }
 
-        /* WITHOUT items - Dimmed but readable */
-        .landing-without-item {
-          color: var(--gray-medium);
+        /* Scroll indicator */
+        .landing-scroll-indicator {
+          position: absolute;
+          bottom: 32px;
+          left: 50%;
+          transform: translateX(-50%);
+          animation: bounce 2s infinite;
         }
 
-        .landing-without-indicator {
-          color: var(--gray-medium);
-          font-size: 16px;
-          font-weight: 400;
-          flex-shrink: 0;
-          margin-top: 2px;
+        .landing-scroll-icon {
+          width: 24px;
+          height: 24px;
+          color: var(--gray-dim);
+          opacity: 0.6;
         }
 
-        /* WITH items - Bright */
-        .landing-with-item {
-          color: var(--white);
+        @keyframes bounce {
+          0%, 20%, 50%, 80%, 100% {
+            transform: translateX(-50%) translateY(0);
+          }
+          40% {
+            transform: translateX(-50%) translateY(-8px);
+          }
+          60% {
+            transform: translateX(-50%) translateY(-4px);
+          }
         }
 
-        .landing-with-indicator {
-          color: var(--purple);
-          font-size: 16px;
-          font-weight: 700;
-          flex-shrink: 0;
-          margin-top: 1px;
-        }
-
-        /* ==================== HOW IT WORKS ==================== */
-        .landing-how-it-works {
+        /* ==================== INTELLIGENCE SECTION (Screen 2) ==================== */
+        .landing-intelligence {
           background: var(--black);
-          padding: 120px 40px;
-          margin-top: 0;
+          padding: 100px 24px;
+          min-height: 100vh;
+          min-height: 100dvh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
-        .landing-how-content {
-          max-width: 1100px;
+        .landing-intelligence-content {
+          max-width: 700px;
           margin: 0 auto;
+          text-align: center;
         }
 
-        /* LEVEL 2: Section Titles */
         .landing-section-header {
           font-family: var(--font-mono);
           font-size: var(--text-section);
           font-weight: 700;
           color: var(--white);
-          text-align: center;
-          letter-spacing: 0.04em;
-          margin: 0 0 72px;
-          user-select: text;
-        }
-
-        .landing-steps-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 48px;
-        }
-
-        .landing-step {
-          background: transparent;
-          padding: 32px 24px;
-          text-align: center;
-        }
-
-        .landing-step-number {
-          font-family: var(--font-mono);
-          font-size: 56px;
-          font-weight: 700;
-          color: var(--white);
-          line-height: 1;
-          margin-bottom: 20px;
-        }
-
-        /* LEVEL 3: Sub-headlines */
-        .landing-step-title {
-          font-family: var(--font-mono);
-          font-size: var(--text-subhead);
-          font-weight: 700;
-          color: var(--white);
+          letter-spacing: -0.01em;
+          margin: 0 0 40px;
           text-transform: uppercase;
-          letter-spacing: 0.04em;
-          line-height: 1.3;
-          margin-bottom: 8px;
-          user-select: text;
         }
 
-        /* LEVEL 5: Small */
-        .landing-step-subtitle {
-          font-family: var(--font-sans);
-          font-size: var(--text-small);
-          font-weight: 400;
-          color: var(--gray-medium);
-          margin-bottom: 20px;
-        }
-
-        /* LEVEL 4: Body */
-        .landing-step-description {
+        .landing-intelligence-body {
           font-family: var(--font-sans);
           font-size: var(--text-body);
           font-weight: 400;
-          color: var(--gray-light);
-          line-height: 1.7;
-          max-width: 280px;
-          margin: 0 auto;
-          user-select: text;
-        }
-
-        /* ==================== VIDEO LIBRARY ==================== */
-        .landing-video-library {
-          background: var(--black);
-          padding: 100px 40px;
-          margin-top: 0;
-        }
-
-        .landing-video-content {
-          max-width: 680px;
-          margin: 0 auto;
-          text-align: center;
-        }
-
-        /* LEVEL 2: Section Titles */
-        .landing-video-library-header {
-          font-family: var(--font-mono);
-          font-size: var(--text-section);
-          font-weight: 700;
-          color: var(--white);
-          letter-spacing: 0.02em;
-          margin-bottom: 28px;
-          user-select: text;
-        }
-
-        /* LEVEL 4: Body */
-        .landing-video-description {
-          font-family: var(--font-sans);
-          font-size: var(--text-body);
-          font-weight: 400;
-          color: var(--gray-light);
           line-height: 1.75;
-          user-select: text;
+          color: var(--gray-light);
+          margin: 0 0 32px;
         }
 
-        /* ==================== FINAL CTA (ELEVATED) ==================== */
-        .landing-final-cta {
+        .landing-conversation-snippet {
           background: var(--black-elevated);
-          padding: 120px 40px;
-          margin-top: 0;
-          position: relative;
+          border-left: 3px solid var(--purple);
+          padding: 24px 32px;
+          margin: 40px 0;
         }
 
-        .landing-final-content {
+        .landing-conversation-quote {
+          font-family: var(--font-sans);
+          font-size: var(--text-subhead);
+          font-weight: 400;
+          font-style: italic;
+          color: var(--white);
+          margin: 0;
+          line-height: 1.5;
+        }
+
+        /* ==================== LIBRARY SECTION (Screen 3) ==================== */
+        .landing-library {
+          background: var(--black);
+          padding: 80px 24px;
+          min-height: 60vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .landing-library-content {
           max-width: 600px;
           margin: 0 auto;
           text-align: center;
         }
 
-        .landing-final-headline {
-          font-family: var(--font-mono);
-          font-size: clamp(36px, 6vw, 52px);
-          font-weight: 700;
-          color: var(--white);
-          line-height: 1.15;
-          margin-bottom: 12px;
-          user-select: text;
+        .landing-library-body {
+          font-family: var(--font-sans);
+          font-size: var(--text-body);
+          font-weight: 400;
+          line-height: 1.7;
+          color: var(--gray-light);
+          margin: 0 0 16px;
         }
 
-        /* LEVEL 5: Small */
-        .landing-final-subheadline {
+        .landing-library-note {
           font-family: var(--font-sans);
           font-size: var(--text-small);
           font-weight: 400;
           color: var(--gray-medium);
-          line-height: 1.6;
-          margin-bottom: 56px;
-          user-select: text;
+          margin: 0;
         }
 
-        /* LEVEL 5: Small - Visible subtext */
-        .landing-final-footer {
+        /* ==================== PROOF SECTION (Screen 4) ==================== */
+        .landing-proof {
+          background: var(--black);
+          padding: 80px 24px 100px;
+          min-height: 60vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .landing-proof-content {
+          max-width: 500px;
+          margin: 0 auto;
+          text-align: center;
+        }
+
+        .landing-checklist {
+          margin-bottom: 48px;
+        }
+
+        .landing-check-item {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          gap: 16px;
           font-family: var(--font-sans);
-          font-size: var(--text-small);
-          font-weight: 400;
+          font-size: var(--text-body);
           color: var(--gray-light);
-          margin-top: 36px;
-          user-select: text;
+          padding: 12px 0;
+          text-align: left;
+        }
+
+        .landing-check-icon {
+          color: var(--green);
+          font-size: 18px;
+          font-weight: 700;
+          flex-shrink: 0;
         }
 
         /* ==================== FOOTER ==================== */
         .landing-footer {
           background: var(--black);
-          padding: 56px 24px;
+          padding: 40px 24px;
+          border-top: 1px solid var(--gray-dark);
         }
 
         .landing-footer-content {
           max-width: 1200px;
           margin: 0 auto;
-          text-align: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
         }
 
         .landing-footer-links {
           display: flex;
-          flex-direction: column;
-          gap: 24px;
-          margin-bottom: 32px;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: center;
         }
 
-        .landing-footer-link,
-        .landing-footer-coming-soon {
+        .landing-footer-link {
           font-family: var(--font-sans);
-          font-size: 15px;
-          font-weight: 400;
-          color: var(--gray-light);
+          font-size: 14px;
+          color: var(--gray-medium);
           text-decoration: none;
-          padding: 12px 0;
           transition: color 150ms ease;
         }
 
@@ -844,46 +652,25 @@ export default function Landing() {
           color: var(--white);
         }
 
-        .landing-footer-link:focus-visible {
-          box-shadow: 0 0 0 2px var(--black), 0 0 0 4px var(--blue);
-          outline: none;
-        }
-
-        .landing-coming-soon-label {
-          font-size: 12px;
-          color: var(--gray-medium);
-          font-weight: 400;
-          letter-spacing: 0.05em;
-        }
-
-        .landing-footer-copyright {
-          font-family: var(--font-sans);
-          font-size: var(--text-small);
-          color: var(--gray-medium);
-          border-top: 1px solid var(--gray-dark);
-          padding-top: 32px;
-          margin-top: 32px;
+        .landing-footer-separator {
+          color: var(--gray-dim);
         }
 
         .landing-footer-instagram {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          margin-top: 24px;
           color: var(--gray-medium);
           font-size: 20px;
-          transition: all 200ms ease;
+          transition: color 150ms ease;
         }
 
         .landing-footer-instagram:hover {
           color: var(--white);
-          transform: scale(1.1);
         }
 
-        .landing-footer-instagram:focus-visible {
-          box-shadow: 0 0 0 2px var(--black), 0 0 0 4px var(--purple);
-          outline: none;
-          border-radius: 4px;
+        .landing-footer-copyright {
+          font-family: var(--font-sans);
+          font-size: 13px;
+          color: var(--gray-dim);
+          margin: 0;
         }
 
         /* ==================== MOBILE RESPONSIVE ==================== */
@@ -892,131 +679,64 @@ export default function Landing() {
             height: 64px;
           }
 
-          .landing-nav-content {
-            padding: 0 24px;
-          }
-
           .landing-hero {
-            padding: calc(100px + 64px) 24px 100px;
+            padding: 80px 20px 50px;
+            min-height: 100vh;
+            min-height: 100dvh;
           }
 
           .landing-hero-headline {
-            margin-bottom: 36px;
-          }
-
-          .landing-hero-paragraph {
+            font-size: clamp(28px, 8vw, 40px);
             margin-bottom: 24px;
           }
 
-          .landing-hero-paragraph:last-of-type {
-            margin-bottom: 56px;
+          .landing-hero-subhead {
+            font-size: clamp(16px, 4vw, 20px);
+            margin-bottom: 40px;
           }
 
-          .landing-comparison {
-            padding: 80px 24px;
-          }
-
-          /* Hide cursor glow on mobile */
-          .landing-comparison::before {
-            display: none;
-          }
-
-          .landing-comparison-grid {
-            grid-template-columns: 1fr;
-            gap: 56px;
-          }
-
-          .landing-comparison-grid::before {
-            display: none;
-          }
-
-          .landing-without-column::after {
-            content: '';
-            display: block;
+          .landing-cta-button {
             width: 100%;
-            height: 1px;
-            background: var(--gray-dark);
-            margin-top: 48px;
+            max-width: 300px;
+            padding: 16px 32px;
           }
 
-          .landing-how-it-works {
-            padding: 80px 24px;
+          .landing-intelligence {
+            padding: 80px 20px;
+            min-height: auto;
           }
 
-          .landing-section-header {
-            margin-bottom: 56px;
+          .landing-conversation-snippet {
+            padding: 20px 24px;
+            margin: 32px 0;
           }
 
-          .landing-steps-grid {
-            grid-template-columns: 1fr;
-            gap: 56px;
+          .landing-library {
+            padding: 60px 20px;
+            min-height: auto;
           }
 
-          .landing-video-library {
-            padding: 80px 24px;
+          .landing-proof {
+            padding: 60px 20px 80px;
+            min-height: auto;
           }
 
-          .landing-final-cta {
-            padding: 80px 24px;
+          .landing-checklist {
+            text-align: left;
           }
 
-          .landing-footer {
-            padding: 48px 24px;
-          }
-
-          .landing-footer-links {
-            flex-direction: column;
-            gap: 24px;
-          }
-
-          .landing-footer-copyright {
-            border-top: 1px solid var(--gray-dark);
-            padding-top: 32px;
-            margin-top: 32px;
+          .landing-scroll-indicator {
+            bottom: 24px;
           }
         }
 
-        /* Desktop footer with bullets */
-        @media (min-width: 769px) {
-          .landing-footer-links {
-            flex-direction: row;
-            justify-content: center;
-            gap: 32px;
-            margin-bottom: 16px;
-          }
-
-          .landing-footer-link:not(:last-child)::after,
-          .landing-footer-coming-soon::after {
-            content: '•';
-            margin-left: 32px;
-            color: var(--gray-dark);
-          }
-
-          .landing-footer-copyright {
-            border-top: none;
-            padding-top: 0;
-            margin-top: 0;
-          }
-        }
-
-        /* Touch Targets (Mobile) */
+        /* Touch Targets */
         @media (max-width: 768px) {
           .landing-nav-login,
           .landing-nav-signup,
           .landing-cta-button {
             min-height: 44px;
-            min-width: 44px;
           }
-        }
-
-        /* GPU Acceleration for performance */
-        section,
-        .landing-cta-button,
-        .landing-comparison::before {
-          will-change: transform, opacity;
-          transform: translateZ(0);
-          backface-visibility: hidden;
-          perspective: 1000px;
         }
       `}</style>
     </div>
