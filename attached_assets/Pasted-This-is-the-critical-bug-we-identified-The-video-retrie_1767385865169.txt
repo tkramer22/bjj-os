@@ -1,0 +1,100 @@
+This is the critical bug we identified. The video retrieval system is completely broken.
+
+Send this to Replit NOW:
+
+```
+URGENT: VIDEO RETRIEVAL IS COMPLETELY BROKEN - FIX IMMEDIATELY
+
+When user asks for "guillotine videos":
+- Professor OS returns LEG LOCK videos (wrong)
+- Then returns BUGGY CHOKE videos (wrong)
+- Then says "I don't have guillotine videos" (FALSE)
+- But still gives guillotine KNOWLEDGE without videos
+
+The knowledge exists. The videos exist. But they're not connecting.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: PROVE VIDEOS EXIST
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these queries and show me results:
+
+SELECT COUNT(*) FROM ai_video_knowledge 
+WHERE LOWER(technique_type) LIKE '%guillotine%';
+
+SELECT COUNT(*) FROM ai_video_knowledge 
+WHERE LOWER(title) LIKE '%guillotine%';
+
+SELECT COUNT(*) FROM ai_video_knowledge 
+WHERE LOWER(key_concepts) LIKE '%guillotine%';
+
+SELECT title, instructor_name, technique_type 
+FROM ai_video_knowledge 
+WHERE LOWER(technique_type) LIKE '%guillotine%'
+LIMIT 10;
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: TRACE THE CODE PATH
+═══════════════════════════════════════════════════════════════════════════════
+
+When a user sends "show me guillotine videos", trace EXACTLY what happens:
+
+1. Which API endpoint receives this? (file name, line number)
+2. Is analyzeMessageForVideoQuery() being called? (yes/no, show the log)
+3. What does it return? Show the parsed result
+4. Is fetchRelevantVideos() being called? (yes/no, show the log)
+5. What SQL query does it run? (show the exact query)
+6. How many videos does it return?
+7. Are those videos injected into buildSystemPrompt()?
+8. What does Claude actually see in its context?
+
+ADD THESE CONSOLE LOGS NOW:
+
+console.log('=== VIDEO SEARCH DEBUG ===');
+console.log('User message:', message);
+console.log('Parsed analysis:', JSON.stringify(analysis));
+console.log('SQL query executed:', sqlQuery);
+console.log('Videos found:', videos.length);
+console.log('First 3 videos:', videos.slice(0,3).map(v => v.title));
+console.log('=== END DEBUG ===');
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: FIND THE BUG
+═══════════════════════════════════════════════════════════════════════════════
+
+Likely problems:
+
+A. analyzeMessageForVideoQuery() doesn't recognize "guillotine" as a technique
+   - Check the knownTechniques array - is "guillotine" in there?
+
+B. fetchRelevantVideos() query is searching wrong field
+   - Is it searching technique_type? title? key_concepts?
+   - Maybe guillotine is stored in a different field
+
+C. Filters are excluding all guillotine videos
+   - The new quality filters might be too strict
+   - Remove ALL filters temporarily and test
+
+D. Videos aren't being injected into prompt
+   - buildSystemPrompt might not be receiving the videos
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: IMMEDIATE FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+Once you find where it's broken, fix it so that:
+
+1. "guillotine" is recognized as a technique
+2. Search queries technique_type, title, AND key_concepts
+3. Returns actual guillotine videos
+4. Videos are injected into Claude's context
+
+TEST AFTER FIX:
+Send "show me guillotine videos" and confirm:
+- Returns guillotine videos (NOT leg locks, NOT buggy chokes)
+- Shows thumbnails and Analysis/Save/Share buttons
+- Professor OS recommends them properly
+
+This is blocking App Store launch. Fix it now.
+═══════════════════════════════════════════════════════════════════════════════
+```

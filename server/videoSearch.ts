@@ -548,11 +548,28 @@ export function extractSearchIntent(message: string): {
     'overhook', 'whizzer'
   ];
   
-  const searchTerms: string[] = [];
+  const rawSearchTerms: string[] = [];
   for (const technique of techniquePatterns) {
     if (lowerMessage.includes(technique)) {
-      searchTerms.push(technique);
+      rawSearchTerms.push(technique);
     }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TERM NORMALIZATION: Deduplicate overlapping phrases
+  // If "triangle" and "triangle choke" both match, keep only "triangle choke" 
+  // This prevents over-constraining AND conditions
+  // ═══════════════════════════════════════════════════════════════════════════
+  const searchTerms = rawSearchTerms.filter(term => {
+    // Check if this term is a substring of any other term
+    const isSubstringOfAnother = rawSearchTerms.some(otherTerm => 
+      otherTerm !== term && otherTerm.includes(term)
+    );
+    return !isSubstringOfAnother;
+  });
+  
+  if (rawSearchTerms.length !== searchTerms.length) {
+    console.log(`[TERM NORMALIZATION] Deduplicated: [${rawSearchTerms.join(', ')}] → [${searchTerms.join(', ')}]`);
   }
   
   if (searchTerms.length === 0) {
@@ -574,6 +591,14 @@ export function extractSearchIntent(message: string): {
 export async function searchVideos(params: VideoSearchParams): Promise<VideoSearchResult> {
   const { userMessage, userId, conversationContext } = params;
   const intent = extractSearchIntent(userMessage);
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DEBUG: VIDEO SEARCH TRACE - Added to diagnose wrong video returns
+  // ═══════════════════════════════════════════════════════════════════════════
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('[VIDEO SEARCH DEBUG] User message:', userMessage);
+  console.log('[VIDEO SEARCH DEBUG] Parsed intent:', JSON.stringify(intent, null, 2));
+  console.log('═══════════════════════════════════════════════════════════════');
   
   // ═══════════════════════════════════════════════════════════════════════════
   // FOLLOW-UP REFERENCE DETECTION
@@ -638,18 +663,12 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     conditions.push(sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`);
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // CRITICAL: ONLY RETURN FULLY ANALYZED VIDEOS
-    // Videos must have Gemini-extracted knowledge (videoKnowledge records) to be recommended
-    // This ensures recommendations are accurate and have actual technique data
+    // NOTE: Removed mandatory videoKnowledge filter that was excluding all unanalyzed videos
+    // Previously this required Gemini-analyzed knowledge records, but this was blocking
+    // valid guillotine/technique searches when videoKnowledge table was empty or sparse.
+    // The title/tag/techniqueName search is sufficient for finding relevant videos.
     // ═══════════════════════════════════════════════════════════════════════════
-    conditions.push(
-      exists(
-        db.select({ one: sql`1` })
-          .from(videoKnowledge)
-          .where(eq(videoKnowledge.videoId, aiVideoKnowledge.id))
-      )
-    );
-    console.log(`[VIDEO SEARCH] ✅ Filtering for FULLY ANALYZED videos only (with Gemini knowledge)`);
+    console.log(`[VIDEO SEARCH] ✅ Searching ALL qualifying videos (Gemini analysis not required)`);
     
     // ═══════════════════════════════════════════════════════════════════════════
     // STEP 0: INSTRUCTOR FILTER (HIGHEST PRIORITY)
@@ -752,10 +771,20 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
           break;
           
         case 'attack':
-          // For attacks: ONLY add technique_type filter if NO position is specified
-          // This prevents "triangle from closed guard" from returning all "attack" type videos
-          if (!intent.positionCategory) {
+          // ═══════════════════════════════════════════════════════════════════════════
+          // FIX: For specific technique searches (guillotine, triangle, etc.), DON'T add
+          // the restrictive technique_type='attack' filter. Let the searchTerms handle it.
+          // This fixes the bug where "guillotine videos" returned leg locks because
+          // guillotine videos might be stored as technique_type='submission' or 'choke'
+          // ═══════════════════════════════════════════════════════════════════════════
+          // ONLY add technique_type filter if:
+          // 1. NO position is specified AND
+          // 2. NO specific search terms were found (generic "attack" request)
+          if (!intent.positionCategory && intent.searchTerms.length === 0) {
             conditions.push(eq(aiVideoKnowledge.techniqueType, 'attack'));
+            console.log(`[VIDEO SEARCH] 📌 Generic attack filter applied (no specific technique)`);
+          } else if (intent.searchTerms.length > 0) {
+            console.log(`[VIDEO SEARCH] 📌 Specific technique search: [${intent.searchTerms.join(', ')}] - skipping technique_type filter`);
           }
           break;
           
@@ -771,21 +800,24 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // STEP 3: SEARCH TERMS (Direct keyword matching in title/tags/technique + GEMINI FIELDS)
+    // STEP 3: MANDATORY TECHNIQUE TERM MATCHING
     // ═══════════════════════════════════════════════════════════════════════════
-    // Now searches BOTH aiVideoKnowledge fields AND videoKnowledge Gemini-analyzed fields
-    // This finds videos where Gemini identified content, even if title doesn't mention it
+    // FIX: When user asks for "guillotine videos", the video MUST contain "guillotine"
+    // in at least one of: title, techniqueName, tags, OR Gemini-analyzed fields.
+    // This prevents leg lock/buggy choke videos from appearing in guillotine searches.
+    // ═══════════════════════════════════════════════════════════════════════════
     if (intent.searchTerms.length > 0 && !intent.positionCategory) {
-      const searchConditions: any[] = [];
+      // For EACH search term, create a MANDATORY match requirement
+      // All terms must match (AND), but each term can match any field (OR)
       for (const term of intent.searchTerms) {
-        // Original fields from aiVideoKnowledge
-        searchConditions.push(sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`);
-        searchConditions.push(sql`COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`}`);
-        searchConditions.push(sql`${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`}`);
-        
-        // NEW: Search Gemini-analyzed fields in videoKnowledge table
-        // This catches videos where Gemini identified the technique even if title is generic
-        searchConditions.push(
+        const termMatchConditions: any[] = [
+          // Primary fields - fast, always checked
+          sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`,
+          sql`${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`}`,
+          sql`COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`}`,
+          // Also check specific_technique field
+          sql`COALESCE(${aiVideoKnowledge.specificTechnique}, '') ILIKE ${`%${term}%`}`,
+          // Gemini-analyzed fields (optional, but helps find correctly tagged content)
           exists(
             db.select({ one: sql`1` })
               .from(videoKnowledge)
@@ -795,17 +827,16 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
                   sql`${videoKnowledge.techniqueName} ILIKE ${`%${term}%`}`,
                   sql`${videoKnowledge.positionContext} ILIKE ${`%${term}%`}`,
                   sql`array_to_string(${videoKnowledge.keyConcepts}, ' ') ILIKE ${`%${term}%`}`,
-                  sql`${videoKnowledge.fullSummary} ILIKE ${`%${term}%`}`,
-                  sql`${videoKnowledge.problemSolved} ILIKE ${`%${term}%`}`
+                  sql`${videoKnowledge.fullSummary} ILIKE ${`%${term}%`}`
                 )
               ))
           )
-        );
+        ];
+        
+        // MANDATORY: Video MUST match this term in at least one field
+        conditions.push(or(...termMatchConditions));
+        console.log(`[VIDEO SEARCH] 🔒 MANDATORY MATCH: "${term}" must appear in title/techniqueName/tags/Gemini fields`);
       }
-      if (searchConditions.length > 0) {
-        conditions.push(or(...searchConditions));
-      }
-      console.log(`[VIDEO SEARCH] 🔍 Searching Gemini fields for: [${intent.searchTerms.join(', ')}]`);
     }
     
     // Gi/Nogi preference
@@ -882,41 +913,45 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     // ═══════════════════════════════════════════════════════════════════════════
     
     // INSTRUCTOR FALLBACK: If instructor search returned few results, lower quality threshold
-    // Still only return analyzed videos (with videoKnowledge records)
+    // IMPORTANT: Retain technique filters to avoid generic compilations
     if (videos.length < 3 && intent.requestedInstructor) {
       console.log(`[VIDEO SEARCH] ⚠️ Only ${videos.length} results for ${intent.requestedInstructor}, lowering quality threshold`);
       
+      const fallbackConditions: any[] = [
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`,
+        ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`)
+      ];
+      
+      // RETAIN technique filters - don't drop back to generic instructor compilations
+      if (intent.searchTerms.length > 0) {
+        for (const term of intent.searchTerms) {
+          const termMatchConditions: any[] = [
+            sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`,
+            sql`${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`}`,
+            sql`COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`}`,
+            sql`COALESCE(${aiVideoKnowledge.specificTechnique}, '') ILIKE ${`%${term}%`}`
+          ];
+          fallbackConditions.push(or(...termMatchConditions));
+        }
+        console.log(`[VIDEO SEARCH] Instructor fallback RETAINING technique filters: [${intent.searchTerms.join(', ')}]`);
+      }
+      
       videos = await db.select()
         .from(aiVideoKnowledge)
-        .where(and(
-          sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`,
-          ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`),
-          exists(
-            db.select({ one: sql`1` })
-              .from(videoKnowledge)
-              .where(eq(videoKnowledge.videoId, aiVideoKnowledge.id))
-          )
-        ))
+        .where(and(...fallbackConditions))
         .orderBy(desc(aiVideoKnowledge.qualityScore))
         .limit(50);
         
-      console.log(`[VIDEO SEARCH] Instructor fallback search returned ${videos.length} ANALYZED videos`);
+      console.log(`[VIDEO SEARCH] Instructor fallback search returned ${videos.length} videos`);
     }
     
     // POSITION FALLBACK: Broaden within position category
-    // Still only return analyzed videos (with videoKnowledge records)
     if (videos.length < 3 && intent.positionCategory && !intent.requestedInstructor) {
       console.log(`[VIDEO SEARCH] ⚠️ Only ${videos.length} results, broadening WITHIN position: ${intent.positionCategory}`);
       
       // Keep position locked, but remove intent/technique restrictions
       const fallbackConditions: any[] = [
-        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
-        // CRITICAL: Only analyzed videos
-        exists(
-          db.select({ one: sql`1` })
-            .from(videoKnowledge)
-            .where(eq(videoKnowledge.videoId, aiVideoKnowledge.id))
-        )
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`
       ];
       
       // Position variations (same as above)
@@ -939,7 +974,7 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
         .orderBy(desc(aiVideoKnowledge.qualityScore))
         .limit(50);
         
-      console.log(`[VIDEO SEARCH] Fallback search returned ${videos.length} ANALYZED videos`);
+      console.log(`[VIDEO SEARCH] Fallback search returned ${videos.length} videos`);
     }
     
     // Session focus boosting (keeps position-filtered results, just re-ranks)
@@ -986,6 +1021,17 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
       .where(conditions.length > 0 ? and(...conditions) : undefined);
     
     const totalMatches = Number(countResult[0]?.count) || 0;
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DEBUG: Final results trace
+    // ═══════════════════════════════════════════════════════════════════════════
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log(`[VIDEO SEARCH DEBUG] FINAL RESULTS: ${videos.length} videos, ${totalMatches} total matches`);
+    console.log('[VIDEO SEARCH DEBUG] First 5 videos:');
+    videos.slice(0, 5).forEach((v, i) => {
+      console.log(`  ${i + 1}. "${v.title}" by ${v.instructorName} (technique_type: ${v.techniqueType}, quality: ${v.qualityScore})`);
+    });
+    console.log('═══════════════════════════════════════════════════════════════');
     
     return {
       videos: videos.slice(0, 50),
