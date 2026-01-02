@@ -9,14 +9,21 @@ export interface ShareOptions {
 }
 
 export async function shareContent(options: ShareOptions): Promise<boolean> {
+  console.log('=== SHARE ATTEMPT ===');
+  console.log('Platform:', Capacitor.getPlatform());
+  console.log('Is Native:', Capacitor.isNativePlatform());
+  console.log('Options:', JSON.stringify(options, null, 2));
+  
   try {
     if (Capacitor.isNativePlatform()) {
-      await Share.share({
+      console.log('Calling Share.share() for native platform...');
+      const result = await Share.share({
         title: options.title,
         text: options.text,
         url: options.url,
         dialogTitle: options.dialogTitle || 'Share',
       });
+      console.log('=== SHARE SUCCESS ===', result);
       return true;
     } else {
       if (navigator.share) {
@@ -35,6 +42,11 @@ export async function shareContent(options: ShareOptions): Promise<boolean> {
       }
     }
   } catch (error: any) {
+    console.log('=== SHARE ERROR ===');
+    console.log('Error name:', error?.name);
+    console.log('Error message:', error?.message);
+    console.log('Full error:', error);
+    
     // User cancelled - don't treat as error (iOS returns 'ERR_CANCELED' or 'cancel')
     const errorMessage = error?.message?.toLowerCase() || '';
     const errorName = error?.name?.toLowerCase() || '';
@@ -42,14 +54,20 @@ export async function shareContent(options: ShareOptions): Promise<boolean> {
         errorMessage.includes('cancel') || 
         errorMessage.includes('abort') ||
         errorMessage.includes('dismiss')) {
+      console.log('User cancelled share - not an error');
       return false;
     }
-    console.warn('Share failed:', error);
+    console.warn('Share failed unexpectedly:', error);
     return false;
   }
 }
 
 export async function shareVideo(title: string, instructor: string, videoId: string): Promise<boolean> {
+  console.log('=== SHARE VIDEO CALLED ===');
+  console.log('Title:', title);
+  console.log('Instructor:', instructor);
+  console.log('VideoId:', videoId);
+  
   // Validate videoId exists
   if (!videoId) {
     console.warn('Share failed: No video ID provided');
@@ -58,6 +76,9 @@ export async function shareVideo(title: string, instructor: string, videoId: str
   
   const url = `https://www.youtube.com/watch?v=${videoId}`;
   const text = `${title} by ${instructor}\n\n🎥 ${url}\n\nhttps://bjjos.app\n\nBJJ OS gives you a full breakdown of every video - key timestamps, instructor tips, common mistakes. No more scrubbing through 20-minute videos to find the good stuff: https://bjjos.app`;
+  
+  console.log('URL:', url);
+  console.log('Calling shareContent...');
   
   return shareContent({
     title: title || 'BJJ Technique',
