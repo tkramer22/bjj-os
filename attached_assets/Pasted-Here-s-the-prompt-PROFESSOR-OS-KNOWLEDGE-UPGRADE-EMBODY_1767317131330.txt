@@ -1,0 +1,99 @@
+Here’s the prompt:
+
+```
+PROFESSOR OS KNOWLEDGE UPGRADE - EMBODY THE GEMINI DATA
+
+═══════════════════════════════════════════════════════════════════════════════
+THE PROBLEM
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS says "I don't have guillotine videos" when we have many.
+
+Current code only searches: title, instructor_name, technique_type
+But the REAL knowledge is in Gemini-analyzed fields that aren't being queried.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: FIX THE VIDEO SEARCH QUERY
+═══════════════════════════════════════════════════════════════════════════════
+
+In fetchRelevantVideos() function, update the WHERE clause to search these Gemini fields:
+
+- techniques_covered
+- key_concepts  
+- summary
+- primary_position
+- secondary_positions
+- technique_category
+
+Example: When user asks for "guillotine", search:
+WHERE 
+  techniques_covered ILIKE '%guillotine%'
+  OR key_concepts ILIKE '%guillotine%'
+  OR summary ILIKE '%guillotine%'
+  OR technique_category ILIKE '%guillotine%'
+  OR title ILIKE '%guillotine%'
+
+This finds videos where Gemini identified guillotine content, even if the title is "Front Headlock System".
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: INJECT THE KNOWLEDGE, NOT JUST LINKS
+═══════════════════════════════════════════════════════════════════════════════
+
+In buildSystemPrompt(), change how videos are formatted.
+
+CURRENT (weak):
+"- Guillotine Tutorial by JT Torres (submission)"
+
+NEW (powerful):
+"VIDEO: Guillotine Tutorial by JT Torres
+ URL: [youtube_url]
+ 
+ KEY CONCEPTS: [key_concepts field]
+ 
+ INSTRUCTOR TIPS: [instructor_tips field]
+ 
+ COMMON MISTAKES: [common_mistakes field]
+ 
+ CHAINS TO: [chains_to field]
+ 
+ SUMMARY: [summary field]
+"
+
+This gives Claude the ACTUAL knowledge to speak from, not just titles.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: UPDATE THE SYSTEM PROMPT INSTRUCTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Add this instruction to Professor OS's system prompt:
+
+"You have deep knowledge from analyzing thousands of instructional videos. When recommending videos, don't just link them - TEACH from them. Reference specific instructor tips, key concepts, and common mistakes from the video knowledge provided. Speak as a coach who has absorbed this material, not as a search engine returning results."
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing, test with:
+
+User: "I want some guillotine videos"
+
+Professor OS should respond with something like:
+"For guillotines, JT's high elbow system is exactly what you need - he emphasizes keeping your chin buried in their shoulder to prevent the von flue counter. Here's his breakdown: [VIDEO]
+
+If you're struggling with entries during scrambles, Lachlan's snap-down timing video covers when to shoot your arm in. Common mistake he addresses: going for the grip before you've broken their posture.
+
+Which part is giving you the most trouble - the entry or the finish?"
+
+NOT:
+"I don't have guillotine-specific videos in the system right now..."
+
+═══════════════════════════════════════════════════════════════════════════════
+FILES TO MODIFY
+═══════════════════════════════════════════════════════════════════════════════
+
+1. server/routes.ts - fetchRelevantVideos() function
+2. server/routes.ts - buildSystemPrompt() function  
+3. Both functions serve /api/ai/chat/message which all platforms use
+
+DO NOT modify anything else. This is surgical.
+```

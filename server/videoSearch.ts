@@ -771,20 +771,41 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // STEP 3: SEARCH TERMS (Direct keyword matching in title/tags/technique)
+    // STEP 3: SEARCH TERMS (Direct keyword matching in title/tags/technique + GEMINI FIELDS)
     // ═══════════════════════════════════════════════════════════════════════════
-    // Only add search term conditions if we DON'T have a position + intent locked
-    // (otherwise they're redundant and can filter out good results)
+    // Now searches BOTH aiVideoKnowledge fields AND videoKnowledge Gemini-analyzed fields
+    // This finds videos where Gemini identified content, even if title doesn't mention it
     if (intent.searchTerms.length > 0 && !intent.positionCategory) {
       const searchConditions: any[] = [];
       for (const term of intent.searchTerms) {
+        // Original fields from aiVideoKnowledge
         searchConditions.push(sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`);
         searchConditions.push(sql`COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`}`);
         searchConditions.push(sql`${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`}`);
+        
+        // NEW: Search Gemini-analyzed fields in videoKnowledge table
+        // This catches videos where Gemini identified the technique even if title is generic
+        searchConditions.push(
+          exists(
+            db.select({ one: sql`1` })
+              .from(videoKnowledge)
+              .where(and(
+                eq(videoKnowledge.videoId, aiVideoKnowledge.id),
+                or(
+                  sql`${videoKnowledge.techniqueName} ILIKE ${`%${term}%`}`,
+                  sql`${videoKnowledge.positionContext} ILIKE ${`%${term}%`}`,
+                  sql`array_to_string(${videoKnowledge.keyConcepts}, ' ') ILIKE ${`%${term}%`}`,
+                  sql`${videoKnowledge.fullSummary} ILIKE ${`%${term}%`}`,
+                  sql`${videoKnowledge.problemSolved} ILIKE ${`%${term}%`}`
+                )
+              ))
+          )
+        );
       }
       if (searchConditions.length > 0) {
         conditions.push(or(...searchConditions));
       }
+      console.log(`[VIDEO SEARCH] 🔍 Searching Gemini fields for: [${intent.searchTerms.join(', ')}]`);
     }
     
     // Gi/Nogi preference

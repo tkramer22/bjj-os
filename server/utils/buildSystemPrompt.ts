@@ -100,13 +100,51 @@ export async function buildSystemPrompt(userId: string, struggleAreaBoost?: stri
   // Height is now stored as formatted string (e.g., "5'10\"" or "178 cm")
   const heightDisplay = userProfile.height || null;
 
-  // 4. FORMAT VIDEO LIBRARY FOR PROMPT
+  // 4. FETCH GEMINI KNOWLEDGE FOR VIDEOS (deep knowledge injection)
+  const videoIds = videoLibrary.map(v => v.id).filter(Boolean);
+  let videoKnowledgeMap: Map<number, any[]> = new Map();
+  
+  if (videoIds.length > 0) {
+    const knowledgeRecords = await db.select()
+      .from(videoKnowledge)
+      .where(inArray(videoKnowledge.videoId, videoIds));
+    
+    // Group knowledge by videoId
+    for (const record of knowledgeRecords) {
+      if (!videoKnowledgeMap.has(record.videoId)) {
+        videoKnowledgeMap.set(record.videoId, []);
+      }
+      videoKnowledgeMap.get(record.videoId)!.push(record);
+    }
+    console.log(`[SYSTEM PROMPT] Loaded Gemini knowledge for ${videoKnowledgeMap.size} videos`);
+  }
+
+  // 4B. FORMAT VIDEO LIBRARY WITH DEEP KNOWLEDGE
   const videoList = videoLibrary.map((v, idx) => {
-    const timestamps = v.keyTimestamps;
-    const timestampCount = timestamps && Array.isArray(timestamps) ? timestamps.length : 0;
-    const timestampStr = timestampCount > 0 ? ` | ${timestampCount} sections` : '';
-    return `${idx + 1}. ${v.techniqueName || v.title} by ${v.instructorName} (${v.techniqueType})${timestampStr}`;
-  }).join('\n');
+    const knowledge = videoKnowledgeMap.get(v.id);
+    
+    // Build rich knowledge section if available
+    let knowledgeSection = '';
+    if (knowledge && knowledge.length > 0) {
+      // Get first knowledge record (primary technique)
+      const primary = knowledge[0];
+      
+      const keyConcepts = primary.keyConcepts?.slice(0, 3).join('; ') || '';
+      const instructorTips = primary.instructorTips?.slice(0, 2).join('; ') || '';
+      const commonMistakes = primary.commonMistakes?.slice(0, 2).join('; ') || '';
+      const chainsTo = primary.chainsTo?.slice(0, 2).join(', ') || '';
+      const summary = primary.fullSummary || '';
+      
+      if (keyConcepts) knowledgeSection += `\n   KEY CONCEPTS: ${keyConcepts}`;
+      if (instructorTips) knowledgeSection += `\n   INSTRUCTOR TIPS: ${instructorTips}`;
+      if (commonMistakes) knowledgeSection += `\n   COMMON MISTAKES: ${commonMistakes}`;
+      if (chainsTo) knowledgeSection += `\n   CHAINS TO: ${chainsTo}`;
+      if (summary) knowledgeSection += `\n   SUMMARY: ${summary}`;
+    }
+    
+    return `${idx + 1}. ${v.techniqueName || v.title} by ${v.instructorName} (${v.techniqueType})
+   URL: ${v.videoUrl}${knowledgeSection}`;
+  }).join('\n\n');
 
   // 4B. FETCH VERIFIED CREDENTIALS FOR INSTRUCTORS IN VIDEO LIBRARY
   const uniqueInstructors = Array.from(new Set(videoLibrary.map(v => v.instructorName).filter(Boolean))) as string[];
@@ -333,18 +371,31 @@ When asked "how do I" or "what's the best" - show the landscape, not one answer:
 Name the approaches, name the instructors, ask which fits their style.
 
 ═══════════════════════════════════════════════════════════════════════════════
-SECTION 4: VIDEO KNOWLEDGE FIELDS (USE THESE)
+SECTION 4: VIDEO KNOWLEDGE - EMBODY IT, DON'T JUST LINK IT
 ═══════════════════════════════════════════════════════════════════════════════
 
-instructor_quote - Use verbatim: "Danaher says: 'The frame is everything.'"
-instructor_tips - Actionable advice: "Here's the key detail from Lachlan..."
-problem_solved - Match to their problem: "This is literally made for your issue"
-common_mistakes - Warn proactively: "Most people mess this up by..."
-body_type_notes - Personalize: "For stocky builds like yours, Bernardo's approach..."
-chains_to - Show progression: "Once you get this, the natural next move is..."
-gi_or_nogi - Check compatibility: "This is gi-only, won't work in no-gi"
+You have DEEP KNOWLEDGE from analyzing thousands of instructional videos. When recommending videos, DON'T just link them - TEACH from them. Reference specific instructor tips, key concepts, and common mistakes from the video knowledge provided. Speak as a coach who has ABSORBED this material, not as a search engine returning results.
 
-You WATCHED these videos. Use this like someone who studied them, not a search engine.
+USE THESE FIELDS TO TEACH:
+
+KEY CONCEPTS - Lead with the insight: "The key thing JT emphasizes is keeping your chin buried in their shoulder..."
+INSTRUCTOR TIPS - Drop actionable advice: "Lachlan's big tip here is to control the far hip before you attempt the sweep..."
+COMMON MISTAKES - Warn proactively: "Most people lose this because they go for the grip before breaking posture..."
+CHAINS TO - Show progression: "Once you hit this sweep, you flow naturally into mount or leg drag..."
+SUMMARY - Synthesize: "This video is all about the timing of when to shoot your arm in during scrambles..."
+
+EXAMPLE - EMBODIED KNOWLEDGE (GOOD):
+User: "I want guillotine videos"
+Response: "For guillotines, JT's high elbow system is exactly what you need - he emphasizes keeping your chin buried in their shoulder to prevent the von flue counter. Here's his breakdown: [VIDEO: High Elbow Guillotine System by JT Torres | START: 2:15]
+
+If you're struggling with entries during scrambles, Lachlan's snap-down timing video covers when to shoot your arm in. Common mistake he addresses: going for the grip before you've broken their posture.
+
+Which part is giving you the most trouble - the entry or the finish?"
+
+EXAMPLE - SEARCH ENGINE (BAD):
+"Here are some guillotine videos: [VIDEO 1], [VIDEO 2], [VIDEO 3]"
+
+You WATCHED these videos. You KNOW this material. Teach from it.
 
 ═══════════════════════════════════════════════════════════════════════════════
 SECTION 5: VIDEO FORMAT
