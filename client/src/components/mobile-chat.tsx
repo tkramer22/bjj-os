@@ -182,15 +182,17 @@ export function MobileChat() {
         loadChatHistory(fallbackId);
         setLoadedUserId(fallbackId);
       } else {
-        // No valid user - show welcome message directly in context
+        // No valid user - show NEW USER welcome message
         chatContext.addMessage({
           id: "0",
           role: 'assistant',
-          content: `Welcome to Professor OS!
+          content: `Hey! I'm Professor OS.
 
-I'm your personal BJJ coach, available 24/7 to help you level up your game.
+I've broken down thousands of videos from the best - Danaher, Lachlan, Gordon, Marcelo, and hundreds more. Every recommendation comes with full analysis: key details, timestamps, what to focus on. Tap "Analysis" to see my breakdown, Save videos to your library, or Share them with training partners.
 
-What would you like to work on today?`,
+Here's what makes me different: I remember everything. Every technique you're working on, every problem you mention, every win you share. The more we train together, the sharper I get.
+
+What are you working on right now?`,
           timestamp: new Date().toISOString()
         });
         setIsLoading(false);
@@ -219,26 +221,34 @@ What would you like to work on today?`,
           timestamp: new Date(msg.createdAt || msg.timestamp).toISOString()
         }));
         
-        chatContext.setMessages(contextMessages);
+        // Add RETURNING USER welcome message at the end
+        const welcomeBackMessage = {
+          id: "welcome-back-" + Date.now(),
+          role: 'assistant' as const,
+          content: `Welcome back! Ready to pick up where we left off?
+
+What's on your mind today?`,
+          timestamp: new Date().toISOString()
+        };
+        
+        chatContext.setMessages([...contextMessages, welcomeBackMessage]);
         
         if (contextMessages.length > 0) {
           setOldestMessageTimestamp(contextMessages[0].timestamp);
         }
         setHasMoreMessages(data.hasMore ?? false);
       } else {
-        // No history - show welcome
+        // No history - NEW USER welcome
         chatContext.addMessage({
           id: "welcome",
           role: 'assistant',
-          content: `Hey! I'm Professor OS, your personal BJJ coach.
+          content: `Hey! I'm Professor OS.
 
-I'm here to help you with:
-• Technique breakdowns and details
-• Training advice and game planning
-• Competition prep and strategy
-• Drilling ideas and concepts
+I've broken down thousands of videos from the best - Danaher, Lachlan, Gordon, Marcelo, and hundreds more. Every recommendation comes with full analysis: key details, timestamps, what to focus on. Tap "Analysis" to see my breakdown, Save videos to your library, or Share them with training partners.
 
-What's on your mind?`,
+Here's what makes me different: I remember everything. Every technique you're working on, every problem you mention, every win you share. The more we train together, the sharper I get.
+
+What are you working on right now?`,
           timestamp: new Date().toISOString()
         });
       }
@@ -249,10 +259,17 @@ What's on your mind?`,
       requestAnimationFrame(() => scrollToBottom(true));
     } catch (error) {
       console.error('[HISTORY] Failed to load:', error);
+      // Error loading history - show NEW USER welcome as fallback
       chatContext.addMessage({
         id: "error-welcome",
         role: 'assistant',
-        content: "Welcome! I'm Professor OS, your BJJ coach. What would you like to work on?",
+        content: `Hey! I'm Professor OS.
+
+I've broken down thousands of videos from the best - Danaher, Lachlan, Gordon, Marcelo, and hundreds more. Every recommendation comes with full analysis: key details, timestamps, what to focus on. Tap "Analysis" to see my breakdown, Save videos to your library, or Share them with training partners.
+
+Here's what makes me different: I remember everything. Every technique you're working on, every problem you mention, every win you share. The more we train together, the sharper I get.
+
+What are you working on right now?`,
         timestamp: new Date().toISOString()
       });
       chatContext.setHistoryLoaded(true);
