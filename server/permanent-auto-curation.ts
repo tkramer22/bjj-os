@@ -53,7 +53,8 @@ const TECHNIQUE_FALLBACK_SEARCHES = [
   'double leg defense'
 ];
 
-const VIDEO_THRESHOLD = 50;
+const VIDEO_THRESHOLD_PRIORITY_1 = 50;   // Priority 1: instructors with <50 videos (curate first)
+const VIDEO_THRESHOLD_PRIORITY_2 = 100;  // Priority 2: instructors with 50-100 videos 
 const INSTRUCTOR_LIMIT = 10;
 const COOLDOWN_DAYS = 30;
 const MIN_DURATION_SECONDS = 120;
@@ -100,26 +101,56 @@ interface CurationResult {
   nextScheduledRun?: string;
 }
 
-async function getUnderrepresentedInstructors(): Promise<{name: string; count: number}[]> {
+async function getUnderrepresentedInstructors(): Promise<{name: string; count: number; priority: number}[]> {
+  // SMART ROTATION: Get instructors across all priority levels
+  // Priority 1: <50 videos (fill first)
+  // Priority 2: 50-100 videos (fill second)  
+  // Priority 3: 100+ videos (always include 1-2 for fresh content)
+  
   const result = await db.execute(sql`
-    SELECT avk.instructor_name, COUNT(*)::int as video_count
-    FROM ai_video_knowledge avk
-    LEFT JOIN fully_mined_instructors fmi ON LOWER(avk.instructor_name) = LOWER(fmi.instructor_name)
-    WHERE avk.instructor_name IS NOT NULL 
-      AND avk.instructor_name != ''
-      AND avk.instructor_name NOT LIKE '%Unknown%'
-      AND avk.instructor_name NOT LIKE '%Not Identified%'
-      AND (fmi.cooldown_until IS NULL OR fmi.cooldown_until < NOW())
-    GROUP BY avk.instructor_name
-    HAVING COUNT(*) < ${VIDEO_THRESHOLD}
-    ORDER BY COUNT(*) ASC
+    WITH instructor_counts AS (
+      SELECT 
+        avk.instructor_name, 
+        COUNT(*)::int as video_count,
+        CASE 
+          WHEN COUNT(*) < ${VIDEO_THRESHOLD_PRIORITY_1} THEN 1
+          WHEN COUNT(*) < ${VIDEO_THRESHOLD_PRIORITY_2} THEN 2
+          ELSE 3
+        END as priority
+      FROM ai_video_knowledge avk
+      LEFT JOIN fully_mined_instructors fmi ON LOWER(avk.instructor_name) = LOWER(fmi.instructor_name)
+      WHERE avk.instructor_name IS NOT NULL 
+        AND avk.instructor_name != ''
+        AND avk.instructor_name NOT LIKE '%Unknown%'
+        AND avk.instructor_name NOT LIKE '%Not Identified%'
+        AND (fmi.cooldown_until IS NULL OR fmi.cooldown_until < NOW())
+      GROUP BY avk.instructor_name
+    )
+    (
+      SELECT instructor_name, video_count, priority FROM instructor_counts 
+      WHERE priority = 1 ORDER BY video_count ASC LIMIT 6
+    )
+    UNION ALL
+    (
+      SELECT instructor_name, video_count, priority FROM instructor_counts 
+      WHERE priority = 2 ORDER BY video_count ASC LIMIT 3
+    )
+    UNION ALL
+    (
+      SELECT instructor_name, video_count, priority FROM instructor_counts 
+      WHERE priority = 3 ORDER BY RANDOM() LIMIT 2
+    )
+    ORDER BY priority ASC, video_count ASC
     LIMIT ${INSTRUCTOR_LIMIT}
   `);
   
   const rows = Array.isArray(result) ? result : (result.rows || []);
+  console.log(`[AUTO-CURATION] Smart Rotation: Found ${rows.length} instructors across priority levels`);
+  
   return rows.map((r: any) => ({
     name: r.instructor_name,
-    count: parseInt(r.video_count || '0')
+    count: parseInt(r.video_count || '0'),
+    priority: parseInt(r.priority || '3')
   }));
 }
 
@@ -343,7 +374,7 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
     const instructors = await getUnderrepresentedInstructors();
     
     if (instructors.length === 0) {
-      console.log(`[AUTO-CURATION] All instructors have 50+ videos!`);
+      console.log(`[AUTO-CURATION] No eligible instructors found (database may be empty or all on cooldown)`);
       
       await db.update(curationRuns)
         .set({
@@ -352,7 +383,7 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
           videosAnalyzed: 0,
           videosAdded: 0,
           videosRejected: 0,
-          errorMessage: 'No underrepresented instructors found'
+          errorMessage: 'No eligible instructors - all may be on cooldown'
         })
         .where(eq(curationRuns.id, result.runId!));
       
@@ -361,8 +392,19 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
       return result;
     }
     
-    console.log(`\n📋 Target Instructors (< ${VIDEO_THRESHOLD} videos):`);
-    instructors.forEach(i => console.log(`   - ${i.name}: ${i.count} videos`));
+    console.log(`\n📋 Target Instructors (Smart Rotation):`);
+    const p1 = instructors.filter(i => i.priority === 1);
+    const p2 = instructors.filter(i => i.priority === 2);
+    const p3 = instructors.filter(i => i.priority === 3);
+    if (p1.length > 0) {
+      console.log(`   Priority 1 (<50 videos): ${p1.map(i => `${i.name} (${i.count})`).join(', ')}`);
+    }
+    if (p2.length > 0) {
+      console.log(`   Priority 2 (50-100 videos): ${p2.map(i => `${i.name} (${i.count})`).join(', ')}`);
+    }
+    if (p3.length > 0) {
+      console.log(`   Priority 3 (100+ videos): ${p3.map(i => `${i.name} (${i.count})`).join(', ')}`);
+    }
     
     let consecutiveEmptyInstructors = 0;
     
