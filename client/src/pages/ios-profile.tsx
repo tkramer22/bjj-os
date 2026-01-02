@@ -795,6 +795,7 @@ export default function IOSProfilePage() {
                       if (BELT_OPTIONS[selectedIndex] !== undefined) {
                         const newValue = BELT_OPTIONS[selectedIndex];
                         if (newValue !== editValue) {
+                          triggerHaptic('light');
                           setEditValue(newValue);
                         }
                       }
@@ -899,6 +900,7 @@ export default function IOSProfilePage() {
                       if (STYLE_OPTIONS[selectedIndex] !== undefined) {
                         const newValue = STYLE_OPTIONS[selectedIndex];
                         if (newValue !== editValue) {
+                          triggerHaptic('light');
                           setEditValue(newValue);
                         }
                       }
@@ -995,6 +997,7 @@ export default function IOSProfilePage() {
                         const newValue = String(weightOptions[selectedIndex]);
                         // Only update if value actually changed to prevent re-scroll
                         if (newValue !== editValue) {
+                          triggerHaptic('light');
                           setEditValue(newValue);
                         }
                       }
@@ -1090,6 +1093,7 @@ export default function IOSProfilePage() {
                         const newValue = heightOptions[selectedIndex];
                         // Only update if value actually changed to prevent re-scroll
                         if (newValue !== editValue) {
+                          triggerHaptic('light');
                           setEditValue(newValue);
                         }
                       }
