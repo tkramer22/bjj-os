@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { eq, desc, sql, inArray } from 'drizzle-orm';
+import { eq, desc, sql, inArray, exists, and } from 'drizzle-orm';
 import { bjjUsers, aiVideoKnowledge, videoKnowledge } from '../../shared/schema';
 import { getCredentialsForInstructors, buildCredentialsSection } from './verified-credentials';
 
@@ -59,7 +59,20 @@ export async function buildSystemPrompt(userId: string, struggleAreaBoost?: stri
       keyTimestamps: aiVideoKnowledge.keyTimestamps
     })
       .from(aiVideoKnowledge)
-      .where(sql`${aiVideoKnowledge.qualityScore} IS NOT NULL`)
+      .where(and(
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
+        sql`${aiVideoKnowledge.youtubeId} IS NOT NULL AND ${aiVideoKnowledge.youtubeId} != ''`,
+        sql`${aiVideoKnowledge.thumbnailUrl} IS NOT NULL AND ${aiVideoKnowledge.thumbnailUrl} != ''`,
+        sql`${aiVideoKnowledge.videoUrl} IS NOT NULL AND ${aiVideoKnowledge.videoUrl} != ''`,
+        sql`${aiVideoKnowledge.title} IS NOT NULL AND ${aiVideoKnowledge.title} != ''`,
+        sql`${aiVideoKnowledge.instructorName} IS NOT NULL AND ${aiVideoKnowledge.instructorName} != ''`,
+        sql`${aiVideoKnowledge.techniqueType} IS NOT NULL AND ${aiVideoKnowledge.techniqueType} != ''`,
+        exists(
+          db.select({ one: sql`1` })
+            .from(videoKnowledge)
+            .where(eq(videoKnowledge.videoId, aiVideoKnowledge.id))
+        )
+      ))
       .orderBy(desc(aiVideoKnowledge.qualityScore))
       .limit(100);
 

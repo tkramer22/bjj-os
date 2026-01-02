@@ -1,0 +1,87 @@
+That’s great news! The core UI/UX is working now.
+
+**Remaining issues (simple and focused):**
+
+```
+iOS FIXES - SHARE BUTTON + VIDEO FILTERING
+═══════════════════════════════════════════════════════════════════════════════
+
+ISSUE 1: SHARE BUTTON FAILING
+═══════════════════════════════════════════════════════════════════════════════
+
+Share button shows error. Debug and fix:
+
+1. Check console for the actual error when Share is tapped
+2. Verify @capacitor/share is installed:
+   npm install @capacitor/share
+   npx cap sync ios
+
+3. Fix the share handler:
+```javascript
+import { Share } from '@capacitor/share';
+
+const handleShare = async (video) => {
+  try {
+    await Share.share({
+      title: video.title || 'BJJ Technique',
+      text: `${video.title} by ${video.instructor}\n\n🎥 ${video.youtube_url || video.youtubeUrl}\n\nhttps://bjjos.app`,
+      dialogTitle: 'Share this technique'
+    });
+  } catch (error) {
+    // User cancelled - don't show error
+    if (!error.message?.includes('cancel')) {
+      console.error('Share failed:', error);
+    }
+  }
+};
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: FILTER OUT VIDEOS WITHOUT ANALYTICS
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL: Professor OS should ONLY recommend videos that have analytics data.
+Videos without analytics have no value - the whole system is built on the
+Gemini-analyzed knowledge.
+
+In ALL queries that fetch videos for Professor OS recommendations, add:
+
+WHERE thumbnail_url IS NOT NULL
+AND youtube_url IS NOT NULL  
+AND title IS NOT NULL
+AND title != ‘’
+AND instructor_name IS NOT NULL
+AND technique_type IS NOT NULL
+
+This ensures only fully-analyzed videos are recommended.
+
+Check these files for video recommendation queries:
+
+- server/routes/ai-chat-claude.ts
+- server/utils/buildSystemPrompt.ts
+- Any video search/recommendation functions
+
+Every query that feeds videos to Professor OS must have these filters.
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+□ Share button → native iOS share sheet opens
+□ All recommended videos have thumbnails
+□ All recommended videos have Analysis/Save/Share buttons
+□ No broken/unavailable videos in recommendations
+
+npm run build
+npx cap sync ios
+
+git add -A
+git commit -m “Fix share button, filter videos without analytics”
+git push origin main
+═══════════════════════════════════════════════════════════════════════════════
+
+```
+---
+
+**Ready to send?** This is focused on just the two remaining issues.​​​​​​​​​​​​​​​​
+```

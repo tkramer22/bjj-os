@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { db } from '../db';
-import { eq, desc, sql } from 'drizzle-orm';
-import { aiConversationLearning, bjjUsers, aiVideoKnowledge, professorOsDiagnostics } from '../../shared/schema';
+import { eq, desc, sql, exists, and } from 'drizzle-orm';
+import { aiConversationLearning, bjjUsers, aiVideoKnowledge, professorOsDiagnostics, videoKnowledge } from '../../shared/schema';
 import { buildSystemPrompt } from '../utils/buildSystemPrompt';
 import { loadImportantCombatNews, loadPopulationIntelligence } from '../utils/professorOSPrompt';
 import { processConversation } from '../utils/learningLoop';
@@ -481,7 +481,20 @@ export async function handleClaudeStream(req: any, res: any) {
         videoUrl: aiVideoKnowledge.videoUrl
       })
         .from(aiVideoKnowledge)
-        .where(sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`)
+        .where(and(
+          sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
+          sql`${aiVideoKnowledge.youtubeId} IS NOT NULL AND ${aiVideoKnowledge.youtubeId} != ''`,
+          sql`${aiVideoKnowledge.thumbnailUrl} IS NOT NULL AND ${aiVideoKnowledge.thumbnailUrl} != ''`,
+          sql`${aiVideoKnowledge.videoUrl} IS NOT NULL AND ${aiVideoKnowledge.videoUrl} != ''`,
+          sql`${aiVideoKnowledge.title} IS NOT NULL AND ${aiVideoKnowledge.title} != ''`,
+          sql`${aiVideoKnowledge.instructorName} IS NOT NULL AND ${aiVideoKnowledge.instructorName} != ''`,
+          sql`${aiVideoKnowledge.techniqueType} IS NOT NULL AND ${aiVideoKnowledge.techniqueType} != ''`,
+          exists(
+            db.select({ one: sql`1` })
+              .from(videoKnowledge)
+              .where(eq(videoKnowledge.videoId, aiVideoKnowledge.id))
+          )
+        ))
         .orderBy(desc(aiVideoKnowledge.qualityScore))
         .limit(100);
       

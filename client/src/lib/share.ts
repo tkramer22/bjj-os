@@ -35,7 +35,13 @@ export async function shareContent(options: ShareOptions): Promise<boolean> {
       }
     }
   } catch (error: any) {
-    if (error.name === 'AbortError') {
+    // User cancelled - don't treat as error (iOS returns 'ERR_CANCELED' or 'cancel')
+    const errorMessage = error?.message?.toLowerCase() || '';
+    const errorName = error?.name?.toLowerCase() || '';
+    if (errorName === 'aborterror' || 
+        errorMessage.includes('cancel') || 
+        errorMessage.includes('abort') ||
+        errorMessage.includes('dismiss')) {
       return false;
     }
     console.warn('Share failed:', error);
@@ -44,11 +50,17 @@ export async function shareContent(options: ShareOptions): Promise<boolean> {
 }
 
 export async function shareVideo(title: string, instructor: string, videoId: string): Promise<boolean> {
+  // Validate videoId exists
+  if (!videoId) {
+    console.warn('Share failed: No video ID provided');
+    return false;
+  }
+  
   const url = `https://www.youtube.com/watch?v=${videoId}`;
   const text = `${title} by ${instructor}\n\n🎥 ${url}\n\nhttps://bjjos.app\n\nBJJ OS gives you a full breakdown of every video - key timestamps, instructor tips, common mistakes. No more scrubbing through 20-minute videos to find the good stuff: https://bjjos.app`;
   
   return shareContent({
-    title: title,
+    title: title || 'BJJ Technique',
     text,
     dialogTitle: 'Share this technique',
   });
