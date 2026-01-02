@@ -15376,7 +15376,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         id: bjjUsers.id,
         email: bjjUsers.email,
         stripeSubscriptionId: bjjUsers.stripeSubscriptionId,
-        subscriptionTier: bjjUsers.subscriptionTier,
+        subscriptionType: bjjUsers.subscriptionType,
         subscriptionStatus: bjjUsers.subscriptionStatus,
         subscriptionEndDate: bjjUsers.subscriptionEndDate,
         referralCode: bjjUsers.referralCode,
@@ -15393,11 +15393,11 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       let subscriptionDetails: any = {
         type: 'none',
         status: user.subscriptionStatus || 'none',
-        tier: user.subscriptionTier || 'free',
+        tier: user.subscriptionType || 'free',
       };
       
       // Check for lifetime access
-      if (user.subscriptionTier === 'lifetime' || user.subscriptionStatus === 'lifetime') {
+      if (user.subscriptionType === 'lifetime' || user.subscriptionStatus === 'lifetime') {
         subscriptionDetails = {
           type: 'lifetime',
           status: 'active',
@@ -15433,7 +15433,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         }
       }
       // No active subscription
-      else if (!user.subscriptionTier || user.subscriptionTier === 'free' || user.subscriptionStatus === 'canceled') {
+      else if (!user.subscriptionType || user.subscriptionType === 'free' || user.subscriptionType === 'free_trial' || user.subscriptionStatus === 'canceled') {
         subscriptionDetails = {
           type: 'none',
           status: user.subscriptionStatus || 'none',
@@ -15459,7 +15459,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         id: bjjUsers.id,
         email: bjjUsers.email,
         stripeSubscriptionId: bjjUsers.stripeSubscriptionId,
-        subscriptionTier: bjjUsers.subscriptionTier,
+        subscriptionType: bjjUsers.subscriptionType,
       })
         .from(bjjUsers)
         .where(eq(bjjUsers.id, userId))
@@ -15470,7 +15470,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       }
       
       // Cannot cancel lifetime subscriptions
-      if (user.subscriptionTier === 'lifetime') {
+      if (user.subscriptionType === 'lifetime') {
         return res.status(400).json({ 
           success: false, 
           error: 'Lifetime memberships cannot be cancelled' 
