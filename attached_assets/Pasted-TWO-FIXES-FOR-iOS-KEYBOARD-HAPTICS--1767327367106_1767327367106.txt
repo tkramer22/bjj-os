@@ -1,0 +1,102 @@
+TWO FIXES FOR iOS - KEYBOARD + HAPTICS
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 1: KEYBOARD COVERS CHAT INPUT
+═══════════════════════════════════════════════════════════════════════════════
+
+THE PROBLEM:
+When keyboard opens in chat, it covers the text input field.
+User cannot see what they're typing.
+
+THE FIX:
+Use Capacitor Keyboard plugin to detect keyboard and adjust layout.
+
+import { Keyboard } from '@capacitor/keyboard';
+
+// In chat component, add listeners on mount:
+useEffect(() => {
+  Keyboard.addListener('keyboardWillShow', (info) => {
+    document.body.style.setProperty('--keyboard-height', `${info.keyboardHeight}px`);
+  });
+
+  Keyboard.addListener('keyboardWillHide', () => {
+    document.body.style.setProperty('--keyboard-height', '0px');
+  });
+
+  return () => {
+    Keyboard.removeAllListeners();
+  };
+}, []);
+
+// CSS for chat container:
+.chat-container {
+  padding-bottom: calc(env(safe-area-inset-bottom) + var(--keyboard-height, 0px));
+  transition: padding-bottom 0.25s ease;
+}
+
+// Also ensure input scrolls into view when focused:
+const handleInputFocus = () => {
+  setTimeout(() => {
+    inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 300);
+};
+
+EXPECTED BEHAVIOR:
+- Keyboard opens
+- Chat messages scroll up
+- Input field stays visible ABOVE the keyboard
+- User can see what they're typing
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 2: HAPTICS ON PROFILE PICKERS
+═══════════════════════════════════════════════════════════════════════════════
+
+THE PROBLEM:
+No haptic feedback when scrolling through:
+- Belt picker
+- Height picker
+- Weight picker
+- Style picker
+
+THE FIX:
+Add Haptics.impact on each picker's onChange/onValueChange handler.
+
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
+
+// For each picker onChange:
+const handleBeltChange = (newValue) => {
+  Haptics.impact({ style: ImpactStyle.Light });
+  setBelt(newValue);
+};
+
+const handleHeightChange = (newValue) => {
+  Haptics.impact({ style: ImpactStyle.Light });
+  setHeight(newValue);
+};
+
+const handleWeightChange = (newValue) => {
+  Haptics.impact({ style: ImpactStyle.Light });
+  setWeight(newValue);
+};
+
+const handleStyleChange = (newValue) => {
+  Haptics.impact({ style: ImpactStyle.Light });
+  setStyle(newValue);
+};
+
+Apply to ALL pickers in the Profile/Edit Profile screen.
+Use ImpactStyle.Light for smooth, subtle feedback on each scroll tick.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Test on physical device (haptics don't work in simulator):
+
+1. Open chat, tap input field
+   - Keyboard should appear
+   - Input field should stay visible above keyboard
+   - Can see what you're typing
+
+2. Go to Profile, scroll through any picker
+   - Each value change should give a light haptic tap

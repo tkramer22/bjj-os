@@ -7,6 +7,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
+import { triggerHaptic } from "@/lib/haptics";
 
 type OnboardingStep = "name" | "belt" | "style" | "body";
 type BeltLevel = "white" | "blue" | "purple" | "brown" | "black";
@@ -231,7 +232,7 @@ export default function OnboardingPage() {
               {(["white", "blue", "purple", "brown", "black"] as BeltLevel[]).map((belt) => (
                 <button
                   key={belt}
-                  onClick={() => setBeltLevel(belt)}
+                  onClick={() => { triggerHaptic('light'); setBeltLevel(belt); }}
                   className={`p-4 rounded-lg border-2 transition-all ${
                     beltLevel === belt
                       ? "border-[hsl(var(--bjj-primary-purple))] bg-[hsl(var(--bjj-primary-purple))]/10"
@@ -276,7 +277,7 @@ export default function OnboardingPage() {
               {(["gi", "nogi", "both"] as TrainingStyle[]).map((style) => (
                 <button
                   key={style}
-                  onClick={() => setTrainingStyle(style)}
+                  onClick={() => { triggerHaptic('light'); setTrainingStyle(style); }}
                   className={`p-4 rounded-lg border-2 transition-all ${
                     trainingStyle === style
                       ? "border-[hsl(var(--bjj-primary-purple))] bg-[hsl(var(--bjj-primary-purple))]/10"
@@ -367,7 +368,7 @@ export default function OnboardingPage() {
                   <Input
                     type="number"
                     value={heightFeet}
-                    onChange={(e) => setHeightFeet(parseInt(e.target.value) || 0)}
+                    onChange={(e) => { triggerHaptic('light'); setHeightFeet(parseInt(e.target.value) || 0); }}
                     className="w-16 bg-black/50 border-white/10 text-white text-center"
                     min={4}
                     max={7}
@@ -377,7 +378,7 @@ export default function OnboardingPage() {
                   <Input
                     type="number"
                     value={heightInches}
-                    onChange={(e) => setHeightInches(parseInt(e.target.value) || 0)}
+                    onChange={(e) => { triggerHaptic('light'); setHeightInches(parseInt(e.target.value) || 0); }}
                     className="w-16 bg-black/50 border-white/10 text-white text-center"
                     min={0}
                     max={11}
@@ -395,7 +396,7 @@ export default function OnboardingPage() {
                 <Input
                   type="number"
                   value={weight}
-                  onChange={(e) => setWeight(parseInt(e.target.value) || 0)}
+                  onChange={(e) => { triggerHaptic('light'); setWeight(parseInt(e.target.value) || 0); }}
                   className="w-24 bg-black/50 border-white/10 text-white text-center"
                   min={useMetric ? 40 : 90}
                   max={useMetric ? 200 : 400}
