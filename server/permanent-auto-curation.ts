@@ -661,7 +661,7 @@ async function sendCurationEmail(result: CurationResult): Promise<void> {
     
     const pendingGeminiResult = await db.execute(sql`
       SELECT COUNT(*)::int as cnt FROM video_watch_status 
-      WHERE processing_status = 'pending' OR processing_status IS NULL
+      WHERE processed = false OR processed IS NULL
     `);
     const pendingRows = Array.isArray(pendingGeminiResult) ? pendingGeminiResult : (pendingGeminiResult.rows || []);
     const geminiQueueSize = pendingRows[0]?.cnt || 0;
