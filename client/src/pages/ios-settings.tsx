@@ -15,10 +15,14 @@ interface UserProfile {
   id: number;
   email: string;
   name?: string;
+  displayName?: string;
   username?: string;
   beltLevel?: string;
   weight?: number | string;
+  height?: string;
   style?: string;
+  unitPreference?: string;
+  injuries?: string | string[];
   isPro?: boolean;
   isLifetime?: boolean;
   subscriptionEndDate?: string;
@@ -60,6 +64,17 @@ export default function IOSSettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [profileEdit, setProfileEdit] = useState({
+    displayName: '',
+    beltLevel: '',
+    style: '',
+    height: '',
+    weight: '',
+    unitPreference: 'imperial',
+    injuries: '',
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   
   const { data: user } = useQuery<UserProfile>({
     queryKey: ['/api/auth/me'],
@@ -137,6 +152,53 @@ export default function IOSSettingsPage() {
       triggerHaptic('success');
     },
   });
+
+  const openProfileEdit = () => {
+    triggerHaptic('light');
+    setProfileEdit({
+      displayName: user?.displayName || user?.name || '',
+      beltLevel: user?.beltLevel || '',
+      style: user?.style || '',
+      height: user?.height || '',
+      weight: user?.weight?.toString() || '',
+      unitPreference: user?.unitPreference || 'imperial',
+      injuries: typeof user?.injuries === 'string' ? user.injuries : (user?.injuries?.join(', ') || ''),
+    });
+    setShowProfileEdit(true);
+  };
+
+  const saveProfile = async () => {
+    setIsSavingProfile(true);
+    try {
+      const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
+      const response = await fetch(getApiUrl('/api/auth/profile'), {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}),
+        },
+        body: JSON.stringify({
+          displayName: profileEdit.displayName,
+          beltLevel: profileEdit.beltLevel,
+          style: profileEdit.style,
+          height: profileEdit.height,
+          weight: profileEdit.weight ? parseInt(profileEdit.weight) : null,
+          unitPreference: profileEdit.unitPreference,
+          injuries: profileEdit.injuries || null,
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to save profile');
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      setShowProfileEdit(false);
+      triggerHaptic('success');
+    } catch (error) {
+      console.error('Save profile error:', error);
+      triggerHaptic('error');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   const handleBack = () => {
     triggerHaptic('light');
@@ -434,6 +496,141 @@ export default function IOSSettingsPage() {
                   {user.email || 'Not set'}
                 </span>
               </div>
+            </div>
+          </>
+        )}
+
+        {/* Profile Section */}
+        {user && (
+          <>
+            <h2 style={{ 
+              fontSize: '13px', 
+              fontWeight: 600, 
+              color: '#71717A', 
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              marginBottom: '12px',
+              paddingLeft: '8px'
+            }}>
+              Training Profile
+            </h2>
+            <div style={{
+              background: '#1A1A1D',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              border: '1px solid #2A2A2E',
+              marginBottom: '24px',
+            }}>
+              {/* Name */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <User size={18} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Name</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-display-name">
+                  {user.displayName || user.name || 'Not set'}
+                </span>
+              </div>
+
+              {/* Belt */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Award size={18} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Belt</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#FFFFFF', textTransform: 'capitalize' }} data-testid="text-belt">
+                  {user.beltLevel || 'Not set'}
+                </span>
+              </div>
+
+              {/* Style */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <span style={{ fontSize: '15px', color: '#71717A', marginLeft: '30px' }}>Style</span>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-style">
+                  {user.style === 'gi' ? 'Gi' : user.style === 'nogi' ? 'No-Gi' : user.style === 'both' ? 'Both' : 'Not set'}
+                </span>
+              </div>
+
+              {/* Height */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <span style={{ fontSize: '15px', color: '#71717A', marginLeft: '30px' }}>Height</span>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-height">
+                  {user.height || 'Not set'}
+                </span>
+              </div>
+
+              {/* Weight */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Scale size={18} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Weight</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-weight">
+                  {user.weight ? `${user.weight} ${user.unitPreference === 'metric' ? 'kg' : 'lbs'}` : 'Not set'}
+                </span>
+              </div>
+
+              {/* Injuries (optional) */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <span style={{ fontSize: '15px', color: '#71717A', marginLeft: '30px' }}>Injuries</span>
+                <span style={{ fontSize: '15px', color: user.injuries ? '#FFFFFF' : '#71717A' }} data-testid="text-injuries">
+                  {user.injuries ? (typeof user.injuries === 'string' ? user.injuries : user.injuries.join(', ')) : 'None'}
+                </span>
+              </div>
+
+              {/* Edit Profile Button */}
+              <button
+                onClick={openProfileEdit}
+                data-testid="button-edit-profile"
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '14px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ fontSize: '15px', color: '#8B5CF6', fontWeight: 500 }}>Edit Profile</span>
+              </button>
             </div>
           </>
         )}
@@ -1016,6 +1213,257 @@ export default function IOSSettingsPage() {
                 }}
               >
                 {cancelSubscription.isPending ? 'Cancelling...' : 'Yes, Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Profile Modal */}
+      {showProfileEdit && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+            overflowY: 'auto',
+          }}
+          onClick={() => setShowProfileEdit(false)}
+          data-testid="modal-edit-profile-overlay"
+        >
+          <div 
+            style={{
+              background: '#1A1A1D',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '360px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ 
+              fontSize: '18px', 
+              fontWeight: 600, 
+              marginBottom: '20px',
+              color: '#FFFFFF'
+            }}>
+              Edit Profile
+            </h3>
+
+            {/* Name */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#71717A', marginBottom: '8px' }}>Name</label>
+              <input
+                type="text"
+                value={profileEdit.displayName}
+                onChange={(e) => setProfileEdit({ ...profileEdit, displayName: e.target.value })}
+                data-testid="input-edit-name"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  background: '#0A0A0A',
+                  border: '1px solid #2A2A2E',
+                  borderRadius: '10px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                }}
+              />
+            </div>
+
+            {/* Belt Level */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#71717A', marginBottom: '8px' }}>Belt</label>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {['white', 'blue', 'purple', 'brown', 'black'].map(belt => (
+                  <button
+                    key={belt}
+                    onClick={() => { triggerHaptic('light'); setProfileEdit({ ...profileEdit, beltLevel: belt }); }}
+                    data-testid={`button-edit-belt-${belt}`}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: profileEdit.beltLevel === belt ? '#8B5CF6' : '#2A2A2E',
+                      color: '#FFFFFF',
+                      fontSize: '14px',
+                      textTransform: 'capitalize',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {belt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Style */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#71717A', marginBottom: '8px' }}>Style</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[{ v: 'gi', l: 'Gi' }, { v: 'nogi', l: 'No-Gi' }, { v: 'both', l: 'Both' }].map(s => (
+                  <button
+                    key={s.v}
+                    onClick={() => { triggerHaptic('light'); setProfileEdit({ ...profileEdit, style: s.v }); }}
+                    data-testid={`button-edit-style-${s.v}`}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: profileEdit.style === s.v ? '#8B5CF6' : '#2A2A2E',
+                      color: '#FFFFFF',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {s.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Units Toggle */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#71717A', marginBottom: '8px' }}>Units</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[{ v: 'imperial', l: 'Imperial' }, { v: 'metric', l: 'Metric' }].map(u => (
+                  <button
+                    key={u.v}
+                    onClick={() => { triggerHaptic('light'); setProfileEdit({ ...profileEdit, unitPreference: u.v }); }}
+                    data-testid={`button-edit-units-${u.v}`}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: profileEdit.unitPreference === u.v ? '#8B5CF6' : '#2A2A2E',
+                      color: '#FFFFFF',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {u.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Height */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#71717A', marginBottom: '8px' }}>
+                Height ({profileEdit.unitPreference === 'metric' ? 'cm' : 'ft\'in"'})
+              </label>
+              <input
+                type="text"
+                value={profileEdit.height}
+                onChange={(e) => setProfileEdit({ ...profileEdit, height: e.target.value })}
+                placeholder={profileEdit.unitPreference === 'metric' ? '175' : '5\'9"'}
+                data-testid="input-edit-height"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  background: '#0A0A0A',
+                  border: '1px solid #2A2A2E',
+                  borderRadius: '10px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                }}
+              />
+            </div>
+
+            {/* Weight */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#71717A', marginBottom: '8px' }}>
+                Weight ({profileEdit.unitPreference === 'metric' ? 'kg' : 'lbs'})
+              </label>
+              <input
+                type="number"
+                value={profileEdit.weight}
+                onChange={(e) => setProfileEdit({ ...profileEdit, weight: e.target.value })}
+                placeholder={profileEdit.unitPreference === 'metric' ? '80' : '175'}
+                data-testid="input-edit-weight"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  background: '#0A0A0A',
+                  border: '1px solid #2A2A2E',
+                  borderRadius: '10px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                }}
+              />
+            </div>
+
+            {/* Injuries (optional) */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#71717A', marginBottom: '8px' }}>
+                Injuries / Limitations (optional)
+              </label>
+              <input
+                type="text"
+                value={profileEdit.injuries}
+                onChange={(e) => setProfileEdit({ ...profileEdit, injuries: e.target.value })}
+                placeholder="Any injuries Professor OS should know about?"
+                data-testid="input-edit-injuries"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  background: '#0A0A0A',
+                  border: '1px solid #2A2A2E',
+                  borderRadius: '10px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                }}
+              />
+            </div>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowProfileEdit(false)}
+                data-testid="button-cancel-edit"
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: '#2A2A2E',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveProfile}
+                disabled={isSavingProfile}
+                data-testid="button-save-profile"
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: '#8B5CF6',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  opacity: isSavingProfile ? 0.5 : 1,
+                }}
+              >
+                {isSavingProfile ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>

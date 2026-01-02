@@ -6,14 +6,11 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
-import { Check, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-type OnboardingStep = "name" | "username" | "belt" | "years" | "frequency" | "struggle" | "style";
+type OnboardingStep = "name" | "belt" | "style" | "body";
 type BeltLevel = "white" | "blue" | "purple" | "brown" | "black";
 type TrainingStyle = "gi" | "nogi" | "both";
-type YearsTraining = "<6mo" | "6mo-1yr" | "1-2yr" | "2-5yr" | "5-10yr" | "10+yr";
-type TrainingFrequency = "1-2x" | "3-4x" | "5+x";
-type StruggleArea = "guard_passing" | "guard_retention" | "takedowns" | "submissions" | "escapes" | "transitions" | "other";
 
 export default function OnboardingPage() {
   const [, setLocation] = useLocation();
@@ -21,12 +18,10 @@ export default function OnboardingPage() {
   const [step, setStep] = useState<OnboardingStep>("name");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Check if user already completed onboarding
   const { data: user } = useQuery<any>({
     queryKey: ["/api/auth/me"],
   });
 
-  // Redirect to chat if onboarding already completed
   useEffect(() => {
     if (user && user.onboardingCompleted) {
       console.log('[ONBOARDING] User already completed onboarding, redirecting to /chat');
@@ -34,92 +29,30 @@ export default function OnboardingPage() {
     }
   }, [user, setLocation]);
 
-  // Onboarding data
   const [name, setName] = useState("");
-  const [username, setUsername] = useState("");
-  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
-  const [checkingUsername, setCheckingUsername] = useState(false);
   const [beltLevel, setBeltLevel] = useState<BeltLevel | null>(null);
-  const [yearsTraining, setYearsTraining] = useState<YearsTraining | null>(null);
-  const [trainingFrequency, setTrainingFrequency] = useState<TrainingFrequency | null>(null);
-  const [struggleArea, setStruggleArea] = useState<StruggleArea | null>(null);
   const [trainingStyle, setTrainingStyle] = useState<TrainingStyle | null>(null);
+  const [heightFeet, setHeightFeet] = useState(5);
+  const [heightInches, setHeightInches] = useState(9);
+  const [heightCm, setHeightCm] = useState(175);
+  const [weight, setWeight] = useState(170);
+  const [useMetric, setUseMetric] = useState(false);
 
   const getStepNumber = () => {
     switch (step) {
       case "name": return 1;
-      case "username": return 2;
-      case "belt": return 3;
-      case "years": return 4;
-      case "frequency": return 5;
-      case "struggle": return 6;
-      case "style": return 7;
+      case "belt": return 2;
+      case "style": return 3;
+      case "body": return 4;
       default: return 1;
     }
   };
-
-  // Check username availability
-  const checkUsername = async (value: string) => {
-    if (!value || value.length < 3) {
-      setUsernameAvailable(null);
-      return;
-    }
-
-    setCheckingUsername(true);
-    try {
-      const response = await apiRequest("GET", `/api/auth/check-username?username=${encodeURIComponent(value)}`);
-      const data = await response.json();
-      setUsernameAvailable(data.available);
-    } catch {
-      setUsernameAvailable(null);
-    } finally {
-      setCheckingUsername(false);
-    }
-  };
-
-  // Debounced username check
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (username) {
-        checkUsername(username);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [username]);
 
   const handleNameSubmit = () => {
     if (!name.trim()) {
       toast({
         title: "Name Required",
         description: "Please enter your first name",
-        variant: "destructive",
-      });
-      return;
-    }
-    setStep("username");
-  };
-
-  const handleUsernameSubmit = () => {
-    if (!username.trim()) {
-      toast({
-        title: "Username Required",
-        description: "Please enter a username",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (username.length < 3) {
-      toast({
-        title: "Username Too Short",
-        description: "Username must be at least 3 characters",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!usernameAvailable) {
-      toast({
-        title: "Username Unavailable",
-        description: "This username is already taken",
         variant: "destructive",
       });
       return;
@@ -136,46 +69,10 @@ export default function OnboardingPage() {
       });
       return;
     }
-    setStep("years");
-  };
-
-  const handleYearsSubmit = () => {
-    if (!yearsTraining) {
-      toast({
-        title: "Selection Required",
-        description: "Please select how long you've been training",
-        variant: "destructive",
-      });
-      return;
-    }
-    setStep("frequency");
-  };
-
-  const handleFrequencySubmit = () => {
-    if (!trainingFrequency) {
-      toast({
-        title: "Selection Required",
-        description: "Please select how often you train",
-        variant: "destructive",
-      });
-      return;
-    }
-    setStep("struggle");
-  };
-
-  const handleStruggleSubmit = () => {
-    if (!struggleArea) {
-      toast({
-        title: "Selection Required",
-        description: "Please select what you struggle with most",
-        variant: "destructive",
-      });
-      return;
-    }
     setStep("style");
   };
 
-  const handleStyleSubmit = async () => {
+  const handleStyleSubmit = () => {
     if (!trainingStyle) {
       toast({
         title: "Selection Required",
@@ -184,37 +81,40 @@ export default function OnboardingPage() {
       });
       return;
     }
+    setStep("body");
+  };
 
+  const handleComplete = async () => {
     setIsLoading(true);
 
+    const heightString = useMetric 
+      ? `${heightCm}cm` 
+      : `${heightFeet}'${heightInches}"`;
+
     try {
-      console.log('[ONBOARDING] Submitting data:', {
+      console.log('[ONBOARDING] Submitting simplified data:', {
         displayName: name.trim(),
-        username: username.trim(),
         beltLevel,
-        yearsTrainingRange: yearsTraining,
-        trainingFrequencyText: trainingFrequency,
-        struggleAreaCategory: struggleArea,
         style: trainingStyle,
+        height: heightString,
+        weight,
+        unitPreference: useMetric ? 'metric' : 'imperial',
       });
 
       await apiRequest("PATCH", "/api/auth/profile", {
         displayName: name.trim(),
-        username: username.trim(),
         beltLevel,
-        yearsTrainingRange: yearsTraining,
-        trainingFrequencyText: trainingFrequency,
-        struggleAreaCategory: struggleArea,
         style: trainingStyle,
+        height: heightString,
+        weight,
+        unitPreference: useMetric ? 'metric' : 'imperial',
         onboardingCompleted: true,
       });
 
-      console.log('[ONBOARDING] Profile updated, invalidating cache and refetching...');
+      console.log('[ONBOARDING] Profile updated, invalidating cache...');
       
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
-      
-      console.log('[ONBOARDING] Cache refreshed, user data now has onboardingCompleted=true');
 
       toast({
         title: "Profile Complete!",
@@ -233,23 +133,10 @@ export default function OnboardingPage() {
   };
 
   const handleBack = () => {
-    if (step === "username") setStep("name");
-    else if (step === "belt") setStep("username");
-    else if (step === "years") setStep("belt");
-    else if (step === "frequency") setStep("years");
-    else if (step === "struggle") setStep("frequency");
-    else if (step === "style") setStep("struggle");
+    if (step === "belt") setStep("name");
+    else if (step === "style") setStep("belt");
+    else if (step === "body") setStep("style");
   };
-
-  const struggleOptions: { value: StruggleArea; label: string }[] = [
-    { value: "guard_passing", label: "Guard Passing" },
-    { value: "guard_retention", label: "Guard Retention" },
-    { value: "takedowns", label: "Takedowns" },
-    { value: "submissions", label: "Submissions" },
-    { value: "escapes", label: "Escapes" },
-    { value: "transitions", label: "Transitions" },
-    { value: "other", label: "Other" },
-  ];
 
   return (
     <div className="onboarding-page">
@@ -262,32 +149,32 @@ export default function OnboardingPage() {
             Welcome to BJJ OS
           </h1>
           <p className="text-[hsl(var(--bjj-text-secondary))] text-lg">
-            Let's personalize your training experience
+            Let's get you set up in under a minute
           </p>
         </div>
 
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-[hsl(var(--bjj-text-secondary))]">
-              Step {getStepNumber()} of 7
+              Step {getStepNumber()} of 4
             </span>
             <span className="text-sm text-[hsl(var(--bjj-text-secondary))]">
-              {Math.round((getStepNumber() / 7) * 100)}% complete
+              {Math.round((getStepNumber() / 4) * 100)}% complete
             </span>
           </div>
           <div className="h-2 bg-white/5 rounded-full overflow-hidden" data-testid="progress-bar">
             <div
               className="h-full bg-gradient-to-r from-[hsl(var(--bjj-primary-purple))] to-[hsl(var(--bjj-primary-blue))] transition-all duration-300"
-              style={{ width: `${(getStepNumber() / 7) * 100}%` }}
+              style={{ width: `${(getStepNumber() / 4) * 100}%` }}
             />
           </div>
         </div>
 
-        {/* Step 1: First Name */}
+        {/* Step 1: Name */}
         {step === "name" && (
           <div className="onboarding-step">
             <h2 className="text-2xl font-bold mb-2 text-white">
-              What's your first name?
+              What's your name?
             </h2>
             <p className="text-[hsl(var(--bjj-text-secondary))] mb-6">
               How should Professor OS address you?
@@ -313,61 +200,11 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Step 2: Username */}
-        {step === "username" && (
-          <div className="onboarding-step">
-            <h2 className="text-2xl font-bold mb-2 text-white">
-              Choose a username
-            </h2>
-            <p className="text-[hsl(var(--bjj-text-secondary))] mb-6">
-              Lowercase letters, numbers, and underscores only
-            </p>
-            <div className="relative mb-6">
-              <Input
-                type="text"
-                placeholder="e.g., blackbelt123"
-                value={username}
-                onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                onKeyPress={(e) => e.key === 'Enter' && handleUsernameSubmit()}
-                autoFocus
-                className="bg-black/50 border-white/10 text-white placeholder:text-white/40 pr-10"
-                data-testid="input-username"
-              />
-              {checkingUsername && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40 animate-spin" />
-              )}
-              {!checkingUsername && usernameAvailable === true && (
-                <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500" data-testid="icon-username-available" />
-              )}
-              {!checkingUsername && usernameAvailable === false && (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500 font-bold" data-testid="icon-username-taken">✕</span>
-              )}
-            </div>
-            <div className="flex gap-3">
-              <BJJButton
-                variant="outline"
-                onClick={handleBack}
-                data-testid="button-back"
-              >
-                Back
-              </BJJButton>
-              <BJJButton
-                onClick={handleUsernameSubmit}
-                disabled={!username.trim() || !usernameAvailable}
-                className="flex-1"
-                data-testid="button-next-username"
-              >
-                Continue
-              </BJJButton>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Belt Level */}
+        {/* Step 2: Belt Level */}
         {step === "belt" && (
           <div className="onboarding-step">
             <h2 className="text-2xl font-bold mb-2 text-white">
-              What belt are you?
+              What's your belt?
             </h2>
             <p className="text-[hsl(var(--bjj-text-secondary))] mb-6">
               Select your current rank
@@ -408,146 +245,11 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Step 4: Years Training */}
-        {step === "years" && (
-          <div className="onboarding-step">
-            <h2 className="text-2xl font-bold mb-2 text-white">
-              How long have you been training?
-            </h2>
-            <p className="text-[hsl(var(--bjj-text-secondary))] mb-6">
-              Select your training experience
-            </p>
-            <div className="grid grid-cols-1 gap-3 mb-6">
-              {(["<6mo", "6mo-1yr", "1-2yr", "2-5yr", "5-10yr", "10+yr"] as YearsTraining[]).map((years) => (
-                <button
-                  key={years}
-                  onClick={() => setYearsTraining(years)}
-                  className={`p-4 rounded-lg border-2 transition-all ${
-                    yearsTraining === years
-                      ? "border-[hsl(var(--bjj-primary-purple))] bg-[hsl(var(--bjj-primary-purple))]/10"
-                      : "border-white/10 bg-black/30 hover:border-white/20"
-                  }`}
-                  data-testid={`button-years-${years}`}
-                >
-                  <span className="text-white font-medium">{years}</span>
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <BJJButton
-                variant="outline"
-                onClick={handleBack}
-                data-testid="button-back"
-              >
-                Back
-              </BJJButton>
-              <BJJButton
-                onClick={handleYearsSubmit}
-                disabled={!yearsTraining}
-                className="flex-1"
-                data-testid="button-next-years"
-              >
-                Continue
-              </BJJButton>
-            </div>
-          </div>
-        )}
-
-        {/* Step 5: Training Frequency */}
-        {step === "frequency" && (
-          <div className="onboarding-step">
-            <h2 className="text-2xl font-bold mb-2 text-white">
-              How often do you train?
-            </h2>
-            <p className="text-[hsl(var(--bjj-text-secondary))] mb-6">
-              Times per week
-            </p>
-            <div className="grid grid-cols-1 gap-3 mb-6">
-              {(["1-2x", "3-4x", "5+x"] as TrainingFrequency[]).map((freq) => (
-                <button
-                  key={freq}
-                  onClick={() => setTrainingFrequency(freq)}
-                  className={`p-4 rounded-lg border-2 transition-all ${
-                    trainingFrequency === freq
-                      ? "border-[hsl(var(--bjj-primary-purple))] bg-[hsl(var(--bjj-primary-purple))]/10"
-                      : "border-white/10 bg-black/30 hover:border-white/20"
-                  }`}
-                  data-testid={`button-frequency-${freq}`}
-                >
-                  <span className="text-white font-medium">{freq} per week</span>
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <BJJButton
-                variant="outline"
-                onClick={handleBack}
-                data-testid="button-back"
-              >
-                Back
-              </BJJButton>
-              <BJJButton
-                onClick={handleFrequencySubmit}
-                disabled={!trainingFrequency}
-                className="flex-1"
-                data-testid="button-next-frequency"
-              >
-                Continue
-              </BJJButton>
-            </div>
-          </div>
-        )}
-
-        {/* Step 6: Struggle Area */}
-        {step === "struggle" && (
-          <div className="onboarding-step">
-            <h2 className="text-2xl font-bold mb-2 text-white">
-              What technique do you struggle with most?
-            </h2>
-            <p className="text-[hsl(var(--bjj-text-secondary))] mb-6">
-              This helps Professor OS give you personalized guidance
-            </p>
-            <div className="grid grid-cols-1 gap-3 mb-6">
-              {struggleOptions.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setStruggleArea(option.value)}
-                  className={`p-4 rounded-lg border-2 transition-all ${
-                    struggleArea === option.value
-                      ? "border-[hsl(var(--bjj-primary-purple))] bg-[hsl(var(--bjj-primary-purple))]/10"
-                      : "border-white/10 bg-black/30 hover:border-white/20"
-                  }`}
-                  data-testid={`button-struggle-${option.value}`}
-                >
-                  <span className="text-white font-medium">{option.label}</span>
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <BJJButton
-                variant="outline"
-                onClick={handleBack}
-                data-testid="button-back"
-              >
-                Back
-              </BJJButton>
-              <BJJButton
-                onClick={handleStruggleSubmit}
-                disabled={!struggleArea}
-                className="flex-1"
-                data-testid="button-next-struggle"
-              >
-                Continue
-              </BJJButton>
-            </div>
-          </div>
-        )}
-
-        {/* Step 7: Training Style */}
+        {/* Step 3: Training Style */}
         {step === "style" && (
           <div className="onboarding-step">
             <h2 className="text-2xl font-bold mb-2 text-white">
-              What do you primarily train?
+              What do you train?
             </h2>
             <p className="text-[hsl(var(--bjj-text-secondary))] mb-6">
               Choose your training focus
@@ -564,12 +266,127 @@ export default function OnboardingPage() {
                   }`}
                   data-testid={`button-style-${style}`}
                 >
-                  <span className="text-white font-medium capitalize">
+                  <span className="text-white font-medium">
                     {style === "gi" ? "Gi" : style === "nogi" ? "No-Gi" : "Both"}
                   </span>
                 </button>
               ))}
             </div>
+            <div className="flex gap-3">
+              <BJJButton
+                variant="outline"
+                onClick={handleBack}
+                data-testid="button-back"
+              >
+                Back
+              </BJJButton>
+              <BJJButton
+                onClick={handleStyleSubmit}
+                disabled={!trainingStyle}
+                className="flex-1"
+                data-testid="button-next-style"
+              >
+                Continue
+              </BJJButton>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Height & Weight */}
+        {step === "body" && (
+          <div className="onboarding-step">
+            <h2 className="text-2xl font-bold mb-2 text-white">
+              Height & Weight
+            </h2>
+            <p className="text-[hsl(var(--bjj-text-secondary))] mb-6">
+              Helps Professor OS recommend techniques for your body type
+            </p>
+
+            {/* Unit toggle */}
+            <div className="flex justify-center gap-2 mb-6">
+              <button
+                onClick={() => setUseMetric(false)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  !useMetric
+                    ? "bg-[hsl(var(--bjj-primary-purple))] text-white"
+                    : "bg-white/10 text-white/60 hover:bg-white/20"
+                }`}
+                data-testid="button-imperial"
+              >
+                Imperial
+              </button>
+              <button
+                onClick={() => setUseMetric(true)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  useMetric
+                    ? "bg-[hsl(var(--bjj-primary-purple))] text-white"
+                    : "bg-white/10 text-white/60 hover:bg-white/20"
+                }`}
+                data-testid="button-metric"
+              >
+                Metric
+              </button>
+            </div>
+
+            {/* Height */}
+            <div className="mb-6">
+              <label className="block text-white/80 mb-2 text-sm">Height</label>
+              {useMetric ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    value={heightCm}
+                    onChange={(e) => setHeightCm(parseInt(e.target.value) || 0)}
+                    className="w-24 bg-black/50 border-white/10 text-white text-center"
+                    min={100}
+                    max={250}
+                    data-testid="input-height-cm"
+                  />
+                  <span className="text-white/60">cm</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    value={heightFeet}
+                    onChange={(e) => setHeightFeet(parseInt(e.target.value) || 0)}
+                    className="w-16 bg-black/50 border-white/10 text-white text-center"
+                    min={4}
+                    max={7}
+                    data-testid="input-height-feet"
+                  />
+                  <span className="text-white/60">ft</span>
+                  <Input
+                    type="number"
+                    value={heightInches}
+                    onChange={(e) => setHeightInches(parseInt(e.target.value) || 0)}
+                    className="w-16 bg-black/50 border-white/10 text-white text-center"
+                    min={0}
+                    max={11}
+                    data-testid="input-height-inches"
+                  />
+                  <span className="text-white/60">in</span>
+                </div>
+              )}
+            </div>
+
+            {/* Weight */}
+            <div className="mb-6">
+              <label className="block text-white/80 mb-2 text-sm">Weight</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={weight}
+                  onChange={(e) => setWeight(parseInt(e.target.value) || 0)}
+                  className="w-24 bg-black/50 border-white/10 text-white text-center"
+                  min={useMetric ? 40 : 90}
+                  max={useMetric ? 200 : 400}
+                  data-testid="input-weight"
+                />
+                <span className="text-white/60">{useMetric ? "kg" : "lbs"}</span>
+              </div>
+            </div>
+
             <div className="flex gap-3">
               <BJJButton
                 variant="outline"
@@ -580,12 +397,19 @@ export default function OnboardingPage() {
                 Back
               </BJJButton>
               <BJJButton
-                onClick={handleStyleSubmit}
-                disabled={!trainingStyle || isLoading}
+                onClick={handleComplete}
+                disabled={isLoading}
                 className="flex-1"
                 data-testid="button-complete"
               >
-                {isLoading ? "Saving..." : "Complete Setup"}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Get Started"
+                )}
               </BJJButton>
             </div>
           </div>
