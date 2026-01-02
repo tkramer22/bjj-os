@@ -9,8 +9,6 @@ import { formatDateDivider, shouldShowDateDivider } from "@/lib/timestamps";
 import { triggerHaptic } from "@/lib/haptics";
 import { getApiUrl, isNativeApp, getAuthToken } from "@/lib/capacitorAuth";
 import { useChatContext } from "@/contexts/ChatContext";
-import { Keyboard } from '@capacitor/keyboard';
-import { Capacitor } from '@capacitor/core';
 
 interface Message {
   id: string;
@@ -49,50 +47,10 @@ export function MobileChat() {
   const [oldestMessageTimestamp, setOldestMessageTimestamp] = useState<string | null>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [thinkingStatus, setThinkingStatus] = useState<string | null>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const thinkingStatusRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Handle keyboard show/hide for iOS native
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) {
-      console.log('[KEYBOARD] Not native platform, skipping keyboard listeners');
-      return;
-    }
-
-    console.log('[KEYBOARD] Setting up keyboard listeners for iOS native');
-
-    const showListener = Keyboard.addListener('keyboardWillShow', (info) => {
-      console.log('[KEYBOARD] keyboardWillShow fired, height:', info.keyboardHeight);
-      setKeyboardHeight(info.keyboardHeight);
-      // Scroll to bottom when keyboard appears - multiple attempts for reliability
-      setTimeout(() => scrollToBottom(true), 50);
-      setTimeout(() => scrollToBottom(true), 150);
-      setTimeout(() => scrollToBottom(true), 300);
-    });
-
-    const hideListener = Keyboard.addListener('keyboardWillHide', () => {
-      console.log('[KEYBOARD] keyboardWillHide fired');
-      setKeyboardHeight(0);
-    });
-
-    return () => {
-      showListener.then(l => l.remove());
-      hideListener.then(l => l.remove());
-    };
-  }, []);
-
-  // Scroll to bottom whenever keyboard height changes
-  useEffect(() => {
-    if (keyboardHeight > 0) {
-      console.log('[KEYBOARD] Height changed, scrolling to bottom:', keyboardHeight);
-      requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      });
-    }
-  }, [keyboardHeight]);
 
   // Get authenticated user from API
   const { data: currentUser, isLoading: isLoadingUser } = useQuery<AuthUser>({
@@ -508,8 +466,12 @@ What are you working on right now?`,
   }
 
   return (
-    <div className="mobile-chat-container">
-      <div className="mobile-chat-header mobile-safe-area-top">
+    <div className="mobile-chat-container" style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+    }}>
+      <div className="mobile-chat-header mobile-safe-area-top" style={{ flexShrink: 0 }}>
         <div>
           <h2 style={{ fontSize: "1.25rem", marginBottom: "0.25rem" }}>Prof. OS</h2>
           <p style={{ 
@@ -531,7 +493,9 @@ What are you working on right now?`,
           }
         }}
         style={{
-          paddingBottom: keyboardHeight > 0 ? keyboardHeight + 100 : 180,
+          flex: 1,
+          overflowY: 'auto',
+          paddingBottom: 20,
         }}
       >
         {isLoadingMore && (
@@ -630,16 +594,10 @@ What are you working on right now?`,
       <div 
         className="mobile-chat-input-container mobile-safe-area-bottom"
         style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 9999,
+          flexShrink: 0,
           background: '#0A0A0B',
           borderTop: '1px solid var(--mobile-border)',
-          paddingBottom: keyboardHeight > 0 ? '12px' : 'calc(12px + env(safe-area-inset-bottom, 0px))',
-          transform: keyboardHeight > 0 ? `translateY(-${keyboardHeight}px)` : 'translateY(-80px)',
-          transition: 'transform 0.25s ease-out',
+          paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
         }}
       >
         <div style={{

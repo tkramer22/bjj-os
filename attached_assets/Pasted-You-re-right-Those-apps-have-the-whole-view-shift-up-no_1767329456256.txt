@@ -1,0 +1,96 @@
+You’re right. Those apps have the whole view shift up, not just one element repositioning.
+
+-----
+
+```
+KEYBOARD FIX - SHIFT ENTIRE VIEW LIKE CLAUDE/REPLIT MOBILE
+
+═══════════════════════════════════════════════════════════════════════════════
+THE GOAL
+═══════════════════════════════════════════════════════════════════════════════
+
+When keyboard opens, the ENTIRE chat view shifts up - just like Claude mobile 
+app and Replit mobile app. The input stays at the bottom of the visible area, 
+directly above the keyboard.
+
+Not repositioning elements. The whole viewport adjusts.
+
+═══════════════════════════════════════════════════════════════════════════════
+THE FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+Option 1: Let iOS handle it natively
+
+In capacitor.config.ts, set:
+
+plugins: {
+  Keyboard: {
+    resize: 'body',  // Let iOS resize the webview when keyboard opens
+    scrollAssist: true,
+    scrollPadding: true
+  }
+}
+
+This tells Capacitor to let the native iOS keyboard behavior resize the webview.
+
+Option 2: If that doesn't work, use 'ionic' mode:
+
+plugins: {
+  Keyboard: {
+    resize: 'ionic'
+  }
+}
+
+Option 3: Use 'native' mode:
+
+plugins: {
+  Keyboard: {
+    resize: 'native'
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+REMOVE PREVIOUS MANUAL FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+Remove any manual keyboard height adjustments we added:
+- Remove keyboardWillShow/keyboardWillHide listeners that adjust padding
+- Remove transform/translateY on input container
+- Remove manual bottom positioning based on keyboard height
+
+Let the native iOS behavior handle it.
+
+═══════════════════════════════════════════════════════════════════════════════
+CSS REQUIREMENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+The chat container should use flexbox and fill available height:
+
+.chat-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.chat-input-container {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+The input stays at the bottom. When iOS resizes the webview, everything 
+shifts up naturally.
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST
+═══════════════════════════════════════════════════════════════════════════════
+
+Must test on physical device. Keyboard resize doesn't work in simulator.
+
+Expected: Tap input → keyboard opens → entire view shifts up → input visible
+```
