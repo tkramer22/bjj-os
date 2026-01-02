@@ -1,0 +1,106 @@
+You’re right on both counts.
+
+**1. Remove “No Subscription” state** - If they’re in the app at all, they have access. That state is impossible.
+
+**2. Professor OS using profile data** - Let me check what’s currently being injected:​​​​​​​​​​​​​​​​
+
+Good news - the architecture is already there. The system prompt has a complete USER PROFILE section that includes:
+
+- Name, Belt, Weight, Height
+- Training Style (gi/nogi/both)
+- Training Frequency
+- Biggest Struggle
+- Goals, Injuries
+- Days training together
+
+**The question is: Is it actually being loaded and used?**
+
+-----
+
+Let me add this to the subscription prompt so we cover both:
+
+```
+ADD TO PREVIOUS PROMPT:
+
+═══════════════════════════════════════════════════════════════════════════════
+SUBSCRIPTION - REMOVE "NO PLAN" STATE
+═══════════════════════════════════════════════════════════════════════════════
+
+Remove the "No active subscription" / "No Plan" state entirely.
+
+Users cannot reach the app without a subscription, so this state is impossible.
+Only show:
+1. Lifetime Member
+2. Referral Trial (30 days free)
+3. Standard Trial (7 days free)
+4. Paying Subscriber
+5. Cancelled (with access until date)
+
+═══════════════════════════════════════════════════════════════════════════════
+PROFESSOR OS - VERIFY PROFILE DATA INJECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS should use ALL profile data in responses.
+
+VERIFY this is happening in /api/ai/chat/message endpoint:
+
+1. Load user profile BEFORE building system prompt:
+```
+
+const profile = await db.query.user_profiles.findFirst({
+where: eq(user_profiles.user_id, userId),
+with: { user: true }
+});
+
+```
+2. Pass to buildSystemPrompt:
+```
+
+const systemPrompt = buildSystemPrompt({
+user: {
+displayName: profile.first_name,
+beltLevel: profile.belt_level,
+style: profile.training_style,
+height: profile.height,
+weight: profile.weight,
+trainingFrequency: profile.training_frequency,
+struggleTechnique: profile.biggest_struggle,
+goals: profile.goals,
+injuries: profile.injuries
+}
+}, availableVideos, conversationHistory);
+
+```
+3. Add instruction to system prompt:
+
+"USE THE USER'S PROFILE DATA:
+You know this about the person you're coaching:
+- They are a ${beltLevel} training ${style}
+- They weigh ${weight} lbs and are ${height}
+- They train ${trainingFrequency}x per week
+- Their biggest struggle is ${struggleTechnique}
+
+Factor this into your advice:
+- For a 185 lb person, recommend techniques that work for their body type
+- For a blue belt, don't overwhelm with black belt concepts
+- For someone who trains 6x/week, they can handle more volume
+- Address their stated struggles proactively"
+
+EXAMPLE OF CORRECT USAGE:
+
+User: "How should I approach passing?"
+
+Professor OS (using profile): "At 185 and 5'9", you've got solid base for pressure passing. As a blue belt training both gi and nogi, I'd focus on getting your headquarters position locked in before you think about leg drags or knee cuts. Since you train 6 times a week with JT, you're getting live reps - the fundamentals will compound fast. What's giving you more trouble right now - getting to headquarters or finishing the pass from there?"
+
+NOT: Generic advice that could apply to anyone.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Test by asking Professor OS:
+- "What do you know about me?"
+- "Give me passing advice for my body type"
+
+Professor OS should reference: Blue belt, 185 lbs, 5'9", trains both, trains with JT
+```

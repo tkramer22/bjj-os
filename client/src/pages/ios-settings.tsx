@@ -288,7 +288,7 @@ export default function IOSSettingsPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: subscription?.type !== 'none' ? '1px solid #2A2A2E' : 'none',
+            borderBottom: '1px solid #2A2A2E',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <CreditCard size={20} color="#71717A" />
@@ -397,17 +397,6 @@ export default function IOSSettingsPage() {
             </button>
           )}
 
-          {/* No active plan */}
-          {subscription?.type === 'none' && (
-            <div style={{
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <span style={{ fontSize: '14px', color: '#71717A' }}>No active subscription</span>
-            </div>
-          )}
         </div>
 
         {/* Account Section - Email (read-only) */}
