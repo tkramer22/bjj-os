@@ -303,7 +303,7 @@ export default function IOSSettingsPage() {
                   <CreditCard size={20} color="#71717A" />
                   <span style={{ fontSize: '15px', color: '#71717A' }}>Plan</span>
                 </div>
-                <span style={{ fontSize: '15px', color: '#22C55E', fontWeight: 600 }} data-testid="text-plan">
+                <span style={{ fontSize: '15px', color: '#FFFFFF', fontWeight: 600 }} data-testid="text-plan">
                   {isLoadingSubscription ? '...' : 'Lifetime Member'}
                 </span>
               </div>
@@ -314,7 +314,7 @@ export default function IOSSettingsPage() {
                 justifyContent: 'space-between',
               }}>
                 <span style={{ fontSize: '15px', color: '#71717A' }}>Status</span>
-                <span style={{ fontSize: '15px', color: '#22C55E' }}>No charge - Forever</span>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }}>No charge - Forever</span>
               </div>
             </>
           )}
@@ -453,7 +453,7 @@ export default function IOSSettingsPage() {
                   <CreditCard size={20} color="#71717A" />
                   <span style={{ fontSize: '15px', color: '#71717A' }}>Plan</span>
                 </div>
-                <span style={{ fontSize: '15px', color: '#22C55E', fontWeight: 600 }} data-testid="text-plan">
+                <span style={{ fontSize: '15px', color: '#FFFFFF', fontWeight: 600 }} data-testid="text-plan">
                   Monthly
                 </span>
               </div>
