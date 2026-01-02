@@ -230,13 +230,55 @@ What are you working on right now?`,
           timestamp: new Date(msg.createdAt || msg.timestamp).toISOString()
         }));
         
-        // Add RETURNING USER welcome message at the end
+        // Add RETURNING USER welcome message at the end (rotating for variety)
+        const welcomeBackMessages = [
+          // Standard warm
+          "Welcome back! Ready to pick up where we left off?",
+          "Good to see you again. What are we working on today?",
+          "Back on the mats? Let's get after it.",
+          "Ready when you are. What's on your mind?",
+          "Let's build on what we covered last time. What's up?",
+          
+          // Coach energy
+          "Back for more? I like that. What do you need?",
+          "The grind continues. What can I help with?",
+          "Another day, another chance to level up. What's the focus?",
+          "Consistency wins. What are we sharpening today?",
+          "You keep showing up. That's how black belts are made. What's on your mind?",
+          
+          // BJJ culture
+          "Oss! What technique is giving you trouble?",
+          "How were the rolls? What do we need to fix?",
+          "Did you get any taps since we last talked?",
+          "Who gave you problems today? Let's solve it.",
+          "Ready to add another weapon to your game?",
+          
+          // Humor / personality
+          "Back already? Your training partners are in trouble.",
+          "Let me guess - someone passed your guard again?",
+          "Missed me? I've been studying more tape. What do you need?",
+          "I was just reviewing some Danaher. Perfect timing.",
+          "No rest days from learning. What's up?",
+          
+          // Motivational
+          "Every session counts. Let's make this one matter.",
+          "Small improvements, big results. What are we working on?",
+          "Future you will thank present you. What's the focus today?",
+          "Trust the process. What do you need help with?",
+          
+          // Curiosity-driven
+          "What happened in training? Tell me everything.",
+          "Any breakthroughs since last time?",
+          "What's been stuck in your head since we last talked?",
+          "Something specific bring you back, or just here to learn?"
+        ];
+        
+        const randomWelcome = welcomeBackMessages[Math.floor(Math.random() * welcomeBackMessages.length)];
+        
         const welcomeBackMessage = {
           id: "welcome-back-" + Date.now(),
           role: 'assistant' as const,
-          content: `Welcome back! Ready to pick up where we left off?
-
-What's on your mind today?`,
+          content: randomWelcome,
           timestamp: new Date().toISOString()
         };
         
