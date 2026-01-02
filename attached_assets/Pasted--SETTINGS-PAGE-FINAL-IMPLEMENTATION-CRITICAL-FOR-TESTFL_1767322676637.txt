@@ -1,0 +1,154 @@
+```
+SETTINGS PAGE - FINAL IMPLEMENTATION (CRITICAL FOR TESTFLIGHT)
+
+═══════════════════════════════════════════════════════════════════════════════
+REMOVE ENTIRELY
+═══════════════════════════════════════════════════════════════════════════════
+
+Delete the "TRAINING PROFILE" section completely (including "Edit Profile" link).
+This is redundant - Profile is accessible from the bottom tab.
+
+═══════════════════════════════════════════════════════════════════════════════
+SUBSCRIPTION SECTION - COMPLETE REQUIREMENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+There is NO "Free" plan. Remove any reference to "Free".
+
+Display based on user's subscription_status from database/Stripe:
+
+---
+
+**TYPE 1: LIFETIME MEMBER**
+```
+
+SUBSCRIPTION
+
+Plan                    Lifetime Member
+Status                  No charge - Forever
+
+```
+(No cancel button - it's lifetime)
+
+---
+
+**TYPE 2: 7-DAY TRIAL**
+```
+
+SUBSCRIPTION
+
+Plan                    Monthly ($19.99/month)
+Status                  7-day free trial
+First billing           [DATE - 7 days from signup]
+
+[Cancel Subscription]
+
+```
+---
+
+**TYPE 3: 30-DAY TRIAL (Referral)**
+```
+
+SUBSCRIPTION
+
+Plan                    Monthly ($19.99/month)
+Status                  30-day free trial
+First billing           [DATE - 30 days from signup]
+
+[Cancel Subscription]
+
+```
+---
+
+**TYPE 4: PAYING SUBSCRIBER**
+```
+
+SUBSCRIPTION
+
+Plan                    Monthly
+Price                   $19.99/month
+Next billing            [DATE from Stripe]
+
+[Cancel Subscription]
+
+```
+---
+
+**TYPE 5: CANCELLED (still has access)**
+```
+
+SUBSCRIPTION
+
+Plan                    Monthly (Cancelled)
+Access until            [DATE - end of billing period]
+
+Your subscription has been cancelled.
+You won’t be charged again.
+
+```
+═══════════════════════════════════════════════════════════════════════════════
+CANCEL SUBSCRIPTION - STRIPE INTEGRATION
+═══════════════════════════════════════════════════════════════════════════════
+
+The Cancel button MUST actually cancel in Stripe:
+
+1. User taps "Cancel Subscription"
+2. Haptic feedback (Medium)
+3. Confirmation modal:
+   "Are you sure you want to cancel?
+   You'll keep access until [BILLING DATE]."
+   [Keep Subscription] [Yes, Cancel]
+4. On confirm: POST /api/subscription/cancel
+5. Backend calls Stripe: stripe.subscriptions.update(id, { cancel_at_period_end: true })
+6. Success message: "Subscription cancelled. You have access until [DATE]."
+7. UI updates to show cancelled status
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX TODD'S ACCOUNT IN DATABASE
+═══════════════════════════════════════════════════════════════════════════════
+
+UPDATE users 
+SET subscription_status = 'lifetime' 
+WHERE email = 'toddkramer@icloud.com';
+
+Or wherever this field lives - ensure it's set to 'lifetime' so "Lifetime Member" displays.
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL SETTINGS PAGE STRUCTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+SUBSCRIPTION
+[Dynamic based on user type - see above]
+
+ACCOUNT
+- Email (display only)
+
+APP SETTINGS
+- Push Notifications
+- Dark Mode
+- Sound Effects
+- Haptic Feedback
+- Voice Input
+
+DATA & PRIVACY
+- Delete Chat History
+- Reset Professor OS Memory
+
+LEGAL & SUPPORT
+- Terms of Service
+- Privacy Policy
+- Help & Support
+
+[Log Out]
+
+BJJ OS v1.0.0
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION BEFORE TESTFLIGHT
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Todd's account shows "Lifetime Member" (not "Free")
+2. Training Profile section is gone
+3. Test account with trial shows billing date + cancel button
+4. Cancel button triggers confirmation modal
+5. Cancel actually calls Stripe API (verify in Stripe dashboard)
+```

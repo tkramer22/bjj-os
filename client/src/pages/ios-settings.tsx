@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
-  ArrowLeft, Bell, Moon, Volume2, Vibrate, Mail, User,
+  ArrowLeft, Bell, Moon, Volume2, Vibrate, Mail,
   CreditCard, FileText, Shield, HelpCircle, LogOut, ChevronRight,
   ExternalLink, Loader2, Trash2, RotateCcw, Mic
 } from "lucide-react";
@@ -179,19 +179,6 @@ export default function IOSSettingsPage() {
     setter(!currentValue);
   };
 
-  const getSubscriptionLabel = () => {
-    if (subscription?.type === 'lifetime') return 'Lifetime Member';
-    if (subscription?.type === 'referral') return 'Referral Trial';
-    if (subscription?.type === 'trial') return 'Free Trial';
-    if (subscription?.type === 'paying') return 'Monthly ($19.99/month)';
-    return 'Free';
-  };
-
-  const canCancelSubscription = () => {
-    return (subscription?.type === 'paying' || subscription?.type === 'trial' || subscription?.type === 'referral') 
-      && !subscription?.cancelAtPeriodEnd;
-  };
-
   const ToggleSwitch = ({ 
     enabled, 
     onToggle,
@@ -286,50 +273,53 @@ export default function IOSSettingsPage() {
           border: '1px solid #2A2A2E',
           marginBottom: '24px',
         }}>
-          {/* Plan row */}
-          <div style={{
-            padding: '16px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            borderBottom: '1px solid #2A2A2E',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <CreditCard size={20} color="#71717A" />
-              <span style={{ fontSize: '15px', color: '#71717A' }}>Plan</span>
-            </div>
-            <span style={{ 
-              fontSize: '15px', 
-              color: subscription?.type === 'lifetime' || subscription?.type === 'paying' ? '#22C55E' : '#FFFFFF',
-              fontWeight: 600
-            }} data-testid="text-plan">
-              {isLoadingSubscription ? '...' : getSubscriptionLabel()}
-            </span>
-          </div>
-
-          {/* Lifetime: No charge forever */}
+          {/* TYPE 1: LIFETIME MEMBER */}
           {subscription?.type === 'lifetime' && (
-            <div style={{
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}>
-              <span style={{ fontSize: '14px', color: '#22C55E' }}>No charge - Forever</span>
-            </div>
-          )}
-
-          {/* Referral Trial: Show bonus info */}
-          {subscription?.type === 'referral' && (
             <>
               <div style={{
-                padding: '12px 20px',
-                background: 'rgba(139, 92, 246, 0.1)',
+                padding: '16px 20px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
               }}>
-                <span style={{ fontSize: '14px', color: '#8B5CF6' }}>Referral Bonus Active - 30 days free</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <CreditCard size={20} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Plan</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#22C55E', fontWeight: 600 }} data-testid="text-plan">
+                  {isLoadingSubscription ? '...' : 'Lifetime Member'}
+                </span>
+              </div>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <span style={{ fontSize: '15px', color: '#71717A' }}>Status</span>
+                <span style={{ fontSize: '15px', color: '#22C55E' }}>No charge - Forever</span>
+              </div>
+            </>
+          )}
+
+          {/* TYPE 2: 7-DAY TRIAL */}
+          {subscription?.type === 'trial' && !subscription?.cancelAtPeriodEnd && (
+            <>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <CreditCard size={20} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Plan</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#FFFFFF', fontWeight: 600 }} data-testid="text-plan">
+                  Monthly ($19.99/month)
+                </span>
               </div>
               <div style={{
                 padding: '16px 20px',
@@ -338,110 +328,225 @@ export default function IOSSettingsPage() {
                 justifyContent: 'space-between',
                 borderBottom: '1px solid #2A2A2E',
               }}>
-                <span style={{ fontSize: '15px', color: '#71717A' }}>First billing date</span>
+                <span style={{ fontSize: '15px', color: '#71717A' }}>Status</span>
+                <span style={{ fontSize: '15px', color: '#8B5CF6' }}>7-day free trial</span>
+              </div>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <span style={{ fontSize: '15px', color: '#71717A' }}>First billing</span>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-billing-date">
+                  {formatDate(subscription?.trialEnd || subscription?.billingDate)}
+                </span>
+              </div>
+              <button
+                onClick={() => { triggerHaptic('medium'); setShowCancelModal(true); }}
+                data-testid="button-cancel-subscription"
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '16px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  borderTop: '1px solid #2A2A2E',
+                }}
+              >
+                <span style={{ fontSize: '15px', color: '#EF4444' }}>Cancel Subscription</span>
+              </button>
+            </>
+          )}
+
+          {/* TYPE 3: 30-DAY REFERRAL TRIAL */}
+          {subscription?.type === 'referral' && !subscription?.cancelAtPeriodEnd && (
+            <>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <CreditCard size={20} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Plan</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#FFFFFF', fontWeight: 600 }} data-testid="text-plan">
+                  Monthly ($19.99/month)
+                </span>
+              </div>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <span style={{ fontSize: '15px', color: '#71717A' }}>Status</span>
+                <span style={{ fontSize: '15px', color: '#8B5CF6' }}>30-day free trial</span>
+              </div>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <span style={{ fontSize: '15px', color: '#71717A' }}>First billing</span>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-billing-date">
+                  {formatDate(subscription?.trialEnd || subscription?.billingDate)}
+                </span>
+              </div>
+              <button
+                onClick={() => { triggerHaptic('medium'); setShowCancelModal(true); }}
+                data-testid="button-cancel-subscription"
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '16px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  borderTop: '1px solid #2A2A2E',
+                }}
+              >
+                <span style={{ fontSize: '15px', color: '#EF4444' }}>Cancel Subscription</span>
+              </button>
+            </>
+          )}
+
+          {/* TYPE 4: PAYING SUBSCRIBER */}
+          {subscription?.type === 'paying' && !subscription?.cancelAtPeriodEnd && (
+            <>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <CreditCard size={20} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Plan</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#22C55E', fontWeight: 600 }} data-testid="text-plan">
+                  Monthly
+                </span>
+              </div>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <span style={{ fontSize: '15px', color: '#71717A' }}>Price</span>
+                <span style={{ fontSize: '15px', color: '#FFFFFF' }}>$19.99/month</span>
+              </div>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <span style={{ fontSize: '15px', color: '#71717A' }}>Next billing</span>
                 <span style={{ fontSize: '15px', color: '#FFFFFF' }} data-testid="text-billing-date">
                   {formatDate(subscription?.billingDate)}
+                </span>
+              </div>
+              <button
+                onClick={() => { triggerHaptic('medium'); setShowCancelModal(true); }}
+                data-testid="button-cancel-subscription"
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '16px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  borderTop: '1px solid #2A2A2E',
+                }}
+              >
+                <span style={{ fontSize: '15px', color: '#EF4444' }}>Cancel Subscription</span>
+              </button>
+            </>
+          )}
+
+          {/* TYPE 5: CANCELLED (still has access) */}
+          {subscription?.cancelAtPeriodEnd && subscription?.type !== 'lifetime' && (
+            <>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <CreditCard size={20} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Plan</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#F59E0B', fontWeight: 600 }} data-testid="text-plan">
+                  Monthly (Cancelled)
+                </span>
+              </div>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid #2A2A2E',
+              }}>
+                <span style={{ fontSize: '15px', color: '#71717A' }}>Access until</span>
+                <span style={{ fontSize: '15px', color: '#F59E0B' }} data-testid="text-billing-date">
+                  {formatDate(subscription?.billingDate)}
+                </span>
+              </div>
+              <div style={{
+                padding: '16px 20px',
+                background: 'rgba(245, 158, 11, 0.1)',
+              }}>
+                <p style={{ fontSize: '14px', color: '#F59E0B', margin: 0 }}>
+                  Your subscription has been cancelled.
+                </p>
+                <p style={{ fontSize: '14px', color: '#F59E0B', margin: '4px 0 0 0' }}>
+                  You won't be charged again.
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* TYPE 6: NO SUBSCRIPTION (needs to subscribe) */}
+          {subscription?.type === 'none' && (
+            <>
+              <div style={{
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <CreditCard size={20} color="#71717A" />
+                  <span style={{ fontSize: '15px', color: '#71717A' }}>Plan</span>
+                </div>
+                <span style={{ fontSize: '15px', color: '#FFFFFF', fontWeight: 600 }} data-testid="text-plan">
+                  No active subscription
                 </span>
               </div>
             </>
           )}
 
-          {/* Paying subscriber: Show billing info */}
-          {(subscription?.type === 'paying' || subscription?.type === 'trial') && (
-            <div style={{
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              borderBottom: '1px solid #2A2A2E',
-            }}>
-              <span style={{ fontSize: '15px', color: '#71717A' }}>
-                {subscription?.cancelAtPeriodEnd ? 'Access until' : 'Next billing date'}
-              </span>
-              <span style={{ fontSize: '15px', color: subscription?.cancelAtPeriodEnd ? '#F59E0B' : '#FFFFFF' }} data-testid="text-billing-date">
-                {formatDate(subscription?.billingDate)}
-              </span>
-            </div>
-          )}
-
-          {/* Cancelled status */}
-          {subscription?.cancelAtPeriodEnd && (
-            <div style={{
-              padding: '12px 20px',
-              background: 'rgba(245, 158, 11, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}>
-              <span style={{ fontSize: '14px', color: '#F59E0B' }}>Subscription cancelled - access ends on billing date</span>
-            </div>
-          )}
-
-          {/* Cancel button (for paying/trial users only) */}
-          {canCancelSubscription() && (
-            <button
-              onClick={() => {
-                triggerHaptic('medium');
-                setShowCancelModal(true);
-              }}
-              data-testid="button-cancel-subscription"
-              style={{
-                width: '100%',
-                background: 'transparent',
-                border: 'none',
-                padding: '16px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                borderTop: '1px solid #2A2A2E',
-              }}
-            >
-              <span style={{ fontSize: '15px', color: '#EF4444' }}>Cancel Subscription</span>
-            </button>
-          )}
-
-        </div>
-
-        {/* Training Profile Section - Links to Profile page for editing */}
-        <h2 style={{ 
-          fontSize: '13px', 
-          fontWeight: 600, 
-          color: '#71717A', 
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-          marginBottom: '12px',
-          paddingLeft: '8px'
-        }}>
-          Training Profile
-        </h2>
-        <div style={{
-          background: '#1A1A1D',
-          borderRadius: '16px',
-          overflow: 'hidden',
-          border: '1px solid #2A2A2E',
-          marginBottom: '24px',
-        }}>
-          <button
-            onClick={() => handleNavigate('/ios-profile')}
-            data-testid="button-edit-profile"
-            style={{
-              width: '100%',
-              background: 'transparent',
-              border: 'none',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <User size={20} color="#71717A" />
-              <span style={{ fontSize: '15px', color: '#FFFFFF' }}>Edit Profile</span>
-            </div>
-            <ChevronRight size={18} color="#71717A" />
-          </button>
         </div>
 
         {/* Account Section - Email (read-only) */}
