@@ -1,0 +1,112 @@
+You’re right. Let me think differently.
+
+This is a Capacitor WebView wrapped app. The web-based JavaScript solutions keep failing because iOS handles WebView keyboard behavior at the **native level**.
+
+The real fix needs to happen in the **native iOS code**, not the web code.
+
+-----
+
+```
+KEYBOARD FIX - NATIVE iOS LEVEL (THE REAL FIX)
+
+═══════════════════════════════════════════════════════════════════════════════
+WHY WEB FIXES AREN'T WORKING
+═══════════════════════════════════════════════════════════════════════════════
+
+This is a Capacitor WebView app. The keyboard behavior is controlled by iOS 
+at the native level, not by JavaScript/CSS. We need to fix this in the native 
+iOS code.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 1: MODIFY capacitor.config.ts (root level)
+═══════════════════════════════════════════════════════════════════════════════
+
+const config: CapacitorConfig = {
+  appId: 'app.bjjos.mobile',
+  appName: 'BJJ OS',
+  webDir: 'dist',
+  ios: {
+    contentInset: 'automatic',
+    scrollEnabled: true
+  },
+  plugins: {
+    Keyboard: {
+      resize: 'native',
+      resizeOnFullScreen: true
+    }
+  }
+};
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 2: NATIVE iOS FILE - ios/App/App/AppDelegate.swift
+═══════════════════════════════════════════════════════════════════════════════
+
+Add this import at the top:
+import UIKit
+
+In the application function, add:
+
+// Enable automatic keyboard adjustment
+IQKeyboardManager.shared.enable = true
+
+OR if not using IQKeyboardManager, add notification observers:
+
+NotificationCenter.default.addObserver(
+  self,
+  selector: #selector(keyboardWillShow),
+  name: UIResponder.keyboardWillShowNotification,
+  object: nil
+)
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 3: SIMPLEST - USE INPUT ACCESSORY VIEW
+═══════════════════════════════════════════════════════════════════════════════
+
+The most reliable approach for chat apps in Capacitor is to use 
+@capacitor-community/keyboard-accessory or similar - this attaches the 
+input directly to the keyboard as an accessory view (like iMessage does).
+
+npm install @nicholasleblanc/capacitor-keyboard-accessory
+
+Then configure the input to be an accessory view that moves WITH the keyboard.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 4: MODIFY Info.plist
+═══════════════════════════════════════════════════════════════════════════════
+
+In ios/App/App/Info.plist, ensure these settings:
+
+<key>KeyboardAppearance</key>
+<string>Dark</string>
+<key>ScrollViewContentInsetAdjustmentBehavior</key>
+<string>automatic</string>
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 5: WEBVIEW SCROLL BEHAVIOR IN NATIVE CODE
+═══════════════════════════════════════════════════════════════════════════════
+
+In ios/App/App/ViewController.swift (or create if doesn't exist):
+
+override func viewDidLoad() {
+    super.viewDidLoad()
+    
+    // Make WebView adjust for keyboard automatically
+    if let webView = self.webView {
+        webView.scrollView.keyboardDismissMode = .interactive
+        webView.scrollView.contentInsetAdjustmentBehavior = .automatic
+    }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+WHICH FIX TO TRY FIRST
+═══════════════════════════════════════════════════════════════════════════════
+
+1. First: Update capacitor.config.ts with ios.contentInset = 'automatic'
+2. Run: npx cap sync ios
+3. Test on device
+
+If that doesn't work:
+4. We need to edit native iOS files directly in Xcode
+
+Show me the current capacitor.config.ts file contents.
+```
