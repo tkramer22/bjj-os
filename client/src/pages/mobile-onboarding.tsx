@@ -36,6 +36,31 @@ export default function MobileOnboardingPage() {
     { value: "both", label: "Both" },
   ];
 
+  // Convert between units when toggling
+  const handleUnitToggle = (toMetric: boolean) => {
+    if (toMetric && !formData.useMetric) {
+      // Converting from imperial to metric
+      const totalInches = formData.heightFeet * 12 + formData.heightInches;
+      const cm = Math.round(totalInches * 2.54);
+      setFormData({
+        ...formData,
+        heightCm: cm,
+        weight: Math.round(formData.weight / 2.205), // lbs to kg
+        useMetric: true
+      });
+    } else if (!toMetric && formData.useMetric) {
+      // Converting from metric to imperial
+      const totalInches = Math.round(formData.heightCm / 2.54);
+      setFormData({
+        ...formData,
+        heightFeet: Math.floor(totalInches / 12),
+        heightInches: totalInches % 12,
+        weight: Math.round(formData.weight * 2.205), // kg to lbs
+        useMetric: false
+      });
+    }
+  };
+
   const handleComplete = async () => {
     setIsLoading(true);
     
@@ -331,7 +356,7 @@ export default function MobileOnboardingPage() {
               marginBottom: "1.5rem" 
             }}>
               <button
-                onClick={() => setFormData({ ...formData, useMetric: false })}
+                onClick={() => handleUnitToggle(false)}
                 style={{
                   padding: "0.5rem 1rem",
                   borderRadius: "0.5rem",
@@ -345,7 +370,7 @@ export default function MobileOnboardingPage() {
                 Imperial
               </button>
               <button
-                onClick={() => setFormData({ ...formData, useMetric: true })}
+                onClick={() => handleUnitToggle(true)}
                 style={{
                   padding: "0.5rem 1rem",
                   borderRadius: "0.5rem",

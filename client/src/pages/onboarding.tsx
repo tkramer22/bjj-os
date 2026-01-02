@@ -38,6 +38,24 @@ export default function OnboardingPage() {
   const [weight, setWeight] = useState(170);
   const [useMetric, setUseMetric] = useState(false);
 
+  // Convert between units when toggling
+  const handleUnitToggle = (toMetric: boolean) => {
+    if (toMetric && !useMetric) {
+      // Converting from imperial to metric
+      const totalInches = heightFeet * 12 + heightInches;
+      const cm = Math.round(totalInches * 2.54);
+      setHeightCm(cm);
+      setWeight(Math.round(weight / 2.205)); // lbs to kg
+    } else if (!toMetric && useMetric) {
+      // Converting from metric to imperial
+      const totalInches = Math.round(heightCm / 2.54);
+      setHeightFeet(Math.floor(totalInches / 12));
+      setHeightInches(totalInches % 12);
+      setWeight(Math.round(weight * 2.205)); // kg to lbs
+    }
+    setUseMetric(toMetric);
+  };
+
   const getStepNumber = () => {
     switch (step) {
       case "name": return 1;
@@ -305,7 +323,7 @@ export default function OnboardingPage() {
             {/* Unit toggle */}
             <div className="flex justify-center gap-2 mb-6">
               <button
-                onClick={() => setUseMetric(false)}
+                onClick={() => handleUnitToggle(false)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   !useMetric
                     ? "bg-[hsl(var(--bjj-primary-purple))] text-white"
@@ -316,7 +334,7 @@ export default function OnboardingPage() {
                 Imperial
               </button>
               <button
-                onClick={() => setUseMetric(true)}
+                onClick={() => handleUnitToggle(true)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   useMetric
                     ? "bg-[hsl(var(--bjj-primary-purple))] text-white"
