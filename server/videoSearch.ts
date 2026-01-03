@@ -696,10 +696,25 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // STEP 1: POSITION FILTER (MANDATORY when detected)
-    // If user mentions "half guard", "mount", "back", etc. - this is NON-NEGOTIABLE
+    // STEP 1: POSITION FILTER (CONDITIONAL - NOT mandatory when specific technique is mentioned)
+    // If user mentions "half guard escape" - position matters
+    // If user mentions "front headlock guillotine" - technique (guillotine) takes priority
     // ═══════════════════════════════════════════════════════════════════════════
-    if (intent.positionCategory) {
+    
+    // Check if user mentioned a specific named technique (these should take priority over position)
+    const SPECIFIC_TECHNIQUES = [
+      'guillotine', 'armbar', 'triangle', 'kimura', 'americana', 'omoplata',
+      'rear naked', 'rnc', 'darce', "d'arce", 'anaconda', 'ezekiel', 'arm triangle',
+      'bow and arrow', 'loop choke', 'baseball choke', 'north south choke',
+      'heel hook', 'knee bar', 'kneebar', 'toe hold', 'calf slicer',
+      'berimbolo', 'kiss of the dragon', 'leg drag', 'knee slice', 'knee cut'
+    ];
+    const hasSpecificTechnique = intent.searchTerms.some(term => 
+      SPECIFIC_TECHNIQUES.some(t => term.toLowerCase().includes(t))
+    );
+    
+    if (intent.positionCategory && !hasSpecificTechnique) {
+      // Position filter is MANDATORY only when NO specific technique is mentioned
       // Handle positions that might be stored with different variations
       const positionVariations: string[] = [intent.positionCategory];
       
@@ -727,6 +742,10 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
       conditions.push(or(...positionConditions));
       
       console.log(`[VIDEO SEARCH] 🎯 POSITION LOCKED: ${intent.positionCategory} (${positionVariations.length} variations)`);
+    } else if (intent.positionCategory && hasSpecificTechnique) {
+      // When specific technique is mentioned, position becomes OPTIONAL (prefer but don't require)
+      console.log(`[VIDEO SEARCH] 📌 Position "${intent.positionCategory}" detected but TECHNIQUE "${intent.searchTerms.join(', ')}" takes priority`);
+      console.log(`[VIDEO SEARCH] 📌 Searching technique across ALL positions (better coverage)`);
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
