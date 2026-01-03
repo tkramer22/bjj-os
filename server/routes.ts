@@ -405,37 +405,46 @@ export function registerRoutes(app: Express): Server {
   // ============================================================================
   // VERSION ENDPOINT (Cache Busting)
   // ============================================================================
+  // Version with unique build ID to track deployments
+  const BUILD_ID = 'BUILD_20260103_1650';
+  
   app.get('/api/version', (req, res) => {
     res.json({
-      version: '6.0.6',
+      version: '6.0.7',
+      buildId: BUILD_ID,
       buildTime: new Date().toISOString(),
-      features: ['semantic-search', 'perspective-filtering', 'instructor-search', 'fallback-quality', 'error-handling', 'technique-priority-search']
+      features: ['semantic-search', 'perspective-filtering', 'instructor-search', 'fallback-quality', 'error-handling', 'technique-priority-search', 'guillotine-fix'],
+      fixes: ['GUILLOTINE_FIX: Technique takes priority over position filter when specific techniques mentioned']
     });
   });
   
   // ============================================================================
-  // DIAGNOSTIC ENDPOINT - Test Video Search in Production
+  // DIAGNOSTIC ENDPOINT - Test Video Search in Production (NO AUTH - for debugging)
   // ============================================================================
   app.get('/api/debug/video-search', async (req, res) => {
     try {
       const query = (req.query.q as string) || 'guillotine';
       const { searchVideos } = await import('./videoSearch');
       
-      console.log(`[PRODUCTION DEBUG] Testing video search for: "${query}"`);
+      console.log(`[PRODUCTION DEBUG v6.0.7] Testing video search for: "${query}"`);
       
       const result = await searchVideos({
         userMessage: query
       });
       
-      console.log(`[PRODUCTION DEBUG] Found ${result.videos.length} videos, noMatchFound=${result.noMatchFound}`);
+      console.log(`[PRODUCTION DEBUG v6.0.7] Found ${result.videos.length} videos, noMatchFound=${result.noMatchFound}`);
       
       res.json({
         query,
         videosFound: result.videos.length,
         noMatchFound: result.noMatchFound,
         searchIntent: result.searchIntent,
-        version: '6.0.6',
+        version: '6.0.7',
+        buildId: BUILD_ID,
         timestamp: new Date().toISOString(),
+        techniqueOverrideActive: result.searchIntent.searchTerms?.some((t: string) => 
+          ['guillotine', 'armbar', 'triangle', 'kimura'].some(tech => t.toLowerCase().includes(tech))
+        ) || false,
         videos: result.videos.slice(0, 10).map(v => ({
           id: v.id,
           title: v.title,
@@ -444,8 +453,8 @@ export function registerRoutes(app: Express): Server {
         }))
       });
     } catch (error: any) {
-      console.error('[PRODUCTION DEBUG] Video search error:', error);
-      res.status(500).json({ error: error.message, version: '6.0.6' });
+      console.error('[PRODUCTION DEBUG v6.0.7] Video search error:', error);
+      res.status(500).json({ error: error.message, version: '6.0.7', buildId: BUILD_ID });
     }
   });
   
