@@ -47,17 +47,23 @@ export async function buildSystemPrompt(userId: string, struggleAreaBoost?: stri
 
   // 2. LOAD OR USE PRELOADED VIDEOS with smart filtering
   // ═══════════════════════════════════════════════════════════════════════════
-  // CRITICAL: If noMatchFound is true, DON'T inject any fallback videos
-  // This prevents Claude from seeing unrelated videos and recommending them
+  // CRITICAL FIX (Jan 2026): ALWAYS include some high-quality videos
+  // Even when noMatchFound=true, include general high-quality videos so Professor OS
+  // can proactively recommend related content. Just tell Claude to be honest about
+  // not having the specific technique.
   // ═══════════════════════════════════════════════════════════════════════════
-  let videoLibrary;
-  if (dynamicContext?.noMatchFound) {
-    videoLibrary = []; // NO fallback videos when user searched for something we don't have
-    console.log('[SYSTEM PROMPT] ⚠️ noMatchFound=true - SUPPRESSING fallback video library');
-  } else if (dynamicContext?.preloadedVideos && dynamicContext.preloadedVideos.length > 0) {
+  let videoLibrary: any[] = [];
+  const noMatchForSpecificTechnique = dynamicContext?.noMatchFound;
+  
+  if (dynamicContext?.preloadedVideos && dynamicContext.preloadedVideos.length > 0 && !noMatchForSpecificTechnique) {
+    // Use preloaded videos if search found matches
     videoLibrary = dynamicContext.preloadedVideos.slice(0, 20);
     console.log('[SYSTEM PROMPT] Using preloaded video library:', videoLibrary.length, 'videos');
   } else {
+    // Load high-quality fallback videos (even when noMatchFound=true)
+    if (noMatchForSpecificTechnique) {
+      console.log('[SYSTEM PROMPT] ⚠️ noMatchFound=true - Loading general high-quality videos for proactive recommendations');
+    }
     let loadedVideos = await db.select({
       id: aiVideoKnowledge.id,
       title: aiVideoKnowledge.title,
@@ -682,26 +688,25 @@ REMEMBER: This is ${displayName}'s journey. You're their training partner, not a
       fullPrompt += `
 
 ═══════════════════════════════════════════════════════════════════════════════
-⚠️ CRITICAL INSTRUCTION: NO VIDEOS FOUND FOR "${searchedTechnique.toUpperCase()}"
+⚠️ SPECIAL CASE: NO EXACT VIDEO FOR "${searchedTechnique.toUpperCase()}"
 ═══════════════════════════════════════════════════════════════════════════════
 
-The user asked about "${searchedTechnique}" but I don't have any videos in my library that specifically cover this technique.
+I don't have a video specifically titled "${searchedTechnique}" in my library yet.
 
-**DO NOT:**
-- Recommend videos that aren't specifically about "${searchedTechnique}"
-- Suggest random or vaguely related videos
-- Make up video titles or instructors
+**STILL DO THIS:**
+1. Give a great conceptual breakdown of ${searchedTechnique} (you still know how to teach it!)
+2. PROACTIVELY recommend 1-2 RELATED videos from my library that cover similar concepts
+   - If it's a choke, recommend other chokes from elite instructors
+   - If it's a guard technique, recommend related guard content
+   - Always pick the HIGHEST QUALITY videos (9.0+ score) for related positions/submissions
+3. Be honest: "I don't have a dedicated ${searchedTechnique} video yet, but here's great related content..."
 
-**DO:**
-- Acknowledge honestly that you don't have videos on "${searchedTechnique}" yet
-- Say something like: "I don't have ${searchedTechnique} videos in my library yet, but I'm always adding new content."
-- Offer to help with the technique conceptually (explain key concepts, common mistakes, etc.)
-- Ask if they'd like videos on a related technique you DO have
+**RULE: ALWAYS include at least ONE video card [VIDEO: Title by Instructor] even when no exact match.**
 
-Be genuine - Professor OS's credibility comes from accurate, honest recommendations.
+Professor OS never leaves users without actionable video content. Find the closest match from the library above.
 ═══════════════════════════════════════════════════════════════════════════════
 `;
-      console.log(`[SYSTEM PROMPT] ⚠️ Added NO_MATCH_FOUND instruction for: "${searchedTechnique}"`);
+      console.log(`[SYSTEM PROMPT] ⚠️ Added PROACTIVE_RELATED_VIDEO instruction for: "${searchedTechnique}"`);
     }
     
     // Add dynamic video search results with knowledge enhancement

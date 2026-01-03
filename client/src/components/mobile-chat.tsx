@@ -42,7 +42,45 @@ export function MobileChat() {
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
+  // Use sessionStorage to persist loadedUserId across tab switches (prevents re-loading welcome message)
+  // Only persist actual user IDs (not 'none'), so that a fresh login triggers proper history load
+  const [loadedUserId, setLoadedUserIdInternal] = useState<string | null>(() => {
+    try {
+      const stored = sessionStorage.getItem('bjjos_chat_loaded_user_id');
+      // Don't restore 'none' sentinel - only actual user IDs
+      return stored && stored !== 'none' ? stored : null;
+    } catch {
+      return null;
+    }
+  });
+  
+  // Track if welcome message was shown this session (separate from user ID)
+  const [welcomeShownThisSession, setWelcomeShownThisSession] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('bjjos_welcome_shown') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  
+  // Wrapper that also persists to sessionStorage
+  const setLoadedUserId = (id: string | null) => {
+    setLoadedUserIdInternal(id);
+    try {
+      if (id && id !== 'none') {
+        sessionStorage.setItem('bjjos_chat_loaded_user_id', id);
+      } else {
+        sessionStorage.removeItem('bjjos_chat_loaded_user_id');
+      }
+      // Mark welcome as shown when we load any user
+      if (id) {
+        sessionStorage.setItem('bjjos_welcome_shown', 'true');
+        setWelcomeShownThisSession(true);
+      }
+    } catch {
+      // sessionStorage not available
+    }
+  };
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [oldestMessageTimestamp, setOldestMessageTimestamp] = useState<string | null>(null);

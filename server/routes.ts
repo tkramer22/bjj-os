@@ -406,15 +406,19 @@ export function registerRoutes(app: Express): Server {
   // VERSION ENDPOINT (Cache Busting)
   // ============================================================================
   // Version with unique build ID to track deployments
-  const BUILD_ID = 'BUILD_20260103_1650';
+  const BUILD_ID = 'BUILD_20260103_1710';
   
   app.get('/api/version', (req, res) => {
     res.json({
-      version: '6.0.7',
+      version: '6.0.8',
       buildId: BUILD_ID,
       buildTime: new Date().toISOString(),
-      features: ['semantic-search', 'perspective-filtering', 'instructor-search', 'fallback-quality', 'error-handling', 'technique-priority-search', 'guillotine-fix'],
-      fixes: ['GUILLOTINE_FIX: Technique takes priority over position filter when specific techniques mentioned']
+      features: ['semantic-search', 'perspective-filtering', 'instructor-search', 'fallback-quality', 'error-handling', 'technique-priority-search', 'guillotine-fix', 'proactive-video-recs'],
+      fixes: [
+        'VIDEO_COUNT_FIX: Library now shows total count from ai_video_knowledge',
+        'PROACTIVE_VIDEOS: Professor OS always includes at least one video even for no-match searches',
+        'WELCOME_MSG_FIX: Welcome message only shows on new session, not tab switches'
+      ]
     });
   });
   
@@ -426,24 +430,24 @@ export function registerRoutes(app: Express): Server {
       const query = (req.query.q as string) || 'guillotine';
       const { searchVideos } = await import('./videoSearch');
       
-      console.log(`[PRODUCTION DEBUG v6.0.7] Testing video search for: "${query}"`);
+      console.log(`[PRODUCTION DEBUG v6.0.8] Testing video search for: "${query}"`);
       
       const result = await searchVideos({
         userMessage: query
       });
       
-      console.log(`[PRODUCTION DEBUG v6.0.7] Found ${result.videos.length} videos, noMatchFound=${result.noMatchFound}`);
+      console.log(`[PRODUCTION DEBUG v6.0.8] Found ${result.videos.length} videos, noMatchFound=${result.noMatchFound}`);
       
       res.json({
         query,
         videosFound: result.videos.length,
         noMatchFound: result.noMatchFound,
         searchIntent: result.searchIntent,
-        version: '6.0.7',
+        version: '6.0.8',
         buildId: BUILD_ID,
         timestamp: new Date().toISOString(),
         techniqueOverrideActive: result.searchIntent.searchTerms?.some((t: string) => 
-          ['guillotine', 'armbar', 'triangle', 'kimura'].some(tech => t.toLowerCase().includes(tech))
+          ['guillotine', 'armbar', 'triangle', 'kimura', 'anaconda'].some(tech => t.toLowerCase().includes(tech))
         ) || false,
         videos: result.videos.slice(0, 10).map(v => ({
           id: v.id,
@@ -453,8 +457,8 @@ export function registerRoutes(app: Express): Server {
         }))
       });
     } catch (error: any) {
-      console.error('[PRODUCTION DEBUG v6.0.7] Video search error:', error);
-      res.status(500).json({ error: error.message, version: '6.0.7', buildId: BUILD_ID });
+      console.error('[PRODUCTION DEBUG v6.0.8] Video search error:', error);
+      res.status(500).json({ error: error.message, version: '6.0.8', buildId: BUILD_ID });
     }
   });
   
@@ -7186,6 +7190,12 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
   // Get all analyzed videos (user-facing library)
   app.get('/api/ai/videos', async (req, res) => {
     try {
+      // Get TOTAL count first (for accurate dashboard display)
+      const [totalCountResult] = await db.select({ count: sql<number>`COUNT(*)` })
+        .from(aiVideoKnowledge);
+      const totalCount = Number(totalCountResult?.count || 0);
+      
+      // Then get browsable videos (with thumbnails for display)
       const videos = await db.select({
         id: aiVideoKnowledge.id,
         youtubeId: aiVideoKnowledge.youtubeId,
@@ -7233,7 +7243,8 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       }));
       
       res.json({
-        count: transformedVideos.length,
+        count: transformedVideos.length, // Browsable videos (what the UI shows)
+        totalCount: totalCount, // TOTAL videos in library (for header/stats display)
         videos: transformedVideos
       });
     } catch (error: any) {
