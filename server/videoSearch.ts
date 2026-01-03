@@ -26,6 +26,8 @@ interface VideoSearchResult {
   videos: any[];
   totalMatches: number;
   searchIntent: SearchIntent;
+  noMatchFound?: boolean; // True when search found zero matching videos - DON'T fallback to random videos
+  searchTermsValidated?: boolean; // True when all search terms were matched in returned videos
 }
 
 // ============================================================================
@@ -802,6 +804,10 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     // ═══════════════════════════════════════════════════════════════════════════
     // STEP 3: MANDATORY TECHNIQUE TERM MATCHING - SEARCH ALL GEMINI FIELDS
     // ═══════════════════════════════════════════════════════════════════════════
+    // CRITICAL FIX: Apply term matching ALWAYS when searchTerms exist, NOT just
+    // when no positionCategory. This fixes "half guard guillotine" returning
+    // half guard videos without guillotine content.
+    // 
     // The REAL value of Gemini analysis is finding content by what's IN the video,
     // not just the title. A video called "Front Headlock System" should still appear
     // for "guillotine" if Gemini found guillotine content in it.
@@ -813,7 +819,7 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     //                               instructorTips, commonMistakes, fullSummary,
     //                               problemSolved, setupsFrom, chainsTo, counters
     // ═══════════════════════════════════════════════════════════════════════════
-    if (intent.searchTerms.length > 0 && !intent.positionCategory) {
+    if (intent.searchTerms.length > 0) {
       // For EACH search term, create a MANDATORY match requirement
       // All terms must match (AND), but each term can match any field (OR)
       for (const term of intent.searchTerms) {
@@ -1074,27 +1080,78 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     const totalMatches = Number(countResult[0]?.count) || 0;
     
     // ═══════════════════════════════════════════════════════════════════════════
+    // POST-VALIDATION: Verify returned videos ACTUALLY match the search terms
+    // This catches edge cases where DB query succeeded but results don't match
+    // ═══════════════════════════════════════════════════════════════════════════
+    let validatedVideos = videos;
+    let searchTermsValidated = true;
+    
+    if (intent.searchTerms.length > 0 && videos.length > 0) {
+      const termsLower = intent.searchTerms.map(t => t.toLowerCase());
+      
+      // Filter videos that ACTUALLY contain at least one of the search terms
+      // CRITICAL: Include ALL fields we search in SQL to avoid false "no match" results
+      validatedVideos = videos.filter(v => {
+        const searchableText = [
+          // From aiVideoKnowledge (SQL fields)
+          v.title || '',
+          v.techniqueName || '',
+          v.specificTechnique || '',
+          (v.tags || []).join(' '),
+          JSON.stringify(v.problemsSolved || {}),
+          JSON.stringify(v.keyDetails || {}),
+          JSON.stringify(v.relatedTechniques || {}),
+          // From videoKnowledge (Gemini fields) - may be in response if joined
+          v.fullSummary || '',
+          (v.instructorTips || []).join(' '),
+          (v.keyConcepts || []).join(' '),
+          (v.commonMistakes || []).join(' '),
+          (v.setupsFrom || []).join(' '),
+          (v.chainsTo || []).join(' '),
+          (v.counters || []).join(' '),
+          v.positionContext || '',
+          v.problemSolved || ''
+        ].join(' ').toLowerCase();
+        
+        return termsLower.some(term => searchableText.includes(term));
+      });
+      
+      if (validatedVideos.length < videos.length) {
+        console.log(`[VIDEO SEARCH] ⚠️ POST-VALIDATION: Removed ${videos.length - validatedVideos.length} videos that didn't contain search terms`);
+        searchTermsValidated = validatedVideos.length > 0;
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
     // DEBUG: Final results trace
     // ═══════════════════════════════════════════════════════════════════════════
     console.log('═══════════════════════════════════════════════════════════════');
-    console.log(`[VIDEO SEARCH DEBUG] FINAL RESULTS: ${videos.length} videos, ${totalMatches} total matches`);
+    console.log(`[VIDEO SEARCH DEBUG] FINAL RESULTS: ${validatedVideos.length} videos, ${totalMatches} total matches`);
+    console.log(`[VIDEO SEARCH DEBUG] Search terms: [${intent.searchTerms.join(', ')}]`);
+    console.log(`[VIDEO SEARCH DEBUG] Terms validated: ${searchTermsValidated}`);
     console.log('[VIDEO SEARCH DEBUG] First 5 videos:');
-    videos.slice(0, 5).forEach((v, i) => {
+    validatedVideos.slice(0, 5).forEach((v, i) => {
       console.log(`  ${i + 1}. "${v.title}" by ${v.instructorName} (technique_type: ${v.techniqueType}, quality: ${v.qualityScore})`);
     });
     console.log('═══════════════════════════════════════════════════════════════');
     
+    // Return noMatchFound=true if we have search terms but zero results
+    const noMatchFound = intent.searchTerms.length > 0 && validatedVideos.length === 0;
+    
     return {
-      videos: videos.slice(0, 50),
-      totalMatches,
-      searchIntent: intent
+      videos: validatedVideos.slice(0, 50),
+      totalMatches: validatedVideos.length,
+      searchIntent: intent,
+      noMatchFound,
+      searchTermsValidated
     };
   } catch (error) {
     console.error('[VIDEO SEARCH] Database error:', error);
     return {
       videos: [],
       totalMatches: 0,
-      searchIntent: intent
+      searchIntent: intent,
+      noMatchFound: true
     };
   }
 }
@@ -1178,10 +1235,14 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
   
   console.log(`[FALLBACK SEARCH] Found ${videos.length} ANALYZED videos`);
   
+  // Return noMatchFound=true if we have search terms but zero results
+  const noMatchFound = intent.searchTerms.length > 0 && videos.length === 0;
+  
   return { 
     videos, 
     totalMatches: videos.length,
-    searchIntent: intent
+    searchIntent: intent,
+    noMatchFound
   };
 }
 

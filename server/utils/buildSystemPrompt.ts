@@ -18,6 +18,9 @@ interface DynamicContext {
   newsItems?: Array<{ title: string; summary: string }>;
   preloadedUser?: any;
   preloadedVideos?: any[];
+  // CRITICAL: Flags to control video injection behavior
+  noMatchFound?: boolean; // True when search found zero matching videos for requested technique
+  searchTermsUsed?: string[]; // The specific technique terms user searched for
 }
 
 export async function buildSystemPrompt(userId: string, struggleAreaBoost?: string, dynamicContext?: DynamicContext): Promise<string> {
@@ -43,8 +46,15 @@ export async function buildSystemPrompt(userId: string, struggleAreaBoost?: stri
   const displayName = userProfile.displayName || userProfile.username || 'User';
 
   // 2. LOAD OR USE PRELOADED VIDEOS with smart filtering
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CRITICAL: If noMatchFound is true, DON'T inject any fallback videos
+  // This prevents Claude from seeing unrelated videos and recommending them
+  // ═══════════════════════════════════════════════════════════════════════════
   let videoLibrary;
-  if (dynamicContext?.preloadedVideos && dynamicContext.preloadedVideos.length > 0) {
+  if (dynamicContext?.noMatchFound) {
+    videoLibrary = []; // NO fallback videos when user searched for something we don't have
+    console.log('[SYSTEM PROMPT] ⚠️ noMatchFound=true - SUPPRESSING fallback video library');
+  } else if (dynamicContext?.preloadedVideos && dynamicContext.preloadedVideos.length > 0) {
     videoLibrary = dynamicContext.preloadedVideos.slice(0, 20);
     console.log('[SYSTEM PROMPT] Using preloaded video library:', videoLibrary.length, 'videos');
   } else {
@@ -620,10 +630,42 @@ REMEMBER: This is ${displayName}'s journey. You're their training partner, not a
     hasDynamicContext: !!dynamicContext,
     dynamicVideosCount: dynamicContext?.dynamicVideos?.length || 0,
     populationInsightsCount: dynamicContext?.populationInsights?.length || 0,
-    newsItemsCount: dynamicContext?.newsItems?.length || 0
+    newsItemsCount: dynamicContext?.newsItems?.length || 0,
+    noMatchFound: dynamicContext?.noMatchFound,
+    searchTermsUsed: dynamicContext?.searchTermsUsed
   });
   
   if (dynamicContext) {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CRITICAL: Handle "no match found" scenario - DON'T recommend random videos
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (dynamicContext.noMatchFound && dynamicContext.searchTermsUsed?.length) {
+      const searchedTechnique = dynamicContext.searchTermsUsed.join(', ');
+      fullPrompt += `
+
+═══════════════════════════════════════════════════════════════════════════════
+⚠️ CRITICAL INSTRUCTION: NO VIDEOS FOUND FOR "${searchedTechnique.toUpperCase()}"
+═══════════════════════════════════════════════════════════════════════════════
+
+The user asked about "${searchedTechnique}" but I don't have any videos in my library that specifically cover this technique.
+
+**DO NOT:**
+- Recommend videos that aren't specifically about "${searchedTechnique}"
+- Suggest random or vaguely related videos
+- Make up video titles or instructors
+
+**DO:**
+- Acknowledge honestly that you don't have videos on "${searchedTechnique}" yet
+- Say something like: "I don't have ${searchedTechnique} videos in my library yet, but I'm always adding new content."
+- Offer to help with the technique conceptually (explain key concepts, common mistakes, etc.)
+- Ask if they'd like videos on a related technique you DO have
+
+Be genuine - Professor OS's credibility comes from accurate, honest recommendations.
+═══════════════════════════════════════════════════════════════════════════════
+`;
+      console.log(`[SYSTEM PROMPT] ⚠️ Added NO_MATCH_FOUND instruction for: "${searchedTechnique}"`);
+    }
+    
     // Add dynamic video search results with knowledge enhancement
     if (dynamicContext.dynamicVideos && dynamicContext.dynamicVideos.length > 0) {
       const videoIds = dynamicContext.dynamicVideos.slice(0, 10).map(v => v.id);

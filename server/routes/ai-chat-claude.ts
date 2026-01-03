@@ -427,10 +427,16 @@ export async function handleClaudeStream(req: any, res: any) {
       }
     });
     
-    // Fallback if no matches
-    if (videoSearchResult.videos.length === 0) {
-      console.log('🔄 No exact matches, trying fallback search...');
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CRITICAL: Only use fallback when search returned 0 results AND noMatchFound is NOT set
+    // If noMatchFound is true, user searched for something we don't have - DON'T return random videos
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (videoSearchResult.videos.length === 0 && !videoSearchResult.noMatchFound) {
+      console.log('🔄 No exact matches (position/instructor only), trying fallback search...');
       videoSearchResult = await fallbackSearch(message);
+    } else if (videoSearchResult.noMatchFound) {
+      console.log('❌ No videos found for requested technique - NOT using fallback (would return wrong videos)');
+      console.log(`   Search terms: [${videoSearchResult.searchIntent.searchTerms.join(', ')}]`);
     }
     
     const videoSearchMs = Date.now() - t2;
@@ -574,7 +580,10 @@ export async function handleClaudeStream(req: any, res: any) {
       newsItems: recentNews.map(n => ({
         title: n.title || '',
         summary: n.summary || n.description || ''
-      }))
+      })),
+      // CRITICAL: Pass search status flags to prevent wrong video recommendations
+      noMatchFound: videoSearchResult.noMatchFound,
+      searchTermsUsed: videoSearchResult.searchIntent.searchTerms || []
     });
     // Append synthesized knowledge section if available
     let finalSystemPrompt = systemPrompt;
