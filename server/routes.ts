@@ -7759,10 +7759,15 @@ NEVER recommend videos from unrelated positions.
 ═══════════════════════════════════════════════════════════════`;
       }
       
-      // 3.5 FALLBACK: If semantic search returns no results, load top-quality videos
+      // 3.5 FALLBACK LOGIC: Only use fallback when search returned 0 results for generic queries
+      // ═══════════════════════════════════════════════════════════════════════════
+      // CRITICAL: If user searched for a specific technique (noMatchFound=true), 
+      // DON'T return random top-quality videos - this causes WRONG recommendations
+      // ═══════════════════════════════════════════════════════════════════════════
       let videosToUse = searchResult.videos;
-      if (!hasSemanticResults) {
-        console.log('⚠️ [SEMANTIC SEARCH] No results, falling back to top-quality videos');
+      if (!hasSemanticResults && !searchResult.noMatchFound) {
+        // Only fallback for GENERIC queries (no specific technique terms)
+        console.log('⚠️ [SEMANTIC SEARCH] Generic query with no results, using top-quality fallback');
         const fallbackVideos = await db.select({
           id: aiVideoKnowledge.id,
           title: aiVideoKnowledge.title,
@@ -7781,6 +7786,11 @@ NEVER recommend videos from unrelated positions.
         
         videosToUse = fallbackVideos;
         console.log(`📊 [FALLBACK] Loaded ${videosToUse.length} top-quality videos`);
+      } else if (!hasSemanticResults && searchResult.noMatchFound) {
+        // User searched for specific technique we don't have - DON'T return wrong videos
+        console.log(`❌ [NO MATCH] User searched for specific technique we don't have. NOT using fallback.`);
+        console.log(`   Search terms: [${searchResult.searchIntent.searchTerms.join(', ')}]`);
+        videosToUse = []; // Empty - let AI acknowledge we don't have this content
       }
       
       // 3.6 COMBINE: Semantic/fallback results + instructor-specific videos

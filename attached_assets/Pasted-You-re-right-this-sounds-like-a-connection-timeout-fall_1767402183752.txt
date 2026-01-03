@@ -1,0 +1,47 @@
+You’re right - this sounds like a **connection timeout/fallback issue**. When the database connection dropped, it fell back to returning random/cached results instead of failing gracefully.
+
+Here’s the updated prompt that addresses this:
+
+```
+CRITICAL: PROFESSOR OS VIDEO RELIABILITY - PERMANENT FIX
+
+PROBLEM IDENTIFIED:
+1. User sent message, got "not available" error
+2. Next message "worked" but returned WRONG video (buggy choke instead of guillotine)
+3. This means when database connection fails, system falls back to random/cached results
+
+THIS IS UNACCEPTABLE. Fix permanently:
+
+1. CONNECTION HANDLING:
+   - Add connection pooling to prevent timeouts
+   - Add keep-alive pings to database
+   - If connection drops, RECONNECT - do not fall back to cached results
+   - Set reasonable timeout (30 seconds) then retry
+
+2. FAILURE MODE - NEVER RETURN WRONG VIDEOS:
+   - If database unavailable: Say "I'm having trouble accessing videos right now. Try again in a moment."
+   - If search returns zero matches: Say "I couldn't find videos on [technique]"
+   - NEVER return random/cached/unrelated videos as fallback
+
+3. VALIDATION BEFORE EVERY RESPONSE:
+   - Does the video technique match what user asked for?
+   - If user said "guillotine" and video doesn't contain "guillotine" → DO NOT RETURN IT
+   - Add a validation function that checks technique match before sending
+
+4. ADD RETRY LOGIC:
+   - If first search fails, retry 2 more times
+   - Only after 3 failures show error message
+   - Log all failures for debugging
+
+5. LOGGING FOR DEBUGGING:
+   - Log every database query
+   - Log connection status
+   - Log when fallbacks are triggered (so we can remove them)
+   - Log technique requested vs technique returned
+
+6. REMOVE ALL FALLBACK/CACHED VIDEO LOGIC:
+   - Find and delete any code that returns cached or default videos
+   - There should be NO fallback - either correct results or error message
+
+This must be bulletproof. Professor OS credibility depends on ALWAYS returning relevant content or honestly saying it cannot.
+```

@@ -644,6 +644,14 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     intent.requestedInstructor = resolvedInstructor;
   }
   
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RETRY LOGIC: Attempt database queries up to 3 times before failing
+  // This prevents transient connection issues from returning wrong/cached results
+  // ═══════════════════════════════════════════════════════════════════════════
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 1000;
+  
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
   try {
     // ═══════════════════════════════════════════════════════════════════════════
     // BJJ-INTELLIGENT SEARCH: Position-first, title-matching, NO broad categories
@@ -1146,14 +1154,35 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
       searchTermsValidated
     };
   } catch (error) {
-    console.error('[VIDEO SEARCH] Database error:', error);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RETRY LOGIC: Retry on transient database errors, fail after MAX_RETRIES
+    // ═══════════════════════════════════════════════════════════════════════════
+    console.error(`[VIDEO SEARCH] Database error (attempt ${attempt}/${MAX_RETRIES}):`, error);
+    
+    if (attempt < MAX_RETRIES) {
+      console.log(`[VIDEO SEARCH] ⏳ Retrying in ${RETRY_DELAY_MS}ms...`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      continue; // Retry the loop
+    }
+    
+    // All retries exhausted - return noMatchFound=true to prevent wrong videos
+    console.error(`[VIDEO SEARCH] ❌ All ${MAX_RETRIES} retries exhausted. Returning error state.`);
     return {
       videos: [],
       totalMatches: 0,
       searchIntent: intent,
-      noMatchFound: true
+      noMatchFound: true // CRITICAL: Prevents fallback from returning random videos
     };
   }
+  } // End retry loop
+  
+  // Should never reach here, but return safe empty result if we do
+  return {
+    videos: [],
+    totalMatches: 0,
+    searchIntent: intent,
+    noMatchFound: true
+  };
 }
 
 export async function fallbackSearch(userMessage: string): Promise<VideoSearchResult> {
