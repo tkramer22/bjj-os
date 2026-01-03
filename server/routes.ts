@@ -11723,8 +11723,10 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
 
   // Quick Metrics for Mobile (Compact)
   app.get('/api/admin/quick-metrics', checkAdminAuth, async (req, res) => {
+    console.log('[QUICK-METRICS] Starting quick metrics fetch...');
     try {
       const today = new Date().toISOString().split('T')[0];
+      console.log('[QUICK-METRICS] Today:', today);
       
       // Helper to safely get rows from db.execute result (handles both array and {rows} formats)
       const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
@@ -11800,6 +11802,8 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         db.execute(sql`SELECT COUNT(DISTINCT video_id) as count FROM video_knowledge`)
       ]);
       
+      console.log('[QUICK-METRICS] All queries completed successfully');
+      
       // Safely extract rows from all results
       const totalVideosRows = getRows(totalVideos);
       const videosTodayRows = getRows(videosToday);
@@ -11872,8 +11876,9 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       });
       
     } catch (error: any) {
-      console.error('[DEV OS] Quick metrics error:', error);
-      res.status(500).json({ error: 'Failed to fetch quick metrics' });
+      console.error('[QUICK-METRICS] ERROR:', error.message);
+      console.error('[QUICK-METRICS] Stack:', error.stack);
+      res.status(500).json({ error: 'Failed to fetch quick metrics', details: error.message });
     }
   });
 
