@@ -407,10 +407,46 @@ export function registerRoutes(app: Express): Server {
   // ============================================================================
   app.get('/api/version', (req, res) => {
     res.json({
-      version: '6.0.5',
+      version: '6.0.6',
       buildTime: new Date().toISOString(),
-      features: ['semantic-search', 'perspective-filtering', 'instructor-search', 'fallback-quality', 'error-handling']
+      features: ['semantic-search', 'perspective-filtering', 'instructor-search', 'fallback-quality', 'error-handling', 'technique-priority-search']
     });
+  });
+  
+  // ============================================================================
+  // DIAGNOSTIC ENDPOINT - Test Video Search in Production
+  // ============================================================================
+  app.get('/api/debug/video-search', async (req, res) => {
+    try {
+      const query = (req.query.q as string) || 'guillotine';
+      const { searchVideos } = await import('./videoSearch');
+      
+      console.log(`[PRODUCTION DEBUG] Testing video search for: "${query}"`);
+      
+      const result = await searchVideos({
+        userMessage: query
+      });
+      
+      console.log(`[PRODUCTION DEBUG] Found ${result.videos.length} videos, noMatchFound=${result.noMatchFound}`);
+      
+      res.json({
+        query,
+        videosFound: result.videos.length,
+        noMatchFound: result.noMatchFound,
+        searchIntent: result.searchIntent,
+        version: '6.0.6',
+        timestamp: new Date().toISOString(),
+        videos: result.videos.slice(0, 10).map(v => ({
+          id: v.id,
+          title: v.title,
+          instructor: v.instructorName,
+          quality: v.qualityScore
+        }))
+      });
+    } catch (error: any) {
+      console.error('[PRODUCTION DEBUG] Video search error:', error);
+      res.status(500).json({ error: error.message, version: '6.0.6' });
+    }
   });
   
   // ============================================================================
