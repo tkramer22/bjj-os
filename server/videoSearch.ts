@@ -1216,9 +1216,35 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
   
   let videos;
   
-  // PRIORITY 0: Instructor filter is HIGHEST priority
-  // If user asked for a specific instructor, search by instructor first
-  if (intent.requestedInstructor) {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PRIORITY 0: TECHNIQUE + INSTRUCTOR (when both are present)
+  // CRITICAL FIX: When user mentions a technique, ALWAYS require technique match
+  // even when they also mention an instructor. "Marcelo guillotine" must return
+  // ONLY guillotine videos by Marcelo, not any random Marcelo video.
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (intent.requestedInstructor && intent.searchTerms.length > 0) {
+    console.log(`[FALLBACK SEARCH] Using INSTRUCTOR + TECHNIQUE filter: ${intent.requestedInstructor} + [${intent.searchTerms.join(', ')}]`);
+    
+    // Build technique matching conditions (must match at least one term)
+    const termConditions = intent.searchTerms.map(term => 
+      sql`(${aiVideoKnowledge.title} ILIKE ${`%${term}%`} OR 
+          ${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`} OR
+          COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`})`
+    );
+    
+    videos = await db.select()
+      .from(aiVideoKnowledge)
+      .where(and(
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
+        ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`),
+        or(...termConditions), // MUST match the technique
+        analyzedVideoFilter
+      ))
+      .orderBy(desc(aiVideoKnowledge.qualityScore))
+      .limit(50);
+  }
+  // PRIORITY 0B: Instructor ONLY (when no technique specified)
+  else if (intent.requestedInstructor) {
     console.log(`[FALLBACK SEARCH] Using instructor filter: ${intent.requestedInstructor} (ANALYZED only)`);
     videos = await db.select()
       .from(aiVideoKnowledge)

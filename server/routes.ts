@@ -410,14 +410,15 @@ export function registerRoutes(app: Express): Server {
   
   app.get('/api/version', (req, res) => {
     res.json({
-      version: '6.0.8',
+      version: '6.0.9',
       buildId: BUILD_ID,
       buildTime: new Date().toISOString(),
-      features: ['semantic-search', 'perspective-filtering', 'instructor-search', 'fallback-quality', 'error-handling', 'technique-priority-search', 'guillotine-fix', 'proactive-video-recs'],
+      features: ['semantic-search', 'perspective-filtering', 'instructor-search', 'fallback-quality', 'error-handling', 'technique-priority-search', 'guillotine-fix', 'proactive-video-recs', 'relevance-fix'],
       fixes: [
         'VIDEO_COUNT_FIX: Library now shows total count from ai_video_knowledge',
         'PROACTIVE_VIDEOS: Professor OS always includes at least one video even for no-match searches',
-        'WELCOME_MSG_FIX: Welcome message only shows on new session, not tab switches'
+        'WELCOME_MSG_FIX: Welcome message only shows on new session, not tab switches',
+        'RELEVANCE_FIX: fallbackSearch now requires technique match when searchTerms exist - prevents irrelevant video recs'
       ]
     });
   });
@@ -430,20 +431,20 @@ export function registerRoutes(app: Express): Server {
       const query = (req.query.q as string) || 'guillotine';
       const { searchVideos } = await import('./videoSearch');
       
-      console.log(`[PRODUCTION DEBUG v6.0.8] Testing video search for: "${query}"`);
+      console.log(`[PRODUCTION DEBUG v6.0.9] Testing video search for: "${query}"`);
       
       const result = await searchVideos({
         userMessage: query
       });
       
-      console.log(`[PRODUCTION DEBUG v6.0.8] Found ${result.videos.length} videos, noMatchFound=${result.noMatchFound}`);
+      console.log(`[PRODUCTION DEBUG v6.0.9] Found ${result.videos.length} videos, noMatchFound=${result.noMatchFound}`);
       
       res.json({
         query,
         videosFound: result.videos.length,
         noMatchFound: result.noMatchFound,
         searchIntent: result.searchIntent,
-        version: '6.0.8',
+        version: '6.0.9',
         buildId: BUILD_ID,
         timestamp: new Date().toISOString(),
         techniqueOverrideActive: result.searchIntent.searchTerms?.some((t: string) => 
@@ -457,8 +458,8 @@ export function registerRoutes(app: Express): Server {
         }))
       });
     } catch (error: any) {
-      console.error('[PRODUCTION DEBUG v6.0.8] Video search error:', error);
-      res.status(500).json({ error: error.message, version: '6.0.8', buildId: BUILD_ID });
+      console.error('[PRODUCTION DEBUG v6.0.9] Video search error:', error);
+      res.status(500).json({ error: error.message, version: '6.0.9', buildId: BUILD_ID });
     }
   });
   
