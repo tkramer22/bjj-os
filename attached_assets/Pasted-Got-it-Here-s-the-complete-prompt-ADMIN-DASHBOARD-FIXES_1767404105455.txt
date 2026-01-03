@@ -1,0 +1,107 @@
+Got it. Here’s the complete prompt:
+
+```
+ADMIN DASHBOARD - FIXES AND IMPROVEMENTS
+
+═══════════════════════════════════════════════════════════════════════════════
+1. HEADER/LOGO UPDATE
+═══════════════════════════════════════════════════════════════════════════════
+
+Replace the current circular "BJJ" logo and "BJJ OS / Admin Dashboard" text with:
+- The actual BJJ/OS logo (the one with the diagonal gradient slash)
+- Below it just say "Admin Dashboard"
+- Remove the circular purple BJJ icon and the separate "BJJ OS" text
+
+═══════════════════════════════════════════════════════════════════════════════
+2. TOP CARDS - RESTRUCTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+Current: Library | Curation | Users | MRR
+New:     Library | Gemini Analyzed | Curation | Users
+
+Changes:
+- REMOVE the MRR card (Monthly Revenue already shown in System Overview)
+- ADD new "Gemini Analyzed" card showing: "X / Y" format (analyzed / total videos)
+- Library card: Make CLICKABLE → navigates to /admin/videos
+- Users card: Make CLICKABLE → navigates to /admin/users
+- Users count must be ACCURATE - only count non-deleted, active users
+
+═══════════════════════════════════════════════════════════════════════════════
+3. USERS COUNT - FIX ACCURACY
+═══════════════════════════════════════════════════════════════════════════════
+
+The "61 users" count appears incorrect. Fix the query:
+
+- Only count users where deleted = false (or deleted_at IS NULL)
+- Only count active users
+- Must match what shows on the Users page
+- Query should be: SELECT COUNT(*) FROM users WHERE deleted_at IS NULL
+
+═══════════════════════════════════════════════════════════════════════════════
+4. CURATION EFFICIENCY - FIX + ADD GEMINI
+═══════════════════════════════════════════════════════════════════════════════
+
+Current shows all zeros even though curation ran today. Fix:
+
+- Discovered: Count videos discovered from YouTube today
+- Analyzed: Count videos sent to Gemini for analysis today
+- Accepted: Count videos added to library today
+- Rejected: Count videos that failed quality check today
+- Skipped: Count pre-filtered videos today
+
+ADD a row or section showing:
+- "Gemini Analyzed Today: X"
+- This tracks how many videos were processed by Gemini today
+
+Make sure stats are actually being logged when curation runs.
+
+═══════════════════════════════════════════════════════════════════════════════
+5. USER ACTIVITY - FIX TYPE ERROR
+═══════════════════════════════════════════════════════════════════════════════
+
+Error: "The 'string' argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date"
+
+Find where this error occurs and fix the type mismatch:
+- A Date object is being passed where a string is expected
+- Convert the Date to string using .toISOString() or similar
+- Test that User Activity loads without error
+
+═══════════════════════════════════════════════════════════════════════════════
+6. REFRESH BUTTON - MAKE IT WORK
+═══════════════════════════════════════════════════════════════════════════════
+
+The refresh button (top right) must actually refresh all dashboard data:
+- Re-fetch library count
+- Re-fetch Gemini analyzed count
+- Re-fetch users count
+- Re-fetch curation efficiency stats
+- Re-fetch user activity
+- Re-fetch system overview
+
+Add a loading state while refreshing.
+
+═══════════════════════════════════════════════════════════════════════════════
+7. DATA ACCURACY - CRITICAL
+═══════════════════════════════════════════════════════════════════════════════
+
+Every number on this dashboard must reflect REAL database counts:
+- Library count = SELECT COUNT(*) FROM videos (or ai_video_knowledge)
+- Gemini analyzed = SELECT COUNT(*) FROM ai_video_knowledge WHERE gemini_analyzed = true (or equivalent field)
+- Users = SELECT COUNT(*) FROM users WHERE deleted_at IS NULL
+- Subscriptions = SELECT COUNT(*) FROM subscriptions WHERE status = 'active'
+
+No hardcoded numbers. No cached stale data. Real-time accuracy.
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST AFTER IMPLEMENTING
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Logo shows BJJ/OS with gradient slash, "Admin Dashboard" below
+2. Click Library card → goes to Videos page
+3. Click Users card → goes to Users page
+4. Users count matches actual Users page count
+5. Gemini Analyzed card shows X / Y format
+6. Curation Efficiency shows real data (not zeros) after running curation
+7. User Activity loads without error
+8. Refresh button reloads all data with loading state
+```

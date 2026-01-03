@@ -71,14 +71,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         <div className="flex flex-col h-full">
           {/* Sidebar Header */}
           <div className="p-6 border-b" style={{ marginTop: '80px' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)' }}>
-                <span className="text-white font-bold text-lg">BJJ</span>
-              </div>
-              <div>
-                <h2 className="font-bold text-lg">BJJ OS</h2>
-                <p className="text-xs text-muted-foreground">Admin Dashboard</p>
-              </div>
+            <div className="flex flex-col items-start gap-2">
+              <img src="/bjjos-logo.png" alt="BJJ/OS" className="h-8 w-auto" />
+              <p className="text-sm text-muted-foreground font-medium">Admin Dashboard</p>
             </div>
           </div>
 
@@ -173,6 +168,7 @@ interface QuickMetrics {
   signedUpToday: number;
   activeSubscriptions: number;
   mrr: string;
+  geminiAnalyzed: number;
   curationEfficiency: {
     discovered: number;      // Videos found from YouTube
     analyzed: number;        // Videos that went through AI
@@ -248,6 +244,8 @@ function CollapsibleSection({ title, icon, children, defaultExpanded = false, te
 }
 
 export default function AdminDashboard() {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
   const { data: metrics, isLoading, isError, error, refetch } = useQuery<QuickMetrics>({
     queryKey: ['/api/admin/quick-metrics'],
     queryFn: async () => {
@@ -275,6 +273,15 @@ export default function AdminDashboard() {
     retry: 2,
     retryDelay: 1000
   });
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (isError) {
     return (
@@ -313,17 +320,18 @@ export default function AdminDashboard() {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => refetch()}
+            onClick={handleRefresh}
+            disabled={isRefreshing}
             className="self-start sm:self-auto"
             data-testid="button-refresh-dashboard"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
         </div>
 
         {/* Priority Metrics - Always Visible */}
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="bg-card rounded-lg border p-5">
+          <Link href="/admin/videos" className="bg-card rounded-lg border p-5 hover-elevate cursor-pointer" data-testid="card-library">
             <div className="flex items-center gap-3 mb-2">
               <span className="text-3xl">📚</span>
               <div className="flex-1">
@@ -332,6 +340,23 @@ export default function AdminDashboard() {
               </div>
             </div>
             <p className="text-sm text-muted-foreground">+{metrics.videosToday} today</p>
+          </Link>
+
+          <div className="bg-card rounded-lg border p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-3xl">🧠</span>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-muted-foreground">Gemini Analyzed</p>
+                <p className="text-2xl font-bold" data-testid="value-gemini-analyzed">
+                  {metrics.geminiAnalyzed} / {metrics.totalVideos}
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {metrics.totalVideos > 0 
+                ? `${Math.round((metrics.geminiAnalyzed / metrics.totalVideos) * 100)}% complete`
+                : 'No videos yet'}
+            </p>
           </div>
 
           <div className="bg-card rounded-lg border p-5">
@@ -349,7 +374,7 @@ export default function AdminDashboard() {
             </p>
           </div>
 
-          <div className="bg-card rounded-lg border p-5">
+          <Link href="/admin/users" className="bg-card rounded-lg border p-5 hover-elevate cursor-pointer" data-testid="card-users">
             <div className="flex items-center gap-3 mb-2">
               <span className="text-3xl">👥</span>
               <div className="flex-1">
@@ -358,18 +383,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <p className="text-sm text-muted-foreground">{metrics.activeSubscriptions} subscriptions</p>
-          </div>
-
-          <div className="bg-card rounded-lg border p-5">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-3xl">💰</span>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-muted-foreground">MRR</p>
-                <p className="text-2xl font-bold">${metrics.mrr}</p>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">{metrics.signedUpToday} new today</p>
-          </div>
+          </Link>
         </div>
 
         {/* CURATION EFFICIENCY - Collapsible */}

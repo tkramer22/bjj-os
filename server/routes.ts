@@ -11760,12 +11760,13 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         usersToday, 
         activeSubscriptions, 
         mrr,
-        todayScreening
+        todayScreening,
+        geminiAnalyzed
       ] = await Promise.all([
         db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`),
-        db.execute(sql`SELECT COUNT(*) as count FROM bjj_users`),
+        db.execute(sql`SELECT COUNT(*) as count FROM bjj_users WHERE deleted_at IS NULL`),
         db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE DATE(created_at) = ${today}`),
-        db.execute(sql`SELECT COUNT(*) as count FROM bjj_users WHERE DATE(created_at) = ${today}`),
+        db.execute(sql`SELECT COUNT(*) as count FROM bjj_users WHERE DATE(created_at) = ${today} AND deleted_at IS NULL`),
         db.execute(sql`
           SELECT COUNT(*) as count FROM bjj_users 
           WHERE (subscription_status = 'active' OR subscription_status = 'trialing')
@@ -11794,7 +11795,9 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           FROM curation_runs
           WHERE DATE(run_date) = ${today}
             AND status = 'completed'
-        `)
+        `),
+        // Count unique videos that have Gemini knowledge extracted
+        db.execute(sql`SELECT COUNT(DISTINCT video_id) as count FROM video_knowledge`)
       ]);
       
       // Safely extract rows from all results
@@ -11805,6 +11808,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const activeSubsRows = getRows(activeSubscriptions);
       const mrrRows = getRows(mrr);
       const screeningRows = getRows(todayScreening);
+      const geminiAnalyzedRows = getRows(geminiAnalyzed);
       
       // Calculate full curation funnel metrics - with safe fallbacks
       const screening = screeningRows[0];
@@ -11853,6 +11857,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         signedUpToday: Number(usersTodayRows[0]?.count || 0),
         activeSubscriptions: Number(activeSubsRows[0]?.count || 0),
         mrr: Number(mrrRows[0]?.mrr || 0).toFixed(0),
+        geminiAnalyzed: Number(geminiAnalyzedRows[0]?.count || 0), // Videos with Gemini knowledge extracted
         // Curation Efficiency Metrics (THE CORE BUSINESS METRIC)
         // FULL FUNNEL: Discovered → Analyzed → Accepted/Rejected
         curationEfficiency: {
@@ -14513,7 +14518,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
         .slice(0, 20)
         .map(q => ({
-          timestamp: q.createdAt,
+          timestamp: q.createdAt ? new Date(q.createdAt).toISOString() : null,
           userAnonymized: q.userId ? `***${q.userId.slice(-4)}` : 'Unknown',
           question: q.userQuestion,
           videosRecommended: (q.recommendedVideos as any[] || []).length,
