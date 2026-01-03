@@ -160,7 +160,9 @@ export default function IOSLibraryPage() {
       counts[prof] = (counts[prof] || 0) + 1;
     });
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    return [{ name: 'All', count: sourceVideos.length }, ...sorted.map(([name, count]) => ({ name, count }))];
+    // "All" shows unique professor count, not video count
+    const uniqueProfessorCount = Object.keys(counts).length;
+    return [{ name: 'All', count: uniqueProfessorCount }, ...sorted.map(([name, count]) => ({ name, count }))];
   }, [videosFilteredByTechnique]);
 
   const filteredVideos = videos?.filter((video) => {
