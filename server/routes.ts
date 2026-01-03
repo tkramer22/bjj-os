@@ -406,11 +406,11 @@ export function registerRoutes(app: Express): Server {
   // VERSION ENDPOINT (Cache Busting)
   // ============================================================================
   // Version with unique build ID to track deployments
-  const BUILD_ID = 'BUILD_20260103_1710';
+  const BUILD_ID = 'BUILD_20260103_2230';
   
   app.get('/api/version', (req, res) => {
     res.json({
-      version: '6.0.9',
+      version: '6.0.10',
       buildId: BUILD_ID,
       buildTime: new Date().toISOString(),
       features: ['semantic-search', 'perspective-filtering', 'instructor-search', 'fallback-quality', 'error-handling', 'technique-priority-search', 'guillotine-fix', 'proactive-video-recs', 'relevance-fix'],
@@ -418,7 +418,9 @@ export function registerRoutes(app: Express): Server {
         'VIDEO_COUNT_FIX: Library now shows total count from ai_video_knowledge',
         'PROACTIVE_VIDEOS: Professor OS always includes at least one video even for no-match searches',
         'WELCOME_MSG_FIX: Welcome message only shows on new session, not tab switches',
-        'RELEVANCE_FIX: fallbackSearch now requires technique match when searchTerms exist - prevents irrelevant video recs'
+        'RELEVANCE_FIX: fallbackSearch now requires technique match when searchTerms exist - prevents irrelevant video recs',
+        'GEMINI_COUNT_FIX: Dashboard and Videos page now use same data source for Gemini analyzed count',
+        'ANALYTICS_FIX: Fixed No values to set error in time-on-page tracking'
       ]
     });
   });
@@ -431,20 +433,20 @@ export function registerRoutes(app: Express): Server {
       const query = (req.query.q as string) || 'guillotine';
       const { searchVideos } = await import('./videoSearch');
       
-      console.log(`[PRODUCTION DEBUG v6.0.9] Testing video search for: "${query}"`);
+      console.log(`[PRODUCTION DEBUG v6.0.10] Testing video search for: "${query}"`);
       
       const result = await searchVideos({
         userMessage: query
       });
       
-      console.log(`[PRODUCTION DEBUG v6.0.9] Found ${result.videos.length} videos, noMatchFound=${result.noMatchFound}`);
+      console.log(`[PRODUCTION DEBUG v6.0.10] Found ${result.videos.length} videos, noMatchFound=${result.noMatchFound}`);
       
       res.json({
         query,
         videosFound: result.videos.length,
         noMatchFound: result.noMatchFound,
         searchIntent: result.searchIntent,
-        version: '6.0.9',
+        version: '6.0.10',
         buildId: BUILD_ID,
         timestamp: new Date().toISOString(),
         techniqueOverrideActive: result.searchIntent.searchTerms?.some((t: string) => 
@@ -458,8 +460,8 @@ export function registerRoutes(app: Express): Server {
         }))
       });
     } catch (error: any) {
-      console.error('[PRODUCTION DEBUG v6.0.9] Video search error:', error);
-      res.status(500).json({ error: error.message, version: '6.0.9', buildId: BUILD_ID });
+      console.error('[PRODUCTION DEBUG v6.0.10] Video search error:', error);
+      res.status(500).json({ error: error.message, version: '6.0.10', buildId: BUILD_ID });
     }
   });
   
@@ -11855,8 +11857,8 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           WHERE DATE(run_date) = ${today}
             AND status = 'completed'
         `),
-        // Count unique videos that have Gemini knowledge extracted
-        db.execute(sql`SELECT COUNT(DISTINCT video_id) as count FROM video_knowledge`)
+        // Count videos processed by Gemini (same source as Videos page for consistency)
+        db.execute(sql`SELECT COUNT(*) as count FROM video_watch_status WHERE processed = true`)
       ]);
       
       console.log('[QUICK-METRICS] All queries completed successfully');

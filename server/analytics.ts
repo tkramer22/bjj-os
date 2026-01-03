@@ -153,10 +153,21 @@ router.post('/time-on-page', async (req, res) => {
   try {
     const { visitorId, sessionId, pagePath, timeOnPage } = req.body;
     
+    // Validate required fields - timeOnPage must be a valid number
+    if (!visitorId || !pagePath || timeOnPage === undefined || timeOnPage === null) {
+      return res.json({ success: false, reason: 'Missing required fields' });
+    }
+    
+    // Ensure timeOnPage is a valid number
+    const timeValue = typeof timeOnPage === 'number' ? timeOnPage : parseInt(timeOnPage, 10);
+    if (isNaN(timeValue)) {
+      return res.json({ success: false, reason: 'Invalid timeOnPage value' });
+    }
+    
     // Update the most recent matching page view
     const result = await db
       .update(pageViews)
-      .set({ timeOnPage })
+      .set({ timeOnPage: timeValue })
       .where(
         and(
           eq(pageViews.visitorId, visitorId),
