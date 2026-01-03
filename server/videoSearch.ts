@@ -1150,19 +1150,49 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
+    // LAST RESORT: Direct ILIKE search on title ONLY when zero results
+    // This catches cases where complex conditions fail but videos exist by keyword
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (validatedVideos.length === 0 && intent.searchTerms.length > 0) {
+      console.log(`[VIDEO SEARCH] ⚡ LAST RESORT: Direct title search for [${intent.searchTerms.join(', ')}]`);
+      
+      const directTermConditions = intent.searchTerms.map(term => 
+        sql`(${aiVideoKnowledge.title} ILIKE ${`%${term}%`} OR ${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`})`
+      );
+      
+      const directSearchResults = await db.select()
+        .from(aiVideoKnowledge)
+        .where(and(
+          sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`, // Lower threshold for last resort
+          or(...directTermConditions)
+        ))
+        .orderBy(desc(aiVideoKnowledge.qualityScore))
+        .limit(10);
+      
+      if (directSearchResults.length > 0) {
+        console.log(`[VIDEO SEARCH] 🎉 LAST RESORT SUCCESS: Found ${directSearchResults.length} videos by title match!`);
+        directSearchResults.forEach((v, i) => {
+          console.log(`  ${i + 1}. "${v.title}" by ${v.instructorName} (quality: ${v.qualityScore})`);
+        });
+        validatedVideos = directSearchResults;
+      } else {
+        console.log(`[VIDEO SEARCH] ❌ LAST RESORT: No videos found even by direct title search`);
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
     // DEBUG: Final results trace
     // ═══════════════════════════════════════════════════════════════════════════
     console.log('═══════════════════════════════════════════════════════════════');
-    console.log(`[VIDEO SEARCH DEBUG] FINAL RESULTS: ${validatedVideos.length} videos, ${totalMatches} total matches`);
+    console.log(`[VIDEO SEARCH DEBUG] FINAL RESULTS: ${validatedVideos.length} videos`);
     console.log(`[VIDEO SEARCH DEBUG] Search terms: [${intent.searchTerms.join(', ')}]`);
-    console.log(`[VIDEO SEARCH DEBUG] Terms validated: ${searchTermsValidated}`);
     console.log('[VIDEO SEARCH DEBUG] First 5 videos:');
     validatedVideos.slice(0, 5).forEach((v, i) => {
       console.log(`  ${i + 1}. "${v.title}" by ${v.instructorName} (technique_type: ${v.techniqueType}, quality: ${v.qualityScore})`);
     });
     console.log('═══════════════════════════════════════════════════════════════');
     
-    // Return noMatchFound=true if we have search terms but zero results
+    // Return noMatchFound=true if we have search terms but STILL zero results after last resort
     const noMatchFound = intent.searchTerms.length > 0 && validatedVideos.length === 0;
     
     return {
