@@ -16964,6 +16964,54 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
   
+  // POST: Analyze ALL unanalyzed videos (for catch-up processing)
+  app.post('/api/admin/analyze-all-videos', checkAdminAuth, async (req, res) => {
+    try {
+      console.log(`[ADMIN] Starting full Gemini analysis of all unanalyzed videos...`);
+      
+      const { analyzeAllUnanalyzedVideos, resetFailedVideosForRetry } = await import('./video-knowledge-service');
+      
+      // Run in background to not block response - this can take hours
+      setImmediate(async () => {
+        try {
+          const result = await analyzeAllUnanalyzedVideos((msg) => {
+            console.log(`[ADMIN] Progress: ${msg}`);
+          });
+          console.log(`[ADMIN] Full analysis complete:`, result);
+        } catch (error: any) {
+          console.error('[ADMIN] Full analysis error:', error);
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: 'Full Gemini analysis started. This will process ALL unanalyzed videos in the background. Check server logs for progress.'
+      });
+    } catch (error: any) {
+      console.error('[ADMIN] Error starting full analysis:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // POST: Reset failed videos for retry
+  app.post('/api/admin/reset-failed-videos', checkAdminAuth, async (req, res) => {
+    try {
+      console.log(`[ADMIN] Resetting failed videos for retry...`);
+      
+      const { resetFailedVideosForRetry } = await import('./video-knowledge-service');
+      const result = await resetFailedVideosForRetry();
+      
+      res.json({
+        success: true,
+        message: `Reset ${result.reset} failed videos for retry`,
+        ...result
+      });
+    } catch (error: any) {
+      console.error('[ADMIN] Error resetting failed videos:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ===== OVERNIGHT PROCESSING SYSTEM (Dec 16, 2025) =====
   
   // GET: Overnight processing status (morning dashboard)

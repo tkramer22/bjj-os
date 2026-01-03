@@ -243,6 +243,97 @@ function CollapsibleSection({ title, icon, children, defaultExpanded = false, te
   );
 }
 
+// Gemini Analysis Card with Analyze All button
+interface GeminiAnalysisCardProps {
+  metrics: QuickMetrics;
+  onRefresh: () => void;
+}
+
+function GeminiAnalysisCard({ metrics, onRefresh }: GeminiAnalysisCardProps) {
+  const { toast } = useToast();
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const percentComplete = metrics.totalVideos > 0 
+    ? Math.round((metrics.geminiAnalyzed / metrics.totalVideos) * 100)
+    : 0;
+  const unanalyzedCount = metrics.totalVideos - metrics.geminiAnalyzed;
+
+  const handleAnalyzeAll = async () => {
+    if (isAnalyzing) return;
+    
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch('/api/admin/analyze-all-videos', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to start analysis');
+      }
+      
+      const data = await res.json();
+      toast({
+        title: "Gemini Analysis Started",
+        description: `Analyzing ${unanalyzedCount} unanalyzed videos in background. This may take a while.`,
+      });
+      
+      // Refresh after a short delay to show progress
+      setTimeout(() => onRefresh(), 5000);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || 'Failed to start analysis',
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  return (
+    <div className="bg-card rounded-lg border p-5">
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-3xl">🧠</span>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-muted-foreground">Gemini Analyzed</p>
+          <p className="text-2xl font-bold" data-testid="value-gemini-analyzed">
+            {metrics.geminiAnalyzed} / {metrics.totalVideos}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <p className={`text-sm ${percentComplete < 80 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
+          {percentComplete}% complete
+        </p>
+        {unanalyzedCount > 0 && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleAnalyzeAll}
+            disabled={isAnalyzing}
+            className="h-7 text-xs"
+            data-testid="button-analyze-all"
+          >
+            {isAnalyzing ? (
+              <>
+                <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                Starting...
+              </>
+            ) : (
+              <>
+                <Play className="w-3 h-3 mr-1" />
+                Analyze All
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
@@ -342,22 +433,7 @@ export default function AdminDashboard() {
             <p className="text-sm text-muted-foreground">+{metrics.videosToday} today</p>
           </Link>
 
-          <div className="bg-card rounded-lg border p-5">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-3xl">🧠</span>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-muted-foreground">Gemini Analyzed</p>
-                <p className="text-2xl font-bold" data-testid="value-gemini-analyzed">
-                  {metrics.geminiAnalyzed} / {metrics.totalVideos}
-                </p>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {metrics.totalVideos > 0 
-                ? `${Math.round((metrics.geminiAnalyzed / metrics.totalVideos) * 100)}% complete`
-                : 'No videos yet'}
-            </p>
-          </div>
+          <GeminiAnalysisCard metrics={metrics} onRefresh={handleRefresh} />
 
           <div className="bg-card rounded-lg border p-5">
             <div className="flex items-center gap-3 mb-2">

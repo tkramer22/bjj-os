@@ -621,13 +621,19 @@ export async function processBatch(batchSize: number = 20): Promise<{
     
     // Find videos that either:
     // 1. Have no video_watch_status entry at all (never processed)
-    // 2. Have video_watch_status with processed=false (reset for reprocessing)
+    // 2. Have video_watch_status with processed=false (failed or reset - RETRY THESE)
+    // 3. Exclude only videos stuck "Processing in progress" to prevent double-processing
+    // NOTE: processed=true videos are excluded (they're done successfully)
     const unprocessedVideos = await db.execute(sql`
       SELECT v.id, v.title 
       FROM ai_video_knowledge v
       LEFT JOIN video_watch_status vws ON v.id = vws.video_id
       WHERE vws.id IS NULL 
-         OR (vws.processed = false AND (vws.error_message IS NULL OR vws.error_message = ''))
+         OR (vws.processed = false AND (
+              vws.error_message IS NULL 
+              OR vws.error_message = '' 
+              OR vws.error_message NOT LIKE 'Processing in progress%'
+            ))
       ORDER BY v.quality_score DESC NULLS LAST
       LIMIT ${batchSize}
     `) as any[];
@@ -768,6 +774,123 @@ export async function getKnowledgeStatus(): Promise<{
     withoutTranscript: processed - withTranscript,
     totalTechniques,
     recentlyProcessed
+  };
+}
+
+/**
+ * Reset all failed videos for reprocessing
+ * This clears error messages so they can be picked up by the regular batch processor
+ * Logs the previous errors before clearing for debugging purposes
+ */
+export async function resetFailedVideosForRetry(): Promise<{ reset: number; previousErrors: string[]; errors: string[] }> {
+  try {
+    // First, log what errors we're clearing (for debugging)
+    const failedVideos = await db.execute(sql`
+      SELECT video_id, error_message FROM video_watch_status
+      WHERE processed = false 
+        AND error_message IS NOT NULL 
+        AND error_message != '' 
+        AND error_message != 'Processing in progress'
+      LIMIT 100
+    `);
+    
+    const rows = Array.isArray(failedVideos) ? failedVideos : (failedVideos as any).rows || [];
+    const previousErrors = rows.map((r: any) => `Video ${r.video_id}: ${r.error_message?.substring(0, 100)}`);
+    
+    if (previousErrors.length > 0) {
+      console.log(`[GEMINI] Archiving ${previousErrors.length} error reasons before reset:`);
+      previousErrors.slice(0, 10).forEach((e: string) => console.log(`  - ${e}`));
+      if (previousErrors.length > 10) console.log(`  ... and ${previousErrors.length - 10} more`);
+    }
+    
+    // Reset all videos that failed (processed=false with an error message)
+    const result = await db.execute(sql`
+      UPDATE video_watch_status 
+      SET error_message = '', processed = false
+      WHERE processed = false 
+        AND error_message IS NOT NULL 
+        AND error_message != '' 
+        AND error_message != 'Processing in progress'
+      RETURNING video_id
+    `);
+    
+    const resetCount = Array.isArray(result) ? result.length : (result as any).rows?.length || 0;
+    console.log(`[GEMINI] Reset ${resetCount} failed videos for retry`);
+    return { reset: resetCount, previousErrors, errors: [] };
+  } catch (error: any) {
+    console.error('[GEMINI] Failed to reset videos:', error.message);
+    return { reset: 0, previousErrors: [], errors: [error.message] };
+  }
+}
+
+/**
+ * Force analyze ALL unanalyzed videos - runs larger batches continuously
+ * Used for one-time catch-up processing
+ */
+export async function analyzeAllUnanalyzedVideos(onProgress?: (msg: string) => void): Promise<{
+  totalProcessed: number;
+  totalSucceeded: number;
+  totalFailed: number;
+  totalTechniques: number;
+  errors: string[];
+}> {
+  const log = (msg: string) => {
+    console.log(`[ANALYZE-ALL] ${msg}`);
+    onProgress?.(msg);
+  };
+  
+  log('Starting full analysis of all unanalyzed videos...');
+  
+  // First, reset any stuck "Processing in progress" entries older than 10 minutes
+  await db.execute(sql`
+    UPDATE video_watch_status 
+    SET error_message = '', processed = false
+    WHERE error_message = 'Processing in progress'
+  `);
+  log('Cleared stuck processing entries');
+  
+  // Also reset all failed videos to give them another chance
+  const resetResult = await resetFailedVideosForRetry();
+  log(`Reset ${resetResult.reset} previously failed videos for retry`);
+  
+  let totalProcessed = 0;
+  let totalSucceeded = 0;
+  let totalFailed = 0;
+  let totalTechniques = 0;
+  const allErrors: string[] = [];
+  
+  // Run batches continuously until no more videos remain
+  const BATCH_SIZE = 20;
+  const MAX_BATCHES = 200; // Safety limit: 200 * 20 = 4000 videos max
+  
+  for (let batchNum = 0; batchNum < MAX_BATCHES; batchNum++) {
+    const result = await processBatch(BATCH_SIZE);
+    
+    if (result.processed === 0) {
+      log(`No more unprocessed videos after ${batchNum} batches`);
+      break;
+    }
+    
+    totalProcessed += result.processed;
+    totalSucceeded += result.succeeded;
+    totalFailed += result.failed;
+    totalTechniques += result.techniquesAdded;
+    allErrors.push(...result.errors);
+    
+    log(`Batch ${batchNum + 1}: ${result.succeeded}/${result.processed} succeeded, ${totalTechniques} total techniques`);
+    
+    // Brief pause between batches to avoid rate limits
+    await sleep(2000);
+  }
+  
+  log(`✅ Complete: ${totalSucceeded}/${totalProcessed} succeeded, ${totalTechniques} techniques extracted`);
+  
+  return {
+    totalProcessed,
+    totalSucceeded,
+    totalFailed,
+    totalTechniques,
+    errors: allErrors.slice(0, 50) // Limit error list
   };
 }
 
