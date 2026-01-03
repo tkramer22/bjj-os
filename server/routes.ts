@@ -11766,9 +11766,9 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         geminiAnalyzed
       ] = await Promise.all([
         db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`),
-        db.execute(sql`SELECT COUNT(*) as count FROM bjj_users WHERE deleted_at IS NULL`),
+        db.execute(sql`SELECT COUNT(*) as count FROM bjj_users`),
         db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE DATE(created_at) = ${today}`),
-        db.execute(sql`SELECT COUNT(*) as count FROM bjj_users WHERE DATE(created_at) = ${today} AND deleted_at IS NULL`),
+        db.execute(sql`SELECT COUNT(*) as count FROM bjj_users WHERE DATE(created_at) = ${today}`),
         db.execute(sql`
           SELECT COUNT(*) as count FROM bjj_users 
           WHERE (subscription_status = 'active' OR subscription_status = 'trialing')
