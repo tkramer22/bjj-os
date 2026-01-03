@@ -1,0 +1,158 @@
+Found it. Here’s the complete prompt that was working - updated to be permanent and never fallback to wrong videos:
+
+```
+PROFESSOR OS - PERMANENT GEMINI-FIRST VIDEO SYSTEM (NEVER FALLBACK)
+
+═══════════════════════════════════════════════════════════════════════════════
+THE RULE: GEMINI IS EVERYTHING - NO EXCEPTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Professor OS MUST use Gemini-analyzed data as its ONLY source for video knowledge.
+If Gemini data is unavailable, say "I'm having trouble accessing videos right now."
+NEVER return random, cached, or unrelated videos.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: VIDEO SEARCH - QUERY ALL GEMINI FIELDS
+═══════════════════════════════════════════════════════════════════════════════
+
+In fetchRelevantVideos(), search ONLY these Gemini-analyzed fields:
+
+- title
+- techniqueName
+- tags
+- specificTechnique
+- problemsSolved (JSONB)
+- keyDetails (JSONB)
+- relatedTechniques (JSONB)
+- keyConcepts
+- instructorTips
+- commonMistakes
+- fullSummary
+- problemSolved
+- setupsFrom
+- chainsTo
+- counters
+
+Example query for "guillotine":
+WHERE 
+  LOWER(title) LIKE '%guillotine%'
+  OR LOWER(techniqueName) LIKE '%guillotine%'
+  OR LOWER(tags::text) LIKE '%guillotine%'
+  OR LOWER(specificTechnique) LIKE '%guillotine%'
+  OR LOWER(keyConcepts) LIKE '%guillotine%'
+  OR LOWER(instructorTips) LIKE '%guillotine%'
+  OR LOWER(fullSummary) LIKE '%guillotine%'
+  OR LOWER(problemSolved) LIKE '%guillotine%'
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: INJECT FULL GEMINI KNOWLEDGE INTO CONTEXT
+═══════════════════════════════════════════════════════════════════════════════
+
+When building the prompt, include ALL Gemini fields:
+
+"VIDEO: ${title} by ${instructorName}
+ URL: ${videoUrl}
+ 
+ KEY CONCEPTS: ${keyConcepts}
+ INSTRUCTOR TIPS: ${instructorTips}
+ COMMON MISTAKES: ${commonMistakes}
+ CHAINS TO: ${chainsTo}
+ SETUPS FROM: ${setupsFrom}
+ SUMMARY: ${fullSummary}
+"
+
+Claude speaks FROM this knowledge, not just links videos.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: VALIDATION - NEVER RETURN WRONG VIDEOS
+═══════════════════════════════════════════════════════════════════════════════
+
+BEFORE returning any video, validate:
+
+function validateVideoMatch(userQuery, video) {
+  const queryTerms = userQuery.toLowerCase().split(' ');
+  const videoContent = [
+    video.title,
+    video.techniqueName,
+    video.keyConcepts,
+    video.fullSummary,
+    video.tags
+  ].join(' ').toLowerCase();
+  
+  // At least one query term must appear in video content
+  return queryTerms.some(term => 
+    term.length > 3 && videoContent.includes(term)
+  );
+}
+
+If validation fails, DO NOT return that video.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: FAILURE MODE - HONEST ERRORS, NOT WRONG ANSWERS
+═══════════════════════════════════════════════════════════════════════════════
+
+REMOVE all fallback/cached video logic. Replace with:
+
+try {
+  const videos = await fetchRelevantVideos(query);
+  if (videos.length === 0) {
+    return "I couldn't find videos matching that specific technique. Can you try rephrasing or asking about a related position?";
+  }
+  // Continue with matched videos
+} catch (error) {
+  console.error('[VIDEO RETRIEVAL ERROR]', error);
+  return "I'm having trouble accessing my video library right now. Try again in a moment.";
+}
+
+NEVER return random videos as a fallback.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: CONNECTION RELIABILITY
+═══════════════════════════════════════════════════════════════════════════════
+
+Add retry logic with honest failure:
+
+async function fetchRelevantVideos(query, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const results = await queryGeminiDatabase(query);
+      return results;
+    } catch (error) {
+      console.error(`[RETRY ${i + 1}/${retries}]`, error);
+      if (i === retries - 1) throw error;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: LOGGING FOR DEBUGGING
+═══════════════════════════════════════════════════════════════════════════════
+
+Log every video request:
+
+console.log('[VIDEO REQUEST]', {
+  userQuery: message,
+  searchTerms: extractedTerms,
+  videosFound: results.length,
+  videoTitles: results.slice(0, 5).map(v => v.title),
+  timestamp: new Date().toISOString()
+});
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST CASES - ALL MUST PASS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. "guillotine videos" → Returns ONLY guillotine videos (not buggy choke)
+2. "half guard sweeps" → Returns ONLY half guard sweep videos
+3. "arm bar from mount" → Returns ONLY relevant armbar videos
+4. Database timeout → Returns "I'm having trouble..." NOT random videos
+5. No matches found → Returns "I couldn't find videos matching..." NOT random videos
+
+═══════════════════════════════════════════════════════════════════════════════
+THIS IS PERMANENT - NO FALLBACKS EVER
+═══════════════════════════════════════════════════════════════════════════════
+
+Gemini analysis is our moat. Professor OS credibility depends on ALWAYS returning 
+relevant content or honestly saying it cannot. Never sacrifice accuracy for a response.
+```
