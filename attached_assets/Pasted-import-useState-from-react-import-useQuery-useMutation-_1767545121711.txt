@@ -1,0 +1,378 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { 
+  RefreshCw, Play, Pause, Clock, Database, Search, User, Target, 
+  Layers, Filter, Settings, AlertCircle, CheckCircle, XCircle, 
+  Loader2, Youtube, Plus, Minus, Activity, ChevronLeft, ChevronRight
+} from "lucide-react";
+
+interface CurationStatus {
+  isActive: boolean;
+  schedule: string;
+  lastRun: { timestamp: string; discovered: number; analyzed: number; added: number; } | null;
+  nextRun: string;
+}
+
+interface LibraryStats {
+  totalVideos: number;
+  giVideos: number;
+  nogiVideos: number;
+  bothVideos: number;
+  avgQualityScore: number;
+  instructorCount: number;
+}
+
+interface CurationJob {
+  id: string;
+  type: string;
+  query: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  progress: number;
+  found: number;
+  added: number;
+  startedAt: string;
+  completedAt?: string;
+}
+
+function formatTimeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString();
+}
+
+export default function CurationCommandCenter() {
+  const queryClient = useQueryClient();
+  
+  const [selectedInstructor, setSelectedInstructor] = useState("");
+  const [customInstructor, setCustomInstructor] = useState("");
+  const [techniqueSearch, setTechniqueSearch] = useState("");
+  const [selectedPosition, setSelectedPosition] = useState("");
+  const [selectedGiNogi, setSelectedGiNogi] = useState("");
+  const [customSearch, setCustomSearch] = useState("");
+  
+  const { data: curationStatus } = useQuery<CurationStatus>({
+    queryKey: ["/api/admin/curation/status"],
+    refetchInterval: 30000,
+  });
+  
+  const { data: libraryStats } = useQuery<LibraryStats>({
+    queryKey: ["/api/admin/curation/library-stats"],
+  });
+  
+  const { data: activeJobs } = useQuery<CurationJob[]>({
+    queryKey: ["/api/admin/curation/active-jobs"],
+    refetchInterval: 5000,
+  });
+  
+  const { data: jobHistory } = useQuery<CurationJob[]>({
+    queryKey: ["/api/admin/curation/job-history"],
+  });
+  
+  const { data: knownInstructors } = useQuery<string[]>({
+    queryKey: ["/api/admin/curation/known-instructors"],
+  });
+  
+  const { data: apiQuota } = useQuery<{ youtubeUsed: number; youtubeLimit: number; geminiCostToday: number; geminiCostMonth: number; }>({
+    queryKey: ["/api/admin/curation/api-quota"],
+    refetchInterval: 60000,
+  });
+  
+  const positions = ["Closed Guard", "Half Guard", "Open Guard", "Butterfly Guard", "De La Riva", "Mount", "Back Control", "Side Control", "Knee on Belly", "Turtle", "Standing"];
+  
+  const toggleCuration = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await apiRequest("POST", "/api/admin/curation/toggle", { enabled });
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/curation/status"] }),
+  });
+  
+  const runCuration = useMutation({
+    mutationFn: async (params: { type: string; query?: string; filter?: string }) => {
+      const res = await apiRequest("POST", "/api/admin/curation/run", params);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/curation/active-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/curation/job-history"] });
+    },
+  });
+  
+  const cancelJob = useMutation({
+    mutationFn: async (jobId: string) => {
+      const res = await apiRequest("POST", `/api/admin/curation/cancel/${jobId}`);
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/curation/active-jobs"] }),
+  });
+
+  return (
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">CURATION COMMAND CENTER</h1>
+            <p className="text-zinc-400 text-sm mt-1">Control and monitor video curation operations</p>
+          </div>
+        </div>
+        
+        {/* SECTION 1: AUTO CURATION */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <RefreshCw className="w-5 h-5 text-lime-400" />
+            <h2 className="text-lg font-semibold">AUTO CURATION</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <div className="text-zinc-400 text-sm">Status</div>
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${curationStatus?.isActive ? 'bg-lime-400 animate-pulse' : 'bg-zinc-600'}`} />
+                <span className="font-medium">{curationStatus?.isActive ? 'ACTIVE' : 'PAUSED'}</span>
+                <button onClick={() => toggleCuration.mutate(!curationStatus?.isActive)} disabled={toggleCuration.isPending}
+                  className={`ml-auto px-3 py-1 rounded text-sm font-medium ${curationStatus?.isActive ? 'bg-zinc-700 hover:bg-zinc-600' : 'bg-lime-500 hover:bg-lime-400 text-black'}`}>
+                  {curationStatus?.isActive ? <><Pause className="w-4 h-4 inline mr-1" /> Pause</> : <><Play className="w-4 h-4 inline mr-1" /> Enable</>}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-zinc-400 text-sm">Schedule</div>
+              <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-zinc-500" /><span>Daily at 3:00 AM EST</span></div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-zinc-400 text-sm">Last Run</div>
+              {curationStatus?.lastRun ? (
+                <div>
+                  <div className="font-medium">{new Date(curationStatus.lastRun.timestamp).toLocaleString()}</div>
+                  <div className="text-sm text-zinc-400">Found: {curationStatus.lastRun.discovered} | Added: {curationStatus.lastRun.added}</div>
+                </div>
+              ) : <div className="text-zinc-500">No runs yet</div>}
+            </div>
+            <div className="space-y-2">
+              <div className="text-zinc-400 text-sm">Next Run</div>
+              <div className="font-medium">{curationStatus?.isActive ? 'Tomorrow at 3:00 AM EST' : 'Paused'}</div>
+            </div>
+          </div>
+        </div>
+        
+        {/* SECTION 2: LIBRARY STATS */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Settings className="w-5 h-5 text-blue-400" />
+            <h2 className="text-lg font-semibold">QUALITY THRESHOLDS & LIBRARY STATS</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <div className="flex justify-between py-2 border-b border-zinc-800">
+                <span className="text-zinc-400">Pre-filter minimum</span><span className="font-mono text-lime-400">6.0</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-zinc-800">
+                <span className="text-zinc-400">Auto-accept threshold</span><span className="font-mono text-lime-400">7.5 <span className="text-zinc-500">(7.0 trusted)</span></span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-between py-2 border-b border-zinc-800">
+                <span className="text-zinc-400">Total Videos</span><span className="font-mono">{libraryStats?.totalVideos?.toLocaleString() || 0}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-zinc-800">
+                <span className="text-zinc-400">Gi / No-Gi / Both</span>
+                <span className="font-mono">{libraryStats?.giVideos || 0} / {libraryStats?.nogiVideos || 0} / {libraryStats?.bothVideos || 0}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-zinc-800">
+                <span className="text-zinc-400">Avg Quality</span><span className="font-mono text-lime-400">{libraryStats?.avgQualityScore?.toFixed(1) || 0}</span>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-zinc-400">Instructors</span><span className="font-mono">{libraryStats?.instructorCount || 0}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* SECTION 3: QUICK CURATION - 6 presets */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Target className="w-5 h-5 text-orange-400" />
+            <h2 className="text-lg font-semibold">QUICK CURATION</h2>
+            <span className="text-sm text-zinc-500">(Runs independently of auto curation)</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            <div className="bg-zinc-800 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2"><Database className="w-5 h-5 text-purple-400" /><h3 className="font-semibold">META TECHNIQUES</h3></div>
+              <p className="text-sm text-zinc-400">Curate all high-priority techniques</p>
+              <button onClick={() => runCuration.mutate({ type: "meta" })} disabled={runCuration.isPending}
+                className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 px-4 rounded font-medium disabled:opacity-50">
+                {runCuration.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Run Now'}
+              </button>
+            </div>
+            
+            <div className="bg-zinc-800 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2"><User className="w-5 h-5 text-blue-400" /><h3 className="font-semibold">INSTRUCTOR</h3></div>
+              <select value={selectedInstructor} onChange={(e) => setSelectedInstructor(e.target.value)}
+                className="w-full bg-zinc-700 border border-zinc-600 rounded px-3 py-2">
+                <option value="">Select instructor...</option>
+                {(knownInstructors || ["John Danaher", "Gordon Ryan", "Marcelo Garcia", "Lachlan Giles", "Craig Jones", "Bernardo Faria"]).map((i) => (
+                  <option key={i} value={i}>{i}</option>
+                ))}
+              </select>
+              <input type="text" value={customInstructor} onChange={(e) => setCustomInstructor(e.target.value)}
+                placeholder="Or enter custom..." className="w-full bg-zinc-700 border border-zinc-600 rounded px-3 py-2 placeholder-zinc-500" />
+              <button onClick={() => { runCuration.mutate({ type: "instructor", query: customInstructor || selectedInstructor }); setCustomInstructor(""); setSelectedInstructor(""); }}
+                disabled={runCuration.isPending || (!selectedInstructor && !customInstructor)}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 rounded font-medium disabled:opacity-50">Run Now</button>
+            </div>
+            
+            <div className="bg-zinc-800 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2"><Target className="w-5 h-5 text-green-400" /><h3 className="font-semibold">TECHNIQUE</h3></div>
+              <input type="text" value={techniqueSearch} onChange={(e) => setTechniqueSearch(e.target.value)}
+                placeholder='e.g. "guillotine"' className="w-full bg-zinc-700 border border-zinc-600 rounded px-3 py-2 placeholder-zinc-500" />
+              <button onClick={() => { runCuration.mutate({ type: "technique", query: techniqueSearch }); setTechniqueSearch(""); }}
+                disabled={runCuration.isPending || !techniqueSearch}
+                className="w-full bg-green-600 hover:bg-green-500 text-white py-2 px-4 rounded font-medium disabled:opacity-50">Run Now</button>
+            </div>
+            
+            <div className="bg-zinc-800 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2"><Layers className="w-5 h-5 text-yellow-400" /><h3 className="font-semibold">POSITION</h3></div>
+              <select value={selectedPosition} onChange={(e) => setSelectedPosition(e.target.value)}
+                className="w-full bg-zinc-700 border border-zinc-600 rounded px-3 py-2">
+                <option value="">Select position...</option>
+                {positions.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <button onClick={() => { runCuration.mutate({ type: "position", query: selectedPosition }); setSelectedPosition(""); }}
+                disabled={runCuration.isPending || !selectedPosition}
+                className="w-full bg-yellow-600 hover:bg-yellow-500 text-white py-2 px-4 rounded font-medium disabled:opacity-50">Run Now</button>
+            </div>
+            
+            <div className="bg-zinc-800 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2"><Filter className="w-5 h-5 text-red-400" /><h3 className="font-semibold">GI/NOGI BALANCE</h3></div>
+              <select value={selectedGiNogi} onChange={(e) => setSelectedGiNogi(e.target.value)}
+                className="w-full bg-zinc-700 border border-zinc-600 rounded px-3 py-2">
+                <option value="">Select type...</option>
+                <option value="gi">Gi Only</option>
+                <option value="nogi">No-Gi Only</option>
+              </select>
+              <button onClick={() => { runCuration.mutate({ type: "gi-nogi", filter: selectedGiNogi }); setSelectedGiNogi(""); }}
+                disabled={runCuration.isPending || !selectedGiNogi}
+                className="w-full bg-red-600 hover:bg-red-500 text-white py-2 px-4 rounded font-medium disabled:opacity-50">Run Now</button>
+            </div>
+            
+            <div className="bg-zinc-800 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2"><Search className="w-5 h-5 text-cyan-400" /><h3 className="font-semibold">CUSTOM SEARCH</h3></div>
+              <input type="text" value={customSearch} onChange={(e) => setCustomSearch(e.target.value)}
+                placeholder='Any YouTube query...' className="w-full bg-zinc-700 border border-zinc-600 rounded px-3 py-2 placeholder-zinc-500" />
+              <button onClick={() => { runCuration.mutate({ type: "custom", query: customSearch }); setCustomSearch(""); }}
+                disabled={runCuration.isPending || !customSearch}
+                className="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-2 px-4 rounded font-medium disabled:opacity-50">Run Now</button>
+            </div>
+          </div>
+        </div>
+        
+        {/* SECTION 4: ACTIVE JOBS & HISTORY */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Activity className="w-5 h-5 text-lime-400" />
+            <h2 className="text-lg font-semibold">CURATION ACTIVITY</h2>
+          </div>
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-zinc-400 mb-3">ACTIVE JOBS</h3>
+            {activeJobs && activeJobs.length > 0 ? (
+              <div className="space-y-2">
+                {activeJobs.map((job) => (
+                  <div key={job.id} className="bg-zinc-800 rounded-lg p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="w-4 h-4 text-lime-400 animate-spin" />
+                      <span className="capitalize">{job.type}: "{job.query}" ({job.progress}%)</span>
+                    </div>
+                    <button onClick={() => cancelJob.mutate(job.id)} className="text-zinc-400 hover:text-red-400"><XCircle className="w-5 h-5" /></button>
+                  </div>
+                ))}
+              </div>
+            ) : <div className="text-zinc-500 text-sm">No active jobs</div>}
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-zinc-400 mb-3">RECENT HISTORY</h3>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-zinc-400 border-b border-zinc-800">
+                  <th className="text-left py-2 px-3">Type</th>
+                  <th className="text-left py-2 px-3">Query</th>
+                  <th className="text-right py-2 px-3">Found</th>
+                  <th className="text-right py-2 px-3">Added</th>
+                  <th className="text-right py-2 px-3">When</th>
+                  <th className="text-center py-2 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(jobHistory || []).slice(0, 10).map((job) => (
+                  <tr key={job.id} className="border-b border-zinc-800/50">
+                    <td className="py-2 px-3 capitalize">{job.type}</td>
+                    <td className="py-2 px-3 text-zinc-400">{job.query || 'Scheduled'}</td>
+                    <td className="py-2 px-3 text-right">{job.found}</td>
+                    <td className="py-2 px-3 text-right text-lime-400">{job.added}</td>
+                    <td className="py-2 px-3 text-right text-zinc-500">{formatTimeAgo(job.completedAt || job.startedAt)}</td>
+                    <td className="py-2 px-3 text-center">
+                      {job.status === 'completed' && <CheckCircle className="w-4 h-4 text-lime-400 inline" />}
+                      {job.status === 'failed' && <XCircle className="w-4 h-4 text-red-400 inline" />}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        {/* SECTION 5 & 6: CHANNELS + API QUOTA */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Youtube className="w-5 h-5 text-red-500" />
+              <h2 className="text-lg font-semibold">CHANNEL MANAGEMENT</h2>
+            </div>
+            <h3 className="text-sm font-medium text-zinc-400 mb-3">TRUSTED CHANNELS (7.0 threshold)</h3>
+            <div className="space-y-2">
+              {["BJJ Fanatics", "Bernardo Faria BJJ", "Lachlan Giles"].map((c) => (
+                <div key={c} className="flex items-center justify-between py-2 px-3 bg-zinc-800 rounded">
+                  <span>{c}</span>
+                </div>
+              ))}
+              <button className="flex items-center gap-2 text-sm text-lime-400 hover:text-lime-300 mt-2">
+                <Plus className="w-4 h-4" /> Add Channel
+              </button>
+            </div>
+          </div>
+          
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Database className="w-5 h-5 text-blue-400" />
+              <h2 className="text-lg font-semibold">API USAGE</h2>
+            </div>
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-zinc-400">YouTube API</span>
+                <span className="font-mono">{apiQuota?.youtubeUsed || 0} / {apiQuota?.youtubeLimit || 10000} daily</span>
+              </div>
+              <div className="h-3 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${((apiQuota?.youtubeUsed || 0) / 10000) * 100}%` }} />
+              </div>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-zinc-400">Gemini API</span>
+              <span className="font-mono">~${apiQuota?.geminiCostToday?.toFixed(2) || '0.00'} today | ~${apiQuota?.geminiCostMonth?.toFixed(2) || '0.00'} month</span>
+            </div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+  );
+}

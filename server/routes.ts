@@ -18351,37 +18351,32 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
 
   // ===== CURATION COMMAND CENTER API =====
   
-  // In-memory store for active curation jobs
-  const activeCurationJobs: Map<string, {
-    id: string;
-    type: string;
-    query: string;
-    status: 'running' | 'completed' | 'failed' | 'cancelled';
-    progress: number;
-    found: number;
-    added: number;
-    startedAt: string;
-    completedAt?: string;
-  }> = new Map();
-  
-  const curationJobHistory: Array<{
-    id: string;
-    type: string;
-    query: string;
-    status: 'running' | 'completed' | 'failed' | 'cancelled';
-    progress: number;
-    found: number;
-    added: number;
-    startedAt: string;
-    completedAt?: string;
-  }> = [];
+  // Helper to format curation run as job
+  function formatCurationRunAsJob(run: any) {
+    const progress = run.status === 'completed' ? 100 : 
+                    run.status === 'failed' || run.status === 'cancelled' ? 0 :
+                    Math.min(90, Math.round((run.videosAnalyzed || 0) / Math.max(1, run.videosScreened || 10) * 100));
+    return {
+      id: run.id,
+      type: run.runType || 'manual',
+      query: run.searchCategory || '',
+      status: run.status as 'running' | 'completed' | 'failed' | 'cancelled',
+      progress,
+      found: run.videosScreened || 0,
+      added: run.videosAdded || 0,
+      startedAt: run.startedAt?.toISOString() || new Date().toISOString(),
+      completedAt: run.completedAt?.toISOString(),
+    };
+  }
 
   // Get curation status
   app.get('/api/admin/curation/status', checkAdminAuth, async (req, res) => {
     try {
-      // Check if auto-curation is enabled (from dev_os_settings)
-      const [setting] = await db.select().from(devOsSettings).where(eq(devOsSettings.key, 'auto_curation_enabled')).limit(1);
-      const isActive = setting?.value === 'true';
+      // Check if auto-curation is enabled (from curation_settings table)
+      const settingResult = await db.execute(sql`
+        SELECT value FROM curation_settings WHERE key = 'auto_curation_enabled' LIMIT 1
+      `);
+      const isActive = (settingResult.rows?.[0] as any)?.value === 'true';
       
       // Get last curation run
       const [lastRun] = await db.select().from(curationRuns).orderBy(desc(curationRuns.startedAt)).limit(1);
@@ -18391,7 +18386,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         schedule: '4x daily (3:15am, 9am, 3pm, 9pm EST)',
         lastRun: lastRun ? {
           timestamp: lastRun.startedAt,
-          discovered: lastRun.videosDiscovered || 0,
+          discovered: lastRun.videosScreened || 0,
           analyzed: lastRun.videosAnalyzed || 0,
           added: lastRun.videosAdded || 0,
         } : null,
@@ -18427,15 +18422,36 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
-  // Get active jobs
-  app.get('/api/admin/curation/active-jobs', checkAdminAuth, (req, res) => {
-    const jobs = Array.from(activeCurationJobs.values()).filter(j => j.status === 'running');
-    res.json(jobs);
+  // Get active jobs (from database)
+  app.get('/api/admin/curation/active-jobs', checkAdminAuth, async (req, res) => {
+    try {
+      const activeRuns = await db.select().from(curationRuns)
+        .where(eq(curationRuns.status, 'running'))
+        .orderBy(desc(curationRuns.startedAt))
+        .limit(10);
+      
+      const jobs = activeRuns.map(formatCurationRunAsJob);
+      res.json(jobs);
+    } catch (error: any) {
+      console.error('[CURATION API] Error getting active jobs:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
-  // Get job history
-  app.get('/api/admin/curation/job-history', checkAdminAuth, (req, res) => {
-    res.json(curationJobHistory.slice(-20).reverse());
+  // Get job history (from database)
+  app.get('/api/admin/curation/job-history', checkAdminAuth, async (req, res) => {
+    try {
+      const historyRuns = await db.select().from(curationRuns)
+        .where(sql`${curationRuns.status} != 'running'`)
+        .orderBy(desc(curationRuns.startedAt))
+        .limit(20);
+      
+      const jobs = historyRuns.map(formatCurationRunAsJob);
+      res.json(jobs);
+    } catch (error: any) {
+      console.error('[CURATION API] Error getting job history:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // Get known instructors
@@ -18460,9 +18476,11 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
   // Get API quota usage
   app.get('/api/admin/curation/api-quota', checkAdminAuth, async (req, res) => {
     try {
-      // Get YouTube quota from settings
-      const [quotaSetting] = await db.select().from(devOsSettings).where(eq(devOsSettings.key, 'youtube_quota_used_today')).limit(1);
-      const youtubeUsed = parseInt(quotaSetting?.value || '0');
+      // Get YouTube quota from curation_settings table
+      const quotaResult = await db.execute(sql`
+        SELECT value FROM curation_settings WHERE key = 'youtube_quota_used_today' LIMIT 1
+      `);
+      const youtubeUsed = parseInt((quotaResult.rows?.[0] as any)?.value || '0');
       
       res.json({
         youtubeUsed,
@@ -18481,9 +18499,9 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     try {
       const { enabled } = req.body;
       
-      // Upsert the setting
+      // Upsert the setting in curation_settings table
       await db.execute(sql`
-        INSERT INTO dev_os_settings (key, value, updated_at)
+        INSERT INTO curation_settings (key, value, updated_at)
         VALUES ('auto_curation_enabled', ${enabled ? 'true' : 'false'}, NOW())
         ON CONFLICT (key) DO UPDATE SET value = ${enabled ? 'true' : 'false'}, updated_at = NOW()
       `);
@@ -18496,24 +18514,23 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
-  // Run curation job
+  // Run curation job (persisted to database)
   app.post('/api/admin/curation/run', checkAdminAuth, async (req, res) => {
     try {
       const { type, query, filter } = req.body;
+      const searchCategory = query || filter || type;
       
-      const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const job = {
-        id: jobId,
-        type,
-        query: query || filter || '',
-        status: 'running' as const,
-        progress: 0,
-        found: 0,
-        added: 0,
-        startedAt: new Date().toISOString(),
-      };
+      // Insert new curation run into database
+      const [newRun] = await db.insert(curationRuns).values({
+        runType: type,
+        searchCategory,
+        status: 'running',
+        videosScreened: 0,
+        videosAnalyzed: 0,
+        videosAdded: 0,
+      }).returning();
       
-      activeCurationJobs.set(jobId, job);
+      const jobId = newRun.id;
       
       // Respond immediately
       res.json({ success: true, jobId, message: `Started ${type} curation` });
@@ -18521,7 +18538,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       // Run in background
       (async () => {
         try {
-          let result = { curatedCount: 0, searchesPerformed: 0 };
+          let result = { curatedCount: 0, searchesPerformed: 0, found: 0 };
           
           if (type === 'meta') {
             // Curate all high-priority techniques
@@ -18534,9 +18551,16 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
               const r = await manualCurateTechnique(priority.techniqueName, 10);
               result.curatedCount += r.curatedCount;
               result.searchesPerformed += r.searchesPerformed;
-              job.progress = Math.round((priorities.indexOf(priority) + 1) / Math.min(priorities.length, 5) * 100);
-              job.found += r.searchesPerformed * 10;
-              job.added += r.curatedCount;
+              result.found += r.searchesPerformed * 10;
+              
+              // Update progress in database
+              await db.update(curationRuns)
+                .set({ 
+                  videosScreened: result.found,
+                  videosAnalyzed: result.searchesPerformed * 5,
+                  videosAdded: result.curatedCount 
+                })
+                .where(eq(curationRuns.id, jobId));
             }
           } else if (type === 'instructor' || type === 'technique' || type === 'position' || type === 'custom') {
             const { searchYouTubeVideosExtended } = await import('./intelligent-curator');
@@ -18548,8 +18572,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
             const videos = await searchYouTubeVideosExtended(searchQuery, undefined, 20);
             result.curatedCount = videos.length;
             result.searchesPerformed = 1;
-            job.found = 20;
-            job.added = videos.length;
+            result.found = 20;
           } else if (type === 'gi-nogi') {
             const { searchYouTubeVideosExtended } = await import('./intelligent-curator');
             const searchQuery = filter === 'gi' ? 'gi bjj technique instructional' : 'nogi submission grappling technique';
@@ -18557,24 +18580,30 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
             const videos = await searchYouTubeVideosExtended(searchQuery, undefined, 20);
             result.curatedCount = videos.length;
             result.searchesPerformed = 1;
-            job.found = 20;
-            job.added = videos.length;
+            result.found = 20;
           }
           
-          job.status = 'completed';
-          job.progress = 100;
-          job.completedAt = new Date().toISOString();
-          
-          // Move to history
-          activeCurationJobs.delete(jobId);
-          curationJobHistory.push({ ...job });
+          // Update to completed in database
+          await db.update(curationRuns)
+            .set({ 
+              status: 'completed',
+              videosScreened: result.found,
+              videosAnalyzed: result.searchesPerformed * 5,
+              videosAdded: result.curatedCount,
+              completedAt: new Date()
+            })
+            .where(eq(curationRuns.id, jobId));
           
           console.log(`[CURATION API] Job ${jobId} completed: ${result.curatedCount} videos added`);
         } catch (error: any) {
-          job.status = 'failed';
-          job.completedAt = new Date().toISOString();
-          activeCurationJobs.delete(jobId);
-          curationJobHistory.push({ ...job });
+          // Update to failed in database
+          await db.update(curationRuns)
+            .set({ 
+              status: 'failed',
+              errorMessage: error.message,
+              completedAt: new Date()
+            })
+            .where(eq(curationRuns.id, jobId));
           console.error(`[CURATION API] Job ${jobId} failed:`, error.message);
         }
       })();
@@ -18585,19 +18614,31 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
-  // Cancel job
-  app.post('/api/admin/curation/cancel/:jobId', checkAdminAuth, (req, res) => {
-    const { jobId } = req.params;
-    const job = activeCurationJobs.get(jobId);
-    
-    if (job) {
-      job.status = 'cancelled';
-      job.completedAt = new Date().toISOString();
-      activeCurationJobs.delete(jobId);
-      curationJobHistory.push({ ...job });
-      res.json({ success: true });
-    } else {
-      res.status(404).json({ error: 'Job not found' });
+  // Cancel job (updates database)
+  app.post('/api/admin/curation/cancel/:jobId', checkAdminAuth, async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      
+      // Check if job exists and is running
+      const [job] = await db.select().from(curationRuns).where(eq(curationRuns.id, jobId)).limit(1);
+      
+      if (job && job.status === 'running') {
+        await db.update(curationRuns)
+          .set({ 
+            status: 'cancelled',
+            completedAt: new Date()
+          })
+          .where(eq(curationRuns.id, jobId));
+        
+        res.json({ success: true });
+      } else if (job) {
+        res.status(400).json({ error: 'Job is not running' });
+      } else {
+        res.status(404).json({ error: 'Job not found' });
+      }
+    } catch (error: any) {
+      console.error('[CURATION API] Error cancelling job:', error);
+      res.status(500).json({ error: error.message });
     }
   });
 
