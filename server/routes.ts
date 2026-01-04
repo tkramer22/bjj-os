@@ -506,6 +506,84 @@ export function registerRoutes(app: Express): Server {
   });
   
   // ============================================================================
+  // DIAGNOSTIC ENDPOINT - Test Chat with Minimal Prompt
+  // ============================================================================
+  app.post('/api/test/chat-minimal', async (req, res) => {
+    try {
+      const message = req.body.message || 'Hello';
+      console.log('[TEST CHAT-MINIMAL] Testing with minimal prompt...');
+      
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 500,
+        system: "You are Professor OS, a helpful BJJ coach. Be brief and friendly.",
+        messages: [{ role: "user", content: message }]
+      });
+      
+      const text = response.content[0]?.type === 'text' ? response.content[0].text : 'No text response';
+      console.log('[TEST CHAT-MINIMAL] Success:', text.substring(0, 100));
+      
+      res.json({ success: true, response: text });
+    } catch (error: any) {
+      console.error('[TEST CHAT-MINIMAL] Error:', error);
+      res.json({ success: false, error: error.message });
+    }
+  });
+  
+  // ============================================================================
+  // DIAGNOSTIC ENDPOINT - Test Full System Prompt Build
+  // ============================================================================
+  app.post('/api/test/chat-full', async (req, res) => {
+    try {
+      const message = req.body.message || 'Hello';
+      const userId = req.body.userId;
+      
+      console.log('[TEST CHAT-FULL] Testing with full system prompt...');
+      
+      if (!userId) {
+        return res.json({ success: false, error: 'userId is required - pass a valid user ID to test' });
+      }
+      
+      // Build the full system prompt
+      const { buildSystemPrompt } = await import('./utils/buildSystemPrompt');
+      const startTime = Date.now();
+      const systemPrompt = await buildSystemPrompt(userId);
+      const buildTime = Date.now() - startTime;
+      
+      console.log(`[TEST CHAT-FULL] System prompt built in ${buildTime}ms, length: ${systemPrompt.length} chars`);
+      
+      // Estimate tokens (roughly 4 chars per token)
+      const estimatedTokens = Math.ceil(systemPrompt.length / 4);
+      console.log(`[TEST CHAT-FULL] Estimated tokens: ${estimatedTokens}`);
+      
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: [{ role: "user", content: message }]
+      });
+      
+      const text = response.content[0]?.type === 'text' ? response.content[0].text : 'No text response';
+      console.log('[TEST CHAT-FULL] Success:', text.substring(0, 100));
+      
+      res.json({ 
+        success: true, 
+        response: text,
+        promptLength: systemPrompt.length,
+        estimatedTokens,
+        buildTimeMs: buildTime
+      });
+    } catch (error: any) {
+      console.error('[TEST CHAT-FULL] Error:', error);
+      res.json({ success: false, error: error.message, stack: error.stack?.substring(0, 500) });
+    }
+  });
+  
+  // ============================================================================
   // EMAIL AUTHENTICATION ENDPOINTS (NEW - PRIMARY AUTH METHOD)
   // ============================================================================
   registerEmailAuthRoutes(app);

@@ -1,0 +1,153 @@
+# ROLLBACK SYSTEM PROMPT - CHAT BROKE AFTER PROMPT UPDATE
+
+The chat worked before the recent system prompt update. It’s broken now. This is the cause.
+
+## OPTION 1: ROLLBACK TO LAST WORKING CHECKPOINT
+
+Look at your Replit checkpoints and find one from BEFORE the system prompt changes. Rollback to that checkpoint.
+
+The checkpoint should be from earlier today, before “Professor OS Intelligence Upgrade” or similar prompt changes.
+
+## OPTION 2: CHECK THE SYSTEM PROMPT FOR ERRORS
+
+The system prompt may have:
+
+- Unclosed quotes or backticks
+- Invalid characters
+- Be too long (Claude has context limits)
+
+### Find the system prompt and check it:
+
+```typescript
+// Find where the system prompt is defined - likely in:
+// - server/routes.ts
+// - server/ai/chat.ts
+// - server/prompts/professorOS.ts
+// - Or similar
+
+// The system prompt should be a clean string like:
+const systemPrompt = `You are Professor OS, a BJJ training partner...`;
+
+// NOT broken like:
+const systemPrompt = `You are Professor OS...
+  ## RULES
+  - Never say "let me guess..."  // <-- This comment inside backticks breaks it
+`;
+```
+
+### Check for these common issues:
+
+1. **Unclosed template literals:**
+
+```typescript
+// BAD - missing closing backtick
+const prompt = `You are Professor OS...
+
+// GOOD
+const prompt = `You are Professor OS...`;
+```
+
+1. **Unescaped characters:**
+
+```typescript
+// BAD - unescaped backticks inside template literal
+const prompt = `Use \`code\` formatting`;
+
+// The backticks need to be escaped or use different quotes
+```
+
+1. **Prompt too long:**
+
+```typescript
+// Check the length
+console.log('System prompt length:', systemPrompt.length);
+// If it's over 10,000 characters, that could be an issue
+```
+
+## OPTION 3: USE A MINIMAL WORKING PROMPT
+
+Replace the entire system prompt with this minimal version to test:
+
+```typescript
+const PROFESSOR_OS_SYSTEM_PROMPT = `You are Professor OS, a world-class BJJ training partner.
+
+Your personality:
+- Training partner energy, not lecturer
+- Direct and real, never robotic
+- You train at Essential JJ under JT Torres
+- You rep Albino & Preto
+
+Your job:
+- Help users improve their BJJ
+- Recommend relevant technique videos from the library
+- Give practical, actionable advice
+- Be conversational and supportive
+
+Always be helpful and encouraging. Ask clarifying questions when needed.`;
+```
+
+This is short, clean, and will definitely work. If chat works with this prompt, the issue is in the longer prompt content.
+
+## OPTION 4: CHECK FOR CODE ERRORS
+
+The prompt update may have also changed code. Look for:
+
+```typescript
+// Syntax errors in the chat endpoint
+app.post('/api/ai/chat/message', async (req, res) => {
+  // Make sure all brackets are closed
+  // Make sure all try/catch blocks are complete
+  // Make sure there are no undefined variables
+});
+```
+
+## STEP BY STEP DEBUG
+
+1. First, find the system prompt file
+1. Print it to console: `console.log('PROMPT:', systemPrompt);`
+1. Check the server logs for any errors when loading
+1. Try the minimal prompt above
+1. If minimal works, the issue is in the prompt content
+1. If minimal doesn’t work, the issue is in the code
+
+## QUICK TEST
+
+Add this temporary endpoint to test with minimal prompt:
+
+```typescript
+app.post('/api/test/chat-minimal', async (req, res) => {
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 500,
+      system: "You are Professor OS, a helpful BJJ coach. Be brief and friendly.",
+      messages: [{ role: "user", content: req.body.message || "Hello" }]
+    });
+    
+    res.json({ 
+      success: true, 
+      response: response.content[0]?.text 
+    });
+  } catch (error: any) {
+    res.json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+```
+
+Then test: `POST /api/test/chat-minimal` with `{ "message": "Hi" }`
+
+If this works but the real endpoint doesn’t, the system prompt is the problem.
+
+## MOST LIKELY FIX
+
+The fastest fix is to:
+
+1. Find the checkpoint from before the prompt update
+1. Click “Rollback here”
+1. Verify chat works again
+1. Then carefully re-apply prompt changes one at a time
+
+DO NOT keep making changes on top of broken code. Roll back first.

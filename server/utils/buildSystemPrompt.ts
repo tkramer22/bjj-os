@@ -27,12 +27,40 @@ export async function buildSystemPrompt(userId: string, struggleAreaBoost?: stri
   console.log('[PROMPT VERSION] Building system prompt - TRIMMED v2.0 - ' + new Date().toISOString());
   
   // 1. LOAD OR USE PRELOADED USER PROFILE
+  // Use explicit column selection to avoid missing column errors in Supabase
   let userProfile;
   if (dynamicContext?.preloadedUser) {
     userProfile = dynamicContext.preloadedUser;
     console.log('[SYSTEM PROMPT] Using preloaded user profile');
   } else {
-    const [loadedProfile] = await db.select()
+    const userColumns = {
+      id: bjjUsers.id,
+      email: bjjUsers.email,
+      displayName: bjjUsers.displayName,
+      username: bjjUsers.username,
+      name: bjjUsers.name,
+      beltLevel: bjjUsers.beltLevel,
+      style: bjjUsers.style,
+      contentPreference: bjjUsers.contentPreference,
+      focusAreas: bjjUsers.focusAreas,
+      injuries: bjjUsers.injuries,
+      competeStatus: bjjUsers.competeStatus,
+      trainingGoals: bjjUsers.trainingGoals,
+      bodyType: bjjUsers.bodyType,
+      ageRange: bjjUsers.ageRange,
+      height: bjjUsers.height,
+      weight: bjjUsers.weight,
+      gym: bjjUsers.gym,
+      yearsTrainingRange: bjjUsers.yearsTrainingRange,
+      trainingFrequencyText: bjjUsers.trainingFrequencyText,
+      preferredLanguage: bjjUsers.preferredLanguage,
+      createdAt: bjjUsers.createdAt,
+      struggles: bjjUsers.struggles,
+      strengths: bjjUsers.strengths,
+      struggletechnique: bjjUsers.struggleTechnique,
+      weakestArea: bjjUsers.weakestArea,
+    };
+    const [loadedProfile] = await db.select(userColumns)
       .from(bjjUsers)
       .where(eq(bjjUsers.id, userId))
       .limit(1);
