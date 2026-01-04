@@ -18369,14 +18369,26 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     };
   }
 
+  // Track cancelled jobs to signal background work to stop
+  const cancelledJobIds = new Set<string>();
+  
   // Get curation status
   app.get('/api/admin/curation/status', checkAdminAuth, async (req, res) => {
     try {
       // Check if auto-curation is enabled (from curation_settings table)
-      const settingResult = await db.execute(sql`
-        SELECT value FROM curation_settings WHERE key = 'auto_curation_enabled' LIMIT 1
-      `);
-      const isActive = (settingResult.rows?.[0] as any)?.value === 'true';
+      // Default to true if no setting exists (matches prior behavior - scheduler is enabled by default)
+      let isActive = true;
+      try {
+        const settingResult = await db.execute(sql`
+          SELECT value FROM curation_settings WHERE key = 'auto_curation_enabled' LIMIT 1
+        `);
+        if (settingResult.rows && settingResult.rows.length > 0) {
+          isActive = (settingResult.rows[0] as any)?.value === 'true';
+        }
+      } catch (settingErr) {
+        // Table may not exist yet - default to true
+        console.log('[CURATION API] Settings table not ready, defaulting isActive=true');
+      }
       
       // Get last curation run
       const [lastRun] = await db.select().from(curationRuns).orderBy(desc(curationRuns.startedAt)).limit(1);
@@ -18535,34 +18547,42 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       // Respond immediately
       res.json({ success: true, jobId, message: `Started ${type} curation` });
       
-      // Run in background
+      // Run in background with cancellation check
       (async () => {
+        let result = { curatedCount: 0, searchesPerformed: 0, found: 0, analyzed: 0 };
+        
+        // Helper to check if job was cancelled
+        const isCancelled = () => cancelledJobIds.has(jobId);
+        
         try {
-          let result = { curatedCount: 0, searchesPerformed: 0, found: 0 };
-          
           if (type === 'meta') {
-            // Curate all high-priority techniques
             const { MetaAnalyzer } = await import('./meta-analyzer');
             const analyzer = new MetaAnalyzer();
             const priorities = await analyzer.getCurationPriorities();
             
             const { manualCurateTechnique } = await import('./auto-curator');
             for (const priority of priorities.slice(0, 5)) {
+              // Check for cancellation before each technique
+              if (isCancelled()) {
+                console.log(`[CURATION API] Job ${jobId} cancelled, stopping work`);
+                cancelledJobIds.delete(jobId);
+                return; // Exit without overwriting status
+              }
+              
               const r = await manualCurateTechnique(priority.techniqueName, 10);
+              // Accumulate per-iteration counts (not cumulative totals)
+              const foundThisIteration = r.searchesPerformed * 10;
               result.curatedCount += r.curatedCount;
               result.searchesPerformed += r.searchesPerformed;
-              result.found += r.searchesPerformed * 10;
-              
-              // Update progress in database
-              await db.update(curationRuns)
-                .set({ 
-                  videosScreened: result.found,
-                  videosAnalyzed: result.searchesPerformed * 5,
-                  videosAdded: result.curatedCount 
-                })
-                .where(eq(curationRuns.id, jobId));
+              result.found += foundThisIteration;
+              result.analyzed += foundThisIteration; // Each found video is analyzed once
             }
           } else if (type === 'instructor' || type === 'technique' || type === 'position' || type === 'custom') {
+            if (isCancelled()) {
+              cancelledJobIds.delete(jobId);
+              return;
+            }
+            
             const { searchYouTubeVideosExtended } = await import('./intelligent-curator');
             const searchQuery = type === 'instructor' ? `${query} bjj technique` : 
                                type === 'technique' ? `${query} bjj instructional` :
@@ -18572,38 +18592,57 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
             const videos = await searchYouTubeVideosExtended(searchQuery, undefined, 20);
             result.curatedCount = videos.length;
             result.searchesPerformed = 1;
-            result.found = 20;
+            result.found = videos.length;
+            result.analyzed = videos.length;
           } else if (type === 'gi-nogi') {
+            if (isCancelled()) {
+              cancelledJobIds.delete(jobId);
+              return;
+            }
+            
             const { searchYouTubeVideosExtended } = await import('./intelligent-curator');
             const searchQuery = filter === 'gi' ? 'gi bjj technique instructional' : 'nogi submission grappling technique';
             
             const videos = await searchYouTubeVideosExtended(searchQuery, undefined, 20);
             result.curatedCount = videos.length;
             result.searchesPerformed = 1;
-            result.found = 20;
+            result.found = videos.length;
+            result.analyzed = videos.length;
           }
           
-          // Update to completed in database
+          // Final check before writing completion
+          if (isCancelled()) {
+            cancelledJobIds.delete(jobId);
+            return;
+          }
+          
+          // Write final results once complete (atomic update)
           await db.update(curationRuns)
             .set({ 
               status: 'completed',
               videosScreened: result.found,
-              videosAnalyzed: result.searchesPerformed * 5,
+              videosAnalyzed: result.analyzed,
               videosAdded: result.curatedCount,
               completedAt: new Date()
             })
             .where(eq(curationRuns.id, jobId));
           
+          // Clean up cancelledJobIds set on successful completion
+          cancelledJobIds.delete(jobId);
+          
           console.log(`[CURATION API] Job ${jobId} completed: ${result.curatedCount} videos added`);
         } catch (error: any) {
-          // Update to failed in database
-          await db.update(curationRuns)
-            .set({ 
-              status: 'failed',
-              errorMessage: error.message,
-              completedAt: new Date()
-            })
-            .where(eq(curationRuns.id, jobId));
+          // Only update to failed if not cancelled
+          if (!isCancelled()) {
+            await db.update(curationRuns)
+              .set({ 
+                status: 'failed',
+                errorMessage: error.message,
+                completedAt: new Date()
+              })
+              .where(eq(curationRuns.id, jobId));
+          }
+          cancelledJobIds.delete(jobId);
           console.error(`[CURATION API] Job ${jobId} failed:`, error.message);
         }
       })();
@@ -18614,7 +18653,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
-  // Cancel job (updates database)
+  // Cancel job (updates database and signals background work to stop)
   app.post('/api/admin/curation/cancel/:jobId', checkAdminAuth, async (req, res) => {
     try {
       const { jobId } = req.params;
@@ -18623,6 +18662,10 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const [job] = await db.select().from(curationRuns).where(eq(curationRuns.id, jobId)).limit(1);
       
       if (job && job.status === 'running') {
+        // Signal the background work to stop
+        cancelledJobIds.add(jobId);
+        
+        // Update database status
         await db.update(curationRuns)
           .set({ 
             status: 'cancelled',
@@ -18630,6 +18673,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           })
           .where(eq(curationRuns.id, jobId));
         
+        console.log(`[CURATION API] Job ${jobId} cancelled`);
         res.json({ success: true });
       } else if (job) {
         res.status(400).json({ error: 'Job is not running' });
