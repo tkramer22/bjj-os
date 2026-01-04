@@ -202,6 +202,8 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
           instructor: match.instructorName,
           startTime: video.startTime
         });
+        // 📊 Track video click for dashboard metrics
+        trackVideoClick(match.id || video.id, video.startTime);
         return;
       }
       
@@ -222,6 +224,25 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
     }
   };
 
+  // 📊 DASHBOARD TRACKING: Track video clicks for admin dashboard metrics
+  const trackVideoClick = async (videoId: number | string, startTime?: string) => {
+    if (!userId) return;
+    
+    try {
+      await fetch('/api/ai/engagement/video-click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          videoId: typeof videoId === 'string' ? parseInt(videoId, 10) : videoId,
+          startTimestamp: startTime ? parseInt(startTime, 10) : undefined
+        })
+      });
+      console.log('📊 Video click tracked for dashboard');
+    } catch (error) {
+      console.error('Failed to track video click:', error);
+    }
+  };
 
   const toggleSaveVideo = async (videoId: number) => {
     if (!userId) {
@@ -320,12 +341,16 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                 {segment.video.videoId ? (
                   <div style={{ position: "relative" }}>
                     <button
-                      onClick={() => setCurrentVideo({ 
-                        videoId: segment.video!.videoId, 
-                        title: segment.video!.title, 
-                        instructor: segment.video!.instructor,
-                        startTime: segment.video!.startTime 
-                      })}
+                      onClick={() => {
+                        setCurrentVideo({ 
+                          videoId: segment.video!.videoId, 
+                          title: segment.video!.title, 
+                          instructor: segment.video!.instructor,
+                          startTime: segment.video!.startTime 
+                        });
+                        // 📊 Track video click for dashboard metrics
+                        trackVideoClick(segment.video!.id, segment.video!.startTime);
+                      }}
                       style={{
                         width: "100%",
                         border: "none",

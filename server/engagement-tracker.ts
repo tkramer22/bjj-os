@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { videoInteractions, recommendationOutcomes } from "@shared/schema";
+import { videoInteractions, recommendationOutcomes, activityLog } from "@shared/schema";
 import { eq, and, desc, gte } from "drizzle-orm";
 import type { Request } from "express";
 
@@ -69,6 +69,20 @@ class EngagementTracker {
 
       console.log(`[ENGAGEMENT] Video click tracked: user=${event.userId}, video=${event.videoId}`);
       
+      // 📊 DASHBOARD TRACKING: Also log to activityLog for admin dashboard metrics
+      try {
+        await db.insert(activityLog).values({
+          eventType: 'video_click',
+          userId: event.userId,
+          videoId: event.videoId,
+          description: `Video clicked: ID ${event.videoId}`,
+          metadata: { startTimestamp: event.startTimestamp, queryId: event.queryId }
+        });
+        console.log(`📊 [ACTIVITY] Logged video_click to activityLog`);
+      } catch (activityErr) {
+        console.error('❌ activityLog insert error (non-critical):', activityErr);
+      }
+      
       // Also update recommendation outcome if this was from a recommendation
       if (event.queryId) {
         await this.updateRecommendationOutcome(event.userId, event.queryId, event.videoId, {
@@ -124,6 +138,20 @@ class EngagementTracker {
       await this.updateRecommendationOutcome(event.userId, undefined, event.videoId, {
         actualEngagement: engagement.toString()
       });
+      
+      // 📊 DASHBOARD TRACKING: Also log to activityLog for admin dashboard metrics
+      try {
+        await db.insert(activityLog).values({
+          eventType: 'video_watch',
+          userId: event.userId,
+          videoId: event.videoId,
+          description: `Video watched: ${event.watchDuration}s${event.completed ? ' (completed)' : ''}`,
+          metadata: { watchDuration: event.watchDuration, completed: event.completed }
+        });
+        console.log(`📊 [ACTIVITY] Logged video_watch to activityLog (${event.watchDuration}s)`);
+      } catch (activityErr) {
+        console.error('❌ activityLog insert error (non-critical):', activityErr);
+      }
     } catch (error) {
       console.error('[ENGAGEMENT] Failed to track video watch:', error);
     }

@@ -3370,12 +3370,20 @@ export type UserActivity = typeof userActivity.$inferSelect;
 // MULTI-AGENT INTELLIGENCE SYSTEM - Engagement Tracking & Learning
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Prof Queries - Track all Prof. OS queries for analysis
+// Prof Queries - Track all Prof. OS queries for analysis and dashboard metrics
 export const profQueries = pgTable("prof_queries", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull(),
   query: text("query").notNull(),
+  userQuestion: text("user_question"), // Copy of query for dashboard display
   queryType: varchar("query_type").default('chat'), // 'chat', 'voice', 'search'
+  
+  // Analytics fields for dashboard
+  responseTime: integer("response_time"), // Response time in milliseconds
+  useMultiAgent: boolean("use_multi_agent").default(false),
+  recommendedVideos: jsonb("recommended_videos"), // Array of recommended video objects
+  error: text("error"), // Error message if request failed
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   userIdx: index("idx_prof_queries_user").on(table.userId),

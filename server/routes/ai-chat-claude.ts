@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { db } from '../db';
 import { eq, desc, sql, exists, and } from 'drizzle-orm';
-import { aiConversationLearning, bjjUsers, aiVideoKnowledge, professorOsDiagnostics, videoKnowledge } from '../../shared/schema';
+import { aiConversationLearning, bjjUsers, aiVideoKnowledge, professorOsDiagnostics, videoKnowledge, profQueries } from '../../shared/schema';
 import { buildSystemPrompt } from '../utils/buildSystemPrompt';
 import { loadImportantCombatNews, loadPopulationIntelligence } from '../utils/professorOSPrompt';
 import { processConversation } from '../utils/learningLoop';
@@ -1130,6 +1130,39 @@ export async function handleClaudeStream(req: any, res: any) {
     saveDiagnostics(userId.toString(), message, diagnosticData as DiagnosticData).catch(err => {
       console.error('❌ Failed to save diagnostics:', err);
     });
+    
+    // 📊 ACTIVITY TRACKING: Log to profQueries for dashboard metrics (async, non-blocking)
+    try {
+      // Extract recommended videos from the response for tracking
+      const videoTokenMatches = fullResponse.match(/\[VIDEO:\s*([^\]]+)\]/g) || [];
+      const recommendedVideosList = videoTokenMatches.map(token => {
+        const content = token.replace(/\[VIDEO:\s*/, '').replace(/\]$/, '');
+        const parts = content.split('|').map(p => p.trim());
+        return {
+          title: parts[0] || '',
+          instructor: parts[1] || '',
+          videoId: parts[3] || '',
+          id: parts[4] ? parseInt(parts[4], 10) : null
+        };
+      }).filter(v => v.title);
+      
+      db.insert(profQueries).values({
+        userId: userId.toString(),
+        query: message,
+        userQuestion: message, // Duplicate for dashboard display
+        queryType: 'chat',
+        responseTime: totalTime,
+        useMultiAgent: false, // Claude route doesn't use multi-agent
+        recommendedVideos: recommendedVideosList.length > 0 ? recommendedVideosList : null,
+        error: null
+      }).then(() => {
+        console.log(`📊 [ACTIVITY] Logged query to profQueries (${totalTime}ms, ${recommendedVideosList.length} videos)`);
+      }).catch((profError: any) => {
+        console.error('❌ profQueries logging error (non-critical):', profError.message);
+      });
+    } catch (profError: any) {
+      console.error('❌ profQueries extraction error (non-critical):', profError.message);
+    }
     
   } catch (error: any) {
     console.error('❌ CLAUDE STREAM ERROR:', error);
