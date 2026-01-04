@@ -162,6 +162,39 @@ export function MobileChat() {
     };
   }, []);
 
+  // EMERGENCY TIMEOUT: Never spin for more than 10 seconds
+  // Handles edge cases where history loading gets stuck
+  // Dependencies: Only stable values (isLoading, historyLoaded, message count) - NOT the entire chatContext object
+  const messageCount = chatContext.messages.length;
+  const historyLoaded = chatContext.historyLoaded;
+  
+  useEffect(() => {
+    if (!isLoading || historyLoaded) return; // Already loaded, no timeout needed
+    
+    const emergencyTimeout = setTimeout(() => {
+      console.warn('[CHAT] Emergency timeout - forcing chat to load');
+      setIsLoading(false);
+      chatContext.setHistoryLoaded(true);
+      // Add welcome message if no messages exist
+      if (messageCount === 0) {
+        chatContext.addMessage({
+          id: "timeout-welcome",
+          role: 'assistant',
+          content: `Hey! I'm Professor OS.
+
+I've broken down thousands of videos from the best - Danaher, Lachlan, Gordon, Marcelo, and hundreds more. Every recommendation comes with full analysis: key details, timestamps, what to focus on. Tap "Analysis" to see my breakdown, Save videos to your library, or Share them with training partners.
+
+Here's what makes me different: I remember everything. Every technique you're working on, every problem you mention, every win you share. The more we train together, the sharper I get.
+
+What are you working on right now?`,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }, 10000); // 10 second emergency timeout
+    
+    return () => clearTimeout(emergencyTimeout);
+  }, [isLoading, historyLoaded]); // Only depend on stable boolean values
+
   const scrollToBottom = (instant?: boolean) => {
     messagesEndRef.current?.scrollIntoView({ behavior: instant ? "instant" : "smooth" });
   };

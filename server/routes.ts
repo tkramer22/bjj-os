@@ -8574,7 +8574,7 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
       
     } catch (error: any) {
       console.error('Chat history error:', error);
-      res.status(500).json({ error: 'Failed to load history' });
+      res.status(500).json({ error: 'Failed to load history', messages: [] });
     }
   });
 
