@@ -1,0 +1,66 @@
+Good progress on Gemini (2975/3010 = 99%!). But several dashboard issues remain:
+
+Send this:
+
+```
+ADMIN DASHBOARD - REMAINING FIXES
+
+═══════════════════════════════════════════════════════════════════════════════
+1. CURATION EFFICIENCY - LABELS ARE WRONG
+═══════════════════════════════════════════════════════════════════════════════
+
+Current display:
+- Discovered: 0 (WRONG)
+- Analyzed: 109
+- Accepted: 109
+- Rejected: 654
+
+The logic is incorrect:
+- "Discovered" should be 109 + 654 = 763 (total videos found from YouTube)
+- "Analyzed" should be 109 (AI processed)
+- "Accepted" should be 109 (added to library)
+- "Rejected" should be 654 (failed quality check)
+
+Acceptance Rate should be: 109/763 = 14.3% (of discovered videos)
+NOT 100% (that's just analyzed vs accepted, which is meaningless)
+
+Fix the metrics to show the real funnel:
+Discovered → Analyzed → Accepted/Rejected
+
+═══════════════════════════════════════════════════════════════════════════════
+2. USER ACTIVITY - STILL BROKEN
+═══════════════════════════════════════════════════════════════════════════════
+
+Same error persists: "The 'string' argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date"
+
+This has been reported 5+ times. Find the exact line of code where a Date object is being passed where a string is expected. Convert it using .toISOString()
+
+═══════════════════════════════════════════════════════════════════════════════
+3. USERS PAGE - PAGINATION MISSING
+═══════════════════════════════════════════════════════════════════════════════
+
+Dashboard shows: 61 users
+Users page shows: Only ~10 visible
+
+There's no way to see all 61 users. Need:
+- Pagination (Page 1, 2, 3... or "Load More" button)
+- Or increase default display to show all users
+- Or add scroll that loads more
+
+Also: Refresh button on Users page doesn't work - fix it.
+
+═══════════════════════════════════════════════════════════════════════════════
+4. REFRESH BUTTONS - NOT WORKING
+═══════════════════════════════════════════════════════════════════════════════
+
+The refresh buttons on Dashboard and Users page don't actually refresh data.
+
+Make them:
+- Show a loading spinner
+- Re-fetch all data from the database
+- Update the display
+
+═══════════════════════════════════════════════════════════════════════════════
+
+These are basic admin dashboard functions. Fix them all.
+```

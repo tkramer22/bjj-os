@@ -523,7 +523,7 @@ export default function AdminDashboard() {
             </div>
             
             <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">Acceptance Rate (of analyzed videos)</p>
+              <p className="text-sm text-muted-foreground mb-1">Acceptance Rate (of discovered videos)</p>
               <p className="text-xl sm:text-2xl font-bold text-primary" data-testid="value-acceptance-rate">
                 {metrics.curationEfficiency.acceptanceRate.toFixed(1)}%
               </p>

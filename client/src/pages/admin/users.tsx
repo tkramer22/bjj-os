@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, RefreshCw, Edit, Eye, UserPlus, Users as UsersIcon, Key, Star, XCircle } from "lucide-react";
+import { Search, RefreshCw, Edit, Eye, UserPlus, Users as UsersIcon, Key, Star, XCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -28,12 +28,16 @@ import { Switch } from "@/components/ui/switch";
 
 type TimeFilter = '24h' | '7d' | '30d' | '90d' | 'all';
 
+const USERS_PER_PAGE = 20;
+
 export default function AdminUsers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [planFilter, setPlanFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [beltFilter, setBeltFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
 
   const { data: users, isLoading, refetch } = useQuery({
@@ -151,6 +155,18 @@ export default function AdminUsers() {
     user.phoneNumber?.includes(searchQuery)
   ) || [];
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredUsers.length / USERS_PER_PAGE);
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * USERS_PER_PAGE,
+    currentPage * USERS_PER_PAGE
+  );
+
+  // Reset to page 1 when filters change
+  const handleFilterChange = () => {
+    setCurrentPage(1);
+  };
+
   // Count users by time period
   const getUserCount = (period: TimeFilter) => {
     if (!users) return 0;
@@ -192,10 +208,18 @@ export default function AdminUsers() {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => refetch()}
+            onClick={async () => {
+              setIsRefreshing(true);
+              try {
+                await refetch();
+              } finally {
+                setIsRefreshing(false);
+              }
+            }}
+            disabled={isRefreshing}
             data-testid="button-refresh-users"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
         </div>
 
@@ -206,7 +230,7 @@ export default function AdminUsers() {
               <Button
                 key={filter}
                 variant={timeFilter === filter ? "default" : "ghost"}
-                onClick={() => setTimeFilter(filter)}
+                onClick={() => { setTimeFilter(filter); setCurrentPage(1); }}
                 className="flex-1"
                 data-testid={`filter-time-${filter}`}
               >
@@ -232,12 +256,12 @@ export default function AdminUsers() {
               placeholder="Search by name, email, or phone..."
               className="pl-10"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
               data-testid="input-user-search"
             />
           </div>
 
-          <Select value={planFilter} onValueChange={setPlanFilter}>
+          <Select value={planFilter} onValueChange={(v) => { setPlanFilter(v); setCurrentPage(1); }}>
             <SelectTrigger className="w-[180px]" data-testid="select-plan-filter">
               <SelectValue placeholder="Plan Type" />
             </SelectTrigger>
@@ -250,7 +274,7 @@ export default function AdminUsers() {
             </SelectContent>
           </Select>
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
             <SelectTrigger className="w-[180px]" data-testid="select-status-filter">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
@@ -262,7 +286,7 @@ export default function AdminUsers() {
             </SelectContent>
           </Select>
 
-          <Select value={beltFilter} onValueChange={setBeltFilter}>
+          <Select value={beltFilter} onValueChange={(v) => { setBeltFilter(v); setCurrentPage(1); }}>
             <SelectTrigger className="w-[180px]" data-testid="select-belt-filter">
               <SelectValue placeholder="Belt Level" />
             </SelectTrigger>
@@ -323,14 +347,14 @@ export default function AdminUsers() {
                       Loading users...
                     </TableCell>
                   </TableRow>
-                ) : filteredUsers.length === 0 ? (
+                ) : paginatedUsers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       No users found matching your filters
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredUsers.map((user: any) => (
+                  paginatedUsers.map((user: any) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -424,6 +448,40 @@ export default function AdminUsers() {
                 )}
               </TableBody>
             </Table>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between p-4 border-t">
+                <p className="text-sm text-muted-foreground">
+                  Showing {(currentPage - 1) * USERS_PER_PAGE + 1} - {Math.min(currentPage * USERS_PER_PAGE, filteredUsers.length)} of {filteredUsers.length} users
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    data-testid="button-prev-page"
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-2">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    data-testid="button-next-page"
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

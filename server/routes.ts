@@ -11876,14 +11876,17 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       
       // Calculate full curation funnel metrics - with safe fallbacks
       const screening = screeningRows[0];
-      const discovered = screening ? Number(screening.discovered || 0) : 0;
       const analyzed = screening ? Number(screening.analyzed || 0) : 0;
       const accepted = screening ? Number(screening.accepted || 0) : 0;
       const rejected = screening ? Number(screening.rejected || 0) : 0;
-      const skipped = Math.max(0, discovered - analyzed);
+      // FIXED: Discovered = analyzed + rejected (total videos that went through the pipeline)
+      // videos_screened column was not being populated correctly
+      const discovered = analyzed + rejected;
+      const skipped = 0; // Skipped is no longer used in the new funnel
       
-      // Calculate acceptance rate based on ANALYZED (not discovered)
-      const acceptanceRate = analyzed > 0 ? ((accepted / analyzed) * 100).toFixed(1) : '0.0';
+      // Calculate acceptance rate based on DISCOVERED (total found from YouTube)
+      // Return as number, not string - frontend will format it
+      const acceptanceRate = discovered > 0 ? parseFloat(((accepted / discovered) * 100).toFixed(1)) : 0;
       
       // Determine efficiency status
       let efficiencyStatus = 'unknown';
@@ -14488,13 +14491,14 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
   // 24-Hour Activity Dashboard API
   app.get('/api/admin/activity-24h', checkAdminAuth, async (req, res) => {
     try {
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      // Use SQL NOW() - INTERVAL for reliable timestamp comparison
+      const timeFilter = sql`NOW() - INTERVAL '24 hours'`;
 
       // USER ACTIVITY
       const allQueries = await db
         .select()
         .from(profQueries)
-        .where(sql`${profQueries.createdAt} >= ${twentyFourHoursAgo}`);
+        .where(sql`${profQueries.createdAt} >= ${timeFilter}`);
 
       const totalQueries = allQueries.length;
       const uniqueUsers = new Set(allQueries.map(q => q.userId).filter(Boolean)).size;
@@ -14502,7 +14506,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const newSignups = await db
         .select()
         .from(bjjUsers)
-        .where(sql`${bjjUsers.createdAt} >= ${twentyFourHoursAgo}`);
+        .where(sql`${bjjUsers.createdAt} >= NOW() - INTERVAL '24 hours'`);
 
       const newSignupsCount = newSignups.length;
 
@@ -14510,7 +14514,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const interactions = await db
         .select()
         .from(activityLog)
-        .where(sql`${activityLog.createdAt} >= ${twentyFourHoursAgo}`);
+        .where(sql`${activityLog.createdAt} >= NOW() - INTERVAL '24 hours'`);
 
       const videosClicked = interactions.filter(i => i.eventType === 'video_click').length;
       const videosWatched = interactions.filter(i => 
@@ -14531,7 +14535,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const feedback = await db
         .select()
         .from(videoInteractions)
-        .where(sql`${videoInteractions.createdAt} >= ${twentyFourHoursAgo}`);
+        .where(sql`${videoInteractions.createdAt} >= NOW() - INTERVAL '24 hours'`);
 
       const thumbsUp = feedback.filter(f => f.thumbsUp === true).length;
       const thumbsDown = feedback.filter(f => f.thumbsDown === true).length;
