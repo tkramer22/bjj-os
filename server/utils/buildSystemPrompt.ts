@@ -47,23 +47,23 @@ export async function buildSystemPrompt(userId: string, struggleAreaBoost?: stri
 
   // 2. LOAD OR USE PRELOADED VIDEOS with smart filtering
   // ═══════════════════════════════════════════════════════════════════════════
-  // CRITICAL FIX (Jan 2026): ALWAYS include some high-quality videos
-  // Even when noMatchFound=true, include general high-quality videos so Professor OS
-  // can proactively recommend related content. Just tell Claude to be honest about
-  // not having the specific technique.
+  // CRITICAL FIX (Jan 2026): When noMatchFound=true, DO NOT load fallback videos
+  // This prevents Claude from recommending unrelated videos (e.g., leg locks when 
+  // user asked about anaconda chokes). Instead, Claude teaches conceptually.
   // ═══════════════════════════════════════════════════════════════════════════
   let videoLibrary: any[] = [];
   const noMatchForSpecificTechnique = dynamicContext?.noMatchFound;
   
-  if (dynamicContext?.preloadedVideos && dynamicContext.preloadedVideos.length > 0 && !noMatchForSpecificTechnique) {
+  // CRITICAL: If no match found for the technique, DON'T load random videos
+  if (noMatchForSpecificTechnique) {
+    console.log('[SYSTEM PROMPT] ⚠️ noMatchFound=true - NOT loading fallback videos (prevents wrong recommendations)');
+    videoLibrary = []; // Explicitly empty - Claude should teach conceptually without videos
+  } else if (dynamicContext?.preloadedVideos && dynamicContext.preloadedVideos.length > 0) {
     // Use preloaded videos if search found matches
     videoLibrary = dynamicContext.preloadedVideos.slice(0, 20);
     console.log('[SYSTEM PROMPT] Using preloaded video library:', videoLibrary.length, 'videos');
   } else {
-    // Load high-quality fallback videos (even when noMatchFound=true)
-    if (noMatchForSpecificTechnique) {
-      console.log('[SYSTEM PROMPT] ⚠️ noMatchFound=true - Loading general high-quality videos for proactive recommendations');
-    }
+    // No preloaded videos and no noMatchFound - load high-quality general videos
     let loadedVideos = await db.select({
       id: aiVideoKnowledge.id,
       title: aiVideoKnowledge.title,
@@ -818,25 +818,26 @@ REMEMBER: This is ${displayName}'s journey. You're their training partner, not a
       fullPrompt += `
 
 ═══════════════════════════════════════════════════════════════════════════════
-⚠️ SPECIAL CASE: NO EXACT VIDEO FOR "${searchedTechnique.toUpperCase()}"
+⚠️ IMPORTANT: NO VIDEO EXISTS FOR "${searchedTechnique.toUpperCase()}"
 ═══════════════════════════════════════════════════════════════════════════════
 
-I don't have a video specifically titled "${searchedTechnique}" in my library yet.
+I searched my entire library and I DO NOT have any ${searchedTechnique} videos yet.
 
-**STILL DO THIS:**
-1. Give a great conceptual breakdown of ${searchedTechnique} (you still know how to teach it!)
-2. PROACTIVELY recommend 1-2 RELATED videos from my library that cover similar concepts
-   - If it's a choke, recommend other chokes from elite instructors
-   - If it's a guard technique, recommend related guard content
-   - Always pick the HIGHEST QUALITY videos (9.0+ score) for related positions/submissions
-3. Be honest: "I don't have a dedicated ${searchedTechnique} video yet, but here's great related content..."
+**WHAT TO DO:**
+1. Give a great conceptual breakdown of ${searchedTechnique} from your BJJ knowledge (you still know how to teach it!)
+2. Be honest: "I don't have ${searchedTechnique} videos in my library yet, but let me break down the technique for you..."
+3. DO NOT recommend unrelated videos - if they ask about anaconda chokes, don't show leg lock or X-guard videos
+4. DO NOT use any [VIDEO: ...] tokens - there are no matching videos to share
 
-**RULE: ALWAYS include at least ONE video card [VIDEO: Title by Instructor] even when no exact match.**
+**CRITICAL RULE:** 
+Never recommend videos that don't match what the user asked about. Leg locks are NOT anaconda chokes. 
+X-guard is NOT front headlock. Only recommend videos that ACTUALLY match the technique requested.
 
-Professor OS never leaves users without actionable video content. Find the closest match from the library above.
+When no matching videos exist, teach the technique conceptually without video recommendations.
+Your coaching knowledge is still valuable even without a video to share.
 ═══════════════════════════════════════════════════════════════════════════════
 `;
-      console.log(`[SYSTEM PROMPT] ⚠️ Added PROACTIVE_RELATED_VIDEO instruction for: "${searchedTechnique}"`);
+      console.log(`[SYSTEM PROMPT] ⚠️ NO_VIDEO_FOR_TECHNIQUE instruction for: "${searchedTechnique}"`);
     }
     
     // Add dynamic video search results with knowledge enhancement
