@@ -13325,13 +13325,15 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
   // Get user technique requests
   app.get('/api/admin/meta/requests', checkAdminAuth, async (req, res) => {
     try {
-      const { userTechniqueRequests } = await import('@shared/schema');
+      const { userTechniqueRequests, users } = await import('@shared/schema');
       const { desc } = await import('drizzle-orm');
       
       const limit = parseInt(req.query.limit as string) || 50;
       const requests = await db.select({
         id: userTechniqueRequests.id,
         userId: userTechniqueRequests.userId,
+        userName: users.name,
+        userEmail: users.email,
         techniqueMentioned: userTechniqueRequests.techniqueMentioned,
         requestContext: userTechniqueRequests.requestContext,
         requestType: userTechniqueRequests.requestType,
@@ -13340,6 +13342,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         requestedAt: userTechniqueRequests.requestedAt
       })
         .from(userTechniqueRequests)
+        .leftJoin(users, eq(userTechniqueRequests.userId, sql`${users.id}::text`))
         .orderBy(desc(userTechniqueRequests.requestedAt))
         .limit(limit);
       

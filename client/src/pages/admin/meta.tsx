@@ -38,6 +38,9 @@ interface CurationPriority {
 
 interface UserRequest {
   id: string;
+  userId: string;
+  userName: string | null;
+  userEmail: string | null;
   techniqueMentioned: string;
   requestContext: string;
   requestType: string | null;
@@ -327,8 +330,8 @@ export default function MetaInsightsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>User</TableHead>
                       <TableHead>Technique</TableHead>
-                      <TableHead>Type</TableHead>
                       <TableHead>Belt</TableHead>
                       <TableHead>Gi/NoGi</TableHead>
                       <TableHead>Context</TableHead>
@@ -337,15 +340,18 @@ export default function MetaInsightsPage() {
                   </TableHeader>
                   <TableBody>
                     {requestsData?.requests.slice(0, 20).map((request) => (
-                      <TableRow key={request.id}>
-                        <TableCell className="font-medium capitalize">{request.techniqueMentioned}</TableCell>
+                      <TableRow key={request.id} data-testid={`row-request-${request.id}`}>
                         <TableCell>
-                          {request.requestType ? (
-                            <Badge variant="outline">{request.requestType.replace('_', ' ')}</Badge>
-                          ) : (
-                            '-'
-                          )}
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">
+                              {request.userName || 'Unknown'}
+                            </span>
+                            <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                              {request.userEmail || request.userId}
+                            </span>
+                          </div>
                         </TableCell>
+                        <TableCell className="font-medium capitalize">{request.techniqueMentioned}</TableCell>
                         <TableCell>{request.beltLevel || '-'}</TableCell>
                         <TableCell>{request.giPreference || '-'}</TableCell>
                         <TableCell className="max-w-md truncate text-sm text-muted-foreground">
