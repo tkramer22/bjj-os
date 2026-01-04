@@ -1,0 +1,331 @@
+# PROFESSOR OS INTELLIGENCE UPGRADE
+
+Two critical fixes: (1) Video recommendations must use Gemini technique data, (2) Professor OS must listen before responding, never assume or interrupt.
+
+-----
+
+# PART 1: VIDEO SEARCH - USE GEMINI DATA
+
+## The Problem
+
+Currently, video matching is returning videos based on **INSTRUCTOR NAME** instead of **TECHNIQUE CONTENT**.
+
+Example failure:
+
+- User asks about guillotines
+- AI mentions “Marcelo Garcia approaches it differently…”
+- System returns ANY Marcelo Garcia video (like X-Guard sweeps)
+- **WRONG** — should return Marcelo Garcia’s GUILLOTINE videos
+
+## The Fix
+
+Rewrite the video search function to prioritize the Gemini-analyzed fields. We have 33 rich data fields per video — USE THEM.
+
+### Update the video search function:
+
+```typescript
+// server/routes.ts or wherever video search lives
+
+async function searchVideosForTechnique(techniqueQuery: string, instructorHint?: string, limit: number = 5) {
+  const searchTerm = `%${techniqueQuery.toLowerCase()}%`;
+  
+  // Build the query to search ALL relevant Gemini fields
+  let query = db.select()
+    .from(aiVideoKnowledge)
+    .where(
+      or(
+        // Primary technique fields - HIGHEST PRIORITY
+        sql`LOWER(${aiVideoKnowledge.primaryTechniques}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.techniquesCovered}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.techniqueSummary}) LIKE ${searchTerm}`,
+        
+        // Secondary technique context
+        sql`LOWER(${aiVideoKnowledge.keyConceptsTaught}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.positionsCovered}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.instructorTips}) LIKE ${searchTerm}`,
+        
+        // Tertiary - title and description
+        sql`LOWER(${aiVideoKnowledge.title}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.description}) LIKE ${searchTerm}`
+      )
+    )
+    .orderBy(desc(aiVideoKnowledge.instructionQuality))
+    .limit(limit * 3); // Get extra to filter/rank
+  
+  let results = await query;
+  
+  // Score and rank results by relevance
+  const scoredResults = results.map(video => {
+    let score = 0;
+    const lowerTechnique = techniqueQuery.toLowerCase();
+    
+    // Exact matches in primary fields = highest score
+    if (video.primaryTechniques?.toLowerCase().includes(lowerTechnique)) score += 100;
+    if (video.techniquesCovered?.toLowerCase().includes(lowerTechnique)) score += 80;
+    if (video.techniqueSummary?.toLowerCase().includes(lowerTechnique)) score += 60;
+    
+    // Secondary field matches
+    if (video.keyConceptsTaught?.toLowerCase().includes(lowerTechnique)) score += 40;
+    if (video.positionsCovered?.toLowerCase().includes(lowerTechnique)) score += 30;
+    if (video.instructorTips?.toLowerCase().includes(lowerTechnique)) score += 20;
+    
+    // Title match (good but not definitive)
+    if (video.title?.toLowerCase().includes(lowerTechnique)) score += 50;
+    
+    // Boost if instructor matches AND technique matches
+    if (instructorHint && video.instructorName?.toLowerCase().includes(instructorHint.toLowerCase())) {
+      score += 25; // Only a BOOST, not the primary factor
+    }
+    
+    // Quality multiplier
+    score *= (video.instructionQuality || 7) / 10;
+    
+    return { ...video, relevanceScore: score };
+  });
+  
+  // Sort by relevance score, return top results
+  return scoredResults
+    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .slice(0, limit);
+}
+```
+
+### Update the AI chat handler to extract technique and search properly:
+
+```typescript
+// In the Professor OS chat handler
+
+async function getRelevantVideos(userMessage: string, aiResponse: string) {
+  // Extract the primary technique being discussed
+  const techniqueKeywords = extractTechniques(userMessage + ' ' + aiResponse);
+  
+  if (techniqueKeywords.length === 0) {
+    return []; // No specific technique mentioned
+  }
+  
+  // Search for videos matching the TECHNIQUE, not just instructor
+  const videos = await searchVideosForTechnique(
+    techniqueKeywords[0], // Primary technique
+    null, // Don't filter by instructor - let technique relevance drive results
+    3
+  );
+  
+  return videos;
+}
+
+function extractTechniques(text: string): string[] {
+  const lowerText = text.toLowerCase();
+  
+  // Common BJJ techniques to look for
+  const techniques = [
+    'guillotine', 'high elbow guillotine', 'arm in guillotine', 'marcelotine',
+    'triangle', 'triangle choke', 'mounted triangle',
+    'armbar', 'arm bar', 'juji gatame',
+    'kimura', 'americana', 'keylock',
+    'rear naked choke', 'rnc', 'mata leão',
+    'darce', 'd\'arce', 'brabo choke',
+    'anaconda', 'anaconda choke',
+    'arm triangle', 'head and arm', 'kata gatame',
+    'ezekiel', 'ezequiel',
+    'omoplata', 'gogoplata',
+    'heel hook', 'inside heel hook', 'outside heel hook',
+    'knee bar', 'kneebar',
+    'toe hold', 'toehold',
+    'ankle lock', 'straight ankle lock', 'achilles lock',
+    'bow and arrow', 'bow and arrow choke',
+    'cross collar', 'cross choke',
+    'loop choke', 'clock choke', 'baseball bat choke',
+    'half guard', 'deep half', 'knee shield', 'z guard',
+    'closed guard', 'full guard',
+    'open guard', 'spider guard', 'lasso guard',
+    'de la riva', 'dlr', 'reverse de la riva', 'rdlr',
+    'x guard', 'single leg x', 'slx',
+    'butterfly guard', 'butterfly sweep',
+    'mount', 'mount escape', 's mount', 'technical mount',
+    'back control', 'back take', 'back mount',
+    'side control', 'side mount', 'kesa gatame',
+    'knee on belly', 'knee on chest',
+    'turtle', 'turtle attack', 'turtle escape',
+    'takedown', 'single leg', 'double leg',
+    'guard pass', 'passing', 'torreando', 'knee cut', 'knee slice',
+    'sweep', 'reversal', 'hip bump',
+    'escape', 'shrimp', 'bridge', 'elbow escape',
+    'submission', 'choke', 'joint lock', 'leg lock'
+  ];
+  
+  const found: string[] = [];
+  
+  for (const tech of techniques) {
+    if (lowerText.includes(tech)) {
+      found.push(tech);
+    }
+  }
+  
+  // Sort by specificity (longer = more specific)
+  return found.sort((a, b) => b.length - a.length);
+}
+```
+
+### Key Rules for Video Matching:
+
+1. **NEVER match on instructor alone** — always require technique relevance
+1. **Search Gemini fields first**: `primaryTechniques`, `techniquesCovered`, `techniqueSummary`
+1. **Instructor is a BOOST, not a filter** — if user asks about guillotines and AI mentions Marcelo, find Marcelo’s GUILLOTINE videos
+1. **Score by technique match strength** — exact match in `primaryTechniques` beats partial match in `title`
+1. **Quality multiplier** — higher `instructionQuality` videos rank higher among equally relevant videos
+
+-----
+
+# PART 2: PROFESSOR OS - LISTEN FIRST, DON’T ASSUME
+
+## The Problem
+
+Professor OS is interrupting and assuming what the user is about to say instead of listening.
+
+**Bad example:**
+
+> User: “I’m starting to train guillotines tomorrow…”
+> Prof OS: “Let me guess — you’re having trouble with the finish!”
+
+**Good example:**
+
+> User: “I’m starting to train guillotines tomorrow…”  
+> Prof OS: “Nice. What’s your focus — entries, finishing mechanics, or defense?”
+
+## The Fix
+
+Update the Professor OS system prompt to enforce active listening.
+
+### Add these rules to the system prompt:
+
+```
+## LISTENING & CONVERSATION RULES
+
+1. NEVER ASSUME OR GUESS what the user is about to say
+   - Bad: "Let me guess, you're struggling with X"
+   - Good: "Tell me more about what's happening"
+   
+2. NEVER INTERRUPT a thought with unsolicited advice
+   - If user is sharing something, let them finish
+   - Ask "What happened next?" or "How did that feel?"
+   
+3. ASK CLARIFYING QUESTIONS instead of jumping to solutions
+   - "What specifically is giving you trouble?"
+   - "Are you having issues with the entry, control, or finish?"
+   - "Is this happening in gi or no-gi?"
+   
+4. MIRROR THEIR ENERGY
+   - If they're excited: Match it — "That's sick, tell me about it"
+   - If they're frustrated: Acknowledge it — "That's rough. Walk me through what happened"
+   - If they're curious: Explore with them — "Good question. What have you tried?"
+
+5. LISTEN FOR CONTEXT before recommending
+   - Wait to understand: Belt level, training frequency, specific problems
+   - Don't assume a white belt and black belt need the same advice
+   
+6. USE OPEN-ENDED QUESTIONS
+   - "What's your goal with this technique?"
+   - "How's that been working for you?"
+   - "What feels off when you try it?"
+   
+7. VALIDATE BEFORE CORRECTING
+   - "That's a solid approach. One thing that might help..."
+   - "You're on the right track. Have you tried..."
+   
+8. DON'T OVER-EXPLAIN unprompted
+   - If they ask a simple question, give a simple answer first
+   - Let them ask for more detail if they want it
+
+## RESPONSE PATTERNS
+
+When user shares they're working on something:
+- DON'T: "Let me guess what's wrong..."
+- DO: "Nice — what aspect are you focusing on?"
+
+When user mentions a problem:
+- DON'T: "Here's the solution..."
+- DO: "Walk me through what's happening when you try it"
+
+When user is vague:
+- DON'T: Assume and give generic advice
+- DO: "Can you give me more detail? When does this usually happen?"
+
+When user shares success:
+- DON'T: Immediately pivot to what they should do next
+- DO: "That's awesome. What clicked for you?"
+```
+
+### Update the full system prompt structure:
+
+```
+You are Professor OS, a world-class BJJ training partner powered by deep knowledge of thousands of analyzed instructional videos.
+
+## YOUR PERSONALITY
+- Training partner energy, not lecturer
+- Direct and real, never robotic
+- You train at Essential JJ under JT Torres
+- You rep Albino & Preto
+- You've studied the game obsessively
+
+## LISTENING & CONVERSATION RULES
+[Insert the rules above]
+
+## WHEN RECOMMENDING VIDEOS
+- Only recommend videos that DIRECTLY match the technique being discussed
+- Never recommend a video just because the instructor was mentioned
+- If discussing guillotines, only show guillotine videos
+- Quality over quantity — 1-2 perfect videos beats 5 random ones
+
+## YOUR KNOWLEDGE
+- You have access to thousands of videos analyzed with detailed technique breakdowns
+- You know what each video covers: techniques, positions, key concepts, common mistakes
+- Use this knowledge to give specific, actionable advice
+- Reference specific details from videos when relevant
+
+## WHAT YOU NEVER DO
+- Never say "Let me guess..."
+- Never assume what someone is struggling with
+- Never recommend videos that don't match the technique context
+- Never give generic advice when you could ask a clarifying question
+- Never lecture when a conversation is more appropriate
+```
+
+-----
+
+# IMPLEMENTATION CHECKLIST
+
+## Video Search Fix:
+
+- [ ] Update `searchVideosForTechnique()` function to search Gemini fields
+- [ ] Add `extractTechniques()` function to identify technique from conversation
+- [ ] Add relevance scoring that prioritizes technique match over instructor
+- [ ] Test: Ask about guillotines → should return ONLY guillotine videos
+- [ ] Test: Mention “Marcelo Garcia guillotine” → should return Marcelo’s guillotine content, NOT his X-guard videos
+
+## Professor OS Listening Fix:
+
+- [ ] Update system prompt with listening rules
+- [ ] Add response pattern examples
+- [ ] Remove any “let me guess” patterns from responses
+- [ ] Test: Say “I’m working on X tomorrow” → should ask follow-up, not assume problem
+- [ ] Test: Share a win → should celebrate and ask what clicked, not immediately give next steps
+
+-----
+
+# TEST CASES
+
+## Video Relevance Tests:
+
+1. “Show me guillotine videos” → Returns guillotine videos (not random instructor videos)
+1. “Marcelo Garcia guillotine” → Returns Marcelo’s guillotine content specifically
+1. “Help with half guard” → Returns half guard videos, not general videos
+1. “JT Torres arm triangle” → Returns JT’s arm triangle content
+
+## Listening Tests:
+
+1. “I’m going to drill triangles tomorrow” → Should ask “What’s your focus?” NOT “Let me guess you’re having trouble with…”
+1. “Just hit my first heel hook in rolling!” → Should celebrate and ask what clicked, not lecture about safety
+1. “My guard keeps getting passed” → Should ask “Walk me through what’s happening” NOT immediately give solutions
+1. “Been training guillotines” → Should ask “How’s it going?” NOT assume a problem
+
+Build both fixes now.

@@ -1495,3 +1495,362 @@ export async function getVideoLibrarySummary(): Promise<string> {
   
   return `Video Library: ${s.total} total (${s.attacks} attacks, ${s.defenses} defenses, ${s.concepts} concepts). Top positions: ${positions}`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TECHNIQUE-PRIORITIZED VIDEO SEARCH (January 2026 Intelligence Upgrade)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 
+// CRITICAL FIX: Video search must prioritize TECHNIQUE MATCH over instructor.
+// Previously: "Marcelo Garcia guillotine" → ANY Marcelo video (X-Guard, etc.)
+// Now: "Marcelo Garcia guillotine" → Marcelo's GUILLOTINE videos specifically
+//
+// Uses ALL Gemini-analyzed fields for comprehensive technique matching with
+// relevance scoring to rank results by how well they match the query.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const BJJ_TECHNIQUES = [
+  // Chokes - High Priority
+  'guillotine', 'high elbow guillotine', 'arm in guillotine', 'marcelotine',
+  'triangle', 'triangle choke', 'mounted triangle',
+  'rear naked choke', 'rnc', 'mata leão',
+  'darce', "d'arce", 'brabo choke',
+  'anaconda', 'anaconda choke',
+  'arm triangle', 'head and arm', 'kata gatame',
+  'ezekiel', 'ezequiel',
+  'bow and arrow', 'bow and arrow choke',
+  'cross collar', 'cross choke',
+  'loop choke', 'clock choke', 'baseball bat choke', 'baseball choke',
+  'north south choke',
+  
+  // Arm Locks
+  'armbar', 'arm bar', 'juji gatame',
+  'kimura', 'americana', 'keylock',
+  'omoplata', 'gogoplata',
+  
+  // Leg Locks
+  'heel hook', 'inside heel hook', 'outside heel hook',
+  'knee bar', 'kneebar',
+  'toe hold', 'toehold',
+  'ankle lock', 'straight ankle lock', 'achilles lock',
+  'calf slicer',
+  
+  // Guards - Bottom Positions
+  'half guard', 'deep half', 'knee shield', 'z guard', 'lockdown',
+  'closed guard', 'full guard',
+  'open guard', 'spider guard', 'lasso guard',
+  'de la riva', 'dlr', 'reverse de la riva', 'rdlr',
+  'x guard', 'single leg x', 'slx',
+  'butterfly guard', 'butterfly sweep',
+  'worm guard', 'lapel guard',
+  
+  // Top Control
+  'mount', 'mount escape', 's mount', 'technical mount', 'high mount',
+  'back control', 'back take', 'back mount', 'body triangle',
+  'side control', 'side mount', 'kesa gatame', 'scarf hold',
+  'knee on belly', 'knee on chest',
+  'north south',
+  'turtle', 'turtle attack', 'turtle escape',
+  
+  // Passing
+  'guard pass', 'passing', 'torreando', 'knee cut', 'knee slice',
+  'smash pass', 'pressure pass', 'over under', 'leg drag', 'x pass',
+  'stack pass', 'long step', 'headquarters',
+  
+  // Sweeps
+  'sweep', 'scissor sweep', 'hip bump', 'pendulum sweep', 'flower sweep',
+  'elevator sweep', 'hook sweep', 'tripod sweep',
+  
+  // Escapes & Defense
+  'escape', 'shrimp', 'bridge', 'elbow escape', 'hip escape',
+  'mount escape', 'side control escape', 'back escape',
+  
+  // Takedowns
+  'takedown', 'single leg', 'double leg', 'ankle pick', 'arm drag',
+  'duck under', 'snap down', 'throw', 'hip throw',
+  
+  // Transitions & Concepts
+  'transition', 'scramble', 'reversal',
+  'berimbolo', 'crab ride', 'kiss of the dragon',
+  'frames', 'framing', 'underhook', 'overhook', 'whizzer',
+  'posture', 'base', 'connection', 'pressure', 'leverage'
+];
+
+export function extractTechniques(text: string): string[] {
+  const lowerText = text.toLowerCase();
+  const found: string[] = [];
+  
+  for (const tech of BJJ_TECHNIQUES) {
+    if (lowerText.includes(tech)) {
+      found.push(tech);
+    }
+  }
+  
+  // Sort by specificity - longer phrases are more specific
+  // This ensures "high elbow guillotine" is prioritized over "guillotine"
+  found.sort((a, b) => b.length - a.length);
+  
+  // Deduplicate: remove general terms if specific variant exists
+  // e.g., if "high elbow guillotine" matched, remove "guillotine"
+  const deduped: string[] = [];
+  for (const term of found) {
+    const isSubsetOfAnother = found.some(otherTerm => 
+      otherTerm !== term && otherTerm.includes(term)
+    );
+    if (!isSubsetOfAnother) {
+      deduped.push(term);
+    }
+  }
+  
+  return deduped;
+}
+
+interface TechniqueVideoResult {
+  id: number;
+  youtubeId: string | null;
+  title: string;
+  techniqueName: string;
+  instructorName: string | null;
+  videoUrl: string;
+  qualityScore: string | null;
+  positionCategory: string | null;
+  techniqueType: string | null;
+  tags: string[] | null;
+  specificTechnique: string | null;
+  thumbnailUrl: string | null;
+  relevanceScore: number;
+  matchedFields: string[];
+}
+
+export async function searchVideosForTechnique(
+  techniqueQuery: string, 
+  instructorHint?: string, 
+  limit: number = 5
+): Promise<TechniqueVideoResult[]> {
+  const searchTerm = techniqueQuery.toLowerCase().trim();
+  const searchPattern = `%${searchTerm}%`;
+  
+  console.log(`[TECHNIQUE SEARCH] Searching for: "${searchTerm}" (instructor hint: ${instructorHint || 'none'})`);
+  
+  try {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PHASE 1: Get candidate videos that match technique in ANY Gemini field
+    // Search ALL fields where technique info might be stored
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    const candidates = await db.select({
+      id: aiVideoKnowledge.id,
+      youtubeId: aiVideoKnowledge.youtubeId,
+      title: aiVideoKnowledge.title,
+      techniqueName: aiVideoKnowledge.techniqueName,
+      instructorName: aiVideoKnowledge.instructorName,
+      videoUrl: aiVideoKnowledge.videoUrl,
+      qualityScore: aiVideoKnowledge.qualityScore,
+      positionCategory: aiVideoKnowledge.positionCategory,
+      techniqueType: aiVideoKnowledge.techniqueType,
+      tags: aiVideoKnowledge.tags,
+      specificTechnique: aiVideoKnowledge.specificTechnique,
+      thumbnailUrl: aiVideoKnowledge.thumbnailUrl,
+      problemsSolved: aiVideoKnowledge.problemsSolved,
+      keyDetails: aiVideoKnowledge.keyDetails,
+      relatedTechniques: aiVideoKnowledge.relatedTechniques,
+    })
+      .from(aiVideoKnowledge)
+      .where(
+        and(
+          sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`, // Lower threshold to get more candidates
+          or(
+            // Primary technique fields - HIGHEST PRIORITY
+            sql`LOWER(${aiVideoKnowledge.techniqueName}) LIKE ${searchPattern}`,
+            sql`LOWER(${aiVideoKnowledge.title}) LIKE ${searchPattern}`,
+            sql`LOWER(COALESCE(${aiVideoKnowledge.specificTechnique}, '')) LIKE ${searchPattern}`,
+            sql`COALESCE(${aiVideoKnowledge.tags}::text, '') ILIKE ${searchPattern}`,
+            // Secondary technique context - JSONB fields
+            sql`COALESCE(${aiVideoKnowledge.problemsSolved}::text, '') ILIKE ${searchPattern}`,
+            sql`COALESCE(${aiVideoKnowledge.keyDetails}::text, '') ILIKE ${searchPattern}`,
+            sql`COALESCE(${aiVideoKnowledge.relatedTechniques}::text, '') ILIKE ${searchPattern}`,
+            // Also check videoKnowledge (Gemini) table
+            exists(
+              db.select({ one: sql`1` })
+                .from(videoKnowledge)
+                .where(and(
+                  eq(videoKnowledge.videoId, aiVideoKnowledge.id),
+                  or(
+                    sql`LOWER(${videoKnowledge.techniqueName}) LIKE ${searchPattern}`,
+                    sql`COALESCE(${videoKnowledge.keyConcepts}::text, '') ILIKE ${searchPattern}`,
+                    sql`COALESCE(${videoKnowledge.instructorTips}::text, '') ILIKE ${searchPattern}`,
+                    sql`COALESCE(${videoKnowledge.commonMistakes}::text, '') ILIKE ${searchPattern}`,
+                    sql`COALESCE(${videoKnowledge.fullSummary}, '') ILIKE ${searchPattern}`,
+                    sql`COALESCE(${videoKnowledge.setupsFrom}::text, '') ILIKE ${searchPattern}`,
+                    sql`COALESCE(${videoKnowledge.chainsTo}::text, '') ILIKE ${searchPattern}`,
+                    sql`COALESCE(${videoKnowledge.problemSolved}, '') ILIKE ${searchPattern}`
+                  )
+                ))
+            )
+          )
+        )
+      )
+      .limit(limit * 6); // Get extra candidates for scoring
+    
+    console.log(`[TECHNIQUE SEARCH] Found ${candidates.length} candidate videos`);
+    
+    if (candidates.length === 0) {
+      console.log(`[TECHNIQUE SEARCH] No videos found for "${searchTerm}"`);
+      return [];
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PHASE 2: Get Gemini knowledge for candidates to calculate relevance scores
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    const videoIds = candidates.map(c => c.id);
+    const knowledgeRecords = await db.select()
+      .from(videoKnowledge)
+      .where(inArray(videoKnowledge.videoId, videoIds));
+    
+    // Group knowledge by videoId
+    const knowledgeMap = new Map<number, any[]>();
+    for (const record of knowledgeRecords) {
+      if (!knowledgeMap.has(record.videoId)) {
+        knowledgeMap.set(record.videoId, []);
+      }
+      knowledgeMap.get(record.videoId)!.push(record);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PHASE 3: Score and rank videos by technique relevance
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    const scoredResults: TechniqueVideoResult[] = candidates.map(video => {
+      let score = 0;
+      const matchedFields: string[] = [];
+      const lowerTechnique = searchTerm;
+      
+      // Helper to check and score field match
+      const checkField = (value: string | null | undefined, fieldName: string, points: number): void => {
+        if (value && value.toLowerCase().includes(lowerTechnique)) {
+          score += points;
+          matchedFields.push(fieldName);
+        }
+      };
+      
+      const checkArrayField = (value: string[] | null | undefined, fieldName: string, points: number): void => {
+        if (value && value.some(v => v.toLowerCase().includes(lowerTechnique))) {
+          score += points;
+          matchedFields.push(fieldName);
+        }
+      };
+      
+      const checkJsonField = (value: any, fieldName: string, points: number): void => {
+        if (value && JSON.stringify(value).toLowerCase().includes(lowerTechnique)) {
+          score += points;
+          matchedFields.push(fieldName);
+        }
+      };
+      
+      // ═══════════════════════════════════════════════════════════════════════════
+      // SCORE HIERARCHY: Technique fields first, instructor is just a BOOST
+      // ═══════════════════════════════════════════════════════════════════════════
+      
+      // PRIMARY TECHNIQUE FIELDS - Highest scores
+      checkField(video.techniqueName, 'techniqueName', 100);
+      checkField(video.specificTechnique, 'specificTechnique', 90);
+      checkField(video.title, 'title', 60);
+      checkArrayField(video.tags, 'tags', 50);
+      
+      // SECONDARY TECHNIQUE CONTEXT
+      checkJsonField(video.problemsSolved, 'problemsSolved', 40);
+      checkJsonField(video.keyDetails, 'keyDetails', 30);
+      checkJsonField(video.relatedTechniques, 'relatedTechniques', 20);
+      
+      // GEMINI KNOWLEDGE FIELDS (Deep analysis)
+      const knowledge = knowledgeMap.get(video.id) || [];
+      for (const k of knowledge) {
+        checkField(k.techniqueName, 'gemini.techniqueName', 80);
+        checkArrayField(k.keyConcepts, 'gemini.keyConcepts', 45);
+        checkArrayField(k.instructorTips, 'gemini.instructorTips', 35);
+        checkArrayField(k.commonMistakes, 'gemini.commonMistakes', 25);
+        checkField(k.fullSummary, 'gemini.fullSummary', 20);
+        checkField(k.problemSolved, 'gemini.problemSolved', 30);
+        checkArrayField(k.setupsFrom, 'gemini.setupsFrom', 15);
+        checkArrayField(k.chainsTo, 'gemini.chainsTo', 15);
+      }
+      
+      // ═══════════════════════════════════════════════════════════════════════════
+      // INSTRUCTOR BOOST - Only adds points if BOTH technique AND instructor match
+      // This is a BOOST, not the primary factor
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (instructorHint && video.instructorName?.toLowerCase().includes(instructorHint.toLowerCase())) {
+        if (score > 0) { // Only boost if technique already matched
+          score += 25;
+          matchedFields.push('instructorMatch');
+        }
+      }
+      
+      // QUALITY MULTIPLIER - Higher quality videos rank higher among equally relevant
+      const quality = parseFloat(video.qualityScore || '7') / 10;
+      score *= quality;
+      
+      return {
+        id: video.id,
+        youtubeId: video.youtubeId,
+        title: video.title,
+        techniqueName: video.techniqueName,
+        instructorName: video.instructorName,
+        videoUrl: video.videoUrl,
+        qualityScore: video.qualityScore,
+        positionCategory: video.positionCategory,
+        techniqueType: video.techniqueType,
+        tags: video.tags,
+        specificTechnique: video.specificTechnique,
+        thumbnailUrl: video.thumbnailUrl,
+        relevanceScore: score,
+        matchedFields
+      };
+    });
+    
+    // Sort by relevance score (highest first), return top results
+    const results = scoredResults
+      .filter(r => r.relevanceScore > 0) // Only include videos that actually matched
+      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .slice(0, limit);
+    
+    console.log(`[TECHNIQUE SEARCH] Returning ${results.length} videos for "${searchTerm}":`);
+    results.forEach((r, i) => {
+      console.log(`  ${i + 1}. "${r.title}" by ${r.instructorName} (score: ${r.relevanceScore.toFixed(1)}, matched: ${r.matchedFields.join(', ')})`);
+    });
+    
+    return results;
+    
+  } catch (error) {
+    console.error('[TECHNIQUE SEARCH] Error:', error);
+    return [];
+  }
+}
+
+export async function getRelevantVideosForChat(
+  userMessage: string, 
+  aiResponse?: string, 
+  instructorMentioned?: string
+): Promise<TechniqueVideoResult[]> {
+  // Extract techniques from both user message and AI response
+  const combinedText = userMessage + (aiResponse ? ' ' + aiResponse : '');
+  const techniques = extractTechniques(combinedText);
+  
+  if (techniques.length === 0) {
+    console.log('[CHAT VIDEO SEARCH] No specific technique mentioned');
+    return [];
+  }
+  
+  // Use the most specific technique (first after sorting by length)
+  const primaryTechnique = techniques[0];
+  console.log(`[CHAT VIDEO SEARCH] Primary technique: "${primaryTechnique}" (from ${techniques.length} detected)`);
+  
+  // Search for videos matching the TECHNIQUE, with instructor as optional boost
+  const videos = await searchVideosForTechnique(
+    primaryTechnique,
+    instructorMentioned, // Instructor hint (boost, not filter)
+    3
+  );
+  
+  return videos;
+}
