@@ -355,7 +355,34 @@ export async function handleClaudeStream(req: any, res: any) {
     const queryTypes: string[] = [];
     
     if (!userProfile) {
-      queries.push(db.select().from(bjjUsers).where(eq(bjjUsers.id, userId)).limit(1));
+      // Use explicit column selection to avoid missing column errors (lastActiveAt may not exist in production)
+      queries.push(db.select({
+        id: bjjUsers.id,
+        email: bjjUsers.email,
+        displayName: bjjUsers.displayName,
+        username: bjjUsers.username,
+        name: bjjUsers.name,
+        beltLevel: bjjUsers.beltLevel,
+        style: bjjUsers.style,
+        contentPreference: bjjUsers.contentPreference,
+        focusAreas: bjjUsers.focusAreas,
+        injuries: bjjUsers.injuries,
+        competeStatus: bjjUsers.competeStatus,
+        trainingGoals: bjjUsers.trainingGoals,
+        bodyType: bjjUsers.bodyType,
+        ageRange: bjjUsers.ageRange,
+        height: bjjUsers.height,
+        weight: bjjUsers.weight,
+        gym: bjjUsers.gym,
+        yearsTrainingRange: bjjUsers.yearsTrainingRange,
+        trainingFrequencyText: bjjUsers.trainingFrequencyText,
+        preferredLanguage: bjjUsers.preferredLanguage,
+        createdAt: bjjUsers.createdAt,
+        struggles: bjjUsers.struggles,
+        strengths: bjjUsers.strengths,
+        struggleTechnique: bjjUsers.struggleTechnique,
+        weakestArea: bjjUsers.weakestArea,
+      }).from(bjjUsers).where(eq(bjjUsers.id, userId)).limit(1));
       queryTypes.push('user');
     }
     

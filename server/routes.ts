@@ -3838,6 +3838,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
     try {
       const { timeFilter, planFilter, statusFilter, beltFilter } = req.query;
       
+      // Note: lastActiveAt column may not exist in production database - excluded from query
       let query = db.select({
         id: bjjUsers.id,
         name: bjjUsers.name,
@@ -3850,7 +3851,6 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         onboardingCompleted: bjjUsers.onboardingCompleted,
         createdAt: bjjUsers.createdAt,
         lastLogin: bjjUsers.lastLogin,
-        lastActiveAt: bjjUsers.lastActiveAt,
         adminNotes: bjjUsers.adminNotes,
         themeBelt: bjjUsers.themeBelt,
         themeStripes: bjjUsers.themeStripes,
