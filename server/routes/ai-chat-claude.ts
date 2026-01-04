@@ -329,6 +329,16 @@ export async function handleClaudeStream(req: any, res: any) {
       return res.status(400).json({ error: 'Missing message' });
     }
     
+    // 📊 ACTIVITY TRACKING: Update lastActiveAt for user activity reporting
+    try {
+      await db.update(bjjUsers)
+        .set({ lastActiveAt: new Date() })
+        .where(eq(bjjUsers.id, userId));
+    } catch (activityError) {
+      console.error('[CHAT] Failed to update lastActiveAt:', activityError);
+      // Don't block the chat for tracking errors
+    }
+    
     // 🚀 OPTIMIZATION: Load all data in parallel with caching
     t1 = Date.now();
     

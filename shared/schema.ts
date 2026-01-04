@@ -168,6 +168,9 @@ export const bjjUsers = pgTable("bjj_users", {
   trialEndDate: timestamp("trial_end_date"),
   subscriptionEndDate: timestamp("subscription_end_date"),
   
+  // Activity tracking
+  lastActiveAt: timestamp("last_active_at"), // Last time user sent a message to Professor OS
+  
   onboardingStep: text("onboarding_step").default("belt"), // belt, content_preference, style, focus, referral, complete
   onboardingCompleted: boolean("onboarding_completed").default(false),
   

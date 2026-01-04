@@ -30,6 +30,20 @@ type TimeFilter = '24h' | '7d' | '30d' | '90d' | 'all';
 
 const USERS_PER_PAGE = 20;
 
+function formatTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
 export default function AdminUsers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
@@ -151,8 +165,7 @@ export default function AdminUsers() {
 
   const filteredUsers = users?.filter((user: any) => 
     user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.phoneNumber?.includes(searchQuery)
+    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
 
   // Pagination logic - ensure at least 1 page for proper display
@@ -262,7 +275,7 @@ export default function AdminUsers() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input
-              placeholder="Search by name, email, or phone..."
+              placeholder="Search by name or email..."
               className="pl-10"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
@@ -373,12 +386,12 @@ export default function AdminUsers() {
                 <TableRow>
                   <TableHead>User</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
                   <TableHead>Plan</TableHead>
                   <TableHead>Belt</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>LIFETIME Bypass</TableHead>
                   <TableHead>Joined</TableHead>
+                  <TableHead>Last Active</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -407,7 +420,6 @@ export default function AdminUsers() {
                         </div>
                       </TableCell>
                       <TableCell>{user.email || 'No email'}</TableCell>
-                      <TableCell>{user.phoneNumber}</TableCell>
                       <TableCell>
                         <Badge variant={user.subscriptionType === 'lifetime' ? 'default' : 'secondary'}>
                           {user.subscriptionType || 'free'}
@@ -451,6 +463,13 @@ export default function AdminUsers() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(user.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {user.lastActiveAt 
+                          ? formatTimeAgo(new Date(user.lastActiveAt)) 
+                          : user.lastLogin 
+                            ? formatTimeAgo(new Date(user.lastLogin))
+                            : 'Never'}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

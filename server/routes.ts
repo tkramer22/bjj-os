@@ -3724,7 +3724,6 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       
       let query = db.select({
         id: bjjUsers.id,
-        phoneNumber: bjjUsers.phoneNumber,
         name: bjjUsers.name,
         email: bjjUsers.email,
         beltLevel: bjjUsers.beltLevel,
@@ -3735,6 +3734,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         onboardingCompleted: bjjUsers.onboardingCompleted,
         createdAt: bjjUsers.createdAt,
         lastLogin: bjjUsers.lastLogin,
+        lastActiveAt: bjjUsers.lastActiveAt,
         adminNotes: bjjUsers.adminNotes,
         themeBelt: bjjUsers.themeBelt,
         themeStripes: bjjUsers.themeStripes,
@@ -3788,6 +3788,34 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       res.json(users);
     } catch (error: any) {
       console.error('Fetch users error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get recent user activity (admin only) - Shows recent messages to Professor OS
+  app.get('/api/admin/user-activity', checkAdminAuth, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      
+      // Single query with JOIN for efficiency (no O(n) per-row lookups)
+      const activity = await db.select({
+        id: aiConversationLearning.id,
+        userId: aiConversationLearning.userId,
+        messageText: aiConversationLearning.messageText,
+        messageType: aiConversationLearning.messageType,
+        conversationTopic: aiConversationLearning.conversationTopic,
+        createdAt: aiConversationLearning.createdAt,
+        userEmail: bjjUsers.email
+      })
+      .from(aiConversationLearning)
+      .leftJoin(bjjUsers, eq(aiConversationLearning.userId, bjjUsers.id))
+      .where(eq(aiConversationLearning.messageType, 'user_sent'))
+      .orderBy(desc(aiConversationLearning.createdAt))
+      .limit(limit);
+      
+      res.json(activity);
+    } catch (error: any) {
+      console.error('User activity error:', error);
       res.status(500).json({ error: error.message });
     }
   });

@@ -1,0 +1,612 @@
+# ADMIN DASHBOARD COMPLETE FIX - PRIORITY BUILD
+
+The admin dashboard has multiple broken features. Fix ALL of these issues NOW.
+
+-----
+
+## ISSUE 1: USER MANAGEMENT TABLE
+
+Current problems:
+
+- Phone column exists but we don’t collect phone numbers
+- No “Last Active” column showing when user last logged in
+
+### Fix:
+
+1. **Remove Phone column** from the table completely
+1. **Add Last Active column** to schema if not exists:
+
+```sql
+ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP;
+```
+
+1. **Update schema.ts**:
+
+```typescript
+lastActiveAt: timestamp("last_active_at"),
+```
+
+1. **Track last activity** - Update lastActiveAt whenever user sends a message to Professor OS:
+
+```typescript
+// In the chat message endpoint, after processing:
+await db.update(bjjUsers)
+  .set({ lastActiveAt: new Date() })
+  .where(eq(bjjUsers.id, userId));
+```
+
+1. **Update the Users table columns**:
+
+```tsx
+// Headers - REMOVE Phone, ADD Last Active
+<tr>
+  <th>User</th>
+  <th>Email</th>
+  <th>Plan</th>
+  <th>Belt</th>
+  <th>Status</th>
+  <th>Signed Up</th>
+  <th>Last Active</th>  {/* NEW */}
+  <th>LIFETIME Bypass</th>
+</tr>
+
+// Row data
+<td>{user.lastActiveAt ? formatTimeAgo(user.lastActiveAt) : 'Never'}</td>
+```
+
+1. **Update the API** to return lastActiveAt:
+
+```typescript
+const users = await db.select({
+  // ... existing fields
+  lastActiveAt: bjjUsers.lastActiveAt,
+  createdAt: bjjUsers.createdAt
+}).from(bjjUsers);
+```
+
+-----
+
+## ISSUE 2: USER ACTIVITY “FAILED TO LOAD”
+
+The endpoint is using wrong column name `user_question` instead of `messageText`.
+
+### Fix the endpoint `/api/admin/user-activity`:
+
+```typescript
+app.get('/api/admin/user-activity', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    
+    const activity = await db.select({
+      id: aiConversationLearning.id,
+      userId: aiConversationLearning.userId,
+      messageText: aiConversationLearning.messageText,  // CORRECT column name
+      messageType: aiConversationLearning.messageType,
+      conversationTopic: aiConversationLearning.conversationTopic,
+      createdAt: aiConversationLearning.createdAt
+    })
+    .from(aiConversationLearning)
+    .where(eq(aiConversationLearning.messageType, 'user_sent'))
+    .orderBy(desc(aiConversationLearning.createdAt))
+    .limit(limit);
+    
+    // Join with user info
+    const activityWithUsers = await Promise.all(
+      activity.map(async (msg) => {
+        const user = await db.select({
+          email: bjjUsers.email
+        })
+        .from(bjjUsers)
+        .where(eq(bjjUsers.id, msg.userId))
+        .limit(1);
+        
+        return {
+          ...msg,
+          userEmail: user[0]?.email || 'Unknown'
+        };
+      })
+    );
+    
+    res.json(activityWithUsers);
+  } catch (error: any) {
+    console.error('User activity error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+-----
+
+## ISSUE 3: CURATION COMMAND CENTER NOT BUILT
+
+The page at `/admin/command-center` is missing the full curation control panel.
+
+### Add these sections to the Command Center page:
+
+**SECTION A: AUTO CURATION TOGGLE** (at top)
+
+```tsx
+<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mb-6">
+  <div className="flex items-center justify-between">
+    <div className="flex items-center gap-3">
+      <RefreshCw className="w-5 h-5 text-lime-400" />
+      <h2 className="text-lg font-semibold">AUTO CURATION</h2>
+    </div>
+    <div className="flex items-center gap-4">
+      <div className={`w-3 h-3 rounded-full ${isActive ? 'bg-lime-400 animate-pulse' : 'bg-zinc-600'}`} />
+      <span>{isActive ? 'ACTIVE' : 'PAUSED'}</span>
+      <button 
+        onClick={() => toggleAutoCuration(!isActive)}
+        className={`px-4 py-2 rounded font-medium ${isActive ? 'bg-zinc-700' : 'bg-lime-500 text-black'}`}
+      >
+        {isActive ? 'Pause' : 'Enable'}
+      </button>
+    </div>
+  </div>
+  <div className="mt-4 text-sm text-zinc-400">
+    Schedule: Daily at 3:00 AM EST | Last Run: {lastRun || 'Never'} | Next: {isActive ? 'Tomorrow 3:00 AM' : 'Paused'}
+  </div>
+</div>
+```
+
+**SECTION B: QUICK CURATION PRESETS** (6 cards)
+
+```tsx
+<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mb-6">
+  <h2 className="text-lg font-semibold mb-4">QUICK CURATION</h2>
+  <p className="text-sm text-zinc-500 mb-4">Manual curation runs independently of auto curation</p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    
+    {/* 1. META TECHNIQUES */}
+    <div className="bg-zinc-800 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Database className="w-5 h-5 text-purple-400" />
+        <h3 className="font-semibold">META TECHNIQUES</h3>
+      </div>
+      <p className="text-sm text-zinc-400 mb-3">Curate all high-priority techniques</p>
+      <button 
+        onClick={() => runCuration('meta')}
+        className="w-full bg-purple-600 hover:bg-purple-500 py-2 rounded font-medium"
+      >
+        Run Now
+      </button>
+    </div>
+    
+    {/* 2. INSTRUCTOR */}
+    <div className="bg-zinc-800 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <User className="w-5 h-5 text-blue-400" />
+        <h3 className="font-semibold">INSTRUCTOR</h3>
+      </div>
+      <select 
+        value={selectedInstructor} 
+        onChange={(e) => setSelectedInstructor(e.target.value)}
+        className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+      >
+        <option value="">Select instructor...</option>
+        <option value="John Danaher">John Danaher</option>
+        <option value="Gordon Ryan">Gordon Ryan</option>
+        <option value="Lachlan Giles">Lachlan Giles</option>
+        <option value="Craig Jones">Craig Jones</option>
+        <option value="Marcelo Garcia">Marcelo Garcia</option>
+        <option value="Bernardo Faria">Bernardo Faria</option>
+      </select>
+      <input 
+        type="text"
+        value={customInstructor}
+        onChange={(e) => setCustomInstructor(e.target.value)}
+        placeholder="Or enter custom..."
+        className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+      />
+      <button 
+        onClick={() => runCuration('instructor', customInstructor || selectedInstructor)}
+        disabled={!selectedInstructor && !customInstructor}
+        className="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded font-medium disabled:opacity-50"
+      >
+        Run Now
+      </button>
+    </div>
+    
+    {/* 3. TECHNIQUE */}
+    <div className="bg-zinc-800 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Target className="w-5 h-5 text-green-400" />
+        <h3 className="font-semibold">TECHNIQUE</h3>
+      </div>
+      <input 
+        type="text"
+        value={techniqueSearch}
+        onChange={(e) => setTechniqueSearch(e.target.value)}
+        placeholder='e.g. "guillotine"'
+        className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+      />
+      <button 
+        onClick={() => runCuration('technique', techniqueSearch)}
+        disabled={!techniqueSearch}
+        className="w-full bg-green-600 hover:bg-green-500 py-2 rounded font-medium disabled:opacity-50"
+      >
+        Run Now
+      </button>
+    </div>
+    
+    {/* 4. POSITION */}
+    <div className="bg-zinc-800 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Layers className="w-5 h-5 text-yellow-400" />
+        <h3 className="font-semibold">POSITION</h3>
+      </div>
+      <select 
+        value={selectedPosition}
+        onChange={(e) => setSelectedPosition(e.target.value)}
+        className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+      >
+        <option value="">Select position...</option>
+        <option value="Closed Guard">Closed Guard</option>
+        <option value="Half Guard">Half Guard</option>
+        <option value="Open Guard">Open Guard</option>
+        <option value="Mount">Mount</option>
+        <option value="Back Control">Back Control</option>
+        <option value="Side Control">Side Control</option>
+        <option value="Turtle">Turtle</option>
+      </select>
+      <button 
+        onClick={() => runCuration('position', selectedPosition)}
+        disabled={!selectedPosition}
+        className="w-full bg-yellow-600 hover:bg-yellow-500 py-2 rounded font-medium disabled:opacity-50"
+      >
+        Run Now
+      </button>
+    </div>
+    
+    {/* 5. GI/NOGI */}
+    <div className="bg-zinc-800 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Filter className="w-5 h-5 text-red-400" />
+        <h3 className="font-semibold">GI/NOGI BALANCE</h3>
+      </div>
+      <select 
+        value={selectedGiNogi}
+        onChange={(e) => setSelectedGiNogi(e.target.value)}
+        className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+      >
+        <option value="">Select type...</option>
+        <option value="gi">Gi Only</option>
+        <option value="nogi">No-Gi Only</option>
+      </select>
+      <button 
+        onClick={() => runCuration('gi-nogi', selectedGiNogi)}
+        disabled={!selectedGiNogi}
+        className="w-full bg-red-600 hover:bg-red-500 py-2 rounded font-medium disabled:opacity-50"
+      >
+        Run Now
+      </button>
+    </div>
+    
+    {/* 6. CUSTOM */}
+    <div className="bg-zinc-800 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Search className="w-5 h-5 text-cyan-400" />
+        <h3 className="font-semibold">CUSTOM SEARCH</h3>
+      </div>
+      <input 
+        type="text"
+        value={customSearch}
+        onChange={(e) => setCustomSearch(e.target.value)}
+        placeholder='Any YouTube query...'
+        className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+      />
+      <button 
+        onClick={() => runCuration('custom', customSearch)}
+        disabled={!customSearch}
+        className="w-full bg-cyan-600 hover:bg-cyan-500 py-2 rounded font-medium disabled:opacity-50"
+      >
+        Run Now
+      </button>
+    </div>
+    
+  </div>
+</div>
+```
+
+### Add state and mutation for curation:
+
+```tsx
+const [selectedInstructor, setSelectedInstructor] = useState("");
+const [customInstructor, setCustomInstructor] = useState("");
+const [techniqueSearch, setTechniqueSearch] = useState("");
+const [selectedPosition, setSelectedPosition] = useState("");
+const [selectedGiNogi, setSelectedGiNogi] = useState("");
+const [customSearch, setCustomSearch] = useState("");
+const [isActive, setIsActive] = useState(true);
+
+const runCuration = async (type: string, query?: string) => {
+  try {
+    const res = await fetch('/api/admin/curation/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, query })
+    });
+    const data = await res.json();
+    if (data.success) {
+      // Show success toast or refresh job list
+      alert(`Curation job started for ${type}: ${query || 'all'}`);
+    }
+  } catch (error) {
+    console.error('Curation failed:', error);
+  }
+};
+
+const toggleAutoCuration = async (enabled: boolean) => {
+  try {
+    await fetch('/api/admin/curation/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled })
+    });
+    setIsActive(enabled);
+  } catch (error) {
+    console.error('Toggle failed:', error);
+  }
+};
+```
+
+### Add backend endpoints:
+
+```typescript
+// Toggle auto curation
+let autoCurationEnabled = true;
+
+app.post('/api/admin/curation/toggle', (req, res) => {
+  autoCurationEnabled = req.body.enabled;
+  res.json({ success: true, isActive: autoCurationEnabled });
+});
+
+app.get('/api/admin/curation/status', (req, res) => {
+  res.json({ isActive: autoCurationEnabled });
+});
+
+// Run manual curation
+app.post('/api/admin/curation/run', async (req, res) => {
+  const { type, query } = req.body;
+  
+  // Build search queries based on type
+  let searchQueries: string[] = [];
+  
+  switch (type) {
+    case 'meta':
+      searchQueries = ['guillotine bjj', 'arm triangle bjj', 'triangle choke', 'half guard sweep', 'mount escape'];
+      break;
+    case 'instructor':
+      searchQueries = [`${query} bjj technique`, `${query} instructional`];
+      break;
+    case 'technique':
+      searchQueries = [`${query} bjj tutorial`, `${query} technique breakdown`];
+      break;
+    case 'position':
+      searchQueries = [`${query} sweep bjj`, `${query} submission`, `${query} escape`];
+      break;
+    case 'gi-nogi':
+      searchQueries = query === 'gi' ? ['bjj gi techniques', 'collar choke'] : ['nogi bjj', 'no gi submission'];
+      break;
+    case 'custom':
+      searchQueries = [query];
+      break;
+  }
+  
+  // Start background curation job with your existing YouTube + Gemini pipeline
+  // ... integrate with existing curation logic
+  
+  res.json({ success: true, type, query, searchQueries });
+});
+```
+
+-----
+
+## ISSUE 4: QA TESTS “HTTP NOT SUPPORTED” ERROR
+
+The error “Dynamic require of ‘http’ is not supported” means the QA test is trying to use Node.js `http` module in client-side code.
+
+### Fix: Move the test execution to a backend endpoint:
+
+```typescript
+// Backend: POST /api/admin/qa/run-full-suite
+app.post('/api/admin/qa/run-full-suite', async (req, res) => {
+  const testCases = [
+    { id: '1.1', category: 'Video Relevance', prompt: 'Show me guillotine videos' },
+    { id: '1.2', category: 'Video Relevance', prompt: 'Anaconda choke tips' },
+    { id: '1.3', category: 'Video Relevance', prompt: 'Half guard sweeps' },
+    // ... more test cases
+  ];
+  
+  const results = [];
+  const testUserId = 'qa_test_' + Date.now();
+  
+  for (const test of testCases) {
+    try {
+      // Call Professor OS internally (not via http)
+      const response = await handleChatMessage(testUserId, test.prompt);
+      
+      results.push({
+        ...test,
+        passed: response && response.length > 50,
+        response: response?.substring(0, 200) || 'No response'
+      });
+    } catch (error: any) {
+      results.push({
+        ...test,
+        passed: false,
+        response: 'Error: ' + error.message
+      });
+    }
+    
+    // Small delay between tests
+    await new Promise(r => setTimeout(r, 500));
+  }
+  
+  const passed = results.filter(r => r.passed).length;
+  
+  res.json({
+    passed,
+    total: results.length,
+    percentage: Math.round((passed / results.length) * 100),
+    results
+  });
+});
+```
+
+### Frontend: Call the backend endpoint, don’t use http directly:
+
+```tsx
+const runQATests = async () => {
+  setLoading(true);
+  try {
+    const res = await fetch('/api/admin/qa/run-full-suite', { method: 'POST' });
+    const data = await res.json();
+    setQAResults(data);
+  } catch (error) {
+    console.error('QA test failed:', error);
+  }
+  setLoading(false);
+};
+```
+
+-----
+
+## ISSUE 5: RAW VISITOR DATA NOT LOADING
+
+The analytics endpoint needs to return actual data.
+
+```typescript
+app.get('/api/admin/analytics/visitors', async (req, res) => {
+  try {
+    // Get recent sign-ups as visitor data
+    const visitors = await db.select({
+      id: bjjUsers.id,
+      email: bjjUsers.email,
+      createdAt: bjjUsers.createdAt,
+      lastActiveAt: bjjUsers.lastActiveAt
+    })
+    .from(bjjUsers)
+    .orderBy(desc(bjjUsers.createdAt))
+    .limit(100);
+    
+    res.json(visitors);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+-----
+
+## ISSUE 6: SCROLLING/LAYOUT CUTS OFF
+
+The page container needs proper overflow handling:
+
+```css
+/* In your admin layout CSS */
+.admin-content {
+  min-height: 100vh;
+  overflow-y: auto;
+  padding-bottom: 100px; /* Space at bottom */
+}
+```
+
+Or in Tailwind:
+
+```tsx
+<div className="min-h-screen overflow-y-auto pb-24">
+  {/* Admin content */}
+</div>
+```
+
+-----
+
+## ISSUE 7: META CURATE BUTTONS FREEZE
+
+The Meta dashboard curate buttons need loading state and proper error handling:
+
+```tsx
+const [curatingTechnique, setCuratingTechnique] = useState<string | null>(null);
+
+const handleCurate = async (technique: string) => {
+  setCuratingTechnique(technique);
+  try {
+    const res = await fetch('/api/admin/curation/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'technique', query: technique })
+    });
+    const data = await res.json();
+    // Show success
+  } catch (error) {
+    console.error('Curate failed:', error);
+  } finally {
+    setCuratingTechnique(null);
+  }
+};
+
+// Button:
+<button 
+  onClick={() => handleCurate(technique)}
+  disabled={curatingTechnique === technique}
+  className="..."
+>
+  {curatingTechnique === technique ? (
+    <><Loader2 className="w-4 h-4 animate-spin" /> Curating...</>
+  ) : (
+    'Curate Now'
+  )}
+</button>
+```
+
+-----
+
+## ISSUE 8: REFRESH LOGS NOT WORKING
+
+Wire up the refresh button:
+
+```tsx
+const [logs, setLogs] = useState([]);
+
+const refreshLogs = async () => {
+  try {
+    const res = await fetch('/api/admin/curation/job-history');
+    const data = await res.json();
+    setLogs(data);
+  } catch (error) {
+    console.error('Failed to load logs:', error);
+  }
+};
+
+// Button:
+<button onClick={refreshLogs}>Refresh Logs</button>
+```
+
+-----
+
+## ISSUE 9: REMOVE “SKIPPED PRE-FILTERED”
+
+In the Curation Efficiency section, remove the “Skipped / Pre-filtered” column as it’s confusing. Keep only:
+
+- Discovered
+- Analyzed
+- Accepted
+- Rejected
+
+-----
+
+## PRIORITY ORDER
+
+1. ✅ Fix User Activity endpoint (blocking feature)
+1. ✅ Add Curation Command Center presets + toggle (core feature)
+1. ✅ Fix QA tests http error
+1. ✅ Fix Users table columns
+1. ✅ Fix scrolling layout
+1. ✅ Fix Meta curate buttons
+1. ✅ Fix Raw Visitor Data
+1. ✅ Fix Refresh Logs
+1. ✅ Remove Skipped column
+
+Build ALL of these fixes now.
