@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "./dashboard";
 import { Input } from "@/components/ui/input";
@@ -155,14 +155,23 @@ export default function AdminUsers() {
     user.phoneNumber?.includes(searchQuery)
   ) || [];
 
-  // Pagination logic
-  const totalPages = Math.ceil(filteredUsers.length / USERS_PER_PAGE);
+  // Pagination logic - ensure at least 1 page for proper display
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
+  
+  // Reset to page 1 if current page is out of bounds
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  
   const paginatedUsers = filteredUsers.slice(
-    (currentPage - 1) * USERS_PER_PAGE,
-    currentPage * USERS_PER_PAGE
+    (safeCurrentPage - 1) * USERS_PER_PAGE,
+    safeCurrentPage * USERS_PER_PAGE
   );
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when search or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, timeFilter, planFilter, statusFilter, beltFilter]);
+
+  // Reset to page 1 when filters change (for explicit calls)
   const handleFilterChange = () => {
     setCurrentPage(1);
   };
@@ -330,27 +339,27 @@ export default function AdminUsers() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between p-4 border-b bg-muted/30">
                 <p className="text-sm text-muted-foreground">
-                  Showing {(currentPage - 1) * USERS_PER_PAGE + 1} - {Math.min(currentPage * USERS_PER_PAGE, filteredUsers.length)} of {filteredUsers.length} users
+                  Showing {filteredUsers.length > 0 ? (safeCurrentPage - 1) * USERS_PER_PAGE + 1 : 0} - {Math.min(safeCurrentPage * USERS_PER_PAGE, filteredUsers.length)} of {filteredUsers.length} users
                 </p>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
+                    disabled={safeCurrentPage === 1}
                     data-testid="button-prev-page-top"
                   >
                     <ChevronLeft className="w-4 h-4 mr-1" />
                     Previous
                   </Button>
                   <span className="text-sm font-medium px-2">
-                    Page {currentPage} of {totalPages}
+                    Page {safeCurrentPage} of {totalPages}
                   </span>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
+                    disabled={safeCurrentPage === totalPages}
                     data-testid="button-next-page-top"
                   >
                     Next
@@ -486,27 +495,27 @@ export default function AdminUsers() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between p-4 border-t">
                 <p className="text-sm text-muted-foreground">
-                  Showing {(currentPage - 1) * USERS_PER_PAGE + 1} - {Math.min(currentPage * USERS_PER_PAGE, filteredUsers.length)} of {filteredUsers.length} users
+                  Showing {filteredUsers.length > 0 ? (safeCurrentPage - 1) * USERS_PER_PAGE + 1 : 0} - {Math.min(safeCurrentPage * USERS_PER_PAGE, filteredUsers.length)} of {filteredUsers.length} users
                 </p>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
+                    disabled={safeCurrentPage === 1}
                     data-testid="button-prev-page"
                   >
                     <ChevronLeft className="w-4 h-4 mr-1" />
                     Previous
                   </Button>
                   <span className="text-sm text-muted-foreground px-2">
-                    Page {currentPage} of {totalPages}
+                    Page {safeCurrentPage} of {totalPages}
                   </span>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
+                    disabled={safeCurrentPage === totalPages}
                     data-testid="button-next-page"
                   >
                     Next

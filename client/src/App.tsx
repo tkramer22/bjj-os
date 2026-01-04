@@ -49,6 +49,7 @@ import AdminFlaggedAccounts from "@/pages/admin/flagged-accounts";
 import AdminInstructorPriority from "@/pages/admin/instructor-priority";
 import AdminActivity from "@/pages/admin/activity";
 import AdminAutoCuration from "@/pages/admin/auto-curation";
+import AdminCuration from "@/pages/admin/curation";
 import AdminAnalytics from "@/pages/admin/analytics";
 import AdminChat from "@/pages/admin/chat";
 import AdminCommandCenter from "@/pages/admin/command-center";
@@ -291,6 +292,7 @@ export default function App() {
             <Route path="/admin/activity" component={AdminActivity} />
             <Route path="/admin/magic-links" component={AdminMagicLinks} />
             <Route path="/admin/auto-curation" component={AdminAutoCuration} />
+            <Route path="/admin/curation" component={AdminCuration} />
             <Route path="/admin/dev-os" component={AdminDevOS} />
             <Route path="/admin/analytics" component={AdminAnalytics} />
             <Route path="/admin/emails" component={AdminEmails} />

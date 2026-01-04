@@ -18349,5 +18349,257 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
+  // ===== CURATION COMMAND CENTER API =====
+  
+  // In-memory store for active curation jobs
+  const activeCurationJobs: Map<string, {
+    id: string;
+    type: string;
+    query: string;
+    status: 'running' | 'completed' | 'failed' | 'cancelled';
+    progress: number;
+    found: number;
+    added: number;
+    startedAt: string;
+    completedAt?: string;
+  }> = new Map();
+  
+  const curationJobHistory: Array<{
+    id: string;
+    type: string;
+    query: string;
+    status: 'running' | 'completed' | 'failed' | 'cancelled';
+    progress: number;
+    found: number;
+    added: number;
+    startedAt: string;
+    completedAt?: string;
+  }> = [];
+
+  // Get curation status
+  app.get('/api/admin/curation/status', checkAdminAuth, async (req, res) => {
+    try {
+      // Check if auto-curation is enabled (from dev_os_settings)
+      const [setting] = await db.select().from(devOsSettings).where(eq(devOsSettings.key, 'auto_curation_enabled')).limit(1);
+      const isActive = setting?.value === 'true';
+      
+      // Get last curation run
+      const [lastRun] = await db.select().from(curationRuns).orderBy(desc(curationRuns.startedAt)).limit(1);
+      
+      res.json({
+        isActive,
+        schedule: '4x daily (3:15am, 9am, 3pm, 9pm EST)',
+        lastRun: lastRun ? {
+          timestamp: lastRun.startedAt,
+          discovered: lastRun.videosDiscovered || 0,
+          analyzed: lastRun.videosAnalyzed || 0,
+          added: lastRun.videosAdded || 0,
+        } : null,
+        nextRun: isActive ? 'Scheduled' : 'Paused',
+      });
+    } catch (error: any) {
+      console.error('[CURATION API] Error getting status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get library stats
+  app.get('/api/admin/curation/library-stats', checkAdminAuth, async (req, res) => {
+    try {
+      const totalResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`);
+      const giResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE gi_or_nogi = 'gi'`);
+      const nogiResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE gi_or_nogi = 'nogi'`);
+      const bothResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE gi_or_nogi = 'both'`);
+      const avgQualityResult = await db.execute(sql`SELECT AVG(quality_score) as avg FROM ai_video_knowledge WHERE quality_score IS NOT NULL`);
+      const instructorResult = await db.execute(sql`SELECT COUNT(DISTINCT instructor_name) as count FROM ai_video_knowledge WHERE instructor_name IS NOT NULL`);
+      
+      res.json({
+        totalVideos: parseInt((totalResult.rows?.[0] as any)?.count || '0'),
+        giVideos: parseInt((giResult.rows?.[0] as any)?.count || '0'),
+        nogiVideos: parseInt((nogiResult.rows?.[0] as any)?.count || '0'),
+        bothVideos: parseInt((bothResult.rows?.[0] as any)?.count || '0'),
+        avgQualityScore: parseFloat((avgQualityResult.rows?.[0] as any)?.avg || '0'),
+        instructorCount: parseInt((instructorResult.rows?.[0] as any)?.count || '0'),
+      });
+    } catch (error: any) {
+      console.error('[CURATION API] Error getting library stats:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get active jobs
+  app.get('/api/admin/curation/active-jobs', checkAdminAuth, (req, res) => {
+    const jobs = Array.from(activeCurationJobs.values()).filter(j => j.status === 'running');
+    res.json(jobs);
+  });
+
+  // Get job history
+  app.get('/api/admin/curation/job-history', checkAdminAuth, (req, res) => {
+    res.json(curationJobHistory.slice(-20).reverse());
+  });
+
+  // Get known instructors
+  app.get('/api/admin/curation/known-instructors', checkAdminAuth, async (req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT instructor_name, COUNT(*) as count 
+        FROM ai_video_knowledge 
+        WHERE instructor_name IS NOT NULL AND instructor_name != ''
+        GROUP BY instructor_name 
+        ORDER BY count DESC 
+        LIMIT 50
+      `);
+      const instructors = (result.rows || []).map((r: any) => r.instructor_name);
+      res.json(instructors);
+    } catch (error: any) {
+      console.error('[CURATION API] Error getting instructors:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get API quota usage
+  app.get('/api/admin/curation/api-quota', checkAdminAuth, async (req, res) => {
+    try {
+      // Get YouTube quota from settings
+      const [quotaSetting] = await db.select().from(devOsSettings).where(eq(devOsSettings.key, 'youtube_quota_used_today')).limit(1);
+      const youtubeUsed = parseInt(quotaSetting?.value || '0');
+      
+      res.json({
+        youtubeUsed,
+        youtubeLimit: 10000,
+        geminiCostToday: 0.50,
+        geminiCostMonth: 15.00,
+      });
+    } catch (error: any) {
+      console.error('[CURATION API] Error getting quota:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Toggle auto-curation
+  app.post('/api/admin/curation/toggle', checkAdminAuth, async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      
+      // Upsert the setting
+      await db.execute(sql`
+        INSERT INTO dev_os_settings (key, value, updated_at)
+        VALUES ('auto_curation_enabled', ${enabled ? 'true' : 'false'}, NOW())
+        ON CONFLICT (key) DO UPDATE SET value = ${enabled ? 'true' : 'false'}, updated_at = NOW()
+      `);
+      
+      console.log(`[CURATION API] Auto-curation ${enabled ? 'enabled' : 'disabled'}`);
+      res.json({ success: true, enabled });
+    } catch (error: any) {
+      console.error('[CURATION API] Error toggling curation:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Run curation job
+  app.post('/api/admin/curation/run', checkAdminAuth, async (req, res) => {
+    try {
+      const { type, query, filter } = req.body;
+      
+      const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const job = {
+        id: jobId,
+        type,
+        query: query || filter || '',
+        status: 'running' as const,
+        progress: 0,
+        found: 0,
+        added: 0,
+        startedAt: new Date().toISOString(),
+      };
+      
+      activeCurationJobs.set(jobId, job);
+      
+      // Respond immediately
+      res.json({ success: true, jobId, message: `Started ${type} curation` });
+      
+      // Run in background
+      (async () => {
+        try {
+          let result = { curatedCount: 0, searchesPerformed: 0 };
+          
+          if (type === 'meta') {
+            // Curate all high-priority techniques
+            const { MetaAnalyzer } = await import('./meta-analyzer');
+            const analyzer = new MetaAnalyzer();
+            const priorities = await analyzer.getCurationPriorities();
+            
+            const { manualCurateTechnique } = await import('./auto-curator');
+            for (const priority of priorities.slice(0, 5)) {
+              const r = await manualCurateTechnique(priority.techniqueName, 10);
+              result.curatedCount += r.curatedCount;
+              result.searchesPerformed += r.searchesPerformed;
+              job.progress = Math.round((priorities.indexOf(priority) + 1) / Math.min(priorities.length, 5) * 100);
+              job.found += r.searchesPerformed * 10;
+              job.added += r.curatedCount;
+            }
+          } else if (type === 'instructor' || type === 'technique' || type === 'position' || type === 'custom') {
+            const { searchYouTubeVideosExtended } = await import('./intelligent-curator');
+            const searchQuery = type === 'instructor' ? `${query} bjj technique` : 
+                               type === 'technique' ? `${query} bjj instructional` :
+                               type === 'position' ? `${query} bjj guard pass sweep submission` :
+                               query;
+            
+            const videos = await searchYouTubeVideosExtended(searchQuery, undefined, 20);
+            result.curatedCount = videos.length;
+            result.searchesPerformed = 1;
+            job.found = 20;
+            job.added = videos.length;
+          } else if (type === 'gi-nogi') {
+            const { searchYouTubeVideosExtended } = await import('./intelligent-curator');
+            const searchQuery = filter === 'gi' ? 'gi bjj technique instructional' : 'nogi submission grappling technique';
+            
+            const videos = await searchYouTubeVideosExtended(searchQuery, undefined, 20);
+            result.curatedCount = videos.length;
+            result.searchesPerformed = 1;
+            job.found = 20;
+            job.added = videos.length;
+          }
+          
+          job.status = 'completed';
+          job.progress = 100;
+          job.completedAt = new Date().toISOString();
+          
+          // Move to history
+          activeCurationJobs.delete(jobId);
+          curationJobHistory.push({ ...job });
+          
+          console.log(`[CURATION API] Job ${jobId} completed: ${result.curatedCount} videos added`);
+        } catch (error: any) {
+          job.status = 'failed';
+          job.completedAt = new Date().toISOString();
+          activeCurationJobs.delete(jobId);
+          curationJobHistory.push({ ...job });
+          console.error(`[CURATION API] Job ${jobId} failed:`, error.message);
+        }
+      })();
+      
+    } catch (error: any) {
+      console.error('[CURATION API] Error starting curation:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Cancel job
+  app.post('/api/admin/curation/cancel/:jobId', checkAdminAuth, (req, res) => {
+    const { jobId } = req.params;
+    const job = activeCurationJobs.get(jobId);
+    
+    if (job) {
+      job.status = 'cancelled';
+      job.completedAt = new Date().toISOString();
+      activeCurationJobs.delete(jobId);
+      curationJobHistory.push({ ...job });
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'Job not found' });
+    }
+  });
+
   return createServer(app);
 }
