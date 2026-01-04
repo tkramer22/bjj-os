@@ -468,6 +468,44 @@ export function registerRoutes(app: Express): Server {
   });
   
   // ============================================================================
+  // DIAGNOSTIC ENDPOINT - Test Claude API (NO AUTH - for debugging)
+  // ============================================================================
+  app.get('/api/test/claude', async (req, res) => {
+    try {
+      console.log('[TEST CLAUDE] Testing Claude API...');
+      console.log('[TEST CLAUDE] API key exists:', !!process.env.ANTHROPIC_API_KEY);
+      console.log('[TEST CLAUDE] API key prefix:', process.env.ANTHROPIC_API_KEY?.substring(0, 10) + '...');
+      
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 100,
+        messages: [{ role: "user", content: "Say hello briefly" }]
+      });
+      
+      const text = response.content[0]?.type === 'text' ? response.content[0].text : 'No text response';
+      console.log('[TEST CLAUDE] Claude response:', text.substring(0, 100));
+      
+      res.json({ 
+        success: true, 
+        response: text,
+        apiKeyExists: !!process.env.ANTHROPIC_API_KEY,
+        apiKeyPrefix: process.env.ANTHROPIC_API_KEY?.substring(0, 10) + '...'
+      });
+    } catch (error: any) {
+      console.error('[TEST CLAUDE] Error:', error);
+      res.json({ 
+        success: false, 
+        error: error.message,
+        status: error.status,
+        type: error.name,
+        apiKeyExists: !!process.env.ANTHROPIC_API_KEY
+      });
+    }
+  });
+  
+  // ============================================================================
   // EMAIL AUTHENTICATION ENDPOINTS (NEW - PRIMARY AUTH METHOD)
   // ============================================================================
   registerEmailAuthRoutes(app);
