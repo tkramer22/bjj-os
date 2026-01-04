@@ -410,7 +410,7 @@ export function registerRoutes(app: Express): Server {
   
   app.get('/api/version', (req, res) => {
     res.json({
-      version: '6.0.12',
+      version: '6.0.13',
       buildId: BUILD_ID,
       buildTime: new Date().toISOString(),
       features: ['semantic-search', 'perspective-filtering', 'instructor-search', 'fallback-quality', 'error-handling', 'technique-priority-search', 'guillotine-fix', 'proactive-video-recs', 'relevance-fix', 'last-resort-search'],
@@ -448,7 +448,7 @@ export function registerRoutes(app: Express): Server {
         videosFound: result.videos.length,
         noMatchFound: result.noMatchFound,
         searchIntent: result.searchIntent,
-        version: '6.0.12',
+        version: '6.0.13',
         buildId: BUILD_ID,
         timestamp: new Date().toISOString(),
         techniqueOverrideActive: result.searchIntent.searchTerms?.some((t: string) => 

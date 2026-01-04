@@ -1015,12 +1015,13 @@ export async function handleClaudeStream(req: any, res: any) {
         const videoId = youtubeMatch ? youtubeMatch[1] : '';
         
         if (videoId) {
-          // Build the full token: [VIDEO: title | instructor | duration | videoId | id]
+          // Build the full token: [VIDEO: title | instructor | duration | videoId | id | startTime]
           // Duration: use "full" as placeholder (frontend can show "Watch Full Video")
-          const fullToken = `[VIDEO: ${matchingVideo.techniqueName || titlePattern} | ${matchingVideo.instructorName || instructorPattern} | full | ${videoId} | ${matchingVideo.id}]`;
+          // CRITICAL: Include startTime (6th field) so frontend can display it and show action buttons
+          const fullToken = `[VIDEO: ${matchingVideo.techniqueName || titlePattern} | ${matchingVideo.instructorName || instructorPattern} | full | ${videoId} | ${matchingVideo.id} | ${startTime}]`;
           
           replacements.push({ original: originalToken, replacement: fullToken });
-          console.log(`[VIDEO TOKEN] ✅ Matched (confidence: ${(bestScore * 100).toFixed(0)}%):`, titlePattern, '→', matchingVideo.techniqueName);
+          console.log(`[VIDEO TOKEN] ✅ Matched (confidence: ${(bestScore * 100).toFixed(0)}%): ${titlePattern} → ${matchingVideo.techniqueName} @${startTime}`);
         } else {
           console.warn('[VIDEO TOKEN] ⚠️  No YouTube ID found for:', matchingVideo.videoUrl);
         }
