@@ -1,0 +1,262 @@
+# VIDEO SEARCH IS STILL BROKEN - FIX IT NOW
+
+## THE FAILURE
+
+User asked: “Training guillotine tomorrow”
+Video returned: “Escaping Closed Guard with Gordon Ryan”
+
+**This is 100% wrong.** Escaping closed guard has NOTHING to do with guillotines.
+
+The Gemini search is NOT being used properly. Fix it NOW.
+
+-----
+
+## STEP 1: VERIFY GUILLOTINE VIDEOS EXIST
+
+Run this SQL query RIGHT NOW:
+
+```sql
+SELECT 
+  id,
+  title,
+  instructor_name,
+  techniques_covered,
+  primary_techniques,
+  key_timestamps
+FROM ai_video_knowledge 
+WHERE 
+  LOWER(techniques_covered) LIKE '%guillotine%'
+  OR LOWER(primary_techniques) LIKE '%guillotine%'
+  OR LOWER(title) LIKE '%guillotine%'
+LIMIT 10;
+```
+
+**If this returns guillotine videos, the data exists. The code is wrong.**
+
+-----
+
+## STEP 2: FIND WHERE VIDEOS ARE SELECTED
+
+Search for the video selection code:
+
+```bash
+grep -rn "aiVideoKnowledge" server/
+grep -rn "getVideos\|searchVideos\|findVideos\|selectVideos" server/
+grep -rn "RANDOM\|random()" server/
+```
+
+Find the function that chooses which videos to show.
+
+-----
+
+## STEP 3: THE EXACT CODE THAT MUST RUN
+
+Replace ALL video selection with this:
+
+```typescript
+import { db } from './db';
+import { aiVideoKnowledge } from '../shared/schema';
+import { sql, or, desc } from 'drizzle-orm';
+
+// This is the ONLY function that should select videos
+export async function getVideosForTechnique(userMessage: string): Promise<any[]> {
+  // Step 1: Extract technique keyword
+  const technique = extractTechnique(userMessage);
+  
+  console.log('[VIDEO SEARCH] User message:', userMessage);
+  console.log('[VIDEO SEARCH] Detected technique:', technique);
+  
+  if (!technique) {
+    console.log('[VIDEO SEARCH] No technique detected - returning empty');
+    return []; // NO VIDEOS if no technique detected
+  }
+  
+  // Step 2: Query ONLY videos where Gemini tagged this technique
+  const searchTerm = `%${technique}%`;
+  
+  const videos = await db.select({
+    id: aiVideoKnowledge.id,
+    title: aiVideoKnowledge.title,
+    youtubeId: aiVideoKnowledge.youtubeId,
+    instructorName: aiVideoKnowledge.instructorName,
+    techniquesCovered: aiVideoKnowledge.techniquesCovered,
+    primaryTechniques: aiVideoKnowledge.primaryTechniques,
+    techniqueSummary: aiVideoKnowledge.techniqueSummary,
+    keyTimestamps: aiVideoKnowledge.keyTimestamps,
+    instructionQuality: aiVideoKnowledge.instructionQuality
+  })
+  .from(aiVideoKnowledge)
+  .where(
+    or(
+      sql`LOWER(techniques_covered) LIKE LOWER(${searchTerm})`,
+      sql`LOWER(primary_techniques) LIKE LOWER(${searchTerm})`,
+      sql`LOWER(technique_summary) LIKE LOWER(${searchTerm})`
+    )
+  )
+  .orderBy(desc(aiVideoKnowledge.instructionQuality))
+  .limit(3);
+  
+  console.log('[VIDEO SEARCH] Found', videos.length, 'videos');
+  videos.forEach(v => {
+    console.log('[VIDEO SEARCH]  -', v.title);
+    console.log('[VIDEO SEARCH]    techniques:', v.techniquesCovered);
+  });
+  
+  // Step 3: VERIFY each video actually contains the technique
+  const verified = videos.filter(v => {
+    const all = [
+      v.techniquesCovered || '',
+      v.primaryTechniques || '',
+      v.techniqueSummary || ''
+    ].join(' ').toLowerCase();
+    
+    return all.includes(technique.toLowerCase());
+  });
+  
+  console.log('[VIDEO SEARCH] Verified', verified.length, 'videos');
+  
+  // Step 4: Return verified videos OR empty array
+  // NEVER return random videos
+  return verified;
+}
+
+function extractTechnique(message: string): string | null {
+  const lower = message.toLowerCase();
+  
+  // Techniques ordered by specificity (most specific first)
+  const techniques = [
+    // Guillotine variations
+    'high elbow guillotine', 'arm in guillotine', 'marcelotine', 'power guillotine', 'guillotine',
+    
+    // Other chokes
+    'rear naked choke', 'rnc', 'mata leao',
+    'darce choke', 'darce', 'brabo choke',
+    'anaconda choke', 'anaconda',
+    'arm triangle', 'head and arm choke', 'kata gatame',
+    'triangle choke', 'triangle',
+    'ezekiel choke', 'ezekiel',
+    'loop choke', 'clock choke', 'baseball bat choke',
+    'bow and arrow', 'cross collar choke',
+    
+    // Arm locks
+    'armbar', 'arm bar', 'juji gatame',
+    'kimura', 'double wristlock',
+    'americana', 'keylock',
+    'omoplata', 'gogoplata',
+    
+    // Leg locks
+    'heel hook', 'inside heel hook', 'outside heel hook',
+    'knee bar', 'kneebar',
+    'toe hold', 'toehold',
+    'ankle lock', 'straight ankle lock', 'achilles lock',
+    'calf slicer', 'calf crush',
+    
+    // Guards
+    'half guard', 'deep half guard', 'deep half', 'z guard', 'knee shield',
+    'closed guard', 'full guard',
+    'open guard', 'spider guard', 'lasso guard',
+    'de la riva', 'dlr', 'reverse de la riva', 'rdlr',
+    'x guard', 'single leg x', 'slx',
+    'butterfly guard', 'butterfly',
+    'rubber guard', '10th planet',
+    
+    // Positions
+    'mount', 'full mount', 's mount', 'technical mount',
+    'back control', 'back take', 'back mount', 'rear mount',
+    'side control', 'side mount', 'cross side', 'kesa gatame',
+    'knee on belly', 'knee on chest', 'kob',
+    'north south',
+    'turtle', 'turtle attack',
+    
+    // Actions
+    'guard pass', 'passing', 'torreando', 'knee cut', 'knee slice', 'leg drag',
+    'sweep', 'hip bump', 'scissor sweep', 'flower sweep',
+    'takedown', 'single leg', 'double leg', 'wrestling',
+    'escape', 'bridge', 'shrimp', 'elbow escape',
+    'mount escape', 'side control escape', 'back escape'
+  ];
+  
+  for (const tech of techniques) {
+    if (lower.includes(tech)) {
+      console.log('[EXTRACT] Found technique:', tech);
+      return tech;
+    }
+  }
+  
+  console.log('[EXTRACT] No technique found in:', lower);
+  return null;
+}
+```
+
+-----
+
+## STEP 4: INTEGRATE INTO CHAT FLOW
+
+Find where the chat response is generated and call this function:
+
+```typescript
+// In your chat handler (wherever Claude response is generated)
+
+const userMessage = req.body.message;
+
+// Get relevant videos BEFORE generating AI response
+const relevantVideos = await getVideosForTechnique(userMessage);
+
+console.log('[CHAT] Got', relevantVideos.length, 'relevant videos');
+
+// Pass videos to the AI response generator
+const aiResponse = await generateProfessorOSResponse(userMessage, {
+  videos: relevantVideos,
+  // ... other context
+});
+```
+
+-----
+
+## STEP 5: WHAT MUST NEVER HAPPEN
+
+❌ NEVER select random videos when no match found
+❌ NEVER fall back to “popular” or “recent” videos  
+❌ NEVER let AI “choose” videos based on vibes
+❌ NEVER return videos that don’t contain the technique in Gemini fields
+
+-----
+
+## STEP 6: WHAT MUST ALWAYS HAPPEN
+
+✅ ALWAYS query Gemini fields: techniques_covered, primary_techniques, technique_summary
+✅ ALWAYS verify returned videos actually match
+✅ ALWAYS return empty array if no match (better than wrong)
+✅ ALWAYS log what’s happening so we can debug
+
+-----
+
+## VERIFICATION TEST
+
+After implementing, test this exact flow:
+
+1. User sends: “Training guillotine tomorrow”
+1. Check server logs - should see:
+   
+   ```
+   [VIDEO SEARCH] User message: Training guillotine tomorrow
+   [VIDEO SEARCH] Detected technique: guillotine
+   [VIDEO SEARCH] Found 3 videos
+   [VIDEO SEARCH]  - High Elbow Guillotine with JT Torres
+   [VIDEO SEARCH]    techniques: guillotine, high elbow, front headlock
+   ```
+1. Video displayed should be a GUILLOTINE video
+1. NOT “Escaping Closed Guard”
+
+-----
+
+## IF IT STILL SHOWS WRONG VIDEOS
+
+1. Check the server logs - what technique was detected?
+1. Check if the SQL query is actually running
+1. Check if the column names match (techniques_covered vs techniquesCovered)
+1. Run the SQL query manually to confirm data exists
+
+The Gemini data is there. The timestamps are there. USE THEM.
+
+**Do not respond saying “I’ve updated the code” unless the logs show the correct search running.**

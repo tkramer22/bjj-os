@@ -53,6 +53,20 @@ export default function AdminUsers() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
+  
+  // ISSUE 4: Sortable columns
+  const [sortField, setSortField] = useState<'createdAt' | 'lastActiveAt'>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  
+  const handleSort = (field: 'createdAt' | 'lastActiveAt') => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
+    setCurrentPage(1);
+  };
 
   const { data: users, isLoading, refetch } = useQuery({
     queryKey: ['/api/admin/users', { timeFilter, planFilter, statusFilter, beltFilter }],
@@ -163,10 +177,23 @@ export default function AdminUsers() {
     },
   });
 
-  const filteredUsers = users?.filter((user: any) => 
+  // ISSUE 4: Filter and sort users
+  const filteredUsers = (users?.filter((user: any) => 
     user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email?.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  ) || []).sort((a: any, b: any) => {
+    const aVal = sortField === 'lastActiveAt' 
+      ? (a.lastActiveAt || a.lastLogin || a.createdAt)
+      : a.createdAt;
+    const bVal = sortField === 'lastActiveAt'
+      ? (b.lastActiveAt || b.lastLogin || b.createdAt)
+      : b.createdAt;
+    
+    const aDate = new Date(aVal || 0).getTime();
+    const bDate = new Date(bVal || 0).getTime();
+    
+    return sortOrder === 'desc' ? bDate - aDate : aDate - bDate;
+  });
 
   // Pagination logic - ensure at least 1 page for proper display
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
@@ -390,8 +417,20 @@ export default function AdminUsers() {
                   <TableHead>Belt</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>LIFETIME Bypass</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead>Last Active</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort('createdAt')}
+                    data-testid="sort-joined"
+                  >
+                    Joined {sortField === 'createdAt' && (sortOrder === 'desc' ? '↓' : '↑')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort('lastActiveAt')}
+                    data-testid="sort-last-active"
+                  >
+                    Last Active {sortField === 'lastActiveAt' && (sortOrder === 'desc' ? '↓' : '↑')}
+                  </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>

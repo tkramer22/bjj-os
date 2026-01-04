@@ -19,7 +19,7 @@
  */
 
 import { db } from './db';
-import { aiVideoKnowledge, fullyMinedInstructors, curationRuns, videoWatchStatus } from '@shared/schema';
+import { aiVideoKnowledge, fullyMinedInstructors, curationRuns, videoWatchStatus, systemSettings } from '@shared/schema';
 import { sql, eq, lt, and, isNull, or, gte, desc, ne } from 'drizzle-orm';
 import { google } from 'googleapis';
 import { Resend } from 'resend';
@@ -31,6 +31,103 @@ const youtube = google.youtube({
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const ADMIN_EMAIL = 'todd@bjjos.app';
+
+// Auto-curation enable/disable state - persists to database
+const AUTO_CURATION_SETTING_KEY = 'auto_curation_enabled';
+let autoCurationEnabled = true; // In-memory cache
+
+// Initialize from database on server startup
+export async function initializeAutoCurationState(): Promise<void> {
+  try {
+    const result = await db.select()
+      .from(systemSettings)
+      .where(eq(systemSettings.settingKey, AUTO_CURATION_SETTING_KEY))
+      .limit(1);
+    
+    if (result.length > 0) {
+      autoCurationEnabled = result[0].settingValue !== 'false';
+      console.log(`[AUTO-CURATION] Loaded state from database: ${autoCurationEnabled ? 'ENABLED' : 'DISABLED'}`);
+    } else {
+      // First time - create the setting with default value
+      await db.insert(systemSettings).values({
+        settingKey: AUTO_CURATION_SETTING_KEY,
+        settingValue: 'true',
+        updatedBy: 'system'
+      });
+      console.log(`[AUTO-CURATION] Initialized database setting: ENABLED (default)`);
+    }
+  } catch (error) {
+    console.error('[AUTO-CURATION] Error loading state from database:', error);
+    // Fall back to enabled if database read fails
+    autoCurationEnabled = true;
+  }
+}
+
+export function isAutoCurationEnabled(): boolean {
+  return autoCurationEnabled;
+}
+
+export async function setAutoCurationEnabled(enabled: boolean): Promise<{ success: boolean; error?: string }> {
+  // Persist to database FIRST, then update memory
+  try {
+    const existing = await db.select()
+      .from(systemSettings)
+      .where(eq(systemSettings.settingKey, AUTO_CURATION_SETTING_KEY))
+      .limit(1);
+    
+    if (existing.length > 0) {
+      await db.update(systemSettings)
+        .set({
+          settingValue: String(enabled),
+          updatedAt: new Date(),
+          updatedBy: 'admin'
+        })
+        .where(eq(systemSettings.settingKey, AUTO_CURATION_SETTING_KEY));
+    } else {
+      await db.insert(systemSettings).values({
+        settingKey: AUTO_CURATION_SETTING_KEY,
+        settingValue: String(enabled),
+        updatedBy: 'admin'
+      });
+    }
+    
+    // Only update memory after successful database persistence
+    autoCurationEnabled = enabled;
+    console.log(`[AUTO-CURATION] ${enabled ? '✅ ENABLED' : '🚫 DISABLED'} by admin (persisted to database)`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[AUTO-CURATION] Error persisting state to database:', error);
+    return { success: false, error: error.message || 'Database persistence failed' };
+  }
+}
+
+export interface AutoCurationStatus {
+  enabled: boolean;
+  lastRunAt: Date | null;
+  lastRunResult: string | null;
+  videosAddedLastRun: number;
+  runsToday: number;
+}
+
+let lastRunStatus: { at: Date; result: string; videosAdded: number } | null = null;
+
+export function getAutoCurationStatus(): AutoCurationStatus {
+  return {
+    enabled: autoCurationEnabled,
+    lastRunAt: lastRunStatus?.at || null,
+    lastRunResult: lastRunStatus?.result || null,
+    videosAddedLastRun: lastRunStatus?.videosAdded || 0,
+    runsToday: 0 // Will be filled from db query
+  };
+}
+
+export function updateLastRunStatus(result: string, videosAdded: number): void {
+  lastRunStatus = {
+    at: new Date(),
+    result,
+    videosAdded
+  };
+}
 
 const SEARCH_PATTERNS = [
   '{instructor} jiu jitsu technique',
@@ -344,6 +441,24 @@ async function runTechniqueFallbackSearch(result: CurationResult): Promise<void>
 }
 
 export async function runPermanentAutoCuration(): Promise<CurationResult> {
+  // Check if auto-curation is enabled
+  if (!autoCurationEnabled) {
+    console.log(`\n${'═'.repeat(70)}`);
+    console.log(`🚫 PERMANENT AUTO-CURATION SKIPPED (Disabled by Admin)`);
+    console.log(`${'═'.repeat(70)}`);
+    return {
+      success: false,
+      videosAnalyzed: 0,
+      videosAdded: 0,
+      videosSkipped: 0,
+      instructorsProcessed: [],
+      instructorResults: {},
+      skippedReasons: { 'disabled_by_admin': 1 },
+      errors: ['Auto-curation is disabled'],
+      quotaExhausted: false
+    };
+  }
+  
   console.log(`\n${'═'.repeat(70)}`);
   console.log(`🤖 PERMANENT AUTO-CURATION SYSTEM`);
   console.log(`${'═'.repeat(70)}`);
@@ -855,9 +970,9 @@ export async function discoverNewInstructor(
 }
 
 /**
- * Get curation system status for admin dashboard
+ * Get detailed curation system status for admin dashboard
  */
-export async function getAutoCurationStatus(): Promise<{
+export async function getAutoCurationFullStatus(): Promise<{
   isEnabled: boolean;
   lastRun?: Date;
   lastRunResult?: string;
@@ -900,7 +1015,7 @@ export async function getAutoCurationStatus(): Promise<{
   }
   
   return {
-    isEnabled: true,
+    isEnabled: autoCurationEnabled,
     lastRun: lastRunResult[0]?.startedAt || undefined,
     lastRunResult: lastRunResult[0]?.status || undefined,
     nextScheduledRun: nextRun,

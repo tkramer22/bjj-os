@@ -7,6 +7,7 @@ import { eq, desc, sql, and, or, ilike, gte, count as drizzleCount } from "drizz
 import { logSystemError } from "./activity-logger";
 import * as curationController from "./curation-controller";
 import { sendAdminReport } from "./admin-email";
+import { isAutoCurationEnabled, setAutoCurationEnabled, getAutoCurationStatus, initializeAutoCurationState } from "./permanent-auto-curation";
 
 const router = express.Router();
 
@@ -1527,6 +1528,128 @@ router.get('/referrals/export', requireAdmin, async (req, res) => {
   } catch (error: any) {
     console.error('[ADMIN] Export error:', error);
     res.status(500).json({ error: 'Failed to export data' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ISSUE 1: AUTO CURATION STATUS AND TOGGLE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET: Auto curation status
+router.get('/curation/auto-status', requireAdmin, async (req, res) => {
+  try {
+    // Get current state from the permanent-auto-curation module
+    const isEnabled = isAutoCurationEnabled();
+    const status = getAutoCurationStatus();
+    
+    // Get last curation run stats and today's run count from database
+    const [lastRun, todayRuns] = await Promise.all([
+      db.select()
+        .from(curationRuns)
+        .orderBy(desc(curationRuns.createdAt))
+        .limit(1),
+      db.select({ count: drizzleCount() })
+        .from(curationRuns)
+        .where(gte(curationRuns.createdAt, new Date(new Date().setHours(0, 0, 0, 0))))
+    ]);
+    
+    const lastRunData = lastRun[0] ? {
+      discovered: lastRun[0].discovered || 0,
+      analyzed: lastRun[0].analyzed || 0,
+      accepted: lastRun[0].approved || 0,
+      rejected: lastRun[0].rejected || 0,
+      timestamp: lastRun[0].createdAt
+    } : null;
+    
+    res.json({
+      enabled: isEnabled,
+      lastRun: lastRunData,
+      runsToday: todayRuns[0]?.count || 0,
+      lastRunAt: status.lastRunAt,
+      lastRunResult: status.lastRunResult,
+      videosAddedLastRun: status.videosAddedLastRun
+    });
+  } catch (error: any) {
+    console.error('[ADMIN] Auto curation status error:', error);
+    res.status(500).json({ error: 'Failed to get curation status' });
+  }
+});
+
+// POST: Toggle auto curation (integrates with scheduler via module state + database persistence)
+router.post('/curation/auto-toggle', requireAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be a boolean' });
+    }
+    
+    // Set state in the permanent-auto-curation module (persists to database)
+    const result = await setAutoCurationEnabled(enabled);
+    
+    if (!result.success) {
+      console.error(`[ADMIN] Auto curation toggle failed to persist: ${result.error}`);
+      return res.status(500).json({ error: 'Failed to persist curation state', details: result.error });
+    }
+    
+    console.log(`[ADMIN] Auto curation ${enabled ? 'ENABLED' : 'DISABLED'} by admin (persisted to database)`);
+    
+    res.json({ success: true, enabled: isAutoCurationEnabled() });
+  } catch (error: any) {
+    console.error('[ADMIN] Auto curation toggle error:', error);
+    res.status(500).json({ error: 'Failed to toggle curation' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ISSUE 2: GET ALL INSTRUCTORS FROM DATABASE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.get('/instructors/all', requireAdmin, async (req, res) => {
+  try {
+    const result = await db.selectDistinct({ instructor: aiVideoKnowledge.instructorName })
+      .from(aiVideoKnowledge)
+      .where(sql`${aiVideoKnowledge.instructorName} IS NOT NULL AND ${aiVideoKnowledge.instructorName} != ''`)
+      .orderBy(aiVideoKnowledge.instructorName);
+    
+    const instructors = result
+      .map(r => r.instructor)
+      .filter((name): name is string => !!name && name.trim().length > 0)
+      .sort((a, b) => a.localeCompare(b));
+    
+    res.json({ instructors });
+  } catch (error: any) {
+    console.error('[ADMIN] Get instructors error:', error);
+    res.status(500).json({ error: 'Failed to get instructors' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ISSUE 3: GET POSITIONS FROM DATABASE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.get('/positions/all', requireAdmin, async (req, res) => {
+  try {
+    // Comprehensive hardcoded list of BJJ positions
+    const positions = [
+      'Closed Guard', 'Half Guard', 'Deep Half Guard', 'Z Guard', 'Knee Shield',
+      'Open Guard', 'Spider Guard', 'Lasso Guard', 'De La Riva', 'Reverse De La Riva',
+      'X Guard', 'Single Leg X', 'Butterfly Guard', 'Rubber Guard', 'Worm Guard',
+      'Mount', 'S Mount', 'Technical Mount', 'Mount Escape', 'High Mount',
+      'Back Control', 'Back Mount', 'Truck', 'Back Escape', 'Rear Naked Choke Position',
+      'Side Control', 'Kesa Gatame', 'North South', 'Side Control Escape', 'Scarf Hold',
+      'Knee on Belly', 'Knee on Chest',
+      'Turtle', 'Turtle Attacks', 'Turtle Escapes',
+      'Standing', 'Clinch', 'Takedowns', 'Wrestling', 'Judo Throws',
+      'Guard Passing', 'Guard Retention', 'Pressure Passing', 'Speed Passing',
+      '50/50', 'Leg Entanglements', 'Ashi Garami', 'Saddle', 'Inside Sankaku',
+      'Crucifix', 'Gift Wrap', 'Body Lock', 'Body Triangle'
+    ];
+    
+    res.json({ positions });
+  } catch (error: any) {
+    console.error('[ADMIN] Get positions error:', error);
+    res.status(500).json({ error: 'Failed to get positions' });
   }
 });
 

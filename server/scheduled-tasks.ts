@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { runAlertMonitor } from './alert-monitor-service';
 import { sendHourlyDigest } from './hourly-digest-service';
 import { processBatch as processVideoKnowledgeBatch } from './video-knowledge-service';
-import { runPermanentAutoCuration } from './permanent-auto-curation';
+import { runPermanentAutoCuration, initializeAutoCurationState } from './permanent-auto-curation';
 
 /**
  * SCHEDULED TASKS COORDINATOR
@@ -14,13 +14,16 @@ let isInitialized = false;
 /**
  * Initialize all scheduled tasks
  */
-export function initScheduledTasks() {
+export async function initScheduledTasks() {
   if (isInitialized) {
     console.log('⏰ [SCHEDULER] Already initialized');
     return;
   }
   
   console.log('⏰ [SCHEDULER] Initializing Dev OS 2.0 scheduled tasks...');
+  
+  // Initialize auto-curation state from database BEFORE starting schedulers
+  await initializeAutoCurationState();
   
   // ═══════════════════════════════════════════════════════════════
   // ALERT MONITOR - Every 2 minutes

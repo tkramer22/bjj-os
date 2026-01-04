@@ -108,11 +108,110 @@ export default function CommandCenter() {
   const [selectedGiNogi, setSelectedGiNogi] = useState('');
   const [customSearch, setCustomSearch] = useState('');
   const [quickCurationRunning, setQuickCurationRunning] = useState<string | null>(null);
+  
+  // ISSUE 1: Auto Curation Toggle State
+  const [autoCurationEnabled, setAutoCurationEnabled] = useState(true);
+  const [lastRunStats, setLastRunStats] = useState<{
+    discovered: number;
+    analyzed: number;
+    accepted: number;
+    rejected: number;
+    timestamp: string;
+  } | null>(null);
+  
+  // ISSUE 2: Dynamic Instructor List with loading/error states
+  const [instructorList, setInstructorList] = useState<string[]>([]);
+  const [instructorListLoading, setInstructorListLoading] = useState(true);
+  const [instructorListError, setInstructorListError] = useState<string | null>(null);
+  
+  // ISSUE 3: Dynamic Position List with loading/error states
+  const [positionList, setPositionList] = useState<string[]>([]);
+  const [positionListLoading, setPositionListLoading] = useState(true);
+  const [positionListError, setPositionListError] = useState<string | null>(null);
 
   useEffect(() => {
     loadCommandLog();
     loadSettings();
+    loadAutoCurationStatus();
+    loadInstructors();
+    loadPositions();
   }, []);
+  
+  // ISSUE 1: Load auto curation status
+  const loadAutoCurationStatus = async () => {
+    try {
+      const res = await fetch('/api/admin/curation/auto-status');
+      const data = await res.json();
+      if (data) {
+        setAutoCurationEnabled(data.enabled);
+        setLastRunStats(data.lastRun);
+      }
+    } catch (error) {
+      console.error('Failed to load auto curation status:', error);
+    }
+  };
+  
+  const toggleAutoCuration = async () => {
+    try {
+      const res = await fetch('/api/admin/curation/auto-toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !autoCurationEnabled })
+      });
+      if (res.ok) {
+        setAutoCurationEnabled(!autoCurationEnabled);
+        toast({
+          title: autoCurationEnabled ? 'Auto Curation Disabled' : 'Auto Curation Enabled',
+          description: autoCurationEnabled ? 'Automatic curation paused' : 'Automatic curation will resume on schedule',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to toggle auto curation:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to toggle auto curation',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  // ISSUE 2: Load instructors from database
+  const loadInstructors = async () => {
+    setInstructorListLoading(true);
+    setInstructorListError(null);
+    try {
+      const res = await fetch('/api/admin/instructors/all');
+      if (!res.ok) throw new Error('Failed to fetch instructors');
+      const data = await res.json();
+      if (data.instructors) {
+        setInstructorList(data.instructors);
+      }
+    } catch (error: any) {
+      console.error('Failed to load instructors:', error);
+      setInstructorListError(error.message || 'Failed to load instructors');
+    } finally {
+      setInstructorListLoading(false);
+    }
+  };
+  
+  // ISSUE 3: Load positions
+  const loadPositions = async () => {
+    setPositionListLoading(true);
+    setPositionListError(null);
+    try {
+      const res = await fetch('/api/admin/positions/all');
+      if (!res.ok) throw new Error('Failed to fetch positions');
+      const data = await res.json();
+      if (data.positions) {
+        setPositionList(data.positions);
+      }
+    } catch (error: any) {
+      console.error('Failed to load positions:', error);
+      setPositionListError(error.message || 'Failed to load positions');
+    } finally {
+      setPositionListLoading(false);
+    }
+  };
 
   // Auto-scroll to bottom of progress feed
   useEffect(() => {
@@ -657,6 +756,53 @@ export default function CommandCenter() {
           </Button>
         </div>
 
+        {/* ISSUE 1: AUTO CURATION MASTER TOGGLE */}
+        <Card className="border-2">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className={`w-4 h-4 rounded-full ${autoCurationEnabled ? 'bg-green-500 animate-pulse' : 'bg-zinc-600'}`} />
+                <div>
+                  <h3 className="text-lg font-bold">AUTO CURATION</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {autoCurationEnabled ? 'Running 4x daily (3:15am, 9am, 3pm, 9pm EST)' : 'Paused - no automatic curation'}
+                  </p>
+                </div>
+              </div>
+              
+              <Button
+                onClick={toggleAutoCuration}
+                variant={autoCurationEnabled ? "destructive" : "default"}
+                className="px-6"
+                data-testid="button-toggle-auto-curation"
+              >
+                {autoCurationEnabled ? 'TURN OFF' : 'TURN ON'}
+              </Button>
+            </div>
+            
+            {lastRunStats && (
+              <div className="mt-4 pt-4 border-t grid grid-cols-4 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-blue-400">{lastRunStats.discovered}</div>
+                  <div className="text-xs text-muted-foreground">Discovered</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-purple-400">{lastRunStats.analyzed}</div>
+                  <div className="text-xs text-muted-foreground">Analyzed</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-green-400">{lastRunStats.accepted}</div>
+                  <div className="text-xs text-muted-foreground">Added</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-zinc-400">{lastRunStats.rejected}</div>
+                  <div className="text-xs text-muted-foreground">Rejected</div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Curation Commands */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -775,26 +921,35 @@ export default function CommandCenter() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               
-              {/* INSTRUCTOR */}
+              {/* INSTRUCTOR - ISSUE 2: Dynamic from database with loading/error states */}
               <div className="bg-muted/50 rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="text-blue-400">👤</span>
-                  <span className="font-semibold">Instructor</span>
+                  <span className="font-semibold">
+                    Instructor {instructorListLoading ? '(Loading...)' : `(${instructorList.length})`}
+                  </span>
                 </div>
-                <select 
-                  value={selectedInstructor}
-                  onChange={(e) => setSelectedInstructor(e.target.value)}
-                  className="w-full bg-background border rounded px-3 py-2"
-                  data-testid="select-instructor"
-                >
-                  <option value="">Select instructor...</option>
-                  <option value="John Danaher">John Danaher</option>
-                  <option value="Gordon Ryan">Gordon Ryan</option>
-                  <option value="Lachlan Giles">Lachlan Giles</option>
-                  <option value="Craig Jones">Craig Jones</option>
-                  <option value="Marcelo Garcia">Marcelo Garcia</option>
-                  <option value="Bernardo Faria">Bernardo Faria</option>
-                </select>
+                {instructorListError ? (
+                  <div className="text-destructive text-sm">
+                    Failed to load instructors
+                    <Button variant="link" size="sm" onClick={loadInstructors} className="ml-2" data-testid="button-retry-instructors">
+                      Retry
+                    </Button>
+                  </div>
+                ) : (
+                  <select 
+                    value={selectedInstructor}
+                    onChange={(e) => setSelectedInstructor(e.target.value)}
+                    className="w-full bg-background border rounded px-3 py-2"
+                    data-testid="select-instructor"
+                    disabled={instructorListLoading}
+                  >
+                    <option value="">{instructorListLoading ? 'Loading...' : 'Select instructor...'}</option>
+                    {instructorList.map(instructor => (
+                      <option key={instructor} value={instructor}>{instructor}</option>
+                    ))}
+                  </select>
+                )}
                 <Input 
                   value={customInstructor}
                   onChange={(e) => setCustomInstructor(e.target.value)}
@@ -833,27 +988,35 @@ export default function CommandCenter() {
                 </Button>
               </div>
               
-              {/* POSITION */}
+              {/* POSITION - ISSUE 3: Expanded comprehensive list with loading/error states */}
               <div className="bg-muted/50 rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="text-yellow-400">📐</span>
-                  <span className="font-semibold">Position</span>
+                  <span className="font-semibold">
+                    Position {positionListLoading ? '(Loading...)' : `(${positionList.length})`}
+                  </span>
                 </div>
-                <select 
-                  value={selectedPosition}
-                  onChange={(e) => setSelectedPosition(e.target.value)}
-                  className="w-full bg-background border rounded px-3 py-2"
-                  data-testid="select-position"
-                >
-                  <option value="">Select position...</option>
-                  <option value="Closed Guard">Closed Guard</option>
-                  <option value="Half Guard">Half Guard</option>
-                  <option value="Open Guard">Open Guard</option>
-                  <option value="Mount">Mount</option>
-                  <option value="Back Control">Back Control</option>
-                  <option value="Side Control">Side Control</option>
-                  <option value="Turtle">Turtle</option>
-                </select>
+                {positionListError ? (
+                  <div className="text-destructive text-sm">
+                    Failed to load positions
+                    <Button variant="link" size="sm" onClick={loadPositions} className="ml-2" data-testid="button-retry-positions">
+                      Retry
+                    </Button>
+                  </div>
+                ) : (
+                  <select 
+                    value={selectedPosition}
+                    onChange={(e) => setSelectedPosition(e.target.value)}
+                    className="w-full bg-background border rounded px-3 py-2"
+                    data-testid="select-position"
+                    disabled={positionListLoading}
+                  >
+                    <option value="">{positionListLoading ? 'Loading...' : 'Select position...'}</option>
+                    {positionList.map(position => (
+                      <option key={position} value={position}>{position}</option>
+                    ))}
+                  </select>
+                )}
                 <Button 
                   onClick={() => runQuickCuration('position', selectedPosition, () => setSelectedPosition(''))}
                   disabled={!selectedPosition || quickCurationRunning === 'position'}
