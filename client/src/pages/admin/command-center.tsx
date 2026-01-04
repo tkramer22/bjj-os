@@ -99,6 +99,15 @@ export default function CommandCenter() {
   const [qaTestReport, setQaTestReport] = useState<QATestReport | null>(null);
   const [dataQuality, setDataQuality] = useState<DataQualityReport | null>(null);
   const [dataQualityLoading, setDataQualityLoading] = useState(false);
+  
+  // Quick Curation Presets State
+  const [selectedInstructor, setSelectedInstructor] = useState('');
+  const [customInstructor, setCustomInstructor] = useState('');
+  const [techniqueSearch, setTechniqueSearch] = useState('');
+  const [selectedPosition, setSelectedPosition] = useState('');
+  const [selectedGiNogi, setSelectedGiNogi] = useState('');
+  const [customSearch, setCustomSearch] = useState('');
+  const [quickCurationRunning, setQuickCurationRunning] = useState<string | null>(null);
 
   useEffect(() => {
     loadCommandLog();
@@ -245,6 +254,55 @@ export default function CommandCenter() {
         description: error.message,
         variant: "destructive"
       });
+    }
+  };
+
+  // Quick Curation - Run targeted curation with specific filters
+  const runQuickCuration = async (type: string, query?: string, clearFn?: () => void) => {
+    // Capture the query value before any async operations
+    const queryValue = query?.trim();
+    
+    if (!queryValue && type !== 'meta') {
+      toast({
+        title: "Missing Query",
+        description: "Please enter a search term",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setQuickCurationRunning(type);
+    try {
+      const res = await fetch('/api/admin/curation/quick-run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, query: queryValue })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast({
+          title: "🚀 Quick Curation Started",
+          description: `${type}: "${queryValue || 'meta techniques'}" - Results in 5-10 minutes`,
+        });
+        // Only clear input after successful request
+        if (clearFn) clearFn();
+      } else {
+        toast({
+          title: "❌ Curation Failed",
+          description: data.error || 'Unknown error',
+          variant: "destructive"
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "❌ Request Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setQuickCurationRunning(null);
     }
   };
 
@@ -704,6 +762,175 @@ export default function CommandCenter() {
               </p>
             </CardContent>
           )}
+        </Card>
+
+        {/* Quick Curation Presets */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              🎯 Quick Curation Presets
+            </CardTitle>
+            <CardDescription>Run targeted curation by instructor, technique, position, or custom search</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              
+              {/* INSTRUCTOR */}
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-400">👤</span>
+                  <span className="font-semibold">Instructor</span>
+                </div>
+                <select 
+                  value={selectedInstructor}
+                  onChange={(e) => setSelectedInstructor(e.target.value)}
+                  className="w-full bg-background border rounded px-3 py-2"
+                  data-testid="select-instructor"
+                >
+                  <option value="">Select instructor...</option>
+                  <option value="John Danaher">John Danaher</option>
+                  <option value="Gordon Ryan">Gordon Ryan</option>
+                  <option value="Lachlan Giles">Lachlan Giles</option>
+                  <option value="Craig Jones">Craig Jones</option>
+                  <option value="Marcelo Garcia">Marcelo Garcia</option>
+                  <option value="Bernardo Faria">Bernardo Faria</option>
+                </select>
+                <Input 
+                  value={customInstructor}
+                  onChange={(e) => setCustomInstructor(e.target.value)}
+                  placeholder="Or type custom..."
+                  data-testid="input-custom-instructor"
+                />
+                <Button 
+                  onClick={() => runQuickCuration('instructor', customInstructor || selectedInstructor)}
+                  disabled={(!selectedInstructor && !customInstructor) || quickCurationRunning === 'instructor'}
+                  className="w-full"
+                  data-testid="button-curate-instructor"
+                >
+                  {quickCurationRunning === 'instructor' ? 'Running...' : 'Run Now'}
+                </Button>
+              </div>
+              
+              {/* TECHNIQUE */}
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-green-400">🎯</span>
+                  <span className="font-semibold">Technique</span>
+                </div>
+                <Input 
+                  value={techniqueSearch}
+                  onChange={(e) => setTechniqueSearch(e.target.value)}
+                  placeholder='e.g. "guillotine"'
+                  data-testid="input-technique-search"
+                />
+                <Button 
+                  onClick={() => runQuickCuration('technique', techniqueSearch, () => setTechniqueSearch(''))}
+                  disabled={!techniqueSearch || quickCurationRunning === 'technique'}
+                  className="w-full"
+                  data-testid="button-curate-technique"
+                >
+                  {quickCurationRunning === 'technique' ? 'Running...' : 'Run Now'}
+                </Button>
+              </div>
+              
+              {/* POSITION */}
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-yellow-400">📐</span>
+                  <span className="font-semibold">Position</span>
+                </div>
+                <select 
+                  value={selectedPosition}
+                  onChange={(e) => setSelectedPosition(e.target.value)}
+                  className="w-full bg-background border rounded px-3 py-2"
+                  data-testid="select-position"
+                >
+                  <option value="">Select position...</option>
+                  <option value="Closed Guard">Closed Guard</option>
+                  <option value="Half Guard">Half Guard</option>
+                  <option value="Open Guard">Open Guard</option>
+                  <option value="Mount">Mount</option>
+                  <option value="Back Control">Back Control</option>
+                  <option value="Side Control">Side Control</option>
+                  <option value="Turtle">Turtle</option>
+                </select>
+                <Button 
+                  onClick={() => runQuickCuration('position', selectedPosition, () => setSelectedPosition(''))}
+                  disabled={!selectedPosition || quickCurationRunning === 'position'}
+                  className="w-full"
+                  data-testid="button-curate-position"
+                >
+                  {quickCurationRunning === 'position' ? 'Running...' : 'Run Now'}
+                </Button>
+              </div>
+              
+              {/* GI/NOGI */}
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-red-400">🥋</span>
+                  <span className="font-semibold">Gi/NoGi Balance</span>
+                </div>
+                <select 
+                  value={selectedGiNogi}
+                  onChange={(e) => setSelectedGiNogi(e.target.value)}
+                  className="w-full bg-background border rounded px-3 py-2"
+                  data-testid="select-gi-nogi"
+                >
+                  <option value="">Select type...</option>
+                  <option value="gi">Gi Only</option>
+                  <option value="nogi">No-Gi Only</option>
+                </select>
+                <Button 
+                  onClick={() => runQuickCuration('gi-nogi', selectedGiNogi, () => setSelectedGiNogi(''))}
+                  disabled={!selectedGiNogi || quickCurationRunning === 'gi-nogi'}
+                  className="w-full"
+                  data-testid="button-curate-gi-nogi"
+                >
+                  {quickCurationRunning === 'gi-nogi' ? 'Running...' : 'Run Now'}
+                </Button>
+              </div>
+              
+              {/* CUSTOM SEARCH */}
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-cyan-400">🔍</span>
+                  <span className="font-semibold">Custom Search</span>
+                </div>
+                <Input 
+                  value={customSearch}
+                  onChange={(e) => setCustomSearch(e.target.value)}
+                  placeholder="Any YouTube query..."
+                  data-testid="input-custom-search"
+                />
+                <Button 
+                  onClick={() => runQuickCuration('custom', customSearch, () => setCustomSearch(''))}
+                  disabled={!customSearch || quickCurationRunning === 'custom'}
+                  className="w-full"
+                  data-testid="button-curate-custom"
+                >
+                  {quickCurationRunning === 'custom' ? 'Running...' : 'Run Now'}
+                </Button>
+              </div>
+              
+              {/* META TECHNIQUES */}
+              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-purple-400">🧠</span>
+                  <span className="font-semibold">Meta Techniques</span>
+                </div>
+                <p className="text-sm text-muted-foreground">Curate high-priority trending techniques</p>
+                <Button 
+                  onClick={() => runQuickCuration('meta')}
+                  disabled={quickCurationRunning === 'meta'}
+                  className="w-full"
+                  data-testid="button-curate-meta"
+                >
+                  {quickCurationRunning === 'meta' ? 'Running...' : 'Run Now'}
+                </Button>
+              </div>
+              
+            </div>
+          </CardContent>
         </Card>
       </div>
 

@@ -9511,6 +9511,63 @@ Run another: https://bjjos.app/admin/command-center`
     }
   });
 
+  // POST: Quick curation with specific filters (instructor, technique, position, etc.)
+  app.post('/api/admin/curation/quick-run', checkAdminAuth, async (req, res) => {
+    try {
+      const { type, query } = req.body;
+      
+      if (!type) {
+        return res.status(400).json({ error: 'Curation type required' });
+      }
+      
+      // Build search query based on type
+      let searchQuery = '';
+      switch (type) {
+        case 'instructor':
+          searchQuery = `${query} bjj technique instructional`;
+          break;
+        case 'technique':
+          searchQuery = `${query} bjj technique how to`;
+          break;
+        case 'position':
+          searchQuery = `${query} bjj techniques instructional`;
+          break;
+        case 'gi-nogi':
+          searchQuery = query === 'gi' ? 'gi bjj technique instructional' : 'no-gi bjj technique instructional submission grappling';
+          break;
+        case 'custom':
+          searchQuery = query;
+          break;
+        case 'meta':
+          // Use common high-value techniques
+          const metaTechniques = ['leg lock', 'back take', 'mount escape', 'guard pass', 'guillotine choke'];
+          searchQuery = metaTechniques[Math.floor(Math.random() * metaTechniques.length)] + ' bjj instructional';
+          break;
+        default:
+          return res.status(400).json({ error: `Unknown curation type: ${type}` });
+      }
+      
+      console.log(`[QUICK CURATION] Starting ${type} curation with query: "${searchQuery}"`);
+      
+      // Import and run the auto-curator (non-blocking)
+      const { runAutoCurationManually } = await import('./auto-curator');
+      
+      // Run async - don't await
+      runAutoCurationManually(searchQuery).catch(err => {
+        console.error('[QUICK CURATION] Error:', err);
+      });
+      
+      res.json({ 
+        success: true, 
+        message: `Quick curation started for ${type}: "${query || 'meta'}"`,
+        searchQuery 
+      });
+    } catch (error: any) {
+      console.error('[QUICK CURATION] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // GET: SSE stream for curation progress
   app.get('/api/admin/curation/stream', checkAdminAuth, (req, res) => {
     const runId = req.query.runId as string;

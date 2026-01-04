@@ -15,6 +15,36 @@ function sanitizeSearchQuery(query: string): string {
 }
 
 /**
+ * Quick curation with a custom search query
+ * Used by Command Center for targeted curation runs
+ */
+export async function runAutoCurationManually(
+  searchQuery: string,
+  maxResults: number = 20
+): Promise<{ success: boolean; videosAdded: number; error?: string }> {
+  try {
+    console.log(`[QUICK CURATION] Running manual curation for: "${searchQuery}"`);
+    
+    const sanitized = sanitizeSearchQuery(searchQuery);
+    const videos = await searchYouTubeVideosExtended(sanitized, undefined, maxResults);
+    
+    console.log(`[QUICK CURATION] Complete: ${videos.length} videos added for "${searchQuery}"`);
+    
+    return {
+      success: true,
+      videosAdded: videos.length
+    };
+  } catch (error: any) {
+    console.error('[QUICK CURATION] Error:', error.message);
+    return {
+      success: false,
+      videosAdded: 0,
+      error: error.message
+    };
+  }
+}
+
+/**
  * Curate videos based on meta analysis priorities
  * This function automatically searches and curates videos for high-priority techniques
  */

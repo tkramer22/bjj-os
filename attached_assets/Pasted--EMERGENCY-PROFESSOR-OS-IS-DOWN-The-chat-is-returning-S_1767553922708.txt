@@ -1,0 +1,154 @@
+# 🚨 EMERGENCY: PROFESSOR OS IS DOWN
+
+The chat is returning “Sorry, I’m having trouble right now. Please try again!” for EVERY message. This is the core feature of the app - it must be fixed immediately.
+
+## STEP 1: CHECK SERVER LOGS
+
+Look at the server console output right now. When a message is sent, what error appears?
+
+Common errors to look for:
+
+- `ANTHROPIC_API_KEY is not defined`
+- `401 Unauthorized`
+- `429 Rate Limited`
+- `500 Internal Server Error`
+- `TypeError: Cannot read property...`
+
+## STEP 2: VERIFY API KEY
+
+Check if the Anthropic API key is set:
+
+```typescript
+// Add this temporarily to check
+console.log('API Key exists:', !!process.env.ANTHROPIC_API_KEY);
+console.log('API Key starts with:', process.env.ANTHROPIC_API_KEY?.substring(0, 10));
+```
+
+The key should:
+
+- Exist (not undefined)
+- Start with `sk-ant-`
+
+## STEP 3: CHECK THE CHAT ENDPOINT
+
+Find the chat message endpoint (likely `/api/ai/chat/message` or similar) and add detailed logging:
+
+```typescript
+app.post('/api/ai/chat/message', async (req, res) => {
+  console.log('=== CHAT REQUEST RECEIVED ===');
+  console.log('User ID:', req.body.userId);
+  console.log('Message:', req.body.message);
+  
+  try {
+    // ... existing code to call Claude
+    
+    console.log('Calling Claude API...');
+    
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: req.body.message }]
+    });
+    
+    console.log('Claude response received:', response.content[0]?.text?.substring(0, 100));
+    
+    res.json({ response: response.content[0]?.text });
+    
+  } catch (error: any) {
+    console.error('=== CLAUDE API ERROR ===');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error status:', error.status);
+    console.error('Full error:', error);
+    
+    res.status(500).json({ error: 'Sorry, I\'m having trouble right now. Please try again!' });
+  }
+});
+```
+
+## STEP 4: VERIFY ANTHROPIC SDK SETUP
+
+Make sure the Anthropic client is initialized correctly:
+
+```typescript
+import Anthropic from '@anthropic-ai/sdk';
+
+// This should be at the top of your routes file
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+// Verify on startup
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error('❌ CRITICAL: ANTHROPIC_API_KEY is not set!');
+} else {
+  console.log('✅ Anthropic API key is configured');
+}
+```
+
+## STEP 5: TEST THE API DIRECTLY
+
+Create a test endpoint to isolate the issue:
+
+```typescript
+app.get('/api/test/claude', async (req, res) => {
+  try {
+    console.log('Testing Claude API...');
+    
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 100,
+      messages: [{ role: "user", content: "Say hello" }]
+    });
+    
+    res.json({ 
+      success: true, 
+      response: response.content[0]?.text 
+    });
+  } catch (error: any) {
+    res.json({ 
+      success: false, 
+      error: error.message,
+      status: error.status,
+      type: error.name
+    });
+  }
+});
+```
+
+Then visit: `https://bjjos.app/api/test/claude`
+
+## COMMON FIXES
+
+### If API key is missing:
+
+1. Go to Replit Secrets
+1. Add `ANTHROPIC_API_KEY` with your key from console.anthropic.com
+1. Restart the server
+
+### If API key is invalid/expired:
+
+1. Go to console.anthropic.com
+1. Generate a new API key
+1. Update the secret in Replit
+1. Restart the server
+
+### If rate limited:
+
+1. Check your Anthropic usage dashboard
+1. Wait for rate limit to reset, or
+1. Upgrade your API tier
+
+### If code error:
+
+1. Check what recent changes were made to the chat endpoint
+1. Revert problematic changes
+1. Look for undefined variables or missing imports
+
+## IMMEDIATE ACTION
+
+1. Check server logs NOW for the actual error
+1. Report what error you see
+1. Apply the appropriate fix above
+
+This is blocking all users from using the app’s main feature.

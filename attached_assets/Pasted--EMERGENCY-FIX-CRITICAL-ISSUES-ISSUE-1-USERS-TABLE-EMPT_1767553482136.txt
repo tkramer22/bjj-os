@@ -1,0 +1,464 @@
+# EMERGENCY FIX - CRITICAL ISSUES
+
+## 🚨 ISSUE 1: USERS TABLE EMPTY (CRITICAL)
+
+The User Management page shows “No users yet” but we had 61 users. The data is in the database — the query is broken.
+
+### IMMEDIATE DIAGNOSTIC:
+
+First, run this SQL query directly to verify users exist:
+
+```sql
+SELECT COUNT(*) FROM bjj_users;
+SELECT * FROM bjj_users LIMIT 5;
+```
+
+### FIX THE ENDPOINT:
+
+The `/api/admin/users` endpoint is broken. Here’s the correct implementation:
+
+```typescript
+// In server/routes.ts - REPLACE the entire /api/admin/users endpoint
+
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = (page - 1) * limit;
+    
+    // Get total count
+    const countResult = await db.select({ count: sql<number>`count(*)` }).from(bjjUsers);
+    const total = Number(countResult[0]?.count) || 0;
+    
+    // Get users - use the correct table name: bjjUsers (or bjj_users in SQL)
+    const users = await db.select({
+      id: bjjUsers.id,
+      email: bjjUsers.email,
+      firstName: bjjUsers.firstName,
+      lastName: bjjUsers.lastName,
+      beltRank: bjjUsers.beltRank,
+      subscriptionStatus: bjjUsers.subscriptionStatus,
+      subscriptionTier: bjjUsers.subscriptionTier,
+      stripeCustomerId: bjjUsers.stripeCustomerId,
+      createdAt: bjjUsers.createdAt,
+      lastActiveAt: bjjUsers.lastActiveAt
+    })
+    .from(bjjUsers)
+    .orderBy(desc(bjjUsers.createdAt))
+    .limit(limit)
+    .offset(offset);
+    
+    console.log(`Found ${users.length} users, total: ${total}`); // Debug log
+    
+    res.json({
+      users,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (error: any) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: error.message, stack: error.stack });
+  }
+});
+```
+
+### CHECK THE SCHEMA IMPORT:
+
+Make sure `bjjUsers` is correctly imported from the schema:
+
+```typescript
+import { bjjUsers } from '../shared/schema';
+// OR
+import { bjjUsers } from '@shared/schema';
+```
+
+### VERIFY TABLE NAME:
+
+The table might be named differently. Check your schema.ts:
+
+```typescript
+// It should be something like:
+export const bjjUsers = pgTable("bjj_users", {
+  // ... columns
+});
+```
+
+If the table is named differently (like `users` instead of `bjj_users`), update the query accordingly.
+
+-----
+
+## 🚨 ISSUE 2: CURATION COMMAND CENTER NOT BUILT
+
+The Command Center page exists but does NOT have the video curation controls. Build them NOW.
+
+### Add this section to `/admin/command-center` page:
+
+Find the command center page component and ADD this entire section:
+
+```tsx
+// Add these imports at top
+import { useState } from 'react';
+import { RefreshCw, Play, Pause, Database, User, Target, Layers, Filter, Search, Loader2 } from 'lucide-react';
+
+// Add this state inside the component
+const [autoCurationActive, setAutoCurationActive] = useState(true);
+const [selectedInstructor, setSelectedInstructor] = useState('');
+const [customInstructor, setCustomInstructor] = useState('');
+const [techniqueSearch, setTechniqueSearch] = useState('');
+const [selectedPosition, setSelectedPosition] = useState('');
+const [selectedGiNogi, setSelectedGiNogi] = useState('');
+const [customSearch, setCustomSearch] = useState('');
+const [isRunning, setIsRunning] = useState<string | null>(null);
+
+const toggleAutoCuration = async () => {
+  try {
+    const res = await fetch('/api/admin/curation/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: !autoCurationActive })
+    });
+    if (res.ok) setAutoCurationActive(!autoCurationActive);
+  } catch (e) {
+    console.error('Toggle failed:', e);
+  }
+};
+
+const runCuration = async (type: string, query?: string) => {
+  setIsRunning(type);
+  try {
+    const res = await fetch('/api/admin/curation/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, query })
+    });
+    const data = await res.json();
+    alert(`Curation started: ${type} ${query || ''}`);
+  } catch (e) {
+    console.error('Curation failed:', e);
+  } finally {
+    setIsRunning(null);
+  }
+};
+
+// Add this JSX inside the return, as a new section:
+
+{/* ═══════════════════════════════════════════════════════════════ */}
+{/* VIDEO CURATION CONTROL CENTER */}
+{/* ═══════════════════════════════════════════════════════════════ */}
+
+<div className="mt-8">
+  <h2 className="text-xl font-bold mb-4">📹 VIDEO CURATION CONTROL</h2>
+  
+  {/* Auto Curation Toggle */}
+  <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mb-4">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <RefreshCw className="w-5 h-5 text-lime-400" />
+        <span className="font-semibold">AUTO CURATION</span>
+        <div className={`w-3 h-3 rounded-full ${autoCurationActive ? 'bg-lime-400 animate-pulse' : 'bg-zinc-600'}`} />
+        <span className="text-sm text-zinc-400">{autoCurationActive ? 'ACTIVE' : 'PAUSED'}</span>
+      </div>
+      <button 
+        onClick={toggleAutoCuration}
+        className={`px-4 py-2 rounded font-medium ${autoCurationActive ? 'bg-zinc-700 hover:bg-zinc-600' : 'bg-lime-500 text-black hover:bg-lime-400'}`}
+      >
+        {autoCurationActive ? 'Pause' : 'Enable'}
+      </button>
+    </div>
+    <p className="text-sm text-zinc-500 mt-2">Runs daily at 3:00 AM EST</p>
+  </div>
+  
+  {/* Quick Curation Presets */}
+  <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+    <h3 className="font-semibold mb-4">QUICK CURATION (Manual - runs independently)</h3>
+    
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      
+      {/* META TECHNIQUES */}
+      <div className="bg-zinc-800 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Database className="w-5 h-5 text-purple-400" />
+          <span className="font-semibold">META TECHNIQUES</span>
+        </div>
+        <p className="text-sm text-zinc-400 mb-3">Curate high-priority techniques</p>
+        <button 
+          onClick={() => runCuration('meta')}
+          disabled={isRunning === 'meta'}
+          className="w-full bg-purple-600 hover:bg-purple-500 py-2 rounded font-medium disabled:opacity-50"
+        >
+          {isRunning === 'meta' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Run Now'}
+        </button>
+      </div>
+      
+      {/* INSTRUCTOR */}
+      <div className="bg-zinc-800 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <User className="w-5 h-5 text-blue-400" />
+          <span className="font-semibold">INSTRUCTOR</span>
+        </div>
+        <select 
+          value={selectedInstructor}
+          onChange={(e) => setSelectedInstructor(e.target.value)}
+          className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+        >
+          <option value="">Select instructor...</option>
+          <option value="John Danaher">John Danaher</option>
+          <option value="Gordon Ryan">Gordon Ryan</option>
+          <option value="Lachlan Giles">Lachlan Giles</option>
+          <option value="Craig Jones">Craig Jones</option>
+          <option value="Marcelo Garcia">Marcelo Garcia</option>
+          <option value="Bernardo Faria">Bernardo Faria</option>
+        </select>
+        <input 
+          type="text"
+          value={customInstructor}
+          onChange={(e) => setCustomInstructor(e.target.value)}
+          placeholder="Or type custom..."
+          className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+        />
+        <button 
+          onClick={() => runCuration('instructor', customInstructor || selectedInstructor)}
+          disabled={(!selectedInstructor && !customInstructor) || isRunning === 'instructor'}
+          className="w-full bg-blue-600 hover:bg-blue-500 py-2 rounded font-medium disabled:opacity-50"
+        >
+          {isRunning === 'instructor' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Run Now'}
+        </button>
+      </div>
+      
+      {/* TECHNIQUE */}
+      <div className="bg-zinc-800 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Target className="w-5 h-5 text-green-400" />
+          <span className="font-semibold">TECHNIQUE</span>
+        </div>
+        <input 
+          type="text"
+          value={techniqueSearch}
+          onChange={(e) => setTechniqueSearch(e.target.value)}
+          placeholder='e.g. "guillotine"'
+          className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+        />
+        <button 
+          onClick={() => { runCuration('technique', techniqueSearch); setTechniqueSearch(''); }}
+          disabled={!techniqueSearch || isRunning === 'technique'}
+          className="w-full bg-green-600 hover:bg-green-500 py-2 rounded font-medium disabled:opacity-50"
+        >
+          {isRunning === 'technique' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Run Now'}
+        </button>
+      </div>
+      
+      {/* POSITION */}
+      <div className="bg-zinc-800 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Layers className="w-5 h-5 text-yellow-400" />
+          <span className="font-semibold">POSITION</span>
+        </div>
+        <select 
+          value={selectedPosition}
+          onChange={(e) => setSelectedPosition(e.target.value)}
+          className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+        >
+          <option value="">Select position...</option>
+          <option value="Closed Guard">Closed Guard</option>
+          <option value="Half Guard">Half Guard</option>
+          <option value="Open Guard">Open Guard</option>
+          <option value="Mount">Mount</option>
+          <option value="Back Control">Back Control</option>
+          <option value="Side Control">Side Control</option>
+          <option value="Turtle">Turtle</option>
+        </select>
+        <button 
+          onClick={() => { runCuration('position', selectedPosition); setSelectedPosition(''); }}
+          disabled={!selectedPosition || isRunning === 'position'}
+          className="w-full bg-yellow-600 hover:bg-yellow-500 py-2 rounded font-medium disabled:opacity-50"
+        >
+          {isRunning === 'position' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Run Now'}
+        </button>
+      </div>
+      
+      {/* GI/NOGI */}
+      <div className="bg-zinc-800 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Filter className="w-5 h-5 text-red-400" />
+          <span className="font-semibold">GI/NOGI BALANCE</span>
+        </div>
+        <select 
+          value={selectedGiNogi}
+          onChange={(e) => setSelectedGiNogi(e.target.value)}
+          className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+        >
+          <option value="">Select type...</option>
+          <option value="gi">Gi Only</option>
+          <option value="nogi">No-Gi Only</option>
+        </select>
+        <button 
+          onClick={() => { runCuration('gi-nogi', selectedGiNogi); setSelectedGiNogi(''); }}
+          disabled={!selectedGiNogi || isRunning === 'gi-nogi'}
+          className="w-full bg-red-600 hover:bg-red-500 py-2 rounded font-medium disabled:opacity-50"
+        >
+          {isRunning === 'gi-nogi' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Run Now'}
+        </button>
+      </div>
+      
+      {/* CUSTOM SEARCH */}
+      <div className="bg-zinc-800 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Search className="w-5 h-5 text-cyan-400" />
+          <span className="font-semibold">CUSTOM SEARCH</span>
+        </div>
+        <input 
+          type="text"
+          value={customSearch}
+          onChange={(e) => setCustomSearch(e.target.value)}
+          placeholder="Any YouTube query..."
+          className="w-full bg-zinc-700 rounded px-3 py-2 mb-2"
+        />
+        <button 
+          onClick={() => { runCuration('custom', customSearch); setCustomSearch(''); }}
+          disabled={!customSearch || isRunning === 'custom'}
+          className="w-full bg-cyan-600 hover:bg-cyan-500 py-2 rounded font-medium disabled:opacity-50"
+        >
+          {isRunning === 'custom' ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Run Now'}
+        </button>
+      </div>
+      
+    </div>
+  </div>
+</div>
+```
+
+### Add the backend endpoints if they don’t exist:
+
+```typescript
+// POST /api/admin/curation/toggle
+let autoCurationEnabled = true;
+
+app.post('/api/admin/curation/toggle', (req, res) => {
+  autoCurationEnabled = req.body.enabled;
+  res.json({ success: true, isActive: autoCurationEnabled });
+});
+
+// POST /api/admin/curation/run
+app.post('/api/admin/curation/run', async (req, res) => {
+  const { type, query } = req.body;
+  
+  console.log(`Starting curation: type=${type}, query=${query}`);
+  
+  // For now, just acknowledge - integrate with your YouTube/Gemini curation pipeline
+  res.json({ 
+    success: true, 
+    message: `Curation job started: ${type} - ${query || 'all'}`,
+    type,
+    query
+  });
+  
+  // TODO: Actually run the curation in the background
+  // runCurationPipeline(type, query);
+});
+```
+
+-----
+
+## 🚨 ISSUE 3: QA SUITE “HTTP NOT SUPPORTED” ERROR
+
+The QA test is trying to use Node.js `http` module in browser code. Move it to backend.
+
+### Create backend endpoint:
+
+```typescript
+// POST /api/admin/qa/run-suite
+app.post('/api/admin/qa/run-suite', async (req, res) => {
+  const testCases = [
+    { id: '1.1', category: 'Video Relevance', prompt: 'Show me guillotine videos' },
+    { id: '1.2', category: 'Video Relevance', prompt: 'Anaconda choke tips' },
+    { id: '1.3', category: 'Video Relevance', prompt: 'Half guard sweeps' },
+    { id: '1.4', category: 'Video Relevance', prompt: 'Armbar from guard' },
+    { id: '2.1', category: 'Personality', prompt: 'Who is your favorite instructor?' },
+    { id: '2.2', category: 'Personality', prompt: 'What gi brand do you like?' },
+    { id: '3.1', category: 'Coaching', prompt: 'I keep getting my guard passed' },
+    { id: '3.2', category: 'Coaching', prompt: 'How do I finish the triangle?' },
+  ];
+  
+  const results = [];
+  
+  for (const test of testCases) {
+    try {
+      // Call your internal chat handler directly - NOT via http
+      // Replace this with your actual chat function
+      const response = await handleProfessorOSMessage('qa_test_user', test.prompt);
+      
+      results.push({
+        ...test,
+        passed: response && response.length > 20,
+        response: response?.substring(0, 150) || 'No response',
+        error: null
+      });
+    } catch (error: any) {
+      results.push({
+        ...test,
+        passed: false,
+        response: null,
+        error: error.message
+      });
+    }
+    
+    // Small delay between tests
+    await new Promise(r => setTimeout(r, 300));
+  }
+  
+  const passed = results.filter(r => r.passed).length;
+  
+  res.json({
+    passed,
+    total: results.length,
+    percentage: Math.round((passed / results.length) * 100),
+    results,
+    timestamp: new Date().toISOString()
+  });
+});
+```
+
+### Update frontend to call the backend:
+
+```tsx
+// In the QA component
+const runQATests = async () => {
+  setLoading(true);
+  try {
+    const res = await fetch('/api/admin/qa/run-suite', { method: 'POST' });
+    const data = await res.json();
+    setResults(data);
+  } catch (error) {
+    console.error('QA failed:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+-----
+
+## PRIORITY ORDER
+
+1. **FIX USERS ENDPOINT IMMEDIATELY** - This is critical, users data appears lost
+1. **Add Curation Controls to Command Center** - Copy the JSX above directly
+1. **Fix QA Suite** - Move to backend endpoint
+
+## DIAGNOSTIC STEPS
+
+Before making changes, run these checks:
+
+1. Check if users exist in database:
+
+```sql
+SELECT COUNT(*) FROM bjj_users;
+```
+
+1. Check server logs for errors when loading /admin/users
+1. Verify the bjjUsers import in routes.ts
+
+-----
+
+IMPLEMENT ALL THREE FIXES NOW. Start with the users endpoint - that’s the most critical.
