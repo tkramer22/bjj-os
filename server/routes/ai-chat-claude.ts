@@ -948,6 +948,19 @@ export async function handleClaudeStream(req: any, res: any) {
     // - [VIDEO: Title - Instructor | Instructor | START: MM:SS] (malformed)
     // - [VIDEO: Title | Instructor | START: MM:SS] (pipe-separated)
     // Frontend needs: [VIDEO: title | instructor | duration | videoId | id | startTime]
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CRITICAL FIX (Jan 2026): When noMatchFound=true, STRIP video tokens entirely
+    // This prevents matching hallucinated videos (e.g., user asks about guillotines,
+    // Claude mentions "Gordon Ryan guillotine", we match to ANY Gordon Ryan video)
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (videoSearchResult.noMatchFound) {
+      console.log(`[VIDEO TOKEN] 🚫 noMatchFound=true - STRIPPING all video tokens to prevent wrong recommendations`);
+      const strippedVideoTokens = naturalResponse.replace(/\[VIDEO:[^\]]+\]\n*(?:[^\n]*\n)?/g, '');
+      naturalResponse = strippedVideoTokens.trim();
+      console.log(`[VIDEO TOKEN] ✅ Stripped video tokens. New length: ${naturalResponse.length}`);
+    }
+    
     const videoTokenRegex = /\[VIDEO:\s*([^\]]+)\]/g;
     let match;
     const replacements: { original: string; replacement: string }[] = [];
@@ -1039,30 +1052,49 @@ export async function handleClaudeStream(req: any, res: any) {
       
       let bestMatch: typeof allVideos[0] | null = null;
       let bestScore = 0;
-      const MIN_CONFIDENCE = 0.40; // Require 40% confidence minimum (lowered for better matching)
+      const MIN_CONFIDENCE = 0.50; // Raised to 50% - require TITLE match, not just instructor
+      
+      // ═══════════════════════════════════════════════════════════════════════════
+      // TECHNIQUE VALIDATION: When user searched for a specific technique,
+      // only match videos that actually contain that technique in their title/content
+      // ═══════════════════════════════════════════════════════════════════════════
+      const searchedTechnique = detectedTechnique?.toLowerCase() || '';
+      const requireTechniqueMatch = searchedTechnique.length > 0;
       
       console.log(`[VIDEO TOKEN] 📊 Searching ${uniqueVideos.length} videos (${allVideos.length} cached + ${videoLibrary.length} from search)`);
+      if (requireTechniqueMatch) {
+        console.log(`[VIDEO TOKEN] 🔒 Technique validation REQUIRED: "${searchedTechnique}"`);
+      }
       
       for (const v of uniqueVideos) {
         const videoTitle = (v.techniqueName || '').toLowerCase().replace(/[^\w\s]/g, '');
         const videoInstructor = (v.instructorName || '').toLowerCase().replace(/[^\w\s]/g, '');
         const videoPosition = (v.positionCategory || '').toLowerCase();
         const videoType = (v.techniqueType || '').toLowerCase();
+        const videoTags = Array.isArray((v as any).tags) ? (v as any).tags.join(' ').toLowerCase() : '';
+        
+        // CRITICAL: If technique was searched, video MUST contain that technique
+        if (requireTechniqueMatch) {
+          const videoSearchableText = `${videoTitle} ${videoTags} ${videoPosition} ${videoType}`;
+          if (!videoSearchableText.includes(searchedTechnique)) {
+            continue; // Skip videos that don't match the searched technique
+          }
+        }
         
         let score = 0;
         
-        // Title match (50% weight)
+        // Title match (60% weight - INCREASED to prioritize technique match)
         if (videoTitle.includes(titlePattern) || titlePattern.includes(videoTitle)) {
           const longer = Math.max(videoTitle.length, titlePattern.length);
           const shorter = Math.min(videoTitle.length, titlePattern.length);
-          score += (shorter / longer) * 0.5;
+          score += (shorter / longer) * 0.6;
         }
         
-        // Instructor match (40% weight)
+        // Instructor match (30% weight - DECREASED, instructor is secondary)
         if (videoInstructor.includes(instructorPattern) || instructorPattern.includes(videoInstructor)) {
           const longer = Math.max(videoInstructor.length, instructorPattern.length);
           const shorter = Math.min(videoInstructor.length, instructorPattern.length);
-          score += (shorter / longer) * 0.4;
+          score += (shorter / longer) * 0.3;
         }
         
         // Position/Type bonus (10% weight) - check if token contains position/type keywords
