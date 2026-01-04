@@ -1,5 +1,7 @@
-import { TechniqueMetaStatus } from '@shared/schema';
+import { TechniqueMetaStatus, techniqueMetaStatus } from '@shared/schema';
 import { searchYouTubeVideosExtended } from './intelligent-curator';
+import { db } from './db';
+import { eq } from 'drizzle-orm';
 
 /**
  * Sanitize technique name for YouTube search
@@ -144,24 +146,84 @@ export async function curateVideosFromPriorities(
 
 /**
  * Manually trigger curation for a specific technique
+ * Fetches suggested searches from meta analyzer and curates using those specific terms
  */
 export async function manualCurateTechnique(
   techniqueName: string,
   maxResults: number = 10
-): Promise<{ success: boolean; curatedCount: number; error?: string }> {
+): Promise<{ success: boolean; curatedCount: number; searchesPerformed: number; error?: string }> {
   try {
-    const sanitizedName = sanitizeSearchQuery(techniqueName);
-    const searchQuery = `${sanitizedName} bjj technique`;
-    const videos = await searchYouTubeVideosExtended(searchQuery, undefined, maxResults);
+    // Look up the technique to get suggested searches
+    const [technique] = await db.select({
+      suggestedSearches: techniqueMetaStatus.suggestedSearches,
+    })
+    .from(techniqueMetaStatus)
+    .where(eq(techniqueMetaStatus.techniqueName, techniqueName))
+    .limit(1);
+    
+    let searchTerms: string[] = [];
+    
+    if (technique && technique.suggestedSearches && technique.suggestedSearches.length > 0) {
+      // Use the specific suggested searches from meta analyzer
+      searchTerms = technique.suggestedSearches;
+    } else {
+      // Fallback: Generate basic search terms if no meta data exists
+      const sanitizedName = sanitizeSearchQuery(techniqueName);
+      searchTerms = [
+        `${sanitizedName} bjj technique`,
+        `${sanitizedName} jiu jitsu tutorial`,
+        `${sanitizedName} instructional`,
+      ];
+    }
+    
+    console.log(`[MANUAL CURATE] Starting targeted curation for "${techniqueName}"`);
+    console.log(`[MANUAL CURATE] Using ${searchTerms.length} search terms:`, searchTerms);
+    
+    let totalVideosAdded = 0;
+    let searchesPerformed = 0;
+    
+    // Run each suggested search through the full curation pipeline
+    for (const rawQuery of searchTerms) {
+      const searchQuery = sanitizeSearchQuery(rawQuery);
+      
+      try {
+        searchesPerformed++;
+        console.log(`[MANUAL CURATE] Search ${searchesPerformed}/${searchTerms.length}: "${searchQuery}"`);
+        
+        // searchYouTubeVideosExtended handles: search → duplicate check → Gemini analysis → add to library
+        const videos = await searchYouTubeVideosExtended(searchQuery, undefined, maxResults);
+        
+        totalVideosAdded += videos.length;
+        console.log(`[MANUAL CURATE] Found ${videos.length} qualifying videos for "${searchQuery}"`);
+        
+        // Brief delay between searches to avoid rate limits
+        if (searchesPerformed < searchTerms.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+      } catch (error: any) {
+        // If quota exceeded, stop but return partial results
+        if (error.message?.includes('QUOTA_EXCEEDED')) {
+          console.error('[MANUAL CURATE] YouTube API quota exceeded - stopping');
+          break;
+        }
+        console.error(`[MANUAL CURATE] Error for "${searchQuery}":`, error.message);
+      }
+    }
+    
+    console.log(`[MANUAL CURATE] Complete: ${totalVideosAdded} videos added from ${searchesPerformed} searches`);
     
     return {
       success: true,
-      curatedCount: videos.length,
+      curatedCount: totalVideosAdded,
+      searchesPerformed,
     };
   } catch (error: any) {
+    console.error('[MANUAL CURATE] Error:', error.message);
     return {
       success: false,
       curatedCount: 0,
+      searchesPerformed: 0,
       error: error.message,
     };
   }

@@ -80,9 +80,10 @@ export default function MetaInsightsPage() {
       const result = await adminApiRequest('/api/admin/meta/curate', 'POST', { technique, maxResults: 10 });
       
       if (result.success) {
+        const searchInfo = result.searchesPerformed ? ` (${result.searchesPerformed} searches)` : '';
         toast({
-          title: 'Curation Started',
-          description: `Found ${result.curatedCount} videos for ${technique}`,
+          title: 'Curation Complete',
+          description: `Added ${result.curatedCount} videos for "${technique.replace(/_/g, ' ')}"${searchInfo}`,
         });
         refetchPriorities();
       }

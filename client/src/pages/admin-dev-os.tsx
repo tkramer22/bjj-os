@@ -306,14 +306,6 @@ export default function AdminDevOS() {
       <div className="efficiency-hero" data-testid="efficiency-metrics">
         <div className="efficiency-header">
           <h2 className="efficiency-title">📊 Curation Efficiency (Today)</h2>
-          <span className={`efficiency-status status-${metrics.curationEfficiency.status}`}>
-            {metrics.curationEfficiency.status === 'optimal' && '🟢 OPTIMAL'}
-            {metrics.curationEfficiency.status === 'strict' && '🟡 STRICT'}
-            {metrics.curationEfficiency.status === 'too_strict' && '🔴 TOO STRICT'}
-            {metrics.curationEfficiency.status === 'loose' && '🟡 LOOSE'}
-            {metrics.curationEfficiency.status === 'too_loose' && '🔴 TOO LOOSE'}
-            {metrics.curationEfficiency.status === 'unknown' && '⚪ NO DATA'}
-          </span>
         </div>
         <div className="efficiency-stats">
           <div className="efficiency-stat">
@@ -332,16 +324,6 @@ export default function AdminDevOS() {
             <div className="efficiency-label">Acceptance Rate</div>
             <div className="efficiency-value">{metrics.curationEfficiency.acceptanceRate.toFixed(1)}%</div>
           </div>
-        </div>
-        <div className="efficiency-guide">
-          <small>
-            Target: 2-5% (elite curation) • 
-            {metrics.curationEfficiency.acceptanceRate < 0.5 && ' ⚠️ Too strict - might miss good content'}
-            {metrics.curationEfficiency.acceptanceRate >= 0.5 && metrics.curationEfficiency.acceptanceRate <= 2 && ' ✅ High quality bar'}
-            {metrics.curationEfficiency.acceptanceRate > 2 && metrics.curationEfficiency.acceptanceRate <= 5 && ' ✅ Optimal elite curation'}
-            {metrics.curationEfficiency.acceptanceRate > 5 && metrics.curationEfficiency.acceptanceRate <= 15 && ' ⚠️ Quality may be diluting'}
-            {metrics.curationEfficiency.acceptanceRate > 15 && ' 🚨 Accepting too much'}
-          </small>
         </div>
       </div>
 

@@ -470,28 +470,10 @@ export default function AdminDashboard() {
           testId="section-curation-efficiency"
         >
           <div className="space-y-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4">
               <p className="text-sm text-muted-foreground">
                 Today = {new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })} EST
               </p>
-              <Badge 
-                variant={
-                  metrics.curationEfficiency.status === 'optimal' ? 'default' :
-                  metrics.curationEfficiency.status === 'strict' ? 'secondary' :
-                  metrics.curationEfficiency.status === 'too_strict' ? 'destructive' :
-                  metrics.curationEfficiency.status === 'loose' ? 'secondary' :
-                  metrics.curationEfficiency.status === 'too_loose' ? 'destructive' :
-                  'outline'
-                }
-                data-testid="badge-efficiency-status"
-              >
-                {metrics.curationEfficiency.status === 'optimal' && '🟢 OPTIMAL'}
-                {metrics.curationEfficiency.status === 'strict' && '🟡 STRICT'}
-                {metrics.curationEfficiency.status === 'too_strict' && '🔴 TOO STRICT'}
-                {metrics.curationEfficiency.status === 'loose' && '🟡 LOOSE'}
-                {metrics.curationEfficiency.status === 'too_loose' && '🔴 TOO LOOSE'}
-                {metrics.curationEfficiency.status === 'unknown' && '⚪ NO DATA'}
-              </Badge>
             </div>
 
             <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
@@ -523,16 +505,9 @@ export default function AdminDashboard() {
             </div>
             
             <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">Acceptance Rate (of discovered videos)</p>
+              <p className="text-sm text-muted-foreground mb-1">Acceptance Rate</p>
               <p className="text-xl sm:text-2xl font-bold text-primary" data-testid="value-acceptance-rate">
                 {metrics.curationEfficiency.acceptanceRate.toFixed(1)}%
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                {metrics.curationEfficiency.acceptanceRate < 0.5 && '⚠️ Too strict - might miss good content'}
-                {metrics.curationEfficiency.acceptanceRate >= 0.5 && metrics.curationEfficiency.acceptanceRate <= 2 && '✅ High quality bar'}
-                {metrics.curationEfficiency.acceptanceRate > 2 && metrics.curationEfficiency.acceptanceRate <= 5 && '✅ Optimal elite curation'}
-                {metrics.curationEfficiency.acceptanceRate > 5 && metrics.curationEfficiency.acceptanceRate <= 15 && '⚠️ Quality may be diluting'}
-                {metrics.curationEfficiency.acceptanceRate > 15 && '🚨 Accepting too much'}
               </p>
             </div>
           </div>
