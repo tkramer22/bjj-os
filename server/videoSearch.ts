@@ -1150,14 +1150,21 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // LAST RESORT: Direct ILIKE search on title ONLY when zero results
-    // This catches cases where complex conditions fail but videos exist by keyword
+    // LAST RESORT: COMPREHENSIVE search on ALL fields when zero results
+    // Searches: title, techniqueName, tags, specificTechnique (covers all technique data)
+    // This catches cases where videos exist but technique name is in tags not title
     // ═══════════════════════════════════════════════════════════════════════════
     if (validatedVideos.length === 0 && intent.searchTerms.length > 0) {
-      console.log(`[VIDEO SEARCH] ⚡ LAST RESORT: Direct title search for [${intent.searchTerms.join(', ')}]`);
+      console.log(`[VIDEO SEARCH] ⚡ LAST RESORT: COMPREHENSIVE search for [${intent.searchTerms.join(', ')}]`);
       
+      // Search ALL text fields that could contain the technique name
       const directTermConditions = intent.searchTerms.map(term => 
-        sql`(${aiVideoKnowledge.title} ILIKE ${`%${term}%`} OR ${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`})`
+        sql`(
+          ${aiVideoKnowledge.title} ILIKE ${`%${term}%`} OR 
+          ${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`} OR
+          ${aiVideoKnowledge.specificTechnique} ILIKE ${`%${term}%`} OR
+          COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`}
+        )`
       );
       
       const directSearchResults = await db.select()
@@ -1167,16 +1174,16 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
           or(...directTermConditions)
         ))
         .orderBy(desc(aiVideoKnowledge.qualityScore))
-        .limit(10);
+        .limit(15);
       
       if (directSearchResults.length > 0) {
-        console.log(`[VIDEO SEARCH] 🎉 LAST RESORT SUCCESS: Found ${directSearchResults.length} videos by title match!`);
+        console.log(`[VIDEO SEARCH] 🎉 LAST RESORT SUCCESS: Found ${directSearchResults.length} videos!`);
         directSearchResults.forEach((v, i) => {
-          console.log(`  ${i + 1}. "${v.title}" by ${v.instructorName} (quality: ${v.qualityScore})`);
+          console.log(`  ${i + 1}. "${v.title}" by ${v.instructorName} (quality: ${v.qualityScore}, tags: ${(v.tags || []).slice(0,3).join(', ')})`);
         });
         validatedVideos = directSearchResults;
       } else {
-        console.log(`[VIDEO SEARCH] ❌ LAST RESORT: No videos found even by direct title search`);
+        console.log(`[VIDEO SEARCH] ❌ LAST RESORT: No videos found even after comprehensive search`);
       }
     }
     
@@ -1315,21 +1322,27 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
       .orderBy(desc(aiVideoKnowledge.qualityScore))
       .limit(5);
   }
-  // PRIORITY 3: Use search terms from message for title matching
+  // PRIORITY 3: Use search terms from message for COMPREHENSIVE matching
+  // Searches: title, techniqueName, specificTechnique, tags
   else if (intent.searchTerms.length > 0) {
-    console.log(`[FALLBACK SEARCH] Using search terms: ${intent.searchTerms.join(', ')} (ANALYZED only)`);
+    console.log(`[FALLBACK SEARCH] Using search terms: ${intent.searchTerms.join(', ')} (COMPREHENSIVE, ANALYZED only)`);
     const termConditions = intent.searchTerms.map(term => 
-      sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`
+      sql`(
+        ${aiVideoKnowledge.title} ILIKE ${`%${term}%`} OR
+        ${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`} OR
+        ${aiVideoKnowledge.specificTechnique} ILIKE ${`%${term}%`} OR
+        COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`}
+      )`
     );
     videos = await db.select()
       .from(aiVideoKnowledge)
       .where(and(
-        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 7.0`,
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`, // Lower threshold for better technique coverage
         or(...termConditions),
         analyzedVideoFilter
       ))
       .orderBy(desc(aiVideoKnowledge.qualityScore))
-      .limit(5);
+      .limit(10); // Increased limit for better variety
   }
   // PRIORITY 4: Last resort - return empty to avoid wrong recommendations
   else {

@@ -410,14 +410,15 @@ export function registerRoutes(app: Express): Server {
   
   app.get('/api/version', (req, res) => {
     res.json({
-      version: '6.0.11',
+      version: '6.0.12',
       buildId: BUILD_ID,
       buildTime: new Date().toISOString(),
       features: ['semantic-search', 'perspective-filtering', 'instructor-search', 'fallback-quality', 'error-handling', 'technique-priority-search', 'guillotine-fix', 'proactive-video-recs', 'relevance-fix', 'last-resort-search'],
       fixes: [
         'VIDEO_COUNT_FIX: Library now shows total count from ai_video_knowledge',
         'PROACTIVE_VIDEOS: Professor OS always includes at least one video even for no-match searches',
-        'LAST_RESORT_SEARCH: Direct title search fallback ensures guillotine/technique videos are found when complex queries fail',
+        'LAST_RESORT_COMPREHENSIVE: Now searches title, techniqueName, specificTechnique AND tags fields for technique matching',
+        'FALLBACK_COMPREHENSIVE: fallbackSearch PRIORITY 3 now searches all technique fields including tags',
         'WELCOME_MSG_FIX: Welcome message only shows on new session, not tab switches',
         'RELEVANCE_FIX: fallbackSearch now requires technique match when searchTerms exist - prevents irrelevant video recs',
         'GEMINI_COUNT_FIX: Dashboard and Videos page now use same data source for Gemini analyzed count',
@@ -447,7 +448,7 @@ export function registerRoutes(app: Express): Server {
         videosFound: result.videos.length,
         noMatchFound: result.noMatchFound,
         searchIntent: result.searchIntent,
-        version: '6.0.11',
+        version: '6.0.12',
         buildId: BUILD_ID,
         timestamp: new Date().toISOString(),
         techniqueOverrideActive: result.searchIntent.searchTerms?.some((t: string) => 
