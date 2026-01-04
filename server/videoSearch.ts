@@ -20,6 +20,7 @@ interface SearchIntent {
   specificIntent?: 'escape' | 'sweep' | 'pass' | 'attack' | 'retention' | 'takedown' | 'transition';
   perspective?: 'top' | 'bottom';
   requestedInstructor?: string;
+  hasTechniqueTerms: boolean; // TRUE if real technique terms found, FALSE if only fallback keywords
 }
 
 interface VideoSearchResult {
@@ -330,6 +331,7 @@ export function extractSearchIntent(message: string): {
   specificIntent?: 'escape' | 'sweep' | 'pass' | 'attack' | 'retention' | 'takedown' | 'transition';
   perspective?: 'top' | 'bottom';
   requestedInstructor?: string;
+  hasTechniqueTerms: boolean; // TRUE if real technique terms found, FALSE if only fallback keywords
 } {
   const lowerMessage = message.toLowerCase();
   
@@ -587,7 +589,12 @@ export function extractSearchIntent(message: string): {
   // Detect instructor request
   const requestedInstructor = extractRequestedInstructor(message);
   
-  return { techniqueType, positionCategory, searchTerms, specificIntent, perspective, requestedInstructor };
+  // CRITICAL FLAG: TRUE only if real technique terms were detected from techniquePatterns
+  // FALSE if we only have fallback keywords from message splitting
+  // This determines whether technique match is MANDATORY in video search
+  const hasTechniqueTerms = rawSearchTerms.length > 0;
+  
+  return { techniqueType, positionCategory, searchTerms, specificIntent, perspective, requestedInstructor, hasTechniqueTerms };
 }
 
 export async function searchVideos(params: VideoSearchParams): Promise<VideoSearchResult> {
@@ -600,6 +607,7 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
   console.log('═══════════════════════════════════════════════════════════════');
   console.log('[VIDEO SEARCH DEBUG] User message:', userMessage);
   console.log('[VIDEO SEARCH DEBUG] Parsed intent:', JSON.stringify(intent, null, 2));
+  console.log(`[VIDEO SEARCH DEBUG] hasTechniqueTerms=${intent.hasTechniqueTerms} (real technique match)`);
   console.log('═══════════════════════════════════════════════════════════════');
   
   // ═══════════════════════════════════════════════════════════════════════════
@@ -681,12 +689,30 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     console.log(`[VIDEO SEARCH] ✅ Searching ALL qualifying videos (Gemini analysis not required)`);
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // STEP 0: INSTRUCTOR FILTER (HIGHEST PRIORITY)
-    // If user asks for a specific instructor, this MUST be the primary filter
+    // STEP 0: INSTRUCTOR FILTER - ONLY apply when NO technique is specified
+    // 
+    // CRITICAL FIX (January 2026): Technique match takes PRIORITY over instructor.
+    // If user mentions a technique (guillotine, armbar, etc.), we MUST return
+    // videos matching that technique - instructor becomes OPTIONAL BOOST.
+    // 
+    // OLD (WRONG): Instructor filter was ALWAYS applied first, causing:
+    //   "Marcelo Garcia guillotine" -> Returns ANY Marcelo video (including X-guard)
+    // 
+    // NEW (CORRECT): Technique is MANDATORY when present:
+    //   "Marcelo Garcia guillotine" -> Returns ONLY guillotine videos (prefer Marcelo's)
+    //   "Show me Marcelo Garcia videos" -> Returns all Marcelo videos (no technique)
     // ═══════════════════════════════════════════════════════════════════════════
-    if (resolvedInstructor) {
+    // CRITICAL: Use hasTechniqueTerms from intent, NOT searchTerms.length
+    // searchTerms always has fallback keywords, hasTechniqueTerms only tracks REAL technique matches
+    const hasTechniqueTerms = intent.hasTechniqueTerms;
+    
+    if (resolvedInstructor && !hasTechniqueTerms) {
+      // ONLY filter by instructor when NO technique is specified
       conditions.push(ilike(aiVideoKnowledge.instructorName, `%${resolvedInstructor}%`));
-      console.log(`[VIDEO SEARCH] 🎯 INSTRUCTOR LOCKED: ${resolvedInstructor}`);
+      console.log(`[VIDEO SEARCH] 🎯 INSTRUCTOR LOCKED (no technique): ${resolvedInstructor}`);
+    } else if (resolvedInstructor && hasTechniqueTerms) {
+      // Technique IS specified - instructor becomes OPTIONAL BOOST (applied later in ranking)
+      console.log(`[VIDEO SEARCH] 📌 TECHNIQUE PRIORITY: [${intent.searchTerms.join(', ')}] (instructor "${resolvedInstructor}" is optional boost)`);
     }
   
     // Exclude already-recommended videos
@@ -808,11 +834,12 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
           // ═══════════════════════════════════════════════════════════════════════════
           // ONLY add technique_type filter if:
           // 1. NO position is specified AND
-          // 2. NO specific search terms were found (generic "attack" request)
-          if (!intent.positionCategory && intent.searchTerms.length === 0) {
+          // 2. NO REAL technique terms were found (generic "attack" request)
+          // Use hasTechniqueTerms (not searchTerms.length) to detect real techniques
+          if (!intent.positionCategory && !hasTechniqueTerms) {
             conditions.push(eq(aiVideoKnowledge.techniqueType, 'attack'));
             console.log(`[VIDEO SEARCH] 📌 Generic attack filter applied (no specific technique)`);
-          } else if (intent.searchTerms.length > 0) {
+          } else if (hasTechniqueTerms) {
             console.log(`[VIDEO SEARCH] 📌 Specific technique search: [${intent.searchTerms.join(', ')}] - skipping technique_type filter`);
           }
           break;
@@ -831,22 +858,19 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     // ═══════════════════════════════════════════════════════════════════════════
     // STEP 3: MANDATORY TECHNIQUE TERM MATCHING - SEARCH ALL GEMINI FIELDS
     // ═══════════════════════════════════════════════════════════════════════════
-    // CRITICAL FIX: Apply term matching ALWAYS when searchTerms exist, NOT just
-    // when no positionCategory. This fixes "half guard guillotine" returning
-    // half guard videos without guillotine content.
+    // CRITICAL FIX: Apply term matching ONLY when REAL technique terms exist.
+    // Use hasTechniqueTerms (not searchTerms.length) to avoid false positives
+    // from fallback keywords like instructor names.
+    // 
+    // This fixes "half guard guillotine" returning half guard videos without 
+    // guillotine content, while also fixing "show me Marcelo videos" not
+    // applying the instructor filter.
     // 
     // The REAL value of Gemini analysis is finding content by what's IN the video,
     // not just the title. A video called "Front Headlock System" should still appear
     // for "guillotine" if Gemini found guillotine content in it.
-    // 
-    // This searches ALL fields where technique info might be stored:
-    // From aiVideoKnowledge: title, techniqueName, tags, specificTechnique, 
-    //                        problemsSolved, keyDetails, relatedTechniques
-    // From videoKnowledge (Gemini): techniqueName, positionContext, keyConcepts,
-    //                               instructorTips, commonMistakes, fullSummary,
-    //                               problemSolved, setupsFrom, chainsTo, counters
     // ═══════════════════════════════════════════════════════════════════════════
-    if (intent.searchTerms.length > 0) {
+    if (hasTechniqueTerms) {
       // For EACH search term, create a MANDATORY match requirement
       // All terms must match (AND), but each term can match any field (OR)
       for (const term of intent.searchTerms) {
@@ -969,56 +993,20 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     
     // ═══════════════════════════════════════════════════════════════════════════
     // STEP 4: FALLBACK - If too few results, broaden within constraints
-    // NEVER drop instructor/position filters - that would cause cross-contamination
     // ═══════════════════════════════════════════════════════════════════════════
     
     // INSTRUCTOR FALLBACK: If instructor search returned few results, lower quality threshold
-    // IMPORTANT: Retain technique filters and search ALL Gemini fields
-    if (videos.length < 3 && intent.requestedInstructor) {
-      console.log(`[VIDEO SEARCH] ⚠️ Only ${videos.length} results for ${intent.requestedInstructor}, lowering quality threshold`);
+    // CRITICAL FIX: Only lock instructor when NO technique is specified
+    // When technique IS specified, technique match remains MANDATORY
+    if (videos.length < 3 && intent.requestedInstructor && !hasTechniqueTerms) {
+      console.log(`[VIDEO SEARCH] ⚠️ Only ${videos.length} results for instructor ${intent.requestedInstructor} (no technique), lowering quality threshold`);
       
+      // Simple instructor-only fallback: quality + instructor name only
+      // No technique filters needed here since hasTechniqueTerms is false
       const fallbackConditions: any[] = [
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`,
         ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`)
       ];
-      
-      // RETAIN technique filters - search ALL Gemini fields just like primary search
-      if (intent.searchTerms.length > 0) {
-        for (const term of intent.searchTerms) {
-          const termMatchConditions: any[] = [
-            // aiVideoKnowledge fields
-            sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`,
-            sql`${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`}`,
-            sql`COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`}`,
-            sql`COALESCE(${aiVideoKnowledge.specificTechnique}, '') ILIKE ${`%${term}%`}`,
-            sql`COALESCE(${aiVideoKnowledge.problemsSolved}::text, '') ILIKE ${`%${term}%`}`,
-            sql`COALESCE(${aiVideoKnowledge.keyDetails}::text, '') ILIKE ${`%${term}%`}`,
-            sql`COALESCE(${aiVideoKnowledge.relatedTechniques}::text, '') ILIKE ${`%${term}%`}`,
-            // videoKnowledge (Gemini) fields
-            exists(
-              db.select({ one: sql`1` })
-                .from(videoKnowledge)
-                .where(and(
-                  eq(videoKnowledge.videoId, aiVideoKnowledge.id),
-                  or(
-                    sql`${videoKnowledge.techniqueName} ILIKE ${`%${term}%`}`,
-                    sql`COALESCE(${videoKnowledge.positionContext}, '') ILIKE ${`%${term}%`}`,
-                    sql`array_to_string(COALESCE(${videoKnowledge.keyConcepts}, '{}'), ' ') ILIKE ${`%${term}%`}`,
-                    sql`array_to_string(COALESCE(${videoKnowledge.instructorTips}, '{}'), ' ') ILIKE ${`%${term}%`}`,
-                    sql`array_to_string(COALESCE(${videoKnowledge.commonMistakes}, '{}'), ' ') ILIKE ${`%${term}%`}`,
-                    sql`COALESCE(${videoKnowledge.fullSummary}, '') ILIKE ${`%${term}%`}`,
-                    sql`COALESCE(${videoKnowledge.problemSolved}, '') ILIKE ${`%${term}%`}`,
-                    sql`array_to_string(COALESCE(${videoKnowledge.setupsFrom}, '{}'), ' ') ILIKE ${`%${term}%`}`,
-                    sql`array_to_string(COALESCE(${videoKnowledge.chainsTo}, '{}'), ' ') ILIKE ${`%${term}%`}`,
-                    sql`array_to_string(COALESCE(${videoKnowledge.counters}, '{}'), ' ') ILIKE ${`%${term}%`}`
-                  )
-                ))
-            )
-          ];
-          fallbackConditions.push(or(...termMatchConditions));
-        }
-        console.log(`[VIDEO SEARCH] Instructor fallback searching ALL Gemini fields: [${intent.searchTerms.join(', ')}]`);
-      }
       
       videos = await db.select()
         .from(aiVideoKnowledge)
@@ -1027,6 +1015,38 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
         .limit(50);
         
       console.log(`[VIDEO SEARCH] Instructor fallback search returned ${videos.length} videos`);
+    }
+    
+    // TECHNIQUE + INSTRUCTOR FALLBACK: When both specified but few results,
+    // keep technique mandatory but broaden to ALL instructors
+    if (videos.length < 3 && resolvedInstructor && hasTechniqueTerms) {
+      console.log(`[VIDEO SEARCH] ⚠️ Only ${videos.length} results for technique [${intent.searchTerms.join(', ')}] by ${resolvedInstructor}`);
+      console.log(`[VIDEO SEARCH] 🔄 Broadening to ALL instructors for this technique (instructor becomes boost only)`);
+      
+      // Lower quality threshold but KEEP technique mandatory
+      const fallbackConditions: any[] = [
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.5`
+      ];
+      
+      // Add technique matching (MANDATORY)
+      for (const term of intent.searchTerms) {
+        const termMatchConditions: any[] = [
+          sql`${aiVideoKnowledge.title} ILIKE ${`%${term}%`}`,
+          sql`${aiVideoKnowledge.techniqueName} ILIKE ${`%${term}%`}`,
+          sql`COALESCE(${aiVideoKnowledge.tags}, '{}')::text ILIKE ${`%${term}%`}`,
+          sql`COALESCE(${aiVideoKnowledge.specificTechnique}, '') ILIKE ${`%${term}%`}`
+        ];
+        fallbackConditions.push(or(...termMatchConditions));
+      }
+      
+      // NO instructor filter - just technique
+      videos = await db.select()
+        .from(aiVideoKnowledge)
+        .where(and(...fallbackConditions))
+        .orderBy(desc(aiVideoKnowledge.qualityScore))
+        .limit(50);
+      
+      console.log(`[VIDEO SEARCH] Technique-only fallback returned ${videos.length} videos`);
     }
     
     // POSITION FALLBACK: Broaden within position category
@@ -1061,23 +1081,39 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
       console.log(`[VIDEO SEARCH] Fallback search returned ${videos.length} videos`);
     }
     
-    // Session focus boosting (keeps position-filtered results, just re-ranks)
-    if (conversationContext?.sessionFocus && videos.length > 0) {
+    // Session focus boosting + INSTRUCTOR BOOSTING (keeps position-filtered results, just re-ranks)
+    // CRITICAL: Instructor boost is applied HERE (after technique filtering) - not as a filter
+    if (videos.length > 0) {
       videos = videos.map(v => {
         let boost = 0;
         const videoTags = v.tags || [];
         
-        for (const [topic, count] of Object.entries(conversationContext.sessionFocus!)) {
-          const topicLower = topic.toLowerCase().replace('_', ' ');
-          
-          if (videoTags.some((t: string) => t.toLowerCase().includes(topicLower))) {
-            boost += (count as number) * 2;
+        // Session focus boost
+        if (conversationContext?.sessionFocus) {
+          for (const [topic, count] of Object.entries(conversationContext.sessionFocus)) {
+            const topicLower = topic.toLowerCase().replace('_', ' ');
+            
+            if (videoTags.some((t: string) => t.toLowerCase().includes(topicLower))) {
+              boost += (count as number) * 2;
+            }
+            if (v.positionCategory?.includes(topic)) {
+              boost += (count as number) * 3;
+            }
+            if (v.techniqueName?.toLowerCase().includes(topicLower)) {
+              boost += (count as number) * 2;
+            }
           }
-          if (v.positionCategory?.includes(topic)) {
-            boost += (count as number) * 3;
-          }
-          if (v.techniqueName?.toLowerCase().includes(topicLower)) {
-            boost += (count as number) * 2;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // INSTRUCTOR BOOST: When technique + instructor are mentioned, prefer that instructor
+        // This is an OPTIONAL boost, NOT a filter - technique match is still mandatory
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (resolvedInstructor && hasTechniqueTerms) {
+          const instructorMatch = v.instructorName?.toLowerCase().includes(resolvedInstructor.toLowerCase());
+          if (instructorMatch) {
+            boost += 50; // Significant boost for matching instructor
+            console.log(`[VIDEO SEARCH] 🔥 INSTRUCTOR BOOST: "${v.title}" by ${v.instructorName}`);
           }
         }
         
@@ -1109,11 +1145,12 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     // ═══════════════════════════════════════════════════════════════════════════
     // POST-VALIDATION: Verify returned videos ACTUALLY match the search terms
     // This catches edge cases where DB query succeeded but results don't match
+    // ONLY runs when hasTechniqueTerms is true (real technique search, not instructor-only)
     // ═══════════════════════════════════════════════════════════════════════════
     let validatedVideos = videos;
     let searchTermsValidated = true;
     
-    if (intent.searchTerms.length > 0 && videos.length > 0) {
+    if (hasTechniqueTerms && videos.length > 0) {
       const termsLower = intent.searchTerms.map(t => t.toLowerCase());
       
       // Filter videos that ACTUALLY contain at least one of the search terms
@@ -1153,8 +1190,9 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     // LAST RESORT: COMPREHENSIVE search on ALL fields when zero results
     // Searches: title, techniqueName, tags, specificTechnique (covers all technique data)
     // This catches cases where videos exist but technique name is in tags not title
+    // ONLY runs when hasTechniqueTerms is true (real technique search, not instructor-only)
     // ═══════════════════════════════════════════════════════════════════════════
-    if (validatedVideos.length === 0 && intent.searchTerms.length > 0) {
+    if (validatedVideos.length === 0 && hasTechniqueTerms) {
       console.log(`[VIDEO SEARCH] ⚡ LAST RESORT: COMPREHENSIVE search for [${intent.searchTerms.join(', ')}]`);
       
       // Search ALL text fields that could contain the technique name
@@ -1199,8 +1237,9 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     });
     console.log('═══════════════════════════════════════════════════════════════');
     
-    // Return noMatchFound=true if we have search terms but STILL zero results after last resort
-    const noMatchFound = intent.searchTerms.length > 0 && validatedVideos.length === 0;
+    // Return noMatchFound=true if we have REAL technique terms but STILL zero results after last resort
+    // Use hasTechniqueTerms (not searchTerms.length) to avoid false positives from fallback keywords
+    const noMatchFound = hasTechniqueTerms && validatedVideos.length === 0;
     
     return {
       videos: validatedVideos.slice(0, 50),
@@ -1259,7 +1298,9 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
   // even when they also mention an instructor. "Marcelo guillotine" must return
   // ONLY guillotine videos by Marcelo, not any random Marcelo video.
   // ═══════════════════════════════════════════════════════════════════════════
-  if (intent.requestedInstructor && intent.searchTerms.length > 0) {
+  // CRITICAL: Use intent.hasTechniqueTerms, NOT intent.searchTerms.length
+  // searchTerms always has fallback keywords, hasTechniqueTerms only tracks REAL technique matches
+  if (intent.requestedInstructor && intent.hasTechniqueTerms) {
     console.log(`[FALLBACK SEARCH] Using INSTRUCTOR + TECHNIQUE filter: ${intent.requestedInstructor} + [${intent.searchTerms.join(', ')}]`);
     
     // Build technique matching conditions (must match at least one term)
@@ -1322,9 +1363,10 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
       .orderBy(desc(aiVideoKnowledge.qualityScore))
       .limit(5);
   }
-  // PRIORITY 3: Use search terms from message for COMPREHENSIVE matching
+  // PRIORITY 3: Use REAL technique terms from message for COMPREHENSIVE matching
   // Searches: title, techniqueName, specificTechnique, tags
-  else if (intent.searchTerms.length > 0) {
+  // Only use this path when hasTechniqueTerms is true (real techniques detected)
+  else if (intent.hasTechniqueTerms) {
     console.log(`[FALLBACK SEARCH] Using search terms: ${intent.searchTerms.join(', ')} (COMPREHENSIVE, ANALYZED only)`);
     const termConditions = intent.searchTerms.map(term => 
       sql`(
@@ -1352,8 +1394,9 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
   
   console.log(`[FALLBACK SEARCH] Found ${videos.length} ANALYZED videos`);
   
-  // Return noMatchFound=true if we have search terms but zero results
-  const noMatchFound = intent.searchTerms.length > 0 && videos.length === 0;
+  // Return noMatchFound=true if we have REAL technique terms but zero results
+  // Use hasTechniqueTerms (not searchTerms.length) to avoid false positives from fallback keywords
+  const noMatchFound = intent.hasTechniqueTerms && videos.length === 0;
   
   return { 
     videos, 

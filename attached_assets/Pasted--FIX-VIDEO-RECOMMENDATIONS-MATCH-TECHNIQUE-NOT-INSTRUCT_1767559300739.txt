@@ -1,0 +1,177 @@
+# FIX VIDEO RECOMMENDATIONS - MATCH TECHNIQUE, NOT INSTRUCTOR
+
+## THE BUG
+
+When user asks about guillotines, the system returns:
+
+1. ✅ High Elbow Guillotine by JT Torres (CORRECT)
+1. ❌ 2 Single Leg X Entry and Sweep by Marcelo Garcia (WRONG - this is X-guard, not guillotine)
+
+The system is matching on INSTRUCTOR NAME instead of TECHNIQUE CONTENT.
+
+## ROOT CAUSE
+
+Current code does something like:
+
+```typescript
+// BAD - matches instructor name mentioned in conversation
+WHERE instructor_name ILIKE '%Marcelo Garcia%'
+```
+
+Should be:
+
+```typescript
+// GOOD - matches actual technique content
+WHERE techniques_covered ILIKE '%guillotine%'
+  OR primary_techniques ILIKE '%guillotine%'
+  OR technique_summary ILIKE '%guillotine%'
+```
+
+## THE FIX
+
+Find the video search/recommendation function and replace it with this:
+
+```typescript
+async function searchVideosForConversation(userMessage: string, aiResponse: string, limit: number = 3) {
+  // Step 1: Extract the technique being discussed
+  const technique = extractMainTechnique(userMessage + ' ' + aiResponse);
+  
+  if (!technique) {
+    console.log('No specific technique detected');
+    return [];
+  }
+  
+  console.log('Searching for technique:', technique);
+  
+  // Step 2: Search by TECHNIQUE CONTENT, not instructor
+  const searchTerm = `%${technique.toLowerCase()}%`;
+  
+  const videos = await db.select()
+    .from(aiVideoKnowledge)
+    .where(
+      or(
+        sql`LOWER(${aiVideoKnowledge.primaryTechniques}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.techniquesCovered}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.techniqueSummary}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.keyConceptsTaught}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.title}) LIKE ${searchTerm}`
+      )
+    )
+    .orderBy(desc(aiVideoKnowledge.instructionQuality))
+    .limit(limit * 2);
+  
+  console.log(`Found ${videos.length} videos matching technique: ${technique}`);
+  
+  // Step 3: Score and rank by relevance
+  const scored = videos.map(v => {
+    let score = 0;
+    const t = technique.toLowerCase();
+    
+    // Primary technique fields = highest score
+    if (v.primaryTechniques?.toLowerCase().includes(t)) score += 100;
+    if (v.techniquesCovered?.toLowerCase().includes(t)) score += 80;
+    if (v.techniqueSummary?.toLowerCase().includes(t)) score += 60;
+    if (v.keyConceptsTaught?.toLowerCase().includes(t)) score += 40;
+    if (v.title?.toLowerCase().includes(t)) score += 30;
+    
+    return { ...v, relevanceScore: score };
+  });
+  
+  // Return top matches sorted by relevance
+  return scored
+    .filter(v => v.relevanceScore > 0)
+    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .slice(0, limit);
+}
+
+function extractMainTechnique(text: string): string | null {
+  const lowerText = text.toLowerCase();
+  
+  // BJJ techniques to detect (ordered by specificity)
+  const techniques = [
+    // Chokes - specific first
+    'high elbow guillotine', 'arm in guillotine', 'marcelotine', 'guillotine',
+    'rear naked choke', 'rnc',
+    'darce', 'd\'arce', 'brabo',
+    'anaconda choke', 'anaconda',
+    'arm triangle', 'head and arm',
+    'triangle choke', 'triangle',
+    'bow and arrow', 'ezekiel', 'loop choke', 'clock choke',
+    'cross collar', 'baseball bat choke',
+    
+    // Joint locks
+    'armbar', 'arm bar',
+    'kimura', 'americana',
+    'omoplata', 'gogoplata',
+    
+    // Leg locks
+    'heel hook', 'inside heel hook', 'outside heel hook',
+    'knee bar', 'kneebar',
+    'toe hold', 'ankle lock', 'straight ankle',
+    
+    // Guards
+    'half guard', 'deep half', 'z guard', 'knee shield',
+    'closed guard', 'full guard',
+    'de la riva', 'dlr', 'reverse de la riva', 'rdlr',
+    'x guard', 'single leg x', 'slx',
+    'butterfly guard', 'spider guard', 'lasso',
+    
+    // Positions
+    'mount', 'back control', 'back take',
+    'side control', 'knee on belly',
+    'turtle',
+    
+    // Actions
+    'guard pass', 'passing', 'torreando', 'knee cut',
+    'sweep', 'takedown', 'single leg', 'double leg',
+    'escape', 'bridge'
+  ];
+  
+  // Find the most specific match
+  for (const tech of techniques) {
+    if (lowerText.includes(tech)) {
+      return tech;
+    }
+  }
+  
+  return null;
+}
+```
+
+## WHERE TO PUT THIS
+
+Find where video recommendations are generated. Look in:
+
+- `server/routes.ts` - chat endpoint
+- `server/ai/chat.ts` - AI response handler
+- `server/utils/videoSearch.ts` - video search utility
+- Or search for: `aiVideoKnowledge` or `instructor_name`
+
+Replace the existing video search logic with the code above.
+
+## VERIFICATION
+
+After the fix, test these:
+
+1. “Show me guillotine videos”
+   → Should return ONLY guillotine videos
+   → Should NOT return X-guard, sweeps, or random instructor videos
+1. “Marcelo Garcia guillotine”
+   → Should return Marcelo’s GUILLOTINE content
+   → Should NOT return his butterfly guard or X-guard videos
+1. “Help with half guard”
+   → Should return half guard videos only
+
+## KEY PRINCIPLE
+
+**Technique match is REQUIRED. Instructor is optional boost.**
+
+```
+✅ Technique matches + any instructor = SHOW
+✅ Technique matches + mentioned instructor = SHOW (boosted)
+❌ Instructor matches + wrong technique = DO NOT SHOW
+```
+
+The Marcelo Garcia X-guard video should NEVER appear when discussing guillotines, no matter how many times Marcelo is mentioned.
+
+Implement this fix now.
