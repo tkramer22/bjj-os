@@ -38,6 +38,13 @@ The application uses a React TypeScript frontend and an Express.js backend with 
 - **Lifetime Access Invitation System**: Allows admins to grant lifetime subscriptions via secure email invitations.
 - **Auto-Curation System**: Dynamically discovers and curates high-quality BJJ technique videos using AI analysis, including robust YouTube API quota safeguards.
 - **Command Center**: Production-grade admin interface with full sidebar navigation, detailed command descriptions, in-page curation results display, configurable settings, and comprehensive execution logging. Features automated operational intelligence and one-click controls for various operations.
+- **Professor OS Automated QA Test Suite (January 2026)**: Comprehensive automated testing system for Professor OS quality assurance. Includes:
+  - **Video Relevance Tests (10 tests)**: Verifies returned videos match searched techniques (guillotine, half guard, mount escapes, etc.)
+  - **Video Card Data Tests**: Validates thumbnails, instructor names, YouTube IDs are populated
+  - **Personality Tests (8 tests)**: Confirms Professor OS has defined opinions (JT Torres, A&P gi, training frequency)
+  - **Coaching Quality Tests (3 tests)**: Checks responses include videos + actionable tips + instructor quotes
+  - **Data Quality Endpoint**: Quick audit of missing thumbnails, generic instructors, malformed URLs
+  - **Command Center UI**: "Run QA Tests" button with pass/fail results, warnings, and health percentages
 - **Intelligent Curator V2**: Major upgrade to the video curation system with dynamic discovery capabilities, including a dynamic instructor pool, technique pool, over 800 query combinations, query rotation, deep discovery, intent-based sorting, smart duplicate handling, and auto-expansion for new instructors.
 - **Smart Video Search (Admin Dashboard)**: Dynamic instructor/technique dropdowns with video counts, fuzzy search, and quality/date range filters.
 - **Unified Curation System V3**: Simplified, search-based curation system with AI analysis for instructional content detection, a quality threshold of 7.0+, daily scheduled curation, rotation tracking, and Command Center integration with status-based email reports.

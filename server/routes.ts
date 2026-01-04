@@ -18085,6 +18085,237 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PROFESSOR OS AUTOMATED QA TEST SUITE
+  // ═══════════════════════════════════════════════════════════════════════════
+  app.post('/api/admin/test-professor-os', checkAdminAuth, async (req, res) => {
+    const { categories = ['all'], testUserId } = req.body;
+    
+    try {
+      const { 
+        VIDEO_RELEVANCE_TESTS, 
+        PERSONALITY_TESTS, 
+        COACHING_TESTS,
+        runVideoRelevanceTest,
+        runPersonalityTest,
+        runCoachingTest,
+        runVideoCardDataTest,
+        generateReport,
+        TestResult
+      } = await import('./professor-os-tests');
+      
+      // Use test user ID or default test account
+      const userId = testUserId || 'test-qa-user';
+      
+      // Helper to send message to Professor OS and get response
+      async function sendMessage(question: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+          let fullResponse = '';
+          let resolved = false;
+          
+          // Set timeout to prevent hanging forever
+          const timeout = setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              resolve(fullResponse || 'TIMEOUT: No response received');
+            }
+          }, 60000); // 60 second timeout per question
+          
+          // Make internal API call to the Claude chat endpoint
+          const http = require('http');
+          const postData = JSON.stringify({ message: question, userId, conversationHistory: [] });
+          
+          const options = {
+            hostname: 'localhost',
+            port: 5000,
+            path: '/api/ai/chat',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData)
+            }
+          };
+          
+          const req = http.request(options, (response: any) => {
+            response.on('data', (chunk: Buffer) => {
+              const lines = chunk.toString().split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6).trim();
+                  
+                  // Check for [DONE] signal - this means stream is complete
+                  if (data === '[DONE]') {
+                    if (!resolved) {
+                      resolved = true;
+                      clearTimeout(timeout);
+                      resolve(fullResponse);
+                    }
+                    return;
+                  }
+                  
+                  try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.text) fullResponse += parsed.text;
+                    if (parsed.content) fullResponse += parsed.content;
+                    if (parsed.fullMessage) fullResponse = parsed.fullMessage;
+                  } catch (e) {
+                    // Not JSON, might be raw text chunk
+                    if (data) fullResponse += data;
+                  }
+                }
+              }
+            });
+            
+            response.on('end', () => {
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                resolve(fullResponse);
+              }
+            });
+            
+            response.on('error', (err: Error) => {
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                reject(err);
+              }
+            });
+          });
+          
+          req.on('error', (err: Error) => {
+            if (!resolved) {
+              resolved = true;
+              clearTimeout(timeout);
+              reject(err);
+            }
+          });
+          
+          req.write(postData);
+          req.end();
+        });
+      }
+      
+      const results: TestResult[] = [];
+      const runAll = categories.includes('all');
+      
+      // Category 1: Video Relevance
+      if (runAll || categories.includes('video-relevance')) {
+        console.log('[QA TEST] Running video relevance tests...');
+        for (const test of VIDEO_RELEVANCE_TESTS) {
+          const result = await runVideoRelevanceTest(
+            test.id,
+            test.question,
+            test.keywords,
+            test.mode,
+            sendMessage
+          );
+          results.push(result);
+          console.log(`[QA TEST] ${test.id}: ${result.passed ? '✅ PASS' : '❌ FAIL'}`);
+        }
+      }
+      
+      // Category 2: Video Card Data (run during video relevance tests, collect data completeness)
+      if ((runAll || categories.includes('video-data')) && results.length > 0) {
+        console.log('[QA TEST] Running video card data tests...');
+        // Pick a sample response that had videos
+        const sampleResult = results.find(r => r.actual.includes('videos matched'));
+        if (sampleResult) {
+          const dataResults = await runVideoCardDataTest(sampleResult.actual, '2');
+          results.push(...dataResults);
+        }
+      }
+      
+      // Category 3: Personality
+      if (runAll || categories.includes('personality')) {
+        console.log('[QA TEST] Running personality tests...');
+        for (const test of PERSONALITY_TESTS) {
+          const result = await runPersonalityTest(
+            test.id,
+            test.question,
+            test.keywords,
+            sendMessage
+          );
+          results.push(result);
+          console.log(`[QA TEST] ${test.id}: ${result.passed ? '✅ PASS' : '❌ FAIL'}`);
+        }
+      }
+      
+      // Category 4: Coaching Quality
+      if (runAll || categories.includes('coaching')) {
+        console.log('[QA TEST] Running coaching quality tests...');
+        for (const test of COACHING_TESTS) {
+          const result = await runCoachingTest(test, sendMessage);
+          results.push(result);
+          console.log(`[QA TEST] ${test.id}: ${result.passed ? '✅ PASS' : '❌ FAIL'}`);
+        }
+      }
+      
+      const report = generateReport(results);
+      
+      console.log(`[QA TEST] Complete: ${report.passed}/${report.totalTests} passed (${report.passPercentage}%)`);
+      
+      res.json(report);
+      
+    } catch (error: any) {
+      console.error('[QA TEST] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // Quick video data quality check (no AI calls)
+  app.get('/api/admin/test-professor-os/data-quality', checkAdminAuth, async (req, res) => {
+    try {
+      const missingThumbnails = await db.execute(sql`
+        SELECT COUNT(*) as count FROM ai_video_knowledge 
+        WHERE thumbnail_url IS NULL OR thumbnail_url = ''
+      `);
+      
+      const genericInstructors = await db.execute(sql`
+        SELECT COUNT(*) as count FROM ai_video_knowledge 
+        WHERE instructor_name IS NULL 
+           OR instructor_name = '' 
+           OR instructor_name ILIKE '%Unknown%'
+           OR instructor_name ILIKE '%BJJ Instructor%'
+      `);
+      
+      const missingYoutubeIds = await db.execute(sql`
+        SELECT COUNT(*) as count FROM ai_video_knowledge 
+        WHERE video_url IS NULL 
+           OR video_url = ''
+           OR video_url NOT LIKE '%youtube%'
+      `);
+      
+      const totalVideos = await db.execute(sql`
+        SELECT COUNT(*) as count FROM ai_video_knowledge
+      `);
+      
+      const total = parseInt((totalVideos.rows?.[0] as any)?.count || '0');
+      const noThumbnail = parseInt((missingThumbnails.rows?.[0] as any)?.count || '0');
+      const badInstructor = parseInt((genericInstructors.rows?.[0] as any)?.count || '0');
+      const noYoutubeId = parseInt((missingYoutubeIds.rows?.[0] as any)?.count || '0');
+      
+      res.json({
+        totalVideos: total,
+        issues: {
+          missingThumbnails: noThumbnail,
+          genericInstructors: badInstructor,
+          missingYoutubeIds: noYoutubeId
+        },
+        healthPercentage: total > 0 
+          ? Math.round(((total - Math.max(noThumbnail, badInstructor, noYoutubeId)) / total) * 100) 
+          : 0,
+        summary: noThumbnail === 0 && badInstructor === 0 && noYoutubeId === 0
+          ? '✅ All video data is complete'
+          : `⚠️ ${noThumbnail} missing thumbnails, ${badInstructor} generic instructors, ${noYoutubeId} missing YouTube IDs`
+      });
+      
+    } catch (error: any) {
+      console.error('[DATA QUALITY] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // INTERNAL: Run elite instructor batch curation (localhost only)
   app.get('/api/internal/run-elite-instructor-curation', async (req, res) => {
     // Only allow from localhost

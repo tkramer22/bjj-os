@@ -1,0 +1,88 @@
+Got it. Save this for after the test suite completes:
+
+```
+DATA QUALITY FIXES - RUN AFTER QA TESTS
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: RUN DIAGNOSTIC QUERIES
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these and show me the results:
+
+-- Count videos missing thumbnails
+SELECT COUNT(*) as missing_thumbnails 
+FROM ai_video_knowledge 
+WHERE thumbnail_url IS NULL OR thumbnail_url = '';
+
+-- Count videos with generic instructor names
+SELECT COUNT(*) as generic_instructors 
+FROM ai_video_knowledge 
+WHERE instructor_name IS NULL 
+   OR instructor_name = '' 
+   OR instructor_name ILIKE '%Unknown%'
+   OR instructor_name = 'BJJ Instructor';
+
+-- Count videos missing youtube_id
+SELECT COUNT(*) as missing_youtube_id 
+FROM ai_video_knowledge 
+WHERE youtube_id IS NULL OR youtube_id = '';
+
+-- Show specific problem videos (sample)
+SELECT id, title, instructor_name, thumbnail_url, youtube_id
+FROM ai_video_knowledge 
+WHERE thumbnail_url IS NULL OR instructor_name IS NULL
+LIMIT 20;
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: FIX MISSING THUMBNAILS
+═══════════════════════════════════════════════════════════════════════════════
+
+For videos that have youtube_id but no thumbnail_url:
+
+UPDATE ai_video_knowledge 
+SET thumbnail_url = CONCAT('https://img.youtube.com/vi/', youtube_id, '/hqdefault.jpg')
+WHERE (thumbnail_url IS NULL OR thumbnail_url = '')
+  AND youtube_id IS NOT NULL 
+  AND youtube_id != '';
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: FIX GENERIC INSTRUCTOR NAMES
+═══════════════════════════════════════════════════════════════════════════════
+
+For videos with "BJJ Instructor" or NULL instructor:
+- Try to extract instructor name from title (e.g., "Tom DeBlass Half Guard" → "Tom DeBlass")
+- If title contains known instructor name, update the record
+- For remaining, flag for manual review or Gemini re-analysis
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: ADD DATA QUALITY DASHBOARD
+═══════════════════════════════════════════════════════════════════════════════
+
+Add to Admin Command Center a "Data Quality" section showing:
+
+| Metric | Count | Action |
+|--------|-------|--------|
+| Videos missing thumbnails | [X] | [Fix Button] |
+| Videos with generic instructor | [X] | [Fix Button] |
+| Videos missing Gemini analysis | [X] | [Analyze Button] |
+| Videos with malformed URLs | [X] | [Review Button] |
+
+Each "Fix Button" runs the appropriate repair query.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: HIDE UNFIXABLE VIDEOS
+═══════════════════════════════════════════════════════════════════════════════
+
+Videos that have:
+- No thumbnail_url AND no youtube_id
+- Cannot be fixed automatically
+
+Options:
+1. Hide from recommendations (add is_visible = false flag)
+2. Delete them
+3. Flag for manual review
+
+Recommend: Add is_visible column, set to false for unfixable videos so they don't appear in Professor OS recommendations.
+
+Run Step 1 first and show me the counts before fixing anything.
+```

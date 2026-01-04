@@ -1,0 +1,136 @@
+Great idea. Automated QA testing for Professor OS. Send this:
+
+```
+CREATE PROFESSOR OS AUTOMATED TEST SUITE
+
+Build a test script that automatically sends questions to Professor OS and validates the responses meet our quality standards.
+
+═══════════════════════════════════════════════════════════════════════════════
+TEST CATEGORIES
+═══════════════════════════════════════════════════════════════════════════════
+
+CATEGORY 1: VIDEO RELEVANCE
+For each test, send a technique question and verify the returned videos match.
+
+| Test | Question | Expected Video Must Contain |
+|------|----------|----------------------------|
+| 1.1 | "Show me guillotine videos" | "guillotine" in title/tags/techniques |
+| 1.2 | "Anaconda choke tips" | "anaconda" or "front headlock" or "darce" |
+| 1.3 | "Half guard sweeps" | "half guard" AND "sweep" |
+| 1.4 | "Armbar from guard" | "armbar" AND "guard" |
+| 1.5 | "Mount escapes" | "mount" AND "escape" |
+| 1.6 | "Back takes" | "back" AND ("take" OR "control") |
+| 1.7 | "Triangle choke setup" | "triangle" |
+| 1.8 | "Passing closed guard" | "closed guard" AND "pass" |
+| 1.9 | "Leg locks" | "leg lock" OR "heel hook" OR "kneebar" OR "ashi" |
+| 1.10 | "Tom DeBlass half guard" | "Tom DeBlass" AND "half guard" |
+
+PASS CRITERIA: 
+- At least 1 video returned
+- Video title/tags/techniques contain expected keywords
+- NO completely unrelated videos (e.g., leg locks for guillotine question)
+
+FAIL CRITERIA:
+- Response says "I don't have videos" when videos exist
+- Videos returned don't match the technique asked about
+- Videos match instructor name only, not technique
+
+═══════════════════════════════════════════════════════════════════════════════
+
+CATEGORY 2: VIDEO CARD DATA COMPLETENESS
+For each video returned, verify all required fields exist.
+
+| Field | Required | Fail Condition |
+|-------|----------|----------------|
+| title | Yes | NULL or empty |
+| instructor_name | Yes | NULL, empty, or "BJJ Instructor" |
+| thumbnail_url | Yes | NULL or empty or fails to load |
+| timestamp | Preferred | @ 00:00 is acceptable but specific time is better |
+
+PASS CRITERIA:
+- All videos have title, instructor_name, and working thumbnail
+- At least 50% of videos have specific timestamps (not 00:00)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+CATEGORY 3: PERSONALITY RESPONSES
+Test that Professor OS gives our defined opinions.
+
+| Test | Question | Expected Response Contains |
+|------|----------|---------------------------|
+| 3.1 | "Who is your favorite instructor?" | "JT Torres" |
+| 3.2 | "What gi should I buy?" | "Albino & Preto" OR "A&P" |
+| 3.3 | "Should I train gi or no-gi?" | "Both" |
+| 3.4 | "How often should I train?" | "recover" AND ("3" OR "4" OR "5" OR "6") |
+| 3.5 | "Should I compete?" | "at least once" OR "do it" |
+| 3.6 | "Should I wash my belt?" | "Yes" AND "wash" |
+| 3.7 | "Is it too late to start BJJ?" | "No" |
+| 3.8 | "What's the deal with açaí?" | "rite of passage" OR similar humor |
+
+PASS CRITERIA:
+- Response contains expected keywords/phrases
+- Tone matches Professor OS personality (not generic)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+CATEGORY 4: COACHING QUALITY
+Verify responses include proper coaching elements.
+
+| Test | Question | Must Include |
+|------|----------|-------------|
+| 4.1 | "Help with guillotine" | At least 1 video + technique tips |
+| 4.2 | "I keep getting passed" | Follow-up question OR specific advice |
+| 4.3 | "Marcelo Garcia guillotine" | Instructor quote OR specific detail |
+
+PASS CRITERIA:
+- Technique questions always include at least 1 video
+- Responses include actionable tips, not just video links
+- Cross-instructor synthesis when relevant
+
+═══════════════════════════════════════════════════════════════════════════════
+
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+After running all tests, output a report:
+
+PROFESSOR OS QA TEST RESULTS
+============================
+Date: [timestamp]
+Total Tests: [number]
+Passed: [number] ([percentage]%)
+Failed: [number] ([percentage]%)
+
+FAILURES:
+---------
+Test 1.2: "Anaconda choke tips"
+  Expected: Video about anaconda/front headlock
+  Got: "Single Leg X Entry" (UNRELATED)
+  
+Test 2.3: Missing thumbnail
+  Video: "Tom DeBlass Half Guard Attacks"
+  thumbnail_url: NULL
+
+Test 3.1: "Who is your favorite instructor?"
+  Expected: Contains "JT Torres"
+  Got: "I don't have a favorite" (MISSING PERSONALITY)
+
+WARNINGS:
+---------
+Test 4.1: Video timestamp was 00:00 (generic, not specific)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+IMPLEMENTATION
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Create endpoint: /api/admin/test-professor-os
+2. Runs all tests programmatically against the actual Professor OS API
+3. Returns JSON report of pass/fail
+4. Add button to Admin Dashboard: "Run QA Tests"
+5. Display results in dashboard with visual pass/fail indicators
+
+This lets us verify Professor OS quality after any deployment without manual testing.
+
+Build this test suite now.
+```

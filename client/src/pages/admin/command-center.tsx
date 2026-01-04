@@ -3,12 +3,45 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Play, Pause, RefreshCw, Trash2, Activity, Mail, TestTube, Camera, AlertTriangle, Settings, ChevronDown, ChevronUp, ExternalLink, Radio } from "lucide-react";
+import { Play, Pause, RefreshCw, Trash2, Activity, Mail, TestTube, Camera, AlertTriangle, Settings, ChevronDown, ChevronUp, ExternalLink, Radio, CheckCircle, XCircle, Database } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { AdminLayout } from "./dashboard";
+
+interface QATestResult {
+  id: string;
+  category: string;
+  name: string;
+  question: string;
+  passed: boolean;
+  expected: string;
+  actual: string;
+  details?: string;
+  duration?: number;
+}
+
+interface QATestReport {
+  timestamp: string;
+  totalTests: number;
+  passed: number;
+  failed: number;
+  passPercentage: number;
+  results: QATestResult[];
+  warnings: string[];
+}
+
+interface DataQualityReport {
+  totalVideos: number;
+  issues: {
+    missingThumbnails: number;
+    genericInstructors: number;
+    missingYoutubeIds: number;
+  };
+  healthPercentage: number;
+  summary: string;
+}
 
 interface CommandResult {
   status: 'success' | 'error';
@@ -60,6 +93,12 @@ export default function CommandCenter() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const progressEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  
+  // QA Test State
+  const [qaTestRunning, setQaTestRunning] = useState(false);
+  const [qaTestReport, setQaTestReport] = useState<QATestReport | null>(null);
+  const [dataQuality, setDataQuality] = useState<DataQualityReport | null>(null);
+  const [dataQualityLoading, setDataQualityLoading] = useState(false);
 
   useEffect(() => {
     loadCommandLog();
@@ -206,6 +245,94 @@ export default function CommandCenter() {
         description: error.message,
         variant: "destructive"
       });
+    }
+  };
+
+  // Run QA Tests
+  const runQATests = async (categories: string[] = ['all']) => {
+    setQaTestRunning(true);
+    setQaTestReport(null);
+    
+    toast({
+      title: "🧪 Running QA Tests",
+      description: "This may take 2-5 minutes depending on test categories...",
+    });
+    
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute timeout
+    
+    try {
+      const res = await fetch('/api/admin/test-professor-os', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categories }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
+      const report = await res.json();
+      
+      // Validate report structure
+      if (report.error) {
+        throw new Error(report.error);
+      }
+      
+      if (typeof report.passPercentage !== 'number') {
+        console.error('Invalid report structure:', report);
+        throw new Error('Invalid test report format');
+      }
+      
+      setQaTestReport(report);
+      
+      toast({
+        title: report.passPercentage >= 80 ? "✅ QA Tests Complete" : "⚠️ QA Tests Complete",
+        description: `${report.passed}/${report.totalTests} passed (${report.passPercentage}%)`,
+        variant: report.passPercentage >= 80 ? "default" : "destructive"
+      });
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      
+      const message = error.name === 'AbortError' 
+        ? 'Test timed out after 10 minutes'
+        : error.message;
+      
+      toast({
+        title: "❌ QA Test Failed",
+        description: message,
+        variant: "destructive"
+      });
+    } finally {
+      setQaTestRunning(false);
+    }
+  };
+  
+  // Check Data Quality
+  const checkDataQuality = async () => {
+    setDataQualityLoading(true);
+    try {
+      const res = await fetch('/api/admin/test-professor-os/data-quality');
+      const data = await res.json();
+      setDataQuality(data);
+      
+      toast({
+        title: data.healthPercentage >= 95 ? "✅ Data Quality Good" : "⚠️ Data Issues Found",
+        description: data.summary,
+        variant: data.healthPercentage >= 95 ? "default" : "destructive"
+      });
+    } catch (error: any) {
+      toast({
+        title: "❌ Data Quality Check Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setDataQualityLoading(false);
     }
   };
 
@@ -594,6 +721,181 @@ export default function CommandCenter() {
             command="test_apis"
           />
         </div>
+      </div>
+      
+      {/* Professor OS QA Testing */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold">🧪 Professor OS QA</h2>
+          <Badge variant="outline">Quality Assurance</Badge>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Run Full QA Tests */}
+          <Card className="hover-elevate">
+            <CardContent className="pt-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TestTube className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold">Run Full QA Suite</h3>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {qaTestRunning ? '⏳ Running...' : '~5 min'}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Tests video relevance, personality, and coaching quality
+                </p>
+                <Button
+                  onClick={() => runQATests(['all'])}
+                  disabled={qaTestRunning}
+                  className="w-full"
+                  data-testid="button-run-qa-tests"
+                >
+                  {qaTestRunning ? 'Running Tests...' : 'Run All Tests'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Data Quality Check */}
+          <Card className="hover-elevate">
+            <CardContent className="pt-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Database className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold">Video Data Quality</h3>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {dataQualityLoading ? '⏳ Checking...' : 'Instant'}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Check for missing thumbnails, instructors, YouTube IDs
+                </p>
+                <Button
+                  onClick={checkDataQuality}
+                  disabled={dataQualityLoading}
+                  variant="outline"
+                  className="w-full"
+                  data-testid="button-check-data-quality"
+                >
+                  {dataQualityLoading ? 'Checking...' : 'Check Data Quality'}
+                </Button>
+                
+                {dataQuality && (
+                  <div className="mt-3 p-3 rounded border bg-muted/30 text-sm space-y-2">
+                    <div className="flex justify-between">
+                      <span>Total Videos:</span>
+                      <span className="font-medium">{dataQuality.totalVideos.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Missing Thumbnails:</span>
+                      <span className={dataQuality.issues.missingThumbnails > 0 ? 'text-destructive font-medium' : 'text-green-500'}>
+                        {dataQuality.issues.missingThumbnails}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Generic Instructors:</span>
+                      <span className={dataQuality.issues.genericInstructors > 0 ? 'text-destructive font-medium' : 'text-green-500'}>
+                        {dataQuality.issues.genericInstructors}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Missing YouTube IDs:</span>
+                      <span className={dataQuality.issues.missingYoutubeIds > 0 ? 'text-destructive font-medium' : 'text-green-500'}>
+                        {dataQuality.issues.missingYoutubeIds}
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t text-xs">
+                      <Badge variant={dataQuality.healthPercentage >= 95 ? 'default' : 'destructive'}>
+                        {dataQuality.healthPercentage}% Healthy
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* QA Test Results */}
+        {qaTestReport && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  {qaTestReport.passPercentage >= 80 ? (
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-destructive" />
+                  )}
+                  QA Test Results
+                </CardTitle>
+                <Badge variant={qaTestReport.passPercentage >= 80 ? 'default' : 'destructive'}>
+                  {qaTestReport.passed}/{qaTestReport.totalTests} Passed ({qaTestReport.passPercentage}%)
+                </Badge>
+              </div>
+              <CardDescription>
+                Run at {new Date(qaTestReport.timestamp).toLocaleString()}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-80">
+                <div className="space-y-2">
+                  {qaTestReport.results.map((result) => (
+                    <div
+                      key={result.id}
+                      className={`p-3 rounded border ${result.passed ? 'border-green-500/30 bg-green-500/5' : 'border-destructive/30 bg-destructive/5'}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg">{result.passed ? '✅' : '❌'}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className="text-[10px]">{result.category}</Badge>
+                            <span className="font-medium text-sm">{result.id}: {result.name}</span>
+                          </div>
+                          {!result.passed && (
+                            <div className="mt-2 text-xs space-y-1">
+                              <div className="text-muted-foreground">
+                                <span className="font-medium">Expected:</span> {result.expected}
+                              </div>
+                              <div className="text-destructive">
+                                <span className="font-medium">Got:</span> {result.actual}
+                              </div>
+                            </div>
+                          )}
+                          {result.details && (
+                            <div className="mt-1 text-xs text-amber-500">{result.details}</div>
+                          )}
+                        </div>
+                        {result.duration && (
+                          <span className="text-[10px] text-muted-foreground">{result.duration}ms</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+              
+              {qaTestReport.warnings.length > 0 && (
+                <div className="mt-4 p-3 rounded border border-amber-500/30 bg-amber-500/5">
+                  <div className="flex items-center gap-2 text-amber-500 font-medium text-sm mb-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Warnings
+                  </div>
+                  <ul className="text-xs text-muted-foreground space-y-1">
+                    {qaTestReport.warnings.map((warning, i) => (
+                      <li key={i}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Command Log */}
