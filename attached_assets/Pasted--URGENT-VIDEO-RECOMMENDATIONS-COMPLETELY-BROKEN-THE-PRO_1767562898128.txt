@@ -1,0 +1,166 @@
+# URGENT: VIDEO RECOMMENDATIONS COMPLETELY BROKEN
+
+## THE PROBLEM
+
+User asked: “Training guillotine tomorrow”
+Video returned: “ESCAPING CLOSED GUARD”
+
+This is not even close. The system is returning random videos, not technique-matched videos.
+
+## STEP 1: ADD LOGGING TO SEE WHAT’S HAPPENING
+
+Find where videos are selected and add detailed logging:
+
+```typescript
+// Wherever videos are chosen for the response, add this:
+
+console.log('=== VIDEO SELECTION DEBUG ===');
+console.log('User message:', userMessage);
+console.log('Detected technique:', detectedTechnique);
+console.log('Search query used:', searchQuery);
+console.log('Number of videos found:', videos.length);
+console.log('Videos returned:', videos.map(v => ({
+  title: v.title,
+  instructor: v.instructorName,
+  techniques: v.techniquesCovered,
+  primary: v.primaryTechniques
+})));
+console.log('===============================');
+```
+
+## STEP 2: FIND THE VIDEO SELECTION CODE
+
+Search for where videos are being selected. Look for:
+
+```bash
+grep -r "aiVideoKnowledge" --include="*.ts"
+grep -r "video" --include="*.ts" | grep -i "select\|find\|search\|recommend"
+grep -r "RANDOM\|random\|ORDER BY\|orderBy" --include="*.ts"
+```
+
+## STEP 3: CHECK IF IT’S SELECTING RANDOMLY
+
+The video selection might be doing something like:
+
+```typescript
+// BAD - random or unfiltered selection
+const videos = await db.select().from(aiVideoKnowledge).limit(3);
+
+// Or even worse - random order
+const videos = await db.select().from(aiVideoKnowledge).orderBy(sql`RANDOM()`).limit(3);
+```
+
+## STEP 4: THE CORRECT IMPLEMENTATION
+
+Replace whatever video selection exists with this:
+
+```typescript
+async function getVideosForMessage(userMessage: string): Promise<Video[]> {
+  // Step 1: Extract technique from user's message
+  const technique = extractTechnique(userMessage);
+  
+  console.log('Extracted technique:', technique);
+  
+  if (!technique) {
+    console.log('No technique found in message');
+    return [];
+  }
+  
+  // Step 2: Search ONLY for videos matching this technique
+  const searchTerm = `%${technique}%`;
+  
+  const videos = await db.select()
+    .from(aiVideoKnowledge)
+    .where(
+      or(
+        sql`LOWER(techniques_covered) LIKE LOWER(${searchTerm})`,
+        sql`LOWER(primary_techniques) LIKE LOWER(${searchTerm})`,
+        sql`LOWER(title) LIKE LOWER(${searchTerm})`,
+        sql`LOWER(technique_summary) LIKE LOWER(${searchTerm})`
+      )
+    )
+    .limit(5);
+  
+  console.log(`Found ${videos.length} videos for technique: ${technique}`);
+  videos.forEach(v => console.log(`  - ${v.title}`));
+  
+  return videos;
+}
+
+function extractTechnique(message: string): string | null {
+  const lower = message.toLowerCase();
+  
+  const techniques = [
+    'guillotine', 'triangle', 'armbar', 'kimura', 'americana',
+    'rear naked choke', 'rnc', 'darce', 'anaconda',
+    'arm triangle', 'ezekiel', 'omoplata', 'gogoplata',
+    'heel hook', 'knee bar', 'toe hold', 'ankle lock',
+    'half guard', 'closed guard', 'open guard', 'butterfly guard',
+    'de la riva', 'x guard', 'spider guard', 'lasso guard',
+    'mount', 'back control', 'side control', 'knee on belly',
+    'guard pass', 'sweep', 'takedown', 'escape'
+  ];
+  
+  for (const tech of techniques) {
+    if (lower.includes(tech)) {
+      return tech;
+    }
+  }
+  
+  return null;
+}
+```
+
+## STEP 5: VERIFY THE DATABASE HAS THE RIGHT DATA
+
+Run this SQL to check if guillotine videos exist:
+
+```sql
+SELECT title, instructor_name, techniques_covered, primary_techniques
+FROM ai_video_knowledge 
+WHERE LOWER(techniques_covered) LIKE '%guillotine%'
+   OR LOWER(primary_techniques) LIKE '%guillotine%'
+   OR LOWER(title) LIKE '%guillotine%'
+LIMIT 10;
+```
+
+If this returns guillotine videos but the app shows “Escaping Closed Guard”, the code isn’t using the right query.
+
+## STEP 6: CHECK THE COLUMN NAMES
+
+The column names in code must match the database exactly. Check:
+
+```sql
+-- Get actual column names
+SELECT column_name 
+FROM information_schema.columns 
+WHERE table_name = 'ai_video_knowledge';
+```
+
+Common mismatch issues:
+
+- Code uses `techniquesCovered` but DB has `techniques_covered`
+- Code uses `primaryTechniques` but DB has `primary_techniques`
+
+## WHAT’S PROBABLY HAPPENING
+
+The video selection is likely:
+
+1. Ignoring the technique entirely
+1. Selecting random videos
+1. Or using wrong column names so query returns nothing, then falling back to random
+
+Find the code, add logging, and report back what you see in the console when a message is sent.
+
+## ALSO FIX: “LET ME GUESS”
+
+Professor OS said “Let me guess - you’re getting the entry but losing it…”
+
+This violates our conversation rules. Find the system prompt and add:
+
+```
+NEVER start a response with "Let me guess" or assume what the user's problem is.
+Instead, ask a clarifying question like "What aspect are you focusing on?"
+```
+
+Fix both issues now.
