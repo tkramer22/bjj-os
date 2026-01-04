@@ -383,8 +383,8 @@ export function ActivityDashboard() {
                         <td className="p-3 text-sm font-mono">
                           {activity.userAnonymized}
                         </td>
-                        <td className="p-3 text-sm max-w-md truncate" title={activity.question}>
-                          {activity.question}
+                        <td className="p-3 text-sm max-w-md truncate" title={activity.question || 'No question recorded'}>
+                          {activity.question || <span className="text-muted-foreground italic">No question recorded</span>}
                         </td>
                         <td className="p-3 text-center">
                           <Badge variant="secondary">{activity.videosRecommended}</Badge>

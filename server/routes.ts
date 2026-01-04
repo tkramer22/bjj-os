@@ -3726,6 +3726,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         id: bjjUsers.id,
         phoneNumber: bjjUsers.phoneNumber,
         name: bjjUsers.name,
+        email: bjjUsers.email,
         beltLevel: bjjUsers.beltLevel,
         subscriptionType: bjjUsers.subscriptionType,
         subscriptionStatus: bjjUsers.subscriptionStatus,
