@@ -68,8 +68,10 @@ export default function LoginPage() {
         throw new Error(data.error || 'Invalid email or password');
       }
 
-      if (data.sessionToken) {
-        await saveAuthToken(data.sessionToken);
+      // Fix: Check both 'token' and 'sessionToken' for compatibility
+      const authToken = data.token || data.sessionToken;
+      if (authToken) {
+        await saveAuthToken(authToken);
       }
       if (data.user) {
         await saveUserData(data.user);

@@ -279,11 +279,15 @@ export async function handleClaudeStream(req: any, res: any) {
   // 🔒 SECURITY: Get userId from authenticated user, not from request body
   const userId = req.user?.userId;
   
-  // 🔍 DEBUG: Log API call for duplicate detection
+  // 🔍 DEBUG: Comprehensive request logging for troubleshooting
   console.log('═══════════════════════════════════════════════════════════════');
-  console.log('[CHAT API] Request received - ' + new Date().toISOString());
-  console.log('[CHAT API] User ID:', userId);
-  console.log('[CHAT API] Message:', (message || '').substring(0, 50));
+  console.log('[CHAT API] 📥 REQUEST RECEIVED - ' + new Date().toISOString());
+  console.log('[CHAT API] User ID from req.user:', userId);
+  console.log('[CHAT API] req.user object:', JSON.stringify(req.user || 'undefined'));
+  console.log('[CHAT API] Message (first 100 chars):', (message || '').substring(0, 100));
+  console.log('[CHAT API] Message length:', message?.length || 0);
+  console.log('[CHAT API] Has Authorization header:', !!req.headers.authorization);
+  console.log('[CHAT API] Has sessionToken cookie:', !!req.cookies?.sessionToken);
   console.log('═══════════════════════════════════════════════════════════════');
   
   const startTime = Date.now();

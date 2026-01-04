@@ -446,11 +446,16 @@ What are you working on right now?`,
       
       // Get auth token for native app auth (cookies don't work reliably on iOS)
       const authToken = await getAuthToken();
+      console.log('[CHAT DEBUG] Stream URL:', streamUrl);
+      console.log('[CHAT DEBUG] Auth token exists:', !!authToken);
+      console.log('[CHAT DEBUG] User ID:', userId);
+      
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (authToken) {
         headers['Authorization'] = `Bearer ${authToken}`;
       }
       
+      console.log('[CHAT DEBUG] Sending request...');
       const response = await fetch(streamUrl, {
         method: 'POST',
         headers,
@@ -458,8 +463,20 @@ What are you working on right now?`,
         body: JSON.stringify({ message: messageText, userId }),
       });
 
+      console.log('[CHAT DEBUG] Response status:', response.status);
+      console.log('[CHAT DEBUG] Response ok:', response.ok);
+      
       if (!response.ok) {
-        throw new Error(`Failed to send: ${response.status}`);
+        // Try to get error details from response body
+        let errorDetail = '';
+        try {
+          const errorBody = await response.json();
+          errorDetail = errorBody.error || JSON.stringify(errorBody);
+          console.error('[CHAT DEBUG] Error response body:', errorDetail);
+        } catch {
+          errorDetail = response.statusText;
+        }
+        throw new Error(`Request failed (${response.status}): ${errorDetail}`);
       }
 
       const reader = response.body?.getReader();
@@ -532,12 +549,25 @@ What are you working on right now?`,
       
     } catch (error: any) {
       console.error('[MOBILE-CHAT] Failed to send:', error);
+      console.error('[MOBILE-CHAT] Error name:', error.name);
+      console.error('[MOBILE-CHAT] Error message:', error.message);
+      console.error('[MOBILE-CHAT] Error stack:', error.stack);
       stopThinkingAnimation();
       setIsTyping(false);
       
+      // Provide more specific error message based on error type
+      let errorMessage = "Sorry, I'm having trouble right now. Please try again!";
+      if (error.message?.includes('401')) {
+        errorMessage = "Your session has expired. Please log out and log back in.";
+      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        errorMessage = "Connection issue. Please check your internet and try again.";
+      } else if (error.message?.includes('timeout')) {
+        errorMessage = "Request timed out. Please try again in a moment.";
+      }
+      
       // Update assistant message with error
       chatContext.updateMessage(assistantMessageId, {
-        content: "Sorry, I'm having trouble right now. Please try again!"
+        content: errorMessage
       });
     } finally {
       stopThinkingAnimation();

@@ -82,8 +82,13 @@ export default function IOSLoginPage() {
 
       triggerHaptic('success');
 
-      if (data.sessionToken) {
-        await saveAuthToken(data.sessionToken);
+      // Fix: Server returns 'token' not 'sessionToken' - check both for compatibility
+      const authToken = data.token || data.sessionToken;
+      if (authToken) {
+        console.log('[iOS LOGIN] Saving auth token:', authToken.substring(0, 20) + '...');
+        await saveAuthToken(authToken);
+      } else {
+        console.warn('[iOS LOGIN] No token received from server!');
       }
 
       if (data.user) {

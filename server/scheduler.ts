@@ -126,12 +126,32 @@ export function startScheduler() {
       recordSuccess();
       
       // Get all active users (trial or active subscription)
-      const users = await db.select().from(bjjUsers).where(
+      // Use explicit column selection to avoid missing column errors in Supabase
+      const userColumns = {
+        id: bjjUsers.id,
+        email: bjjUsers.email,
+        phoneNumber: bjjUsers.phoneNumber,
+        name: bjjUsers.name,
+        paused: bjjUsers.paused,
+        onboardingStep: bjjUsers.onboardingStep,
+        timezone: bjjUsers.timezone,
+        sendTime: bjjUsers.sendTime,
+        subscriptionStatus: bjjUsers.subscriptionStatus,
+        beltLevel: bjjUsers.beltLevel,
+        style: bjjUsers.style,
+        contentPreference: bjjUsers.contentPreference,
+        focusAreas: bjjUsers.focusAreas,
+        injuries: bjjUsers.injuries,
+        competeStatus: bjjUsers.competeStatus,
+        trainingGoals: bjjUsers.trainingGoals,
+      };
+      
+      const users = await db.select(userColumns).from(bjjUsers).where(
         eq(bjjUsers.subscriptionStatus, 'active')
       );
 
       // Also get trial users
-      const trialUsers = await db.select().from(bjjUsers).where(
+      const trialUsers = await db.select(userColumns).from(bjjUsers).where(
         eq(bjjUsers.subscriptionStatus, 'trial')
       );
 
@@ -383,7 +403,15 @@ export function startScheduler() {
       }
       
       // Get all users with weekly recap enabled
-      const users = await db.select().from(bjjUsers);
+      // Use explicit column selection to avoid missing column errors in Supabase
+      const recapColumns = {
+        id: bjjUsers.id,
+        phoneNumber: bjjUsers.phoneNumber,
+        name: bjjUsers.name,
+        weeklyRecapEnabled: bjjUsers.weeklyRecapEnabled,
+        timezone: bjjUsers.timezone,
+      };
+      const users = await db.select(recapColumns).from(bjjUsers);
       
       for (const user of users) {
         if (!user.weeklyRecapEnabled) {
