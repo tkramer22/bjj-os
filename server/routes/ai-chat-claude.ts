@@ -9,7 +9,7 @@ import type { ConversationMessage } from '../utils/learningAnalyzer';
 import { RESPONSE_SCHEMA, ProfessorOSResponse } from '../types/professorOSResponse';
 import { composeNaturalResponse } from '../utils/composeResponse';
 import { validateResponse } from '../utils/validateResponse';
-import { searchVideos, fallbackSearch, formatVideosForPrompt, extractSearchIntent, getSessionContext, updateSessionContext } from '../videoSearch';
+import { searchVideos, fallbackSearch, formatVideosForPrompt, extractSearchIntent, getSessionContext, updateSessionContext, extractTechniqueKeyword, searchGeminiFirst } from '../videoSearch';
 import { processMessageForTechniqueExtraction } from '../technique-extraction';
 import { extractTechniqueRequests } from '../technique-extractor';
 import { professorOSCache } from '../services/professor-os-cache';
@@ -454,30 +454,62 @@ export async function handleClaudeStream(req: any, res: any) {
     // Prepare context for prompt builder (avoid duplicate queries)
     const struggleAreaBoost = userProfile.biggestStruggle || userProfile.struggleAreaCategory;
     
-    // 🔍 DYNAMIC VIDEO SEARCH: Search videos based on user message intent + session context
+    // 🔍 GEMINI-FIRST VIDEO SEARCH: Query Gemini-analyzed data ONLY for technique matches
     t2 = Date.now();
     const sessionContext = getSessionContext(userId);
-    let videoSearchResult = await searchVideos({
-      userMessage: message,
-      userId: userId, // For follow-up reference resolution (e.g., "his videos")
-      conversationContext: {
-        userGiNogi: userProfile.style || 'both',
-        sessionFocus: sessionContext.sessionFocus,
-        recommendedVideoIds: sessionContext.recommendedVideoIds,
-        lastInstructor: sessionContext.lastInstructor // Track last mentioned instructor
-      }
-    });
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // CRITICAL: Only use fallback when search returned 0 results AND noMatchFound is NOT set
-    // If noMatchFound is true, user searched for something we don't have - DON'T return random videos
+    // GEMINI-FIRST SEARCH (January 2026)
+    // Video selection is DATABASE QUERY against Gemini fields, NOT AI judgment.
+    // If user asks about guillotines, ONLY return videos where Gemini found guillotine content.
     // ═══════════════════════════════════════════════════════════════════════════
-    if (videoSearchResult.videos.length === 0 && !videoSearchResult.noMatchFound) {
-      console.log('🔄 No exact matches (position/instructor only), trying fallback search...');
-      videoSearchResult = await fallbackSearch(message);
-    } else if (videoSearchResult.noMatchFound) {
-      console.log('❌ No videos found for requested technique - NOT using fallback (would return wrong videos)');
-      console.log(`   Search terms: [${videoSearchResult.searchIntent.searchTerms.join(', ')}]`);
+    
+    // Step 1: Extract technique keyword from user message
+    const detectedTechnique = extractTechniqueKeyword(message);
+    
+    let videoSearchResult;
+    
+    if (detectedTechnique) {
+      // TECHNIQUE DETECTED: Use Gemini-first search (ONLY returns videos where Gemini found this technique)
+      console.log(`🎯 [GEMINI-FIRST] Detected technique: "${detectedTechnique}" - searching Gemini data ONLY`);
+      
+      const geminiResult = await searchGeminiFirst(detectedTechnique);
+      
+      // Convert Gemini result to standard format
+      videoSearchResult = {
+        videos: geminiResult.videos,
+        totalMatches: geminiResult.videos.length,
+        searchIntent: extractSearchIntent(message),
+        noMatchFound: geminiResult.noMatchFound,
+        searchTermsValidated: true
+      };
+      
+      if (geminiResult.noMatchFound) {
+        console.log(`❌ [GEMINI-FIRST] No videos found in Gemini data for "${detectedTechnique}"`);
+        console.log(`   Will teach conceptually without showing wrong videos`);
+      } else {
+        console.log(`✅ [GEMINI-FIRST] Found ${geminiResult.videos.length} videos with Gemini-verified "${detectedTechnique}" content`);
+      }
+    } else {
+      // NO TECHNIQUE DETECTED: Use standard search (instructor-only, position-only, general)
+      console.log(`📌 [STANDARD SEARCH] No specific technique detected - using standard search`);
+      
+      videoSearchResult = await searchVideos({
+        userMessage: message,
+        userId: userId,
+        conversationContext: {
+          userGiNogi: userProfile.style || 'both',
+          sessionFocus: sessionContext.sessionFocus,
+          recommendedVideoIds: sessionContext.recommendedVideoIds,
+          lastInstructor: sessionContext.lastInstructor
+        }
+      });
+      
+      // Only use fallback when search returned 0 results AND noMatchFound is NOT set
+      if (videoSearchResult.videos.length === 0 && !videoSearchResult.noMatchFound) {
+        console.log('🔄 No exact matches, trying fallback search...');
+        videoSearchResult = await fallbackSearch(message);
+      }
     }
     
     const videoSearchMs = Date.now() - t2;

@@ -1,0 +1,211 @@
+# VIDEO SEARCH MUST USE GEMINI DATA - NON-NEGOTIABLE
+
+## THE PROBLEM WITH CURRENT APPROACH
+
+You’re adding prompt rules like “NEVER show escaping closed guard for guillotine questions.”
+
+That’s a band-aid. We have 2,500+ videos with RICH Gemini analysis. USE IT.
+
+## THE HARD RULE
+
+**Video selection is NOT AI judgment. It’s DATABASE QUERY against Gemini fields.**
+
+The AI does NOT decide what videos are relevant. The Gemini analysis already did that work. We query it.
+
+## THE GEMINI FIELDS WE HAVE
+
+Every video has these analyzed fields:
+
+- `techniques_covered` - What techniques are taught
+- `primary_techniques` - Main technique focus
+- `technique_summary` - Description of what’s covered
+- `key_concepts_taught` - Core concepts explained
+- `positions_covered` - Guard, mount, side control, etc.
+- `instructor_tips` - Specific coaching points
+- `common_mistakes` - What to avoid
+- `difficulty_level` - Beginner/intermediate/advanced
+- `gi_or_nogi` - Gi, No-Gi, or Both
+- `instruction_quality` - Quality score
+
+## THE ONLY ACCEPTABLE VIDEO SEARCH
+
+```typescript
+async function searchVideos(technique: string): Promise<Video[]> {
+  const searchTerm = `%${technique.toLowerCase()}%`;
+  
+  // Query ONLY the Gemini-analyzed fields
+  const videos = await db.select()
+    .from(aiVideoKnowledge)
+    .where(
+      or(
+        sql`LOWER(techniques_covered) LIKE ${searchTerm}`,
+        sql`LOWER(primary_techniques) LIKE ${searchTerm}`,
+        sql`LOWER(technique_summary) LIKE ${searchTerm}`,
+        sql`LOWER(key_concepts_taught) LIKE ${searchTerm}`
+      )
+    )
+    .orderBy(desc(aiVideoKnowledge.instructionQuality))
+    .limit(5);
+  
+  return videos;
+}
+```
+
+## WHAT THIS MEANS
+
+If user asks about guillotines:
+
+1. Extract “guillotine” from message
+1. Query: `WHERE techniques_covered LIKE '%guillotine%'`
+1. Return ONLY videos where Gemini identified guillotine content
+1. If no matches, return NOTHING — don’t fall back to random videos
+
+## WHAT WE NEVER DO
+
+❌ AI decides “this video seems relevant”
+❌ Fallback to random videos when no match
+❌ Match on instructor name alone
+❌ Prompt rules like “never show X for Y”
+❌ Let Claude guess which videos might help
+
+## WHAT WE ALWAYS DO
+
+✅ Query Gemini fields for technique match
+✅ Return only videos where `techniques_covered` contains the technique
+✅ Return empty if no match (better than wrong)
+✅ Trust the Gemini analysis — it’s the source of truth
+
+## IMPLEMENTATION
+
+Replace ALL video selection code with this pattern:
+
+```typescript
+// In the chat handler or video recommendation function
+
+async function getVideosForTechnique(userMessage: string) {
+  // Step 1: Extract technique keyword
+  const technique = extractTechniqueKeyword(userMessage);
+  
+  if (!technique) {
+    console.log('[VIDEO] No technique keyword found');
+    return { videos: [], technique: null };
+  }
+  
+  console.log('[VIDEO] Searching for technique:', technique);
+  
+  // Step 2: Query GEMINI FIELDS ONLY
+  const searchTerm = `%${technique}%`;
+  
+  const videos = await db.select({
+    id: aiVideoKnowledge.id,
+    title: aiVideoKnowledge.title,
+    youtubeId: aiVideoKnowledge.youtubeId,
+    instructorName: aiVideoKnowledge.instructorName,
+    techniquesCovered: aiVideoKnowledge.techniquesCovered,
+    primaryTechniques: aiVideoKnowledge.primaryTechniques,
+    techniqueSummary: aiVideoKnowledge.techniqueSummary,
+    instructionQuality: aiVideoKnowledge.instructionQuality,
+    timestampBreakdown: aiVideoKnowledge.timestampBreakdown
+  })
+  .from(aiVideoKnowledge)
+  .where(
+    or(
+      sql`LOWER(${aiVideoKnowledge.techniquesCovered}) LIKE LOWER(${searchTerm})`,
+      sql`LOWER(${aiVideoKnowledge.primaryTechniques}) LIKE LOWER(${searchTerm})`,
+      sql`LOWER(${aiVideoKnowledge.techniqueSummary}) LIKE LOWER(${searchTerm})`
+    )
+  )
+  .orderBy(desc(aiVideoKnowledge.instructionQuality))
+  .limit(3);
+  
+  console.log(`[VIDEO] Found ${videos.length} videos for "${technique}"`);
+  videos.forEach(v => console.log(`  - ${v.title} (techniques: ${v.techniquesCovered})`));
+  
+  // Step 3: VERIFY matches (post-validation)
+  const verified = videos.filter(v => {
+    const techniques = (v.techniquesCovered || '').toLowerCase();
+    const primary = (v.primaryTechniques || '').toLowerCase();
+    const summary = (v.techniqueSummary || '').toLowerCase();
+    return techniques.includes(technique) || primary.includes(technique) || summary.includes(technique);
+  });
+  
+  console.log(`[VIDEO] ${verified.length} videos passed verification`);
+  
+  return { videos: verified, technique };
+}
+
+function extractTechniqueKeyword(message: string): string | null {
+  const lower = message.toLowerCase();
+  
+  // Ordered by specificity (most specific first)
+  const keywords = [
+    'high elbow guillotine', 'arm in guillotine', 'guillotine',
+    'rear naked choke', 'rnc',
+    'triangle choke', 'triangle',
+    'arm triangle', 'darce', 'anaconda',
+    'armbar', 'kimura', 'americana',
+    'omoplata', 'gogoplata',
+    'heel hook', 'knee bar', 'toe hold', 'ankle lock',
+    'half guard', 'deep half', 'closed guard', 'open guard',
+    'butterfly guard', 'de la riva', 'x guard', 'spider guard',
+    'mount escape', 'mount', 'back control', 'back take',
+    'side control', 'knee on belly',
+    'guard pass', 'knee cut', 'torreando',
+    'sweep', 'takedown', 'escape'
+  ];
+  
+  for (const kw of keywords) {
+    if (lower.includes(kw)) {
+      return kw;
+    }
+  }
+  
+  return null;
+}
+```
+
+## THE PRINCIPLE
+
+**Gemini analyzed the videos. Gemini knows what’s in them. Query Gemini’s analysis.**
+
+We spent time and money getting detailed analysis of every video. That analysis lives in the database. The video search is just a database query against that analysis.
+
+The AI’s job is to:
+
+1. Understand what technique the user is asking about
+1. Query the Gemini fields
+1. Present what comes back
+1. Explain it in a helpful way
+
+The AI’s job is NOT to:
+
+1. Decide which videos are relevant
+1. Guess based on titles
+1. Fall back to random videos
+1. Override Gemini’s analysis
+
+## TEST THIS
+
+After implementing, test with:
+
+1. “guillotine” → Should return ONLY videos where `techniques_covered` contains “guillotine”
+1. “half guard” → Should return ONLY half guard videos
+1. “random gibberish” → Should return NOTHING (not random videos)
+
+If “Escaping Closed Guard” appears for a guillotine question, the query is still wrong.
+
+## VERIFY WITH SQL
+
+Run this to confirm guillotine videos exist:
+
+```sql
+SELECT title, techniques_covered, primary_techniques
+FROM ai_video_knowledge
+WHERE LOWER(techniques_covered) LIKE '%guillotine%'
+   OR LOWER(primary_techniques) LIKE '%guillotine%'
+LIMIT 10;
+```
+
+This should return actual guillotine videos. If it does, the code query must match this SQL exactly.
+
+Implement this now. Gemini data is our moat — use it.

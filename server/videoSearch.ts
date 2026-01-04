@@ -13,6 +13,198 @@ interface VideoSearchParams {
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// GEMINI-FIRST VIDEO SEARCH - January 2026
+// ═══════════════════════════════════════════════════════════════════════════════
+// 
+// THE RULE: Video selection is DATABASE QUERY against Gemini fields, NOT AI judgment.
+// 
+// Gemini analyzed the videos. Gemini knows what's in them. Query Gemini's analysis.
+// 
+// If user asks about guillotines:
+//   1. Extract "guillotine" from message
+//   2. Query: WHERE techniqueName ILIKE '%guillotine%' in videoKnowledge
+//   3. Return ONLY videos where Gemini identified guillotine content
+//   4. If no matches, return NOTHING — don't fall back to random videos
+// 
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Ordered by specificity (most specific first) - used for keyword extraction
+const TECHNIQUE_KEYWORDS = [
+  // Specific chokes
+  'high elbow guillotine', 'arm in guillotine', 'standing guillotine', 'guillotine',
+  'rear naked choke', 'rnc', 'bow and arrow', 'bow arrow', 
+  'baseball choke', 'north south choke', 'loop choke', 'paper cutter', 'clock choke',
+  'ezekiel', 'cross collar choke', 'collar choke',
+  // Triangles
+  'triangle choke', 'triangle', 'mounted triangle', 'reverse triangle',
+  // Arm attacks
+  'arm triangle', 'darce', "d'arce", 'anaconda choke', 'anaconda', 
+  'armbar', 'arm bar', 'straight armbar', 'belly down armbar',
+  'kimura', 'americana', 'omoplata', 'gogoplata',
+  // Leg locks
+  'heel hook', 'inside heel hook', 'outside heel hook',
+  'knee bar', 'kneebar', 'toe hold', 'calf slicer', 'ankle lock', 'straight ankle',
+  // Guards
+  'half guard', 'deep half', 'lockdown', 'knee shield',
+  'closed guard', 'full guard',
+  'open guard', 'butterfly guard', 'butterfly', 
+  'de la riva', 'dlr', 'rdlr', 'reverse de la riva',
+  'x guard', 'x-guard', 'single leg x', 'slx',
+  'spider guard', 'lasso guard', 'worm guard', 'lapel guard',
+  'rubber guard', 'mission control', 'z guard',
+  // Positions
+  'mount', 'mount escape', 'mounted', 's mount', 's-mount',
+  'back control', 'back take', 'back mount', 'rear mount',
+  'side control', 'side mount', 'cross side', 'knee on belly', 'kob',
+  'turtle', 'crucifix', 'north south',
+  // Techniques
+  'berimbolo', 'kiss of the dragon', 
+  'leg drag', 'knee slice', 'knee cut', 'torreando', 'bullfighter',
+  'sweep', 'scissor sweep', 'hip bump', 'flower sweep', 'pendulum sweep',
+  'escape', 'bridge', 'hip escape', 'shrimp', 'upa',
+  'takedown', 'single leg', 'double leg', 'snap down', 'arm drag',
+  'pass', 'guard pass', 'guard passing',
+  'retention', 'guard retention'
+];
+
+/**
+ * Extract technique keyword from user message
+ * Returns the most specific matching technique (longer matches first)
+ */
+export function extractTechniqueKeyword(message: string): string | null {
+  const lower = message.toLowerCase();
+  
+  for (const kw of TECHNIQUE_KEYWORDS) {
+    if (lower.includes(kw)) {
+      console.log(`[GEMINI SEARCH] Extracted technique keyword: "${kw}"`);
+      return kw;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * GEMINI-FIRST VIDEO SEARCH
+ * 
+ * This function ONLY queries the Gemini-analyzed videoKnowledge table.
+ * It returns ONLY videos where Gemini identified the requested technique.
+ * If no match, returns empty array (not random videos).
+ */
+export async function searchGeminiFirst(technique: string): Promise<{
+  videos: any[];
+  technique: string;
+  noMatchFound: boolean;
+}> {
+  console.log(`\n═══════════════════════════════════════════════════════════════`);
+  console.log(`[GEMINI SEARCH] 🔍 Searching Gemini-analyzed data for: "${technique}"`);
+  console.log(`═══════════════════════════════════════════════════════════════`);
+  
+  const searchTerm = `%${technique.toLowerCase()}%`;
+  
+  try {
+    // Step 1: Query GEMINI FIELDS ONLY via videoKnowledge table
+    // Join with aiVideoKnowledge to get full video metadata
+    const videos = await db.select({
+      // Required fields for video playback
+      id: aiVideoKnowledge.id,
+      title: aiVideoKnowledge.title,
+      youtubeId: aiVideoKnowledge.youtubeId,
+      videoUrl: aiVideoKnowledge.videoUrl, // CRITICAL: Needed for video playback
+      instructorName: aiVideoKnowledge.instructorName,
+      thumbnailUrl: aiVideoKnowledge.thumbnailUrl,
+      qualityScore: aiVideoKnowledge.qualityScore,
+      duration: aiVideoKnowledge.duration,
+      positionCategory: aiVideoKnowledge.positionCategory,
+      techniqueType: aiVideoKnowledge.techniqueType,
+      giOrNogi: aiVideoKnowledge.giOrNogi,
+      tags: aiVideoKnowledge.tags,
+      keyTimestamps: aiVideoKnowledge.keyTimestamps, // CRITICAL: Needed for timestamp linking
+      // Gemini-analyzed fields
+      techniqueName: videoKnowledge.techniqueName,
+      positionContext: videoKnowledge.positionContext,
+      keyConcepts: videoKnowledge.keyConcepts,
+      instructorTips: videoKnowledge.instructorTips,
+      commonMistakes: videoKnowledge.commonMistakes,
+      fullSummary: videoKnowledge.fullSummary,
+      problemSolved: videoKnowledge.problemSolved,
+      instructorQuote: videoKnowledge.instructorQuote,
+      chainsTo: videoKnowledge.chainsTo,
+      setupsFrom: videoKnowledge.setupsFrom,
+      timestampStart: videoKnowledge.timestampStart,
+      skillLevel: videoKnowledge.skillLevel
+    })
+    .from(videoKnowledge)
+    .innerJoin(aiVideoKnowledge, eq(videoKnowledge.videoId, aiVideoKnowledge.id))
+    .where(
+      and(
+        // Quality threshold
+        sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`,
+        // Match technique in ANY Gemini-analyzed field
+        or(
+          sql`LOWER(${videoKnowledge.techniqueName}) LIKE LOWER(${searchTerm})`,
+          sql`array_to_string(COALESCE(${videoKnowledge.keyConcepts}, '{}'), ' ') ILIKE ${searchTerm}`,
+          sql`COALESCE(${videoKnowledge.fullSummary}, '') ILIKE ${searchTerm}`,
+          sql`array_to_string(COALESCE(${videoKnowledge.instructorTips}, '{}'), ' ') ILIKE ${searchTerm}`,
+          sql`COALESCE(${videoKnowledge.positionContext}, '') ILIKE ${searchTerm}`,
+          sql`COALESCE(${videoKnowledge.problemSolved}, '') ILIKE ${searchTerm}`,
+          sql`array_to_string(COALESCE(${videoKnowledge.chainsTo}, '{}'), ' ') ILIKE ${searchTerm}`,
+          sql`array_to_string(COALESCE(${videoKnowledge.setupsFrom}, '{}'), ' ') ILIKE ${searchTerm}`
+        )
+      )
+    )
+    .orderBy(desc(aiVideoKnowledge.qualityScore))
+    .limit(10);
+    
+    console.log(`[GEMINI SEARCH] Found ${videos.length} videos in Gemini data for "${technique}"`);
+    
+    // Step 2: POST-VALIDATION - Verify matches contain the technique
+    const techniqueWords = technique.toLowerCase().split(/\s+/);
+    const verified = videos.filter(v => {
+      const searchableText = [
+        v.techniqueName || '',
+        (v.keyConcepts || []).join(' '),
+        v.fullSummary || '',
+        (v.instructorTips || []).join(' '),
+        v.positionContext || '',
+        v.problemSolved || '',
+        (v.chainsTo || []).join(' '),
+        (v.setupsFrom || []).join(' '),
+        v.title || ''
+      ].join(' ').toLowerCase();
+      
+      // At least one technique word must match
+      return techniqueWords.some(word => word.length > 2 && searchableText.includes(word));
+    });
+    
+    console.log(`[GEMINI SEARCH] ${verified.length} videos passed post-validation`);
+    verified.slice(0, 5).forEach((v, i) => {
+      console.log(`  ${i + 1}. "${v.title}" by ${v.instructorName} (technique: ${v.techniqueName})`);
+    });
+    
+    // Deduplicate by video ID (multiple videoKnowledge rows can exist per video)
+    const uniqueVideos = Array.from(new Map(verified.map(v => [v.id, v])).values());
+    
+    console.log(`[GEMINI SEARCH] Returning ${uniqueVideos.length} unique videos`);
+    console.log(`═══════════════════════════════════════════════════════════════\n`);
+    
+    return {
+      videos: uniqueVideos,
+      technique,
+      noMatchFound: uniqueVideos.length === 0
+    };
+    
+  } catch (error) {
+    console.error(`[GEMINI SEARCH] Error:`, error);
+    return {
+      videos: [],
+      technique,
+      noMatchFound: true
+    };
+  }
+}
+
 interface SearchIntent {
   techniqueType?: string;
   positionCategory?: string;
