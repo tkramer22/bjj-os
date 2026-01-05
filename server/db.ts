@@ -79,6 +79,72 @@ export async function checkDatabaseConnection(): Promise<boolean> {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// SUPABASE VIDEO LIBRARY VALIDATION
+// ═══════════════════════════════════════════════════════════════
+
+export function isSupabaseDatabase(): boolean {
+  return databaseUrl.includes('supabase.co') || databaseUrl.includes('pooler.supabase.com');
+}
+
+export async function validateVideoLibrary(): Promise<{
+  isValid: boolean;
+  database: string;
+  totalVideos: number;
+  videosWithGemini: number;
+  message: string;
+}> {
+  const isSupabase = isSupabaseDatabase();
+  
+  if (!isSupabase) {
+    console.error('═══════════════════════════════════════════════════════');
+    console.error('❌ CRITICAL: NOT CONNECTED TO SUPABASE DATABASE');
+    console.error('Video library with 3,249+ videos is ONLY in Supabase');
+    console.error('Current DB URL prefix:', databaseUrl.substring(0, 40) + '...');
+    console.error('═══════════════════════════════════════════════════════');
+    return {
+      isValid: false,
+      database: 'Unknown/Production',
+      totalVideos: 0,
+      videosWithGemini: 0,
+      message: 'NOT connected to Supabase - video search will fail'
+    };
+  }
+  
+  try {
+    const videoCount = await db.execute('SELECT COUNT(*) as count FROM ai_video_knowledge');
+    const geminiCount = await db.execute('SELECT COUNT(*) as count FROM video_knowledge');
+    
+    const totalVideos = Number(videoCount.rows?.[0]?.count || videoCount[0]?.count || 0);
+    const videosWithGemini = Number(geminiCount.rows?.[0]?.count || geminiCount[0]?.count || 0);
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('✅ SUPABASE VIDEO LIBRARY VALIDATED');
+    console.log(`   Total Videos: ${totalVideos.toLocaleString()}`);
+    console.log(`   Gemini Analysis Rows: ${videosWithGemini.toLocaleString()}`);
+    console.log('═══════════════════════════════════════════════════════');
+    
+    return {
+      isValid: totalVideos > 0,
+      database: 'Supabase',
+      totalVideos,
+      videosWithGemini,
+      message: totalVideos > 0 
+        ? `Connected to Supabase with ${totalVideos.toLocaleString()} videos`
+        : 'Connected to Supabase but no videos found'
+    };
+  } catch (error) {
+    console.error('❌ Error validating video library:', error instanceof Error ? error.message : 'Unknown error');
+    return {
+      isValid: false,
+      database: 'Supabase (error)',
+      totalVideos: 0,
+      videosWithGemini: 0,
+      message: 'Connected to Supabase but failed to query video tables'
+    };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // CONNECTION POOL MONITORING
 // ═══════════════════════════════════════════════════════════════
 

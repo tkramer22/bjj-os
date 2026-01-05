@@ -584,6 +584,32 @@ export function registerRoutes(app: Express): Server {
   });
   
   // ============================================================================
+  // DATABASE HEALTH CHECK ENDPOINTS
+  // ============================================================================
+  
+  app.get('/api/health/database', async (req, res) => {
+    try {
+      const { validateVideoLibrary, isSupabaseDatabase } = await import('./db');
+      const validation = await validateVideoLibrary();
+      
+      res.json({
+        status: validation.isValid ? '✅ HEALTHY' : '❌ ISSUE DETECTED',
+        database: validation.database,
+        totalVideos: validation.totalVideos,
+        videosWithGeminiAnalysis: validation.videosWithGemini,
+        message: validation.message,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        status: '❌ ERROR',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+  
+  // ============================================================================
   // COMPREHENSIVE VIDEO SEARCH DIAGNOSIS ENDPOINTS (January 2026)
   // ============================================================================
   

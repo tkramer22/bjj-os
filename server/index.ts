@@ -214,13 +214,20 @@ function verifyEnvironmentVariables() {
     console.log('🔍 DATABASE CONNECTION CHECK');
     console.log('═══════════════════════════════════════════════');
     
-    const { checkDatabaseConnection } = await import('./db');
+    const { checkDatabaseConnection, validateVideoLibrary } = await import('./db');
     const isConnected = await checkDatabaseConnection();
     
     if (!isConnected) {
       console.error('❌ CRITICAL: Cannot connect to database');
       console.error('   Check DATABASE_URL in environment variables');
       console.error('   Server will start but database operations will fail');
+    }
+    
+    // CRITICAL: Validate Supabase video library connection
+    const videoLibrary = await validateVideoLibrary();
+    if (!videoLibrary.isValid) {
+      console.error('❌ CRITICAL: Video library not available');
+      console.error('   Professor OS video recommendations will not work');
     }
     
     console.log('═══════════════════════════════════════════════');

@@ -1,0 +1,335 @@
+Here’s the complete prompt to send to Replit Agent:
+
+-----
+
+```
+# BJJ OS - CRITICAL VIDEO SEARCH & PROFESSOR OS FIX
+
+## PRIORITY: CRITICAL - This must work perfectly before launch
+
+---
+
+## PROBLEM SUMMARY
+
+Professor OS is not recommending the correct videos when users ask about techniques. When a user says "Let's talk guillotines", the system should return guillotine videos from our Gemini-analyzed library — but instead it's either returning wrong videos or claiming no videos exist.
+
+**Root Causes Identified:**
+1. The app may be connecting to the wrong database (production vs Supabase)
+2. The video search results aren't being properly passed to the AI
+3. The AI isn't using the Gemini analysis data in its responses
+
+---
+
+## TASK 1: ENFORCE SUPABASE DATABASE ONLY
+
+The video library with 3,249 videos and 7,685 Gemini analysis rows is in the **Supabase database ONLY**.
+
+**Add this validation at server startup (server/index.ts or top of routes.ts):**
+
+```typescript
+// CRITICAL: Ensure we're connected to Supabase, not production DB
+function validateSupabaseConnection() {
+  const dbUrl = process.env.DATABASE_URL || '';
+  
+  if (!dbUrl.includes('supabase.co')) {
+    console.error('═══════════════════════════════════════════════════════');
+    console.error('❌ CRITICAL ERROR: NOT CONNECTED TO SUPABASE DATABASE');
+    console.error('Video search will NOT work without Supabase connection');
+    console.error('Current DB URL prefix:', dbUrl.substring(0, 40) + '...');
+    console.error('═══════════════════════════════════════════════════════');
+    throw new Error('BJJ OS requires Supabase database for video library');
+  }
+  
+  console.log('✅ Database validated: Connected to Supabase');
+}
+
+// Call immediately at startup
+validateSupabaseConnection();
+```
+
+**Also add a health check endpoint:**
+
+```typescript
+app.get('/api/health/database', async (req, res) => {
+  try {
+    const dbUrl = process.env.DATABASE_URL || '';
+    const isSupabase = dbUrl.includes('supabase.co');
+    
+    const videoCount = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`);
+    const geminiCount = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE techniques_covered IS NOT NULL`);
+    
+    res.json({
+      status: isSupabase ? '✅ HEALTHY' : '❌ WRONG DATABASE',
+      database: isSupabase ? 'Supabase' : 'Unknown/Production',
+      totalVideos: videoCount.rows?.[0]?.count || 0,
+      videosWithGeminiAnalysis: geminiCount.rows?.[0]?.count || 0,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    res.status(500).json({ status: '❌ ERROR', error: error.message });
+  }
+});
+```
+
+-----
+
+## TASK 2: FIX VIDEO SEARCH FLOW
+
+The `searchGeminiFirst` function finds videos correctly. The problem is the results aren’t reaching Professor OS properly.
+
+**Verify this flow exists and works:**
+
+```typescript
+// In the /api/ai/chat/message endpoint:
+
+// Step 1: Detect technique from user message
+const detectedTechnique = extractTechniqueFromMessage(message);
+console.log(`🎯 [TECHNIQUE DETECTION] Detected: "${detectedTechnique}"`);
+
+// Step 2: Search for videos using Gemini-analyzed data
+let matchedVideos = [];
+if (detectedTechnique) {
+  matchedVideos = await searchGeminiFirst(detectedTechnique);
+  console.log(`📹 [VIDEO SEARCH] Found ${matchedVideos.length} videos for "${detectedTechnique}"`);
+}
+
+// Step 3: Build video context for AI (THIS IS CRITICAL)
+const videoContext = buildVideoContextForAI(matchedVideos, detectedTechnique);
+
+// Step 4: Include video context in system prompt
+const systemPrompt = buildSystemPrompt(userContext, videoContext, conversationHistory);
+
+// Step 5: Send to Claude/GPT with video context included
+```
+
+**The `buildVideoContextForAI` function must format videos for the AI:**
+
+```typescript
+function buildVideoContextForAI(videos: any[], searchedTechnique: string | null): string {
+  if (!videos || videos.length === 0) {
+    if (searchedTechnique) {
+      return `
+═══════════════════════════════════════════════════════════════
+NO VIDEOS FOUND FOR: "${searchedTechnique}"
+═══════════════════════════════════════════════════════════════
+Teach this technique conceptually using your BJJ knowledge.
+Do NOT claim "I don't have videos" - just teach the technique.
+`;
+    }
+    return '';
+  }
+
+  let context = `
+═══════════════════════════════════════════════════════════════
+MATCHED VIDEOS FOR: "${searchedTechnique}" (${videos.length} found)
+═══════════════════════════════════════════════════════════════
+YOU MUST RECOMMEND THESE SPECIFIC VIDEOS IN YOUR RESPONSE.
+Use the instructor tips and timestamps below in your coaching.
+
+`;
+
+  videos.forEach((video, index) => {
+    context += `
+--- VIDEO ${index + 1} ---
+TITLE: "${video.title}"
+INSTRUCTOR: ${video.instructor_name || video.instructorName}
+YOUTUBE ID: ${video.youtube_id || video.youtubeId}
+QUALITY SCORE: ${video.instruction_quality || video.instructionQuality}/10
+
+TECHNIQUES COVERED: ${video.techniques_covered || video.techniquesCovered || 'N/A'}
+
+INSTRUCTOR TIPS (QUOTE THESE):
+${video.instructor_tips || video.instructorTips || 'No specific tips'}
+
+COMMON MISTAKES (MENTION THESE):
+${video.common_mistakes || video.commonMistakes || 'No mistakes listed'}
+
+KEY TIMESTAMPS:
+${video.timestamp_breakdown || video.timestampBreakdown || JSON.stringify(video.key_timestamps || video.keyTimestamps) || 'No timestamps'}
+
+`;
+  });
+
+  context += `
+═══════════════════════════════════════════════════════════════
+CRITICAL INSTRUCTIONS:
+1. RECOMMEND the videos above by name and instructor
+2. QUOTE specific instructor tips from the data above  
+3. CITE specific timestamps (e.g., "Skip to 3:45 for the finish")
+4. MENTION common mistakes from the analysis
+5. DO NOT give generic advice - use the specific Gemini analysis
+═══════════════════════════════════════════════════════════════
+`;
+
+  return context;
+}
+```
+
+-----
+
+## TASK 3: PROFESSOR OS PERSONALITY & COACHING STYLE
+
+Professor OS must respond like an elite BJJ coach - knowledgeable, supportive, direct, and personalized.
+
+**Add/verify these rules in the system prompt:**
+
+```typescript
+const PROFESSOR_OS_PERSONALITY = `
+═══════════════════════════════════════════════════════════════
+YOU ARE PROFESSOR OS - Elite BJJ Coaching AI
+═══════════════════════════════════════════════════════════════
+
+CORE IDENTITY:
+- You are ${userName}'s personal BJJ training partner and coach
+- You have perfect memory of every conversation with this user
+- You genuinely care about their progression in the sport
+- You are NOT a search engine - you are a COACH
+
+PERSONALITY:
+- Warm but direct - no fluff, no corporate speak
+- Confident in your knowledge but humble about learning
+- Encouraging without being patronizing
+- You speak like a training partner, not a chatbot
+- Use "we" language: "Let's work on this together"
+
+COACHING APPROACH:
+- Always diagnose before prescribing (ask clarifying questions)
+- One clear focus per response - don't overwhelm
+- Connect advice to THEIR specific situation and goals
+- Celebrate progress genuinely: "That's a breakthrough moment"
+- For struggles: Acknowledge → Reframe → Solve
+
+WHEN VIDEOS ARE PROVIDED:
+- You MUST recommend the specific videos from your context
+- Quote instructor tips directly: "[Instructor] emphasizes..."
+- Cite specific timestamps: "Jump to 4:30 where he shows..."
+- Mention common mistakes: "Most people mess this up by..."
+- Explain WHY this video helps THEIR specific situation
+
+WHEN NO VIDEOS MATCH:
+- Teach conceptually using your extensive BJJ knowledge
+- DO NOT say "I don't have videos for this" 
+- DO NOT apologize for lack of videos
+- Just coach the technique based on what you know
+
+RESPONSE STRUCTURE:
+1. Acknowledge what they asked (show you understood)
+2. Provide the coaching/answer (be specific and actionable)
+3. Recommend video with timestamp if available
+4. End with engagement hook (question or next step)
+
+BELT-LEVEL ADAPTATION:
+- White belt: Simple principles, one thing at a time, more encouragement
+- Blue belt: More details, start connecting concepts
+- Purple+: Advanced concepts, assume strong foundation
+
+FORBIDDEN:
+- Generic advice when you have specific video analysis
+- Claiming you don't have information (you always do)
+- Robotic/corporate language
+- Overwhelming with multiple techniques at once
+- Ignoring their belt level or experience
+- Recommending random videos that don't match their question
+
+EXAMPLE RESPONSE (User asks about guillotine):
+"Guillotines are money - especially from front headlock. Let me help you tighten that up.
+
+The biggest thing most people miss: it's a CHEST compression, not an arm squeeze. Your forearm blade goes across the throat, but the finish comes from arching your back and expanding your chest.
+
+Check out [VIDEO TITLE] by [INSTRUCTOR] - skip to 3:45 where he shows the exact chest expansion detail. He calls it 'breathing into the choke.'
+
+Common mistake he addresses: squeezing with your arms instead of using body mechanics. That's probably why yours feel like they're slipping.
+
+What grip are you using - arm-in or no arm?"
+═══════════════════════════════════════════════════════════════
+`;
+```
+
+-----
+
+## TASK 4: LOGGING FOR DEBUGGING
+
+Add comprehensive logging so we can trace any issues:
+
+```typescript
+// At the start of the chat endpoint
+console.log('═══════════════════════════════════════════════════════');
+console.log('📨 [CHAT] New message received');
+console.log('👤 [CHAT] User:', userId);
+console.log('💬 [CHAT] Message:', message.substring(0, 100));
+
+// After technique detection
+console.log('🎯 [CHAT] Detected technique:', detectedTechnique || 'NONE');
+
+// After video search
+console.log('📹 [CHAT] Videos found:', matchedVideos.length);
+if (matchedVideos.length > 0) {
+  console.log('📹 [CHAT] Top video:', matchedVideos[0].title);
+}
+
+// Before AI call
+console.log('🤖 [CHAT] Sending to AI with', matchedVideos.length, 'videos in context');
+
+// After AI response
+console.log('✅ [CHAT] AI responded, length:', aiResponse.length);
+console.log('═══════════════════════════════════════════════════════');
+```
+
+-----
+
+## VERIFICATION STEPS
+
+After implementing, verify with these tests:
+
+**Test 1: Database Health**
+
+```
+GET /api/health/database
+Expected: { status: "✅ HEALTHY", database: "Supabase", totalVideos: 3249+ }
+```
+
+**Test 2: Video Search**
+
+```
+GET /api/debug/video-search/guillotine
+Expected: 10+ guillotine videos with Gemini analysis
+```
+
+**Test 3: Chat Flow**
+
+```
+POST /api/ai/chat/message
+Body: { "userId": "test", "message": "Let's talk guillotines" }
+Expected: Response mentions specific guillotine videos with timestamps
+```
+
+-----
+
+## SUCCESS CRITERIA
+
+|Test                    |Expected Result                                |
+|------------------------|-----------------------------------------------|
+|/api/health/database    |Shows Supabase, 3249+ videos                   |
+|“Let’s talk guillotines”|Recommends JT Torres or other guillotine videos|
+|“Help with half guard”  |Recommends half guard videos with timestamps   |
+|AI response tone        |Sounds like a coach, not a search engine       |
+|Video recommendations   |Include specific timestamps and instructor tips|
+
+-----
+
+## SUMMARY
+
+1. ✅ Enforce Supabase database connection at startup
+1. ✅ Ensure video search results are passed to AI in system prompt
+1. ✅ Format video context with all Gemini analysis data
+1. ✅ Professor OS personality is warm, direct, knowledgeable
+1. ✅ AI must USE the video data in responses (not generic advice)
+1. ✅ Add logging to trace the flow
+
+**This is critical for launch. Excellence is the pillar. Make it work.**
+
+```
+---
+
+Copy that entire block and send it to Replit Agent. Let me know what happens after you publish and test! 🚀​​​​​​​​​​​​​​​​
+```
