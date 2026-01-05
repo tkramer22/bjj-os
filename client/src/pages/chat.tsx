@@ -44,13 +44,13 @@ interface AuthUser {
 
 // Helper function to parse [VIDEO:...] tokens from message content
 // Deduplicates videos - if same video ID appears multiple times, only show one card
-function parseVideoTokens(content?: string): { text: string; video?: { id: number; title: string; instructor: string; duration: string; videoId: string } }[] {
+function parseVideoTokens(content?: string): { text: string; video?: { id: number; title: string; instructor: string; duration: string; videoId: string; startTimeSeconds?: number } }[] {
   // Guard against undefined/null content
   if (!content) {
     return [{ text: '' }];
   }
   
-  const segments: { text: string; video?: { id: number; title: string; instructor: string; duration: string; videoId: string } }[] = [];
+  const segments: { text: string; video?: { id: number; title: string; instructor: string; duration: string; videoId: string; startTimeSeconds?: number } }[] = [];
   const videoRegex = /\[VIDEO:\s*([^\]]+)\]/g;
   const seenVideoIds = new Set<number>(); // Track videos we've already added
   const seenVideoTitles = new Set<string>(); // Fallback for videos without ID
@@ -67,7 +67,7 @@ function parseVideoTokens(content?: string): { text: string; video?: { id: numbe
     // Parse video data from token
     const videoData = match[1].split('|').map(s => s.trim());
     
-    // Try enriched format first: [VIDEO: title | instructor | duration | videoId | id]
+    // Try enriched format first: [VIDEO: title | instructor | duration | videoId | id | startTime]
     if (videoData.length >= 5) {
       const videoId = videoData[3]?.trim() || '';
       const dbId = parseInt(videoData[4], 10);
@@ -85,12 +85,32 @@ function parseVideoTokens(content?: string): { text: string; video?: { id: numbe
         }
         seenVideoIds.add(dbId);
         
+        // Parse timestamp from 6th field if available (e.g., "135" for 2:15)
+        let startTimeSeconds = 0;
+        if (videoData.length >= 6 && videoData[5]) {
+          const parsedTime = parseInt(videoData[5], 10);
+          if (!isNaN(parsedTime)) {
+            startTimeSeconds = parsedTime;
+            console.log('[parseVideoTokens] Extracted enriched timestamp:', startTimeSeconds, 'seconds');
+          }
+        }
+        
+        // Also try to extract START: from duration field (e.g., "START: 2:15" or "2:15")
+        if (startTimeSeconds === 0 && videoData[2]) {
+          const timeMatch = videoData[2].match(/(?:START:\s*)?(\d+):(\d+)/i);
+          if (timeMatch) {
+            startTimeSeconds = parseInt(timeMatch[1], 10) * 60 + parseInt(timeMatch[2], 10);
+            console.log('[parseVideoTokens] Extracted duration timestamp:', startTimeSeconds, 'seconds');
+          }
+        }
+        
         const video = {
           title: videoData[0],
           instructor: videoData[1],
           duration: videoData[2],
           videoId,
-          id: dbId
+          id: dbId,
+          startTimeSeconds
         };
         
         // Debug: log if videoId is missing in enriched format
@@ -117,6 +137,18 @@ function parseVideoTokens(content?: string): { text: string; video?: { id: numbe
       const titleAndInstructor = videoData[0] || '';
       const byMatch = titleAndInstructor.match(/^(.+?)\s+by\s+(.+)$/i);
       
+      // Extract START: timestamp if present (e.g., "START: 2:15" or "START: 04:32")
+      let startTimeSeconds = 0;
+      let startTimeDisplay = '';
+      const startMatch = match[1].match(/START:\s*(\d+):(\d+)/i);
+      if (startMatch) {
+        const minutes = parseInt(startMatch[1], 10);
+        const seconds = parseInt(startMatch[2], 10);
+        startTimeSeconds = minutes * 60 + seconds;
+        startTimeDisplay = `${minutes}:${startMatch[2].padStart(2, '0')}`;
+        console.log('[parseVideoTokens] Extracted START timestamp:', startTimeDisplay, '(', startTimeSeconds, 'seconds)');
+      }
+      
       if (byMatch) {
         const title = byMatch[1].trim();
         const instructor = byMatch[2].trim();
@@ -130,13 +162,14 @@ function parseVideoTokens(content?: string): { text: string; video?: { id: numbe
         }
         seenVideoTitles.add(titleKey);
         
-        // Create fallback video card with minimal data
+        // Create fallback video card with timestamp if available
         const video = {
           title,
           instructor,
-          duration: 'full',
+          duration: startTimeDisplay || 'full',
           videoId: '', // Empty videoId means card will show text only (no embed)
-          id: Date.now() // Temporary ID for React key
+          id: Date.now(), // Temporary ID for React key
+          startTimeSeconds // Include parsed timestamp for video player
         };
         
         segments.push({
@@ -144,7 +177,7 @@ function parseVideoTokens(content?: string): { text: string; video?: { id: numbe
           video
         });
         
-        console.log('[parseVideoTokens] Rendered fallback card:', title, 'by', instructor);
+        console.log('[parseVideoTokens] Rendered fallback card:', title, 'by', instructor, startTimeDisplay ? `@ ${startTimeDisplay}` : '');
       } else {
         // Can't parse - show as text
         console.warn('[parseVideoTokens] Could not parse video token:', match[1]);
@@ -167,7 +200,7 @@ export default function ChatPage() {
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [savedVideoIds, setSavedVideoIds] = useState<Set<number>>(new Set());
-  const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string } | null>(null);
+  const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string; startTimeSeconds?: number } | null>(null);
   const [loadingMessage, setLoadingMessage] = useState("Analyzing your training");
   const { messages, setMessages, historyLoaded, setHistoryLoaded } = useChatContext();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -701,11 +734,12 @@ export default function ChatPage() {
                                 onClick={() => setCurrentVideo({ 
                                   videoId: segment.video!.videoId, 
                                   title: segment.video!.title, 
-                                  instructor: segment.video!.instructor 
+                                  instructor: segment.video!.instructor,
+                                  startTimeSeconds: segment.video!.startTimeSeconds || 0
                                 })}
                                 data-testid={`button-watch-${segment.video.id}`}
                               >
-                                Watch
+                                Watch{segment.video!.startTimeSeconds ? ` @ ${Math.floor(segment.video!.startTimeSeconds / 60)}:${String(segment.video!.startTimeSeconds % 60).padStart(2, '0')}` : ''}
                               </Button>
                               <Button
                                 size="sm"
@@ -817,6 +851,7 @@ export default function ChatPage() {
           videoId={currentVideo.videoId}
           title={currentVideo.title}
           instructor={currentVideo.instructor}
+          startTime={currentVideo.startTimeSeconds || 0}
           onClose={() => setCurrentVideo(null)}
         />
       )}

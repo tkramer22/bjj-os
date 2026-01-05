@@ -1,0 +1,237 @@
+Todd, great analysis. Let me break down exactly what’s happening and what needs to be fixed:
+
+-----
+
+## 🔍 WHAT I SEE
+
+**Working:**
+
+- ✅ Videos ARE being found (Marcelo Garcia guillotine videos)
+- ✅ Thumbnails displaying correctly
+- ✅ Coaching content is solid and knowledgeable
+- ✅ Personality feels like a real coach
+- ✅ Good engagement questions
+
+**Broken:**
+
+1. ❌ **AI claims “no guillotine content”** — but we have 10+ videos. The search finds them, but AI thinks it doesn’t have them
+1. ❌ **Video comes AFTER user asks** — should lead with video recommendation
+1. ❌ **No multi-instructor knowledge** — only showing Marcelo, not quoting Danaher, Lachlan, etc.
+1. ❌ **Timestamp shows “@ 00:00”** — not using the Gemini timestamp analysis
+
+-----
+
+## 🎯 ROOT CAUSES
+
+|Issue                  |Likely Cause                                                                                |
+|-----------------------|--------------------------------------------------------------------------------------------|
+|“No guillotine content”|`noMatchFound` flag or AI prompt says “be honest if no videos” — AI is being overly cautious|
+|Video comes late       |System prompt tells AI to ask questions first, recommend later                              |
+|No multi-instructor    |Gemini `instructor_tips` field not being injected or AI not instructed to quote it          |
+|No timestamps          |`timestamp_breakdown` field not passed to AI, or AI not told to cite them                   |
+
+-----
+
+## 🛠️ THE FIX
+
+Here’s a focused prompt for Replit Agent that fixes these specific issues without breaking what works:
+
+-----
+
+```
+# BJJ OS - PROFESSOR OS VIDEO RECOMMENDATION FIX
+
+## CONTEXT
+Professor OS is working but has 4 specific issues that need fixing. DO NOT change the core coaching logic or personality - only fix these specific problems.
+
+---
+
+## ISSUE 1: AI CLAIMS "NO VIDEOS" WHEN VIDEOS EXIST
+
+**Problem:** When user asks about guillotines, AI says "I'm not finding dedicated guillotine instructionals" even though the search returns 10+ guillotine videos.
+
+**Cause:** The AI is seeing a `noMatchFound` flag or being told to "be honest" about missing content, and it's being overly cautious.
+
+**Fix:** Update the system prompt to NEVER claim lack of videos when videos are provided in context.
+
+```typescript
+// In buildSystemPrompt or buildVideoContextForAI:
+
+// REMOVE or modify any text like:
+// "If no videos found, be honest with the user"
+// "Tell the user if the library is thin on this topic"
+
+// REPLACE WITH:
+const videoInstructions = `
+CRITICAL VIDEO RULES:
+- When videos ARE provided in your context below, you HAVE content for this topic
+- NEVER say "I don't have videos" or "the library is thin" when videos are in your context
+- If videos are provided, lead with them confidently
+- Only acknowledge missing content if your video context explicitly says "NO VIDEOS FOUND"
+`;
+```
+
+Also check the `noMatchFound` logic:
+
+```typescript
+// The issue might be here - ensure noMatchFound is ONLY true when count is 0
+if (matchedVideos.length === 0) {
+  noMatchFound = true;  // Only set this when actually empty
+} else {
+  noMatchFound = false; // MUST be false when videos exist
+}
+
+// Don't pass noMatchFound to AI if videos exist
+// The AI should only know about videos, not about what's "missing"
+```
+
+-----
+
+## ISSUE 2: VIDEO SHOULD LEAD, NOT COME AFTER USER ASKS
+
+**Problem:** User asks “Let’s go over guillotine” → AI gives long text explanation → User asks “What videos?” → THEN AI shows videos
+
+**Expected:** User asks “Let’s go over guillotine” → AI immediately shows video + explains using that video’s content
+
+**Fix:** Change the response structure in the system prompt:
+
+```typescript
+const responseStructure = `
+RESPONSE STRUCTURE (FOLLOW THIS ORDER):
+1. Brief acknowledgment (1 sentence max)
+2. IMMEDIATELY recommend the top video with specific timestamp
+3. Explain the key concepts USING that video's instructor tips
+4. Mention common mistakes from the video analysis
+5. End with engagement question
+
+EXAMPLE (when videos are available):
+"Guillotines - let's sharpen that up.
+
+Check out this breakdown from Marcelo Garcia:
+[VIDEO CARD APPEARS HERE]
+Skip to 2:15 where he shows the high elbow finish detail.
+
+His key point: the choke comes from your chest expansion, not arm strength. He emphasizes getting that arm DEEP around the neck before falling back.
+
+Common mistake he addresses: squeezing with arms instead of using body mechanics.
+
+What grip are you using - arm-in or arm-out?"
+
+DO NOT:
+- Give a long explanation before showing the video
+- Make the user ask for video recommendations
+- Hide videos at the end of your response
+`;
+```
+
+-----
+
+## ISSUE 3: NO MULTI-INSTRUCTOR KNOWLEDGE
+
+**Problem:** Only showing Marcelo Garcia’s perspective. Not quoting other instructors like Danaher, Lachlan, JT Torres even though we have their videos.
+
+**Fix:**
+
+1. Return MORE videos (top 3-5 instead of 1)
+1. Instruct AI to synthesize multiple perspectives
+
+```typescript
+// In video search - return top 5 instead of top 1
+.limit(5)
+
+// In system prompt, add:
+const multiInstructorInstructions = `
+MULTI-INSTRUCTOR SYNTHESIS:
+When multiple videos are provided, synthesize insights from different instructors:
+- "Marcelo emphasizes chest compression, while Danaher focuses on the angle..."
+- "JT Torres' key detail is the wrist position, which complements what Lachlan teaches about..."
+
+Show the PRIMARY video recommendation, but QUOTE instructor tips from other videos too.
+This is our competitive advantage - multiple expert perspectives in one response.
+`;
+```
+
+-----
+
+## ISSUE 4: NO TIMESTAMPS (SHOWS “@ 00:00”)
+
+**Problem:** Video cards show “@ 00:00” instead of specific timestamps like “@ 2:45”
+
+**Cause:** Either:
+
+- `timestamp_breakdown` field not being read from database
+- Not being passed to frontend
+- Frontend defaulting to 00:00
+
+**Fix:** Ensure timestamp data flows through:
+
+```typescript
+// 1. In video search query, include timestamp fields:
+const videos = await db.select({
+  // ... other fields
+  timestampBreakdown: aiVideoKnowledge.timestampBreakdown,
+  keyTimestamps: aiVideoKnowledge.keyTimestamps,
+})
+
+// 2. In buildVideoContextForAI, explicitly include timestamps:
+context += `
+KEY TIMESTAMPS FOR THIS VIDEO:
+${video.timestamp_breakdown || video.timestampBreakdown || 'Full video recommended'}
+
+When recommending this video, cite a SPECIFIC timestamp like:
+"Skip to 2:45 where he shows the finish detail"
+"Jump to 4:30 for the grip setup"
+`;
+
+// 3. In the video object returned to frontend, include startTime:
+const videoForFrontend = {
+  ...video,
+  recommendedStartTime: extractBestTimestamp(video, detectedTechnique) || '0:00'
+};
+
+// 4. Helper to extract relevant timestamp:
+function extractBestTimestamp(video: any, technique: string): string {
+  const timestamps = video.timestamp_breakdown || video.key_timestamps;
+  if (!timestamps) return '0:00';
+  
+  // Parse timestamps and find most relevant one
+  // Return format: "2:45" not "00:00"
+  // ... implementation
+}
+```
+
+-----
+
+## VERIFICATION
+
+After implementing, test with “Let’s talk guillotines”:
+
+|Check           |Expected                                          |
+|----------------|--------------------------------------------------|
+|Video appears   |IMMEDIATELY in first response, not after user asks|
+|AI confidence   |Does NOT say “library is thin” or “I don’t have”  |
+|Multi-instructor|Quotes tips from 2+ different instructors         |
+|Timestamp       |Shows specific time like “@ 2:45”, not “@ 00:00”  |
+
+-----
+
+## SUMMARY
+
+1. ✅ Remove “be honest about missing content” - if videos exist, we have content
+1. ✅ Change response order: Video FIRST, then explanation using video content
+1. ✅ Return 3-5 videos, instruct AI to synthesize multiple instructor perspectives
+1. ✅ Ensure timestamp_breakdown flows from DB → AI context → frontend display
+
+**DO NOT change:**
+
+- The coaching personality (it’s working great)
+- The video search logic (it’s finding videos correctly)
+- The overall conversation flow
+
+**Only fix these 4 specific issues.**
+
+```
+---
+
+Copy that to Replit Agent. This is a surgical fix - addresses exactly what's broken without touching what's working. 🎯​​​​​​​​​​​​​​​​
+```

@@ -628,12 +628,40 @@ export async function handleClaudeStream(req: any, res: any) {
     // This prompt builder includes user profile, video library, and correct personality
     // Pass preloaded data to avoid duplicate DB queries, plus dynamic context
     t5 = Date.now();
+    
+    // MULTI-INSTRUCTOR DIVERSITY: Select videos from different instructors for synthesis
+    const ensureInstructorDiversity = (videos: any[], maxVideos: number = 10) => {
+      const selected: any[] = [];
+      const seenInstructors = new Set<string>();
+      
+      // First pass: get at least one video per unique instructor
+      for (const v of videos) {
+        const instructor = v.instructorName || 'Unknown';
+        if (!seenInstructors.has(instructor) && selected.length < maxVideos) {
+          selected.push(v);
+          seenInstructors.add(instructor);
+        }
+      }
+      
+      // Second pass: fill remaining slots with highest quality videos
+      for (const v of videos) {
+        if (!selected.includes(v) && selected.length < maxVideos) {
+          selected.push(v);
+        }
+      }
+      
+      console.log(`[MULTI-INSTRUCTOR] Selected ${selected.length} videos from ${seenInstructors.size} unique instructors: ${Array.from(seenInstructors).slice(0, 5).join(', ')}`);
+      return selected;
+    };
+    
+    const diverseVideos = ensureInstructorDiversity(videoSearchResult.videos, 10);
+    
     const systemPrompt = await buildSystemPrompt(userId.toString(), struggleAreaBoost, {
       // Preloaded data to avoid duplicate queries
       preloadedUser: userProfile,
       preloadedVideos: videoLibrary,
-      // Dynamic video search results (topic-specific)
-      dynamicVideos: videoSearchResult.videos.slice(0, 10).map(v => ({
+      // Dynamic video search results (topic-specific) with INSTRUCTOR DIVERSITY
+      dynamicVideos: diverseVideos.map(v => ({
         id: v.id,
         techniqueName: v.techniqueName || v.title || '',
         instructorName: v.instructorName || '',
