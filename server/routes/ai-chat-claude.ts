@@ -658,7 +658,10 @@ export async function handleClaudeStream(req: any, res: any) {
       })),
       // CRITICAL: Pass search status flags to prevent wrong video recommendations
       noMatchFound: videoSearchResult.noMatchFound,
-      searchTermsUsed: videoSearchResult.searchIntent.searchTerms || []
+      // Include the detected technique in searchTermsUsed so the warning displays correctly
+      searchTermsUsed: detectedTechnique 
+        ? [detectedTechnique, ...(videoSearchResult.searchIntent.searchTerms || [])]
+        : videoSearchResult.searchIntent.searchTerms || []
     });
     // Append synthesized knowledge section if available
     let finalSystemPrompt = systemPrompt;
@@ -956,10 +959,17 @@ export async function handleClaudeStream(req: any, res: any) {
     // This prevents matching hallucinated videos (e.g., user asks about guillotines,
     // Claude mentions "Gordon Ryan guillotine", we match to ANY Gordon Ryan video)
     // ═══════════════════════════════════════════════════════════════════════════
-    if (videoSearchResult.noMatchFound) {
+    const skipVideoEnrichment = videoSearchResult.noMatchFound;
+    
+    if (skipVideoEnrichment) {
       console.log(`[VIDEO TOKEN] 🚫 noMatchFound=true - STRIPPING all video tokens to prevent wrong recommendations`);
-      const strippedVideoTokens = naturalResponse.replace(/\[VIDEO:[^\]]+\]\n*(?:[^\n]*\n)?/g, '');
-      naturalResponse = strippedVideoTokens.trim();
+      // More aggressive regex: Strip [VIDEO:...] tokens AND clean up surrounding punctuation
+      // Pattern 1: Token followed by optional description
+      naturalResponse = naturalResponse.replace(/\[VIDEO:[^\]]+\](?:\s*[-—]\s*[^\n.!?]*)?/gi, '');
+      // Pattern 2: Clean up orphaned "Check out" or "Watch" sentences that now reference nothing
+      naturalResponse = naturalResponse.replace(/(?:Check out|Watch|Here's|Here is)\s*[.!?]?\s*\n?/gi, '');
+      // Pattern 3: Clean up empty lines left behind
+      naturalResponse = naturalResponse.replace(/\n{3,}/g, '\n\n').trim();
       console.log(`[VIDEO TOKEN] ✅ Stripped video tokens. New length: ${naturalResponse.length}`);
     }
     

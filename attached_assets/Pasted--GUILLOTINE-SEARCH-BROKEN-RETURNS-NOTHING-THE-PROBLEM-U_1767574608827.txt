@@ -1,0 +1,199 @@
+# GUILLOTINE SEARCH BROKEN - RETURNS NOTHING
+
+## THE PROBLEM
+
+User asked about guillotines.
+Professor OS says: “I don’t have a dedicated guillotine instructional in the search results right now”
+Video shown: “Spider Sweep (Leandro Lo Method)” — COMPLETELY WRONG
+
+**But we KNOW guillotine videos exist** — JT Torres “High Elbow Guillotine” was showing earlier today.
+
+The search is returning NOTHING for “guillotine” and falling back to random/unrelated videos.
+
+-----
+
+## STEP 1: VERIFY GUILLOTINE VIDEOS EXIST
+
+Run this SQL RIGHT NOW in Supabase:
+
+```sql
+-- Check if guillotine videos exist
+SELECT 
+  id,
+  title,
+  instructor_name,
+  techniques_covered,
+  primary_techniques
+FROM ai_video_knowledge 
+WHERE 
+  LOWER(techniques_covered) LIKE '%guillotine%'
+  OR LOWER(primary_techniques) LIKE '%guillotine%'
+  OR LOWER(title) LIKE '%guillotine%'
+LIMIT 10;
+```
+
+**Report back what this returns.**
+
+-----
+
+## STEP 2: CHECK COLUMN NAMES
+
+The column names in code might not match the database. Run:
+
+```sql
+SELECT column_name 
+FROM information_schema.columns 
+WHERE table_name = 'ai_video_knowledge'
+ORDER BY column_name;
+```
+
+Look for:
+
+- Is it `techniques_covered` or `techniquesCovered`?
+- Is it `primary_techniques` or `primaryTechniques`?
+- Is it `technique_summary` or `techniqueSummary`?
+
+-----
+
+## STEP 3: ADD DEBUG LOGGING
+
+In the video search function, add logging to see what’s happening:
+
+```typescript
+async function getVideosForTechnique(technique: string) {
+  console.log('=== GUILLOTINE DEBUG ===');
+  console.log('Searching for technique:', technique);
+  
+  const searchTerm = `%${technique}%`;
+  console.log('Search term:', searchTerm);
+  
+  // Log the raw SQL being executed
+  const query = db.select()
+    .from(aiVideoKnowledge)
+    .where(
+      or(
+        sql`LOWER(techniques_covered) LIKE LOWER(${searchTerm})`,
+        sql`LOWER(primary_techniques) LIKE LOWER(${searchTerm})`
+      )
+    )
+    .limit(5);
+  
+  console.log('Executing query...');
+  
+  const videos = await query;
+  
+  console.log('Results count:', videos.length);
+  console.log('Results:', videos.map(v => v.title));
+  console.log('========================');
+  
+  return videos;
+}
+```
+
+-----
+
+## STEP 4: CHECK FOR COLUMN NAME MISMATCH
+
+The most likely issue is camelCase vs snake_case mismatch.
+
+**If database uses snake_case (`techniques_covered`):**
+
+```typescript
+sql`LOWER(techniques_covered) LIKE LOWER(${searchTerm})`
+```
+
+**If database uses camelCase (`techniquesCovered`):**
+
+```typescript
+sql`LOWER("techniquesCovered") LIKE LOWER(${searchTerm})`
+// Note: camelCase in PostgreSQL needs quotes
+```
+
+**Or use the Drizzle column reference:**
+
+```typescript
+sql`LOWER(${aiVideoKnowledge.techniquesCovered}) LIKE LOWER(${searchTerm})`
+```
+
+-----
+
+## STEP 5: TEST WITH RAW SQL
+
+Create a test endpoint that runs raw SQL to verify:
+
+```typescript
+app.get('/api/test/guillotine-search', async (req, res) => {
+  try {
+    // Raw SQL query - bypasses any ORM issues
+    const result = await db.execute(sql`
+      SELECT id, title, instructor_name, techniques_covered
+      FROM ai_video_knowledge
+      WHERE LOWER(techniques_covered) LIKE '%guillotine%'
+         OR LOWER(primary_techniques) LIKE '%guillotine%'
+         OR LOWER(title) LIKE '%guillotine%'
+      LIMIT 5
+    `);
+    
+    res.json({
+      count: result.rows.length,
+      videos: result.rows
+    });
+  } catch (error: any) {
+    res.json({
+      error: error.message,
+      hint: 'Column name might be wrong'
+    });
+  }
+});
+```
+
+Visit: `https://bjjos.app/api/test/guillotine-search`
+
+-----
+
+## STEP 6: FIX THE FALLBACK BEHAVIOR
+
+Currently when search returns nothing, it falls back to random videos. STOP DOING THAT.
+
+```typescript
+const videos = await searchGeminiFirst(technique);
+
+if (videos.length === 0) {
+  // DO NOT fall back to random videos
+  // Return empty and let AI teach conceptually
+  return {
+    videos: [],
+    noMatchFound: true,
+    message: `No ${technique} videos found in library`
+  };
+}
+
+// Only return if we have ACTUAL matches
+return { videos, noMatchFound: false };
+```
+
+-----
+
+## STEP 7: VERIFY THE FIX
+
+After fixing, test with: “Any guillotine videos?”
+
+Expected result:
+
+- Should show JT Torres “High Elbow Guillotine” or similar
+- Should NOT show Spider Sweep
+- Should NOT say “I don’t have guillotine videos”
+
+-----
+
+## MOST LIKELY CAUSE
+
+The column name in the SQL query doesn’t match the actual database column name.
+
+Either:
+
+1. Code uses `techniques_covered` but DB has `techniquesCovered`
+1. Code uses `techniquesCovered` but DB has `techniques_covered`
+1. The Drizzle schema definition doesn’t match the actual DB
+
+**Run the SQL queries above to diagnose.** Report back what you find.

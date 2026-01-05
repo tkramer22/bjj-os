@@ -954,8 +954,10 @@ REMEMBER: This is ${displayName}'s journey. You're their training partner, not a
     // ═══════════════════════════════════════════════════════════════════════════
     // CRITICAL: Handle "no match found" scenario - DON'T recommend random videos
     // ═══════════════════════════════════════════════════════════════════════════
-    if (dynamicContext.noMatchFound && dynamicContext.searchTermsUsed?.length) {
-      const searchedTechnique = dynamicContext.searchTermsUsed.join(', ');
+    if (dynamicContext.noMatchFound) {
+      const searchedTechnique = dynamicContext.searchTermsUsed?.length 
+        ? dynamicContext.searchTermsUsed.join(', ')
+        : 'the requested technique';
       fullPrompt += `
 
 ═══════════════════════════════════════════════════════════════════════════════
