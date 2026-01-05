@@ -697,17 +697,24 @@ export function registerRoutes(app: Express): Server {
         searchGeminiFirstResults: ormCount,
         totalVideos: totalVideos[0]?.count || 0,
         totalGeminiRows: geminiRows[0]?.count || 0,
-        aiVideoKnowledgeResults: rawResult.slice(0, 3).map((v: any) => ({
+        videos: ormResult.videos.map((v: any) => ({
+          id: v.id,
+          title: v.title || v.techniqueName,
+          instructorName: v.instructorName,
+          techniqueName: v.techniqueName,
+          videoUrl: v.videoUrl
+        })),
+        aiVideoKnowledgeResults: rawResult.slice(0, 5).map((v: any) => ({
           id: v.id,
           title: v.title,
           instructor: v.instructorName
         })),
-        videoKnowledgeResults: geminiResult.slice(0, 3).map((v: any) => ({
+        videoKnowledgeResults: geminiResult.slice(0, 5).map((v: any) => ({
           id: v.id,
           techniqueName: v.techniqueName,
           videoTitle: v.videoTitle
         })),
-        searchGeminiFirstResults_data: ormResult.videos.slice(0, 3).map((v: any) => ({
+        searchGeminiFirstResults_data: ormResult.videos.slice(0, 5).map((v: any) => ({
           id: v.id,
           title: v.title,
           instructor: v.instructorName,
