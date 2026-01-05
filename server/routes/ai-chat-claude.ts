@@ -1263,22 +1263,36 @@ export async function handleClaudeStream(req: any, res: any) {
           let bestTimestamp = startTime || '00:00';
           
           // If AI didn't specify a meaningful timestamp, use Gemini's key timestamp
-          if (bestTimestamp === '00:00' && matchingVideo.keyTimestamps) {
+          // Skip 0:00/00:00 and find the first MEANINGFUL timestamp
+          if ((bestTimestamp === '00:00' || bestTimestamp === '0:00') && matchingVideo.keyTimestamps) {
             const keyTs = matchingVideo.keyTimestamps;
             // keyTimestamps can be a string like "0:45 - Grip setup, 2:15 - Sweep mechanics"
             // or an array of timestamp objects
             if (typeof keyTs === 'string' && keyTs.length > 0) {
-              const firstTs = keyTs.match(/(\d{1,2}:\d{2})/);
-              if (firstTs) {
-                bestTimestamp = firstTs[1];
+              // Find ALL timestamps and pick first non-zero one
+              const allTs = keyTs.match(/(\d{1,2}:\d{2})/g);
+              if (allTs) {
+                for (const ts of allTs) {
+                  if (ts !== '0:00' && ts !== '00:00') {
+                    bestTimestamp = ts;
+                    break;
+                  }
+                }
               }
             } else if (Array.isArray(keyTs) && keyTs.length > 0) {
-              const first = keyTs[0];
-              if (typeof first === 'object' && (first.time || first.timestamp)) {
-                bestTimestamp = first.time || first.timestamp;
-              } else if (typeof first === 'string') {
-                const match = first.match(/(\d{1,2}:\d{2})/);
-                if (match) bestTimestamp = match[1];
+              // Iterate through array to find first non-zero timestamp
+              for (const item of keyTs) {
+                let extractedTs: string | null = null;
+                if (typeof item === 'object' && (item.time || item.timestamp)) {
+                  extractedTs = item.time || item.timestamp;
+                } else if (typeof item === 'string') {
+                  const match = item.match(/(\d{1,2}:\d{2})/);
+                  if (match) extractedTs = match[1];
+                }
+                if (extractedTs && extractedTs !== '0:00' && extractedTs !== '00:00') {
+                  bestTimestamp = extractedTs;
+                  break;
+                }
               }
             }
           }

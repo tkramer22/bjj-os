@@ -1,0 +1,171 @@
+```
+# BJJ OS - FINAL FIXES: Timestamps Display & Thumbnail Fallback
+
+## ISSUE 1: Extract & Display Actual Timestamps from Gemini Data
+
+### Problem
+The `timestamp_breakdown` field has timestamp data from Gemini analysis, but we're not parsing it and passing it to the video card. The AI uses the content correctly, but the card shows "full" instead of the actual timestamp like "@ 2:30".
+
+We want to DISPLAY the timestamp on the card and in AI text — NOT auto-start the video at that time.
+
+### Fix: Parse timestamp_breakdown and extract first meaningful timestamp
+
+```typescript
+// Add this function to extract timestamp from Gemini data
+
+function extractTimestampFromBreakdown(video: any): string | null {
+  const breakdown = video.timestamp_breakdown || video.timestampBreakdown;
+  
+  // If it's a string like "0:45 - Grip setup, 2:30 - The finish"
+  if (breakdown && typeof breakdown === 'string') {
+    // Find first timestamp that's NOT 0:00
+    const matches = breakdown.match(/(\d+:\d+)/g);
+    if (matches) {
+      for (const time of matches) {
+        if (time !== '0:00' && time !== '00:00') {
+          return time;  // Return first non-zero timestamp
+        }
+      }
+      // If only 0:00 exists, return null (will show "full")
+      return null;
+    }
+  }
+  
+  // If it's JSON array like [{time: "2:30", description: "..."}]
+  if (video.key_timestamps && Array.isArray(video.key_timestamps)) {
+    for (const ts of video.key_timestamps) {
+      if (ts.time && ts.time !== '0:00' && ts.time !== '00:00') {
+        return ts.time;
+      }
+    }
+  }
+  
+  // Try parsing JSON string
+  if (breakdown && typeof breakdown === 'string' && breakdown.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(breakdown);
+      if (Array.isArray(parsed) && parsed[0]?.time) {
+        const time = parsed[0].time;
+        if (time !== '0:00' && time !== '00:00') {
+          return time;
+        }
+      }
+    } catch (e) {
+      // Not valid JSON, continue
+    }
+  }
+  
+  return null;  // No timestamp found - will display "full"
+}
+```
+
+### Apply it when building video response
+
+```typescript
+// When preparing videos for the response to frontend:
+const videosForResponse = matchedVideos.map(video => ({
+  ...video,
+  // Extract actual timestamp from Gemini data
+  startTime: extractTimestampFromBreakdown(video)
+}));
+```
+
+### Frontend display logic
+
+```typescript
+// In video card component:
+function formatVideoTime(startTime: string | null | undefined): string {
+  if (!startTime || startTime === '0:00' || startTime === '00:00') {
+    return 'full';
+  }
+  return `@ ${startTime}`;
+}
+
+// Display in JSX:
+<span>{video.instructor} • {formatVideoTime(video.startTime)}</span>
+```
+
+### Expected Result
+
+Before: `Buchecha • full`
+After: `Buchecha • @ 2:30`
+
+Before: `Roger Gracie • full`  
+After: `Roger Gracie • @ 1:45`
+
+IMPORTANT: The YouTube video URL should NOT include a timestamp parameter. The video plays from the beginning. The timestamp is just displayed so the user knows where to scrub to.
+
+-----
+
+## ISSUE 2: Fallback Thumbnail to BJJ OS Logo
+
+### Problem
+
+When YouTube thumbnail fails to load (invalid YouTube ID, deleted video, etc.), show BJJ OS logo instead of empty gray “Tap to play” box.
+
+### Fix
+
+```typescript
+// In video card component:
+
+const [thumbnailError, setThumbnailError] = useState(false);
+
+// Check if we have a valid YouTube ID
+const hasValidYoutubeId = video.youtubeId && 
+  video.youtubeId.length === 11 && 
+  /^[a-zA-Z0-9_-]+$/.test(video.youtubeId);
+
+// Fallback to BJJ OS logo when thumbnail fails or no valid ID
+const thumbnailSrc = (!hasValidYoutubeId || thumbnailError)
+  ? '/images/bjjos-logo-fallback.png'  // BJJ OS logo
+  : `https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`;
+
+// JSX:
+<div className="video-thumbnail-container">
+  <img 
+    src={thumbnailSrc}
+    alt={video.title}
+    onError={() => setThumbnailError(true)}
+    className={`video-thumbnail ${(!hasValidYoutubeId || thumbnailError) ? 'fallback-logo' : ''}`}
+  />
+  <div className="play-overlay">
+    <PlayIcon />
+  </div>
+</div>
+```
+
+### CSS for fallback logo
+
+```css
+.video-thumbnail.fallback-logo {
+  object-fit: contain;
+  background-color: #1a1a1a;
+  padding: 20px;
+}
+```
+
+### Make sure the logo asset exists
+
+Add BJJ OS logo image to:
+
+- `/public/images/bjjos-logo-fallback.png`
+
+If the file doesn’t exist, create a simple placeholder or use the existing BJJ OS logo from elsewhere in the app.
+
+-----
+
+## SUMMARY
+
+1. ✅ Parse `timestamp_breakdown` from Gemini data
+1. ✅ Display actual timestamps like “@ 2:30” on video cards
+1. ✅ Show “full” when no valid timestamp exists
+1. ✅ Do NOT auto-start videos at timestamp (just display it)
+1. ✅ Show BJJ OS logo when thumbnail fails to load
+
+These are the final UI polish items. The core functionality is complete.
+
+```
+---
+
+Copy and send to Replit. These are the last two cosmetic fixes! 🚀​​​​​​​​​​​​​​​​
+```
