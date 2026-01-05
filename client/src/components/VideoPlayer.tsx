@@ -36,11 +36,16 @@ export function VideoPlayer({
   const isNative = Capacitor.isNativePlatform();
   const [iframeError, setIframeError] = useState(false);
   
+  // Validate YouTube ID (must be 11 alphanumeric chars)
+  const isValidYoutubeId = videoId && videoId.length === 11 && /^[a-zA-Z0-9_-]+$/.test(videoId);
+  
   // On iOS/native, use the proxy page to handle referrer headers properly
   // On web, use direct YouTube embed
+  // CRITICAL: Only append start parameter if > 0 (0 can cause playback issues)
+  const startParam = startSeconds > 0 ? `&start=${startSeconds}` : '';
   const embedUrl = isNative
-    ? `/youtube-proxy.html?v=${videoId}&start=${startSeconds}`
-    : `https://www.youtube.com/embed/${videoId}?start=${startSeconds}&rel=0&modestbranding=1&autoplay=1&playsinline=1`;
+    ? `/youtube-proxy.html?v=${videoId}${startSeconds > 0 ? `&start=${startSeconds}` : ''}`
+    : `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&autoplay=1&playsinline=1${startParam}`;
   
   const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}${startSeconds > 0 ? `&t=${startSeconds}s` : ''}`;
   

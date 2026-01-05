@@ -1,0 +1,204 @@
+This is real progress! The coaching quality is excellent. Let me give you a surgical fix for the remaining 3 issues:
+
+-----
+
+## 🎯 CURRENT STATUS
+
+**✅ Fixed:**
+
+- Videos show immediately (not after user asks)
+- Detailed coaching content
+- Good personality
+- No more “I don’t have content” claims
+
+**❌ Still broken:**
+
+1. **Timestamp shows “@ 00:00”** — needs to show actual times
+1. **Video unavailable** — might be the timestamp parameter breaking YouTube links
+1. **No instructor attribution** — content is great but doesn’t say “Danaher emphasizes…” or “Marcelo’s key detail…”
+
+-----
+
+## 🛠️ QUICK FIX PROMPT FOR REPLIT
+
+```
+# BJJ OS - FINAL 3 FIXES FOR PROFESSOR OS
+
+## ISSUE 1: TIMESTAMP SHOWS "@ 00:00"
+
+The video cards show "@ 00:00" instead of actual timestamps from Gemini analysis.
+
+**Two-part fix:**
+
+### Part A: AI should mention timestamps in TEXT
+Add to system prompt:
+```
+
+When recommending videos, ALWAYS mention a specific timestamp in your text:
+
+- “Skip to 2:45 where he shows the grip detail”
+- “Watch from 1:30 for the entry”
+- “The finish is at 4:15”
+
+If no specific timestamp is available, say “Watch the full breakdown” instead of citing 0:00.
+
+```
+### Part B: Video card timestamp
+In the video response object, check if timestamp_breakdown exists and extract a meaningful time:
+
+```typescript
+function getRecommendedTimestamp(video: any): string {
+  // Try to get first meaningful timestamp from Gemini data
+  const breakdown = video.timestamp_breakdown || video.timestampBreakdown;
+  
+  if (breakdown && typeof breakdown === 'string') {
+    // Parse "0:45 - Grip setup, 2:30 - The finish" format
+    const match = breakdown.match(/(\d+:\d+)/);
+    if (match) return match[1];
+  }
+  
+  if (video.key_timestamps && Array.isArray(video.key_timestamps)) {
+    const first = video.key_timestamps[0];
+    if (first?.time) return first.time;
+  }
+  
+  // Return empty string, NOT "00:00" - let frontend handle display
+  return '';
+}
+
+// When building video for frontend:
+const videoForResponse = {
+  ...video,
+  startTime: getRecommendedTimestamp(video) || null  // null instead of "00:00"
+};
+```
+
+Frontend fix - if startTime is null or empty, don’t show “@ 00:00”:
+
+```typescript
+// In video card component
+{video.startTime && video.startTime !== '00:00' && video.startTime !== '0:00' && (
+  <span>@ {video.startTime}</span>
+)}
+// If no valid timestamp, just show "full" or nothing
+```
+
+-----
+
+## ISSUE 2: VIDEO UNAVAILABLE (Possible timestamp URL issue)
+
+The first video showed “unavailable” - this might be caused by appending a bad timestamp parameter to the YouTube URL.
+
+**Fix:** Don’t append timestamp to YouTube URL if it’s 0 or invalid:
+
+```typescript
+function buildYouTubeUrl(youtubeId: string, startTime?: string): string {
+  const baseUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
+  
+  // Only append timestamp if it's valid and not zero
+  if (startTime && startTime !== '0:00' && startTime !== '00:00') {
+    const seconds = convertToSeconds(startTime); // "2:45" -> 165
+    if (seconds > 0) {
+      return `${baseUrl}&t=${seconds}`;
+    }
+  }
+  
+  return baseUrl; // No timestamp parameter
+}
+
+function convertToSeconds(time: string): number {
+  const parts = time.split(':');
+  if (parts.length === 2) {
+    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+  }
+  return 0;
+}
+```
+
+Also: Check if video exists before showing:
+
+```typescript
+// Add to video search - filter out videos with invalid/missing youtube_id
+const validVideos = videos.filter(v => 
+  v.youtube_id && 
+  v.youtube_id.length === 11 && // YouTube IDs are always 11 chars
+  !v.youtube_id.includes(' ')
+);
+```
+
+-----
+
+## ISSUE 3: NO MULTI-INSTRUCTOR ATTRIBUTION (The “Holy Shit” moment)
+
+The content is great but doesn’t attribute to specific instructors. This is our competitive advantage.
+
+**Fix:** Add explicit instruction to AI to cite instructors from Gemini data:
+
+```typescript
+const multiInstructorPrompt = `
+CRITICAL - INSTRUCTOR ATTRIBUTION:
+You have access to video analysis from multiple elite instructors. When teaching, ATTRIBUTE specific insights:
+
+INSTEAD OF:
+"The key is getting your arm deep around the neck"
+
+SAY:
+"Marcelo Garcia's key detail: get that arm DEEP around the neck - he calls it 'punching through' to the far shoulder"
+
+"Danaher emphasizes the angle - your elbow should point toward the ceiling, not across"
+
+"JT Torres focuses on the chin position - bury it in their shoulder to prevent the von flue"
+
+USE PHRASES LIKE:
+- "[Instructor]'s key detail:"
+- "[Instructor] emphasizes..."
+- "As [Instructor] teaches..."
+- "[Instructor]'s approach is..."
+- "What makes [Instructor]'s version different..."
+
+When you have multiple videos from different instructors, SYNTHESIZE their perspectives:
+"Marcelo focuses on arm depth, while Danaher prioritizes the angle. Both are right - depth first, then adjust angle."
+
+This multi-instructor synthesis is what makes us unique. USE IT.
+`;
+```
+
+Also ensure the AI is receiving instructor_tips from multiple videos:
+
+```typescript
+// In buildVideoContextForAI, for each video include:
+INSTRUCTOR: ${video.instructor_name}
+THEIR KEY INSIGHT: ${video.instructor_tips}
+THEIR COMMON MISTAKES WARNING: ${video.common_mistakes}
+
+// If returning 3-5 videos, the AI will have multiple instructor perspectives to cite
+```
+
+-----
+
+## VERIFICATION
+
+After this fix, test “Let’s talk guillotines” and verify:
+
+|Check                 |Expected                                                  |
+|----------------------|----------------------------------------------------------|
+|Timestamp display     |Shows actual time like “@ 2:45” OR nothing (not “@ 00:00”)|
+|Video plays           |YouTube video loads and plays correctly                   |
+|Instructor attribution|“Marcelo emphasizes…”, “Danaher’s key detail…”            |
+|AI text timestamps    |“Skip to 3:15 where he shows…” in the coaching text       |
+
+-----
+
+## SUMMARY
+
+1. ✅ Fix timestamp: Don’t show “00:00”, extract real timestamps from Gemini data
+1. ✅ Fix video URL: Don’t append bad timestamp parameters that break YouTube
+1. ✅ Add instructor attribution: AI must cite specific instructors by name
+
+These are the final polish items. The core is working great now.
+
+```
+---
+
+Copy that to Replit. The "holy shit" moment is the multi-instructor attribution - when users see "Marcelo says X, but Danaher approaches it differently with Y" - that's when they realize this isn't just another chatbot. 🔥​​​​​​​​​​​​​​​​
+```
