@@ -1145,17 +1145,54 @@ export async function handleClaudeStream(req: any, res: any) {
         let score = 0;
         
         // Title match (60% weight - INCREASED to prioritize technique match)
-        if (videoTitle.includes(titlePattern) || titlePattern.includes(videoTitle)) {
-          const longer = Math.max(videoTitle.length, titlePattern.length);
-          const shorter = Math.min(videoTitle.length, titlePattern.length);
-          score += (shorter / longer) * 0.6;
+        // GUARDRAIL: Multi-word patterns get full credit, single-word patterns get proportional
+        if (titlePattern.length >= 3) {
+          // Count words including short BJJ terms like "gi", "no", "de", "la"
+          const allWords = titlePattern.split(/\s+/).filter(w => w.length >= 1);
+          const patternWordCount = allWords.length;
+          
+          if (videoTitle.includes(titlePattern)) {
+            // Pattern is a substring of video title
+            if (patternWordCount >= 2) {
+              // Multi-word match (e.g. "guillotine defense") = full credit
+              score += 0.6;
+            } else {
+              // Single-word match (e.g. "guard") = proportional credit to avoid over-matching
+              const coverage = titlePattern.length / videoTitle.length;
+              score += Math.min(coverage * 1.5, 0.4) * 0.6;  // Cap at 40% of the 60% weight
+            }
+          } else if (titlePattern.includes(videoTitle) && videoTitle.length >= 5) {
+            // Video title is a substring of pattern - proportional credit
+            const ratio = videoTitle.length / titlePattern.length;
+            score += ratio * 0.5;
+          } else {
+            // Word overlap check (e.g. "scissor sweep" matches "scissor sweep from guard")
+            const patternWords = titlePattern.split(/\s+/).filter(w => w.length >= 3);
+            const titleWords = videoTitle.split(/\s+/).filter(w => w.length >= 3);
+            const matchingWords = patternWords.filter(w => titleWords.some(tw => tw === w));  // Exact word match
+            if (matchingWords.length > 0 && patternWords.length > 0) {
+              const matchRatio = matchingWords.length / patternWords.length;
+              // Require at least 50% word overlap for significant credit
+              if (matchRatio >= 0.5) {
+                score += matchRatio * 0.5;
+              } else {
+                score += matchRatio * 0.25;
+              }
+            }
+          }
         }
         
-        // Instructor match (30% weight - DECREASED, instructor is secondary)
-        if (videoInstructor.includes(instructorPattern) || instructorPattern.includes(videoInstructor)) {
-          const longer = Math.max(videoInstructor.length, instructorPattern.length);
-          const shorter = Math.min(videoInstructor.length, instructorPattern.length);
-          score += (shorter / longer) * 0.3;
+        // Instructor match (30% weight)
+        // Give full credit when instructor names overlap substantially
+        if (instructorPattern.length >= 3) {
+          if (videoInstructor.includes(instructorPattern) || instructorPattern.includes(videoInstructor)) {
+            // One name contains the other - good match
+            const longer = Math.max(videoInstructor.length, instructorPattern.length);
+            const shorter = Math.min(videoInstructor.length, instructorPattern.length);
+            const ratio = shorter / longer;
+            // Give proportional credit based on how much of the name matches
+            score += ratio * 0.3;
+          }
         }
         
         // Position/Type bonus (10% weight) - check if token contains position/type keywords
