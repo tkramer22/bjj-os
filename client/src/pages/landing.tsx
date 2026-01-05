@@ -67,9 +67,11 @@ export default function Landing() {
       <section className="landing-hero hero-section">
         <div className="landing-hero-content">
           <h1 className="landing-hero-headline">
-            A training partner who's studied
+            The smartest Jiu-Jitsu training partner ever built.
             <br />
-            2,700+ instructionals.
+            3,000+ instructionals studied & analyzed.
+            <br />
+            Perfect memory.
           </h1>
           
           <p className="landing-hero-subhead">
@@ -124,7 +126,7 @@ export default function Landing() {
           <h2 className="landing-section-header">YOUR VIDEO LIBRARY</h2>
           
           <p className="landing-library-body">
-            2,700+ videos searchable by technique, position, or instructor. Save what matters. Build your collection.
+            3,000+ videos searchable by technique, position, or instructor. Save what matters. Build your collection.
           </p>
           
           <p className="landing-library-note">
@@ -139,7 +141,7 @@ export default function Landing() {
           <div className="landing-checklist">
             <div className="landing-check-item">
               <span className="landing-check-icon">✓</span>
-              <span>2,700+ videos analyzed</span>
+              <span>3,000+ videos analyzed</span>
             </div>
             <div className="landing-check-item">
               <span className="landing-check-icon">✓</span>

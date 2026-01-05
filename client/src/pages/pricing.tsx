@@ -103,7 +103,7 @@ export default function PricingPage() {
             </div>
             <div className="feature-item" data-testid="feature-videos">
               <span className="feature-check">&#10003;</span>
-              <span>2,700+ videos — analyzed, timestamped, searchable</span>
+              <span>3,000+ videos — analyzed, timestamped, searchable</span>
             </div>
             <div className="feature-item" data-testid="feature-library">
               <span className="feature-check">&#10003;</span>
