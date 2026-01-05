@@ -1,0 +1,98 @@
+The coaching is **excellent** now — “Marcelo calls it ‘punching through’” is exactly what we wanted!
+
+Just 2 UI issues left:
+
+1. **Missing thumbnail** (gray box)
+1. **Still shows “@ 00:00”** (should just say “full” or nothing)
+
+-----
+
+```
+# BJJ OS - FINAL UI FIX: Thumbnail & Timestamp Display
+
+## ISSUE 1: Missing thumbnails (gray box with play button)
+
+Some videos show no thumbnail. Fix with proper fallback:
+
+```typescript
+// In video card component - add error handling for thumbnails
+
+const [thumbnailError, setThumbnailError] = useState(false);
+
+const thumbnailUrl = video.youtubeId && !thumbnailError
+  ? `https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`
+  : null;
+
+// JSX:
+{thumbnailUrl ? (
+  <img 
+    src={thumbnailUrl}
+    alt={video.title}
+    onError={() => setThumbnailError(true)}
+    className="video-thumbnail"
+  />
+) : (
+  <div className="video-placeholder">
+    <PlayIcon />
+    <span>Tap to play</span>
+  </div>
+)}
+```
+
+**Also check:** Run this SQL to find videos with missing/invalid YouTube IDs:
+
+```sql
+SELECT id, title, youtube_id 
+FROM ai_video_knowledge 
+WHERE youtube_id IS NULL 
+   OR youtube_id = ''
+   OR LENGTH(youtube_id) != 11
+LIMIT 20;
+```
+
+-----
+
+## ISSUE 2: Shows “full @ 00:00” — should just show “full”
+
+When timestamp is 00:00 or empty, show “full” only (not “full @ 00:00”).
+
+```typescript
+// In video card component:
+
+function formatVideoTime(startTime: string | null | undefined): string {
+  // If no timestamp or zero, just say "full"
+  if (!startTime || startTime === '00:00' || startTime === '0:00') {
+    return 'full';
+  }
+  // Otherwise show "full @ 2:45" or just "@ 2:45"
+  return `@ ${startTime}`;
+}
+
+// JSX - replace current timestamp display:
+<span className="video-duration">
+  {formatVideoTime(video.startTime)}
+</span>
+```
+
+Current: `Marcelo Garcia • full @ 00:00`
+After fix: `Marcelo Garcia • full`
+
+Or if there’s a real timestamp:
+`Gordon Ryan • @ 00:21`
+
+-----
+
+## THAT’S IT
+
+Two small frontend fixes:
+
+1. Handle missing thumbnails gracefully
+1. Don’t show “@ 00:00” — just show “full”
+
+The backend and AI are working perfectly now. Ship these UI fixes and you’re launch-ready! 🚀
+
+```
+---
+
+These are pure frontend/display fixes. The hard work is done — Professor OS is coaching like a real training partner now. 💪​​​​​​​​​​​​​​​​
+```

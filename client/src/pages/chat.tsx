@@ -85,13 +85,28 @@ function parseVideoTokens(content?: string): { text: string; video?: { id: numbe
         }
         seenVideoIds.add(dbId);
         
-        // Parse timestamp from 6th field if available (e.g., "135" for 2:15)
+        // Parse timestamp from 6th field if available
+        // Could be seconds (e.g., "135") or MM:SS format (e.g., "2:15")
         let startTimeSeconds = 0;
         if (videoData.length >= 6 && videoData[5]) {
-          const parsedTime = parseInt(videoData[5], 10);
-          if (!isNaN(parsedTime)) {
-            startTimeSeconds = parsedTime;
-            console.log('[parseVideoTokens] Extracted enriched timestamp:', startTimeSeconds, 'seconds');
+          const timeField = videoData[5].trim();
+          
+          // Check if it's MM:SS or H:MM:SS format (contains colon)
+          if (timeField.includes(':')) {
+            const parts = timeField.split(':').map(Number);
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+              startTimeSeconds = parts[0] * 60 + parts[1];
+            } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+              startTimeSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+            }
+            console.log('[parseVideoTokens] Extracted enriched timestamp (MM:SS):', timeField, '→', startTimeSeconds, 'seconds');
+          } else {
+            // Pure numeric (seconds)
+            const parsedTime = parseInt(timeField, 10);
+            if (!isNaN(parsedTime)) {
+              startTimeSeconds = parsedTime;
+              console.log('[parseVideoTokens] Extracted enriched timestamp (seconds):', startTimeSeconds);
+            }
           }
         }
         

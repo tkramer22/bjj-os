@@ -484,16 +484,38 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                       textOverflow: "ellipsis"
                     }}>
                       {segment.video.instructor}
-                      {segment.video.videoId && ` • ${segment.video.duration}`}
-                      {segment.video.startTime && (
-                        <span style={{ 
-                          marginLeft: "0.5rem", 
-                          color: "#667eea",
-                          fontWeight: "600"
-                        }}>
-                          @ {segment.video.startTime}
-                        </span>
-                      )}
+                      {/* Show timestamp or "full" - never show "@ 00:00" */}
+                      {segment.video.videoId && (() => {
+                        const startTime = segment.video.startTime;
+                        
+                        // No timestamp at all
+                        if (!startTime) return ' • full';
+                        
+                        // Check if it's MM:SS or H:MM:SS format (contains colon)
+                        if (startTime.includes(':')) {
+                          // Parse MM:SS to total seconds to check if valid
+                          const parts = startTime.split(':').map(Number);
+                          let totalSeconds = 0;
+                          if (parts.length === 2) {
+                            totalSeconds = parts[0] * 60 + parts[1];
+                          } else if (parts.length === 3) {
+                            totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                          }
+                          // If it's 0 seconds total, show "full"
+                          if (totalSeconds === 0) return ' • full';
+                          // Already formatted, use as-is
+                          return ` • @ ${startTime}`;
+                        }
+                        
+                        // Pure numeric (seconds)
+                        const seconds = parseInt(startTime, 10);
+                        if (isNaN(seconds) || seconds <= 0) return ' • full';
+                        
+                        // Convert seconds to MM:SS
+                        const mins = Math.floor(seconds / 60);
+                        const secs = seconds % 60;
+                        return ` • @ ${mins}:${String(secs).padStart(2, '0')}`;
+                      })()}
                     </p>
                   </div>
                   {/* Buttons row - below text */}
