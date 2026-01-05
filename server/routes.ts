@@ -584,6 +584,184 @@ export function registerRoutes(app: Express): Server {
   });
   
   // ============================================================================
+  // COMPREHENSIVE VIDEO SEARCH DIAGNOSIS ENDPOINTS (January 2026)
+  // ============================================================================
+  
+  // DEBUG: Diagnose video search for specific technique with column check
+  app.get('/api/debug/video-search/:technique', async (req, res) => {
+    const technique = req.params.technique;
+    
+    console.log(`🔬 [DEBUG] Testing video search for: "${technique}"`);
+    
+    try {
+      // Test 1: ORM query against ai_video_knowledge
+      const rawResult = await db.select({
+        id: aiVideoKnowledge.id,
+        title: aiVideoKnowledge.title,
+        techniqueName: aiVideoKnowledge.techniqueName,
+        instructorName: aiVideoKnowledge.instructorName
+      })
+      .from(aiVideoKnowledge)
+      .where(
+        or(
+          ilike(aiVideoKnowledge.title, `%${technique}%`),
+          ilike(aiVideoKnowledge.techniqueName, `%${technique}%`)
+        )
+      )
+      .limit(10);
+      
+      // Test 2: ORM query against video_knowledge table (Gemini analysis)
+      const geminiResult = await db.select({
+        id: videoKnowledge.id,
+        techniqueName: videoKnowledge.techniqueName,
+        positionContext: videoKnowledge.positionContext,
+        fullSummary: videoKnowledge.fullSummary,
+        videoTitle: aiVideoKnowledge.title,
+        instructorName: aiVideoKnowledge.instructorName
+      })
+      .from(videoKnowledge)
+      .innerJoin(aiVideoKnowledge, eq(videoKnowledge.videoId, aiVideoKnowledge.id))
+      .where(
+        or(
+          ilike(videoKnowledge.techniqueName, `%${technique}%`),
+          ilike(videoKnowledge.fullSummary, `%${technique}%`),
+          ilike(videoKnowledge.positionContext, `%${technique}%`)
+        )
+      )
+      .limit(10);
+      
+      // Test 3: Get column count from ai_video_knowledge
+      const totalVideos = await db.select({ count: sql<number>`COUNT(*)` })
+        .from(aiVideoKnowledge);
+      
+      // Test 4: Get column count from video_knowledge  
+      const geminiRows = await db.select({ count: sql<number>`COUNT(*)` })
+        .from(videoKnowledge);
+      
+      // Test 5: Run the actual searchGeminiFirst function
+      const { searchGeminiFirst } = await import('./videoSearch');
+      let ormResult = { videos: [], noMatchFound: true };
+      try {
+        ormResult = await searchGeminiFirst(technique);
+      } catch (ormError: any) {
+        console.error('ORM Query Error:', ormError.message);
+      }
+      
+      // Diagnosis
+      const rawCount = rawResult.length;
+      const geminiCount = geminiResult.length;
+      const ormCount = ormResult.videos.length;
+      
+      let diagnosis = 'UNKNOWN';
+      if (geminiCount > 0 && ormCount === 0) {
+        diagnosis = '🚨 ORM MISMATCH - Gemini data found but searchGeminiFirst failed';
+      } else if (rawCount > 0 && geminiCount === 0) {
+        diagnosis = '⚠️ GEMINI DATA MISSING - Videos exist in ai_video_knowledge but not in video_knowledge (need Gemini analysis)';
+      } else if (rawCount === 0 && geminiCount === 0 && ormCount === 0) {
+        diagnosis = '⚠️ NO VIDEOS EXIST - No videos for this technique in database';
+      } else if (ormCount > 0) {
+        diagnosis = '✅ WORKING - searchGeminiFirst found matching videos';
+      }
+      
+      res.json({
+        searchedTechnique: technique,
+        diagnosis,
+        aiVideoKnowledgeMatches: rawCount,
+        videoKnowledgeMatches: geminiCount,
+        searchGeminiFirstResults: ormCount,
+        totalVideos: totalVideos[0]?.count || 0,
+        totalGeminiRows: geminiRows[0]?.count || 0,
+        aiVideoKnowledgeResults: rawResult.slice(0, 3).map((v: any) => ({
+          id: v.id,
+          title: v.title,
+          instructor: v.instructorName
+        })),
+        videoKnowledgeResults: geminiResult.slice(0, 3).map((v: any) => ({
+          id: v.id,
+          techniqueName: v.techniqueName,
+          videoTitle: v.videoTitle
+        })),
+        searchGeminiFirstResults_data: ormResult.videos.slice(0, 3).map((v: any) => ({
+          id: v.id,
+          title: v.title,
+          instructor: v.instructorName,
+          techniqueName: v.techniqueName
+        })),
+        fix: diagnosis.includes('MISMATCH') 
+          ? 'Check searchGeminiFirst query logic'
+          : diagnosis.includes('GEMINI DATA MISSING')
+          ? 'Run Gemini analysis on these videos'
+          : null
+      });
+      
+    } catch (error: any) {
+      res.status(500).json({
+        error: error.message,
+        diagnosis: '❌ ERROR - Check database connection and column names',
+        stack: error.stack?.substring(0, 500)
+      });
+    }
+  });
+  
+  // DEBUG: List all techniques in database
+  app.get('/api/debug/all-techniques', async (req, res) => {
+    try {
+      // Get unique techniques from video_knowledge
+      const vkResult = await db.execute(sql`
+        SELECT DISTINCT technique_name, COUNT(*) as count
+        FROM video_knowledge
+        WHERE technique_name IS NOT NULL
+        GROUP BY technique_name
+        ORDER BY count DESC
+        LIMIT 50
+      `);
+      
+      // Get unique techniques from ai_video_knowledge
+      const avResult = await db.execute(sql`
+        SELECT DISTINCT technique_name, COUNT(*) as count
+        FROM ai_video_knowledge
+        WHERE technique_name IS NOT NULL
+        GROUP BY technique_name
+        ORDER BY count DESC
+        LIMIT 50
+      `);
+      
+      res.json({
+        video_knowledge_techniques: {
+          count: vkResult.rows?.length || 0,
+          techniques: vkResult.rows?.slice(0, 30) || []
+        },
+        ai_video_knowledge_techniques: {
+          count: avResult.rows?.length || 0,
+          techniques: avResult.rows?.slice(0, 30) || []
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // DEBUG: Video knowledge stats
+  app.get('/api/debug/video-stats', async (req, res) => {
+    try {
+      const stats = await db.execute(sql`
+        SELECT 
+          (SELECT COUNT(*) FROM ai_video_knowledge) as total_videos,
+          (SELECT COUNT(*) FROM video_knowledge) as gemini_analyzed_rows,
+          (SELECT COUNT(DISTINCT video_id) FROM video_knowledge) as unique_videos_with_gemini,
+          (SELECT COUNT(*) FROM ai_video_knowledge WHERE quality_score >= 5.0) as quality_videos
+      `);
+      
+      res.json({
+        stats: stats.rows?.[0] || {},
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================================================
   // EMAIL AUTHENTICATION ENDPOINTS (NEW - PRIMARY AUTH METHOD)
   // ============================================================================
   registerEmailAuthRoutes(app);

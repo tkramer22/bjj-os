@@ -1,0 +1,471 @@
+# BJJ OS - VIDEO SEARCH COMPLETE FIX
+
+## DIAGNOSIS PHASE
+
+### Step 1: Run These SQL Queries in Supabase
+
+Open your Supabase SQL Editor and run these queries:
+
+-----
+
+**Query 1: Get ALL column names from ai_video_knowledge**
+
+```sql
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns 
+WHERE table_name = 'ai_video_knowledge'
+ORDER BY ordinal_position;
+```
+
+-----
+
+**Query 2: Check if guillotine videos exist**
+
+```sql
+SELECT id, title, instructor_name
+FROM ai_video_knowledge 
+WHERE 
+  LOWER(title) LIKE '%guillotine%'
+  OR LOWER(techniques_covered) LIKE '%guillotine%'
+  OR LOWER(primary_techniques) LIKE '%guillotine%'
+  OR LOWER(technique_name) LIKE '%guillotine%'
+LIMIT 20;
+```
+
+-----
+
+**Query 3: See what Gemini fields actually exist**
+
+```sql
+SELECT 
+  id,
+  title,
+  techniques_covered,
+  primary_techniques,
+  technique_summary,
+  instructor_tips
+FROM ai_video_knowledge 
+WHERE techniques_covered IS NOT NULL
+LIMIT 5;
+```
+
+-----
+
+**Query 4: Check total video count with Gemini data**
+
+```sql
+SELECT 
+  COUNT(*) as total_videos,
+  COUNT(techniques_covered) as with_techniques_covered,
+  COUNT(primary_techniques) as with_primary_techniques,
+  COUNT(instructor_tips) as with_instructor_tips
+FROM ai_video_knowledge;
+```
+
+-----
+
+## THE FIX
+
+Once you confirm the column names from Step 1, update your schema and search function.
+
+### File 1: Updated Schema (shared/schema.ts)
+
+Find your `aiVideoKnowledge` table definition and make sure it matches your ACTUAL database columns.
+
+If your database has snake_case columns, it should look like this:
+
+```typescript
+export const aiVideoKnowledge = pgTable("ai_video_knowledge", {
+  id: serial("id").primaryKey(),
+  
+  // Core fields
+  title: text("title"),
+  youtubeId: text("youtube_id"),
+  videoUrl: text("video_url"),
+  instructorName: text("instructor_name"),
+  
+  // GEMINI ANALYSIS FIELDS - These are the key searchable fields
+  techniquesCovered: text("techniques_covered"),
+  primaryTechniques: text("primary_techniques"),
+  techniqueSummary: text("technique_summary"),
+  keyConceptsTaught: text("key_concepts_taught"),
+  instructorTips: text("instructor_tips"),
+  commonMistakes: text("common_mistakes"),
+  timestampBreakdown: text("timestamp_breakdown"),
+  keyTimestamps: jsonb("key_timestamps"),
+  
+  // Classification
+  difficultyLevel: text("difficulty_level"),
+  instructionQuality: numeric("instruction_quality", { precision: 3, scale: 1 }),
+  giOrNogi: text("gi_or_nogi"),
+  positionsCovered: text("positions_covered"),
+  
+  // Older fields (for backwards compatibility)
+  techniqueName: text("technique_name"),
+  techniqueType: text("technique_type"),
+  positionCategory: text("position_category"),
+  beltLevel: text("belt_level"),
+  qualityScore: numeric("quality_score", { precision: 3, scale: 1 }),
+  difficultyScore: integer("difficulty_score"),
+  instructorCredibilityScore: numeric("instructor_credibility_score", { precision: 3, scale: 1 }),
+  helpfulCount: integer("helpful_count").default(0),
+  notHelpfulCount: integer("not_helpful_count").default(0),
+  
+  // Timestamps
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+```
+
+-----
+
+### File 2: Video Search Function (server/video-search.ts)
+
+Create or update this file:
+
+```typescript
+import { db } from '../db';
+import { aiVideoKnowledge } from '../shared/schema';
+import { sql, or, desc, ilike } from 'drizzle-orm';
+
+/**
+ * Search videos by technique using Gemini-analyzed fields
+ * This is the CORE search function - it queries the actual data
+ */
+export async function searchVideosForTechnique(technique: string): Promise<any[]> {
+  console.log(`🔍 [VIDEO SEARCH] Searching for technique: "${technique}"`);
+  
+  const searchTerm = `%${technique.toLowerCase()}%`;
+  
+  try {
+    // Search across ALL relevant Gemini fields
+    const videos = await db.select({
+      id: aiVideoKnowledge.id,
+      title: aiVideoKnowledge.title,
+      youtubeId: aiVideoKnowledge.youtubeId,
+      videoUrl: aiVideoKnowledge.videoUrl,
+      instructorName: aiVideoKnowledge.instructorName,
+      techniquesCovered: aiVideoKnowledge.techniquesCovered,
+      primaryTechniques: aiVideoKnowledge.primaryTechniques,
+      techniqueSummary: aiVideoKnowledge.techniqueSummary,
+      instructorTips: aiVideoKnowledge.instructorTips,
+      commonMistakes: aiVideoKnowledge.commonMistakes,
+      timestampBreakdown: aiVideoKnowledge.timestampBreakdown,
+      keyTimestamps: aiVideoKnowledge.keyTimestamps,
+      instructionQuality: aiVideoKnowledge.instructionQuality,
+      difficultyLevel: aiVideoKnowledge.difficultyLevel,
+      giOrNogi: aiVideoKnowledge.giOrNogi
+    })
+    .from(aiVideoKnowledge)
+    .where(
+      or(
+        // Primary search fields (Gemini analysis)
+        sql`LOWER(${aiVideoKnowledge.techniquesCovered}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.primaryTechniques}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.techniqueSummary}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.title}) LIKE ${searchTerm}`,
+        // Fallback to older fields
+        sql`LOWER(${aiVideoKnowledge.techniqueName}) LIKE ${searchTerm}`,
+        sql`LOWER(${aiVideoKnowledge.techniqueType}) LIKE ${searchTerm}`
+      )
+    )
+    .orderBy(desc(aiVideoKnowledge.instructionQuality))
+    .limit(5);
+    
+    console.log(`✅ [VIDEO SEARCH] Found ${videos.length} videos for "${technique}"`);
+    
+    if (videos.length > 0) {
+      console.log(`📹 [VIDEO SEARCH] Top result: "${videos[0].title}" by ${videos[0].instructorName}`);
+    }
+    
+    return videos;
+    
+  } catch (error) {
+    console.error(`❌ [VIDEO SEARCH] Error searching for "${technique}":`, error);
+    return [];
+  }
+}
+
+/**
+ * NEVER return random videos - return empty if no match
+ */
+export async function getVideosForProfessorOS(technique: string | null): Promise<{
+  videos: any[];
+  noMatchFound: boolean;
+  searchedTechnique: string | null;
+}> {
+  if (!technique || technique.trim() === '') {
+    return { videos: [], noMatchFound: false, searchedTechnique: null };
+  }
+  
+  const videos = await searchVideosForTechnique(technique);
+  
+  // CRITICAL: Never fall back to random videos
+  if (videos.length === 0) {
+    console.log(`⚠️ [VIDEO SEARCH] No videos found for "${technique}" - returning empty (NOT random)`);
+    return { 
+      videos: [], 
+      noMatchFound: true, 
+      searchedTechnique: technique 
+    };
+  }
+  
+  return { 
+    videos, 
+    noMatchFound: false, 
+    searchedTechnique: technique 
+  };
+}
+
+/**
+ * Build video context for AI prompt
+ * This is what gets injected into Professor OS's system prompt
+ */
+export function buildVideoContext(videos: any[]): string {
+  if (videos.length === 0) {
+    return 'NO RELEVANT VIDEOS FOUND FOR THIS TECHNIQUE. Teach conceptually based on your knowledge.';
+  }
+  
+  return videos.map((v, index) => `
+═══════════════════════════════════════════════════════════════
+VIDEO ${index + 1}: "${v.title}" by ${v.instructorName}
+═══════════════════════════════════════════════════════════════
+YOUTUBE ID: ${v.youtubeId || 'N/A'}
+QUALITY SCORE: ${v.instructionQuality || 'N/A'}/10
+DIFFICULTY: ${v.difficultyLevel || 'N/A'}
+GI/NOGI: ${v.giOrNogi || 'N/A'}
+
+TECHNIQUE SUMMARY:
+${v.techniqueSummary || 'No summary available'}
+
+INSTRUCTOR TIPS (USE THESE IN YOUR RESPONSE):
+${v.instructorTips || 'No specific tips recorded'}
+
+COMMON MISTAKES TO MENTION:
+${v.commonMistakes || 'No common mistakes recorded'}
+
+TIMESTAMP BREAKDOWN:
+${v.timestampBreakdown || v.keyTimestamps ? JSON.stringify(v.keyTimestamps) : 'No timestamps available'}
+`).join('\n');
+}
+```
+
+-----
+
+### File 3: Debug Endpoint (add to server/routes.ts)
+
+Add this endpoint to diagnose issues:
+
+```typescript
+// DEBUG: Video search diagnosis endpoint
+app.get('/api/debug/video-search/:technique', async (req, res) => {
+  const technique = req.params.technique;
+  
+  console.log(`🔬 [DEBUG] Testing video search for: "${technique}"`);
+  
+  try {
+    // Test 1: Raw SQL query (bypasses ORM)
+    const rawResult = await db.execute(sql`
+      SELECT id, title, techniques_covered, instructor_name
+      FROM ai_video_knowledge
+      WHERE 
+        LOWER(techniques_covered) LIKE ${`%${technique.toLowerCase()}%`}
+        OR LOWER(primary_techniques) LIKE ${`%${technique.toLowerCase()}%`}
+        OR LOWER(title) LIKE ${`%${technique.toLowerCase()}%`}
+      LIMIT 10
+    `);
+    
+    // Test 2: ORM query (what the app uses)
+    let ormResult = [];
+    try {
+      ormResult = await db.select({
+        id: aiVideoKnowledge.id,
+        title: aiVideoKnowledge.title,
+        techniquesCovered: aiVideoKnowledge.techniquesCovered,
+        instructorName: aiVideoKnowledge.instructorName
+      })
+      .from(aiVideoKnowledge)
+      .where(
+        or(
+          sql`LOWER(${aiVideoKnowledge.techniquesCovered}) LIKE ${`%${technique.toLowerCase()}%`}`,
+          sql`LOWER(${aiVideoKnowledge.primaryTechniques}) LIKE ${`%${technique.toLowerCase()}%`}`,
+          sql`LOWER(${aiVideoKnowledge.title}) LIKE ${`%${technique.toLowerCase()}%`}`
+        )
+      )
+      .limit(10);
+    } catch (ormError: any) {
+      console.error('ORM Query Error:', ormError.message);
+    }
+    
+    // Test 3: Check what columns actually exist
+    const columnsResult = await db.execute(sql`
+      SELECT column_name
+      FROM information_schema.columns 
+      WHERE table_name = 'ai_video_knowledge'
+      ORDER BY ordinal_position
+    `);
+    
+    // Diagnosis
+    const rawCount = rawResult.rows?.length || 0;
+    const ormCount = ormResult.length;
+    
+    let diagnosis = 'UNKNOWN';
+    if (rawCount > 0 && ormCount === 0) {
+      diagnosis = '🚨 COLUMN NAME MISMATCH - ORM schema does not match database columns';
+    } else if (rawCount === 0 && ormCount === 0) {
+      diagnosis = '⚠️ NO VIDEOS FOUND - Either no videos exist for this technique or column names are wrong';
+    } else if (rawCount > 0 && ormCount > 0) {
+      diagnosis = '✅ WORKING - Both queries found videos';
+    }
+    
+    res.json({
+      searchedTechnique: technique,
+      diagnosis,
+      rawSqlCount: rawCount,
+      ormQueryCount: ormCount,
+      rawSqlResults: rawResult.rows?.slice(0, 3) || [],
+      ormResults: ormResult.slice(0, 3),
+      databaseColumns: columnsResult.rows?.map((r: any) => r.column_name) || [],
+      fix: diagnosis.includes('MISMATCH') 
+        ? 'Update shared/schema.ts to match actual database column names'
+        : null
+    });
+    
+  } catch (error: any) {
+    res.status(500).json({
+      error: error.message,
+      diagnosis: '❌ ERROR - Check database connection and column names'
+    });
+  }
+});
+
+// DEBUG: List all techniques in database
+app.get('/api/debug/all-techniques', async (req, res) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT DISTINCT techniques_covered
+      FROM ai_video_knowledge
+      WHERE techniques_covered IS NOT NULL
+      LIMIT 100
+    `);
+    
+    res.json({
+      count: result.rows?.length || 0,
+      techniques: result.rows?.map((r: any) => r.techniques_covered) || []
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+-----
+
+## TESTING
+
+After implementing the fix, test with these URLs:
+
+1. **Test guillotine search:**
+   
+   ```
+   https://bjjos.app/api/debug/video-search/guillotine
+   ```
+1. **Test half guard search:**
+   
+   ```
+   https://bjjos.app/api/debug/video-search/half%20guard
+   ```
+1. **See all techniques:**
+   
+   ```
+   https://bjjos.app/api/debug/all-techniques
+   ```
+
+-----
+
+## EXPECTED RESULTS
+
+**Before Fix:**
+
+```json
+{
+  "diagnosis": "🚨 COLUMN NAME MISMATCH",
+  "rawSqlCount": 15,
+  "ormQueryCount": 0
+}
+```
+
+**After Fix:**
+
+```json
+{
+  "diagnosis": "✅ WORKING",
+  "rawSqlCount": 15,
+  "ormQueryCount": 15
+}
+```
+
+-----
+
+## INTEGRATION WITH PROFESSOR OS
+
+Update the chat endpoint to use the new search function:
+
+```typescript
+// In server/routes.ts - the /api/ai/chat/message endpoint
+
+// 1. Import the new functions
+import { getVideosForProfessorOS, buildVideoContext } from './video-search';
+
+// 2. In the chat handler, replace the video fetching logic:
+const detectedTechnique = extractTechniqueFromMessage(message);
+const { videos, noMatchFound, searchedTechnique } = await getVideosForProfessorOS(detectedTechnique);
+
+// 3. Build video context for AI
+const videoContext = buildVideoContext(videos);
+
+// 4. Inject into system prompt
+const systemPrompt = `
+${baseSystemPrompt}
+
+═══════════════════════════════════════════════════════════════
+AVAILABLE VIDEOS FOR THIS CONVERSATION:
+═══════════════════════════════════════════════════════════════
+${videoContext}
+
+CRITICAL INSTRUCTIONS:
+- When videos are provided, REFERENCE their specific Gemini analysis
+- Quote instructor tips directly from the video data above
+- Cite specific timestamps when recommending videos
+- Mention common mistakes from the analysis
+- DO NOT give generic advice when you have specific video analysis
+- If no videos found, teach conceptually - DO NOT claim videos don't exist
+`;
+```
+
+-----
+
+## SUCCESS CRITERIA
+
+|Test                    |Expected Result                                    |
+|------------------------|---------------------------------------------------|
+|“Let’s talk guillotines”|Shows guillotine videos with timestamps            |
+|“Training half guard”   |Shows half guard videos with instructor tips       |
+|“Flying armbar tips”    |NO video (rare technique), AI teaches conceptually |
+|Video card              |Shows thumbnail + relevant timestamp (not 0:00)    |
+|AI response             |Cites specific instructor tips from Gemini analysis|
+
+-----
+
+## QUICK COPY-PASTE CHECKLIST
+
+1. [ ] Run SQL queries in Supabase to get actual column names
+1. [ ] Update `shared/schema.ts` with correct column mappings
+1. [ ] Add the `video-search.ts` file
+1. [ ] Add debug endpoints to `routes.ts`
+1. [ ] Test with `/api/debug/video-search/guillotine`
+1. [ ] Verify diagnosis shows “✅ WORKING”
+1. [ ] Update chat endpoint to use new functions
+1. [ ] Test Professor OS with “Let’s talk guillotines”
+
+Excellence is the pillar. Make it work. 💪
