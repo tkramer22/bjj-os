@@ -991,6 +991,65 @@ export async function handleClaudeStream(req: any, res: any) {
         }
       }
       
+      // ═══════════════════════════════════════════════════════════════════════════
+      // EXTRACT TIMESTAMP FROM AI PROSE: Look for timestamps mentioned near the video token
+      // Search BOTH before AND after the token, picking the closest match
+      // Patterns: "at 2:15", "the 2:15 mark", "from 2:15", "@ 2:15", "around 2:15"
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (startTime === '00:00') {
+        // Get text context around this token (200 chars before AND 200 chars after)
+        const tokenPosition = match.index;
+        const tokenEnd = tokenPosition + originalToken.length;
+        const contextStart = Math.max(0, tokenPosition - 200);
+        const contextEnd = Math.min(naturalResponse.length, tokenEnd + 200);
+        const contextBefore = naturalResponse.substring(contextStart, tokenPosition);
+        const contextAfter = naturalResponse.substring(tokenEnd, contextEnd);
+        
+        // Timestamp extraction patterns
+        const timestampPatterns = [
+          /at\s+(\d{1,2}:\d{2})/i,
+          /the\s+(\d{1,2}:\d{2})\s*mark/i,
+          /from\s+(\d{1,2}:\d{2})/i,
+          /@\s*(\d{1,2}:\d{2})/i,
+          /around\s+(\d{1,2}:\d{2})/i,
+          /(\d{1,2}:\d{2})\s+for\s+the/i,
+          /watch\s+(?:from\s+)?(\d{1,2}:\d{2})/i,
+          /starting\s+(?:at\s+)?(\d{1,2}:\d{2})/i,
+          /rewatch\s+(?:the\s+)?(\d{1,2}:\d{2})/i,
+          /finish\s+(?:is\s+)?(?:at\s+)?(\d{1,2}:\d{2})/i,
+          /key\s+(?:part\s+)?(?:is\s+)?(?:at\s+)?(\d{1,2}:\d{2})/i
+        ];
+        
+        // Find closest timestamp match (prefer after-context as that's where details often appear)
+        let foundTimestamp: string | null = null;
+        
+        // Check context AFTER token first (more common: "Watch this [VIDEO]... The key part is at 2:15")
+        for (const pattern of timestampPatterns) {
+          const afterMatch = contextAfter.match(pattern);
+          if (afterMatch) {
+            foundTimestamp = afterMatch[1];
+            console.log(`[VIDEO TOKEN] Extracted timestamp from post-token prose: ${foundTimestamp}`);
+            break;
+          }
+        }
+        
+        // If not found after, check context BEFORE token
+        if (!foundTimestamp) {
+          for (const pattern of timestampPatterns) {
+            const beforeMatch = contextBefore.match(pattern);
+            if (beforeMatch) {
+              foundTimestamp = beforeMatch[1];
+              console.log(`[VIDEO TOKEN] Extracted timestamp from pre-token prose: ${foundTimestamp}`);
+              break;
+            }
+          }
+        }
+        
+        if (foundTimestamp) {
+          startTime = foundTimestamp;
+        }
+      }
+      
       // Try multiple parsing strategies
       const firstPart = parts[0].trim();
       

@@ -1,0 +1,191 @@
+# FIX THUMBNAILS AND VIDEO CARD TIMESTAMP
+
+## WHAT’S WORKING ✅
+
+- Video relevance is correct
+- AI references specific timestamps in text (“2:15 mark”)
+- Memory working
+- Gemini analysis being used
+
+## WHAT’S STILL BROKEN
+
+### 1. NO THUMBNAIL
+
+Video card shows blank area with “Tap to play” — should show YouTube thumbnail.
+
+### 2. VIDEO CARD SHOWS “@ 00:00”
+
+The AI text says “Rewatch the 2:15 mark” but the card shows “@ 00:00”. They should match.
+
+-----
+
+## FIX 1: ADD THUMBNAIL IMAGE
+
+Find the video card component and add the YouTube thumbnail:
+
+```tsx
+// YouTube thumbnail URL pattern
+const getThumbnailUrl = (youtubeId: string) => {
+  return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
+};
+
+// In the video card component:
+const VideoCard = ({ video, timestamp }: { video: any; timestamp?: string }) => {
+  const thumbnailUrl = getThumbnailUrl(video.youtubeId);
+  
+  return (
+    <div className="bg-zinc-800 rounded-lg overflow-hidden">
+      {/* THUMBNAIL - Replace the blank "Tap to play" area */}
+      <div className="relative aspect-video">
+        <img 
+          src={thumbnailUrl}
+          alt={video.title}
+          className="w-full h-full object-cover"
+        />
+        {/* Play button overlay */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+          <div className="bg-purple-600/90 rounded-full p-3">
+            <PlayIcon className="w-8 h-8 text-white" />
+          </div>
+        </div>
+      </div>
+      
+      {/* Video info */}
+      <div className="p-3">
+        <h4 className="font-semibold">{video.title}</h4>
+        <p className="text-sm text-zinc-400">
+          {video.instructorName} • <span className="text-purple-400">@ {timestamp || '0:00'}</span>
+        </p>
+      </div>
+    </div>
+  );
+};
+```
+
+-----
+
+## FIX 2: PASS RELEVANT TIMESTAMP TO VIDEO CARD
+
+The AI knows the relevant timestamp (“2:15”). Pass it to the video card.
+
+### Option A: Extract timestamp from Gemini data
+
+```typescript
+function getRelevantTimestamp(video: any, technique: string): string {
+  const breakdown = video.timestampBreakdown || video.keyTimestamps || '';
+  
+  if (!breakdown) return '0:00';
+  
+  // Parse the timestamp breakdown
+  const lines = breakdown.split('\n');
+  
+  // Find the line most relevant to the technique
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    if (lower.includes(technique) || 
+        lower.includes('key') || 
+        lower.includes('main') ||
+        lower.includes('important')) {
+      // Extract timestamp from this line (format: "2:15 - description" or "02:15")
+      const match = line.match(/(\d{1,2}:\d{2})/);
+      if (match) return match[1];
+    }
+  }
+  
+  // If no specific match, return first timestamp found
+  const firstMatch = breakdown.match(/(\d{1,2}:\d{2})/);
+  return firstMatch ? firstMatch[1] : '0:00';
+}
+```
+
+### Option B: Have AI specify the timestamp in structured output
+
+When generating the response, have the AI include timestamp in a structured way:
+
+```typescript
+// In the AI response, parse out the recommended timestamp
+function parseTimestampFromResponse(aiResponse: string): string | null {
+  // Look for patterns like "at 2:15" or "the 2:15 mark" or "from 2:15"
+  const patterns = [
+    /at (\d{1,2}:\d{2})/i,
+    /the (\d{1,2}:\d{2}) mark/i,
+    /from (\d{1,2}:\d{2})/i,
+    /@ ?(\d{1,2}:\d{2})/i,
+    /(\d{1,2}:\d{2}) for/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = aiResponse.match(pattern);
+    if (match) return match[1];
+  }
+  
+  return null;
+}
+
+// When rendering the video card:
+const mentionedTimestamp = parseTimestampFromResponse(aiResponse);
+const displayTimestamp = mentionedTimestamp || getRelevantTimestamp(video, technique);
+```
+
+-----
+
+## FIX 3: UPDATE VIDEO EMBED GENERATION
+
+Wherever videos are embedded in the chat response, include both thumbnail and timestamp:
+
+```typescript
+// When building the video embed for the response
+function buildVideoEmbed(video: any, technique: string) {
+  const timestamp = getRelevantTimestamp(video, technique);
+  const thumbnailUrl = `https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`;
+  
+  return {
+    type: 'video',
+    youtubeId: video.youtubeId,
+    title: video.title,
+    instructor: video.instructorName,
+    thumbnail: thumbnailUrl,
+    timestamp: timestamp,
+    timestampSeconds: timestampToSeconds(timestamp) // For deep linking
+  };
+}
+
+function timestampToSeconds(timestamp: string): number {
+  const [mins, secs] = timestamp.split(':').map(Number);
+  return (mins * 60) + secs;
+}
+```
+
+-----
+
+## FIX 4: DEEP LINK TO TIMESTAMP
+
+When user taps to play, open YouTube at the specific timestamp:
+
+```typescript
+const handlePlayVideo = (youtubeId: string, timestampSeconds: number) => {
+  // YouTube URL with timestamp
+  const url = `https://www.youtube.com/watch?v=${youtubeId}&t=${timestampSeconds}`;
+  
+  // Or for embed:
+  // const embedUrl = `https://www.youtube.com/embed/${youtubeId}?start=${timestampSeconds}&autoplay=1`;
+  
+  Linking.openURL(url);
+};
+```
+
+-----
+
+## VERIFICATION
+
+After fix:
+
+1. **Thumbnail** — Should show actual video preview image
+1. **Timestamp** — Card should show “@ 2:15” matching what the AI mentions
+1. **Play** — Tapping should open YouTube at that timestamp
+
+Test with: “Training half guard tomorrow”
+
+- Should see thumbnail of Lachlan Giles video
+- Should show “@ 2:15” (or whatever Gemini identified as key moment)
+- Tapping should open YouTube at 2:15
