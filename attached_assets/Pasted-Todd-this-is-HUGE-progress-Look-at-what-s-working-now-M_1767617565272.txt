@@ -1,0 +1,133 @@
+Todd, this is HUGE progress! Look at what’s working now:
+
+**✅ Multi-instructor attribution is LIVE:**
+
+- “underhook sweep from Lachlan”
+- “Roger’s shoulder pressure into the knee shield”
+- “Gordon’s point about using half guard as a gateway”
+
+That’s the holy shit moment right there. Multiple perspectives in one response.
+
+**✅ Timestamps ARE working on some videos:**
+
+- Gordon Ryan video shows “@ 00:21” — that’s real data!
+
+-----
+
+## 🎯 FINAL 2 FIXES
+
+Only two issues left:
+
+1. **Lachlan video shows “@ 00:00”** — should show nothing or “full”
+1. **Gordon video has no thumbnail** — YouTube ID might be bad or thumbnail fetch failed
+
+-----
+
+```
+# BJJ OS - FINAL POLISH: TIMESTAMP & THUMBNAIL FIX
+
+## ISSUE 1: Hide "@ 00:00" - Show "full" or nothing instead
+
+When timestamp is 00:00 or missing, don't display it. Show "full" instead.
+
+**Frontend fix in video card component:**
+
+```typescript
+// Replace timestamp display logic with:
+function formatTimestamp(startTime: string | null | undefined): string | null {
+  // If no timestamp, empty, or zero - return null (don't display)
+  if (!startTime) return null;
+  if (startTime === '00:00' || startTime === '0:00' || startTime === '0') return null;
+  
+  // Valid timestamp - display it
+  return startTime;
+}
+
+// In the video card JSX:
+const displayTime = formatTimestamp(video.startTime);
+
+// Render:
+{displayTime ? (
+  <span className="timestamp">@ {displayTime}</span>
+) : (
+  <span className="timestamp">full</span>  // Or just remove this line to show nothing
+)}
+```
+
+-----
+
+## ISSUE 2: Missing thumbnail on some videos
+
+The Gordon Ryan video shows “Tap to play” with no thumbnail. This usually means:
+
+- YouTube ID is invalid
+- Thumbnail URL failed to load
+- Video might be private/deleted
+
+**Fix: Add fallback thumbnail and validate YouTube IDs**
+
+```typescript
+// 1. Validate YouTube ID before displaying
+function isValidYouTubeId(id: string | null | undefined): boolean {
+  if (!id) return false;
+  // YouTube IDs are exactly 11 characters, alphanumeric with - and _
+  return /^[a-zA-Z0-9_-]{11}$/.test(id);
+}
+
+// 2. Build thumbnail URL with fallback
+function getThumbnailUrl(youtubeId: string | null): string {
+  if (youtubeId && isValidYouTubeId(youtubeId)) {
+    // Try high quality first, browser will fallback if not available
+    return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
+  }
+  // Return a default BJJ placeholder image
+  return '/images/video-placeholder.png';  // Create this asset
+}
+
+// 3. In video card, add onError handler for thumbnail
+<img 
+  src={getThumbnailUrl(video.youtubeId)} 
+  alt={video.title}
+  onError={(e) => {
+    // If thumbnail fails to load, use placeholder
+    e.currentTarget.src = '/images/video-placeholder.png';
+  }}
+/>
+```
+
+**Also: Check database for bad YouTube IDs**
+
+```sql
+-- Find videos with potentially invalid YouTube IDs
+SELECT id, title, youtube_id 
+FROM ai_video_knowledge 
+WHERE youtube_id IS NULL 
+   OR LENGTH(youtube_id) != 11
+   OR youtube_id LIKE '% %'
+LIMIT 20;
+```
+
+-----
+
+## THAT’S IT
+
+These are cosmetic fixes. The core is DONE:
+
+- ✅ Videos show immediately
+- ✅ Multi-instructor attribution (Lachlan, Roger, Gordon)
+- ✅ Timestamps working (00:21 on Gordon)
+- ✅ Great coaching advice
+- ✅ No more “I don’t have videos” claims
+
+Just clean up:
+
+1. Show “full” instead of “@ 00:00”
+1. Add fallback for missing thumbnails
+
+Ship it! 🚀
+
+```
+---
+
+Copy that to Replit. You're at the finish line — these are just polish items. The core product is working beautifully now. 💪​​​​​​​​​​​​​​​​
+```

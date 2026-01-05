@@ -14,16 +14,24 @@ export function ThumbnailImage({ thumbnailUrl, videoId, title, className = "" }:
   const [currentSourceIndex, setCurrentSourceIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Validate YouTube ID (must be exactly 11 alphanumeric chars with - and _)
+  const isValidYouTubeId = (id: string | undefined): boolean => {
+    if (!id) return false;
+    return /^[a-zA-Z0-9_-]{11}$/.test(id.trim());
+  };
+
   // Build ordered list of thumbnail sources to try (highest quality first)
   const sources = useMemo(() => {
     const urls: string[] = [];
     if (thumbnailUrl && thumbnailUrl.trim()) urls.push(thumbnailUrl);
-    if (videoId && videoId.trim()) {
+    // Only add YouTube URLs if we have a valid 11-character YouTube ID
+    if (videoId && isValidYouTubeId(videoId)) {
+      const cleanId = videoId.trim();
       // Try multiple YouTube thumbnail quality levels with fallbacks
-      urls.push(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
-      urls.push(`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`);
-      urls.push(`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`);
-      urls.push(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`);
+      urls.push(`https://img.youtube.com/vi/${cleanId}/maxresdefault.jpg`);
+      urls.push(`https://img.youtube.com/vi/${cleanId}/hqdefault.jpg`);
+      urls.push(`https://img.youtube.com/vi/${cleanId}/mqdefault.jpg`);
+      urls.push(`https://i.ytimg.com/vi/${cleanId}/mqdefault.jpg`);
     }
     return urls;
   }, [thumbnailUrl, videoId]);

@@ -740,8 +740,8 @@ export default function ChatPage() {
                                 data-testid={`button-watch-${segment.video.id}`}
                               >
                                 {segment.video!.startTimeSeconds && segment.video!.startTimeSeconds > 0 
-                                  ? `Watch @ ${Math.floor(segment.video!.startTimeSeconds / 60)}:${String(segment.video!.startTimeSeconds % 60).padStart(2, '0')}` 
-                                  : 'Watch'}
+                                  ? `@ ${Math.floor(segment.video!.startTimeSeconds / 60)}:${String(segment.video!.startTimeSeconds % 60).padStart(2, '0')}` 
+                                  : 'full'}
                               </Button>
                               <Button
                                 size="sm"
