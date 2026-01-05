@@ -1688,15 +1688,65 @@ export function formatVideosForPrompt(videos: any[], totalMatches: number): stri
     return '';
   }
   
+  // Format each video with RICH Gemini analysis for AI to use
   const lines = videos.map((v, idx) => {
     const position = v.positionCategory?.replace('_', ' ') || '';
     const type = v.techniqueType || '';
     const tags = (v.tags || []).slice(0, 3).join(', ');
     
-    return `${idx + 1}. "${v.techniqueName || v.title}" by ${v.instructorName || 'Unknown'} [${type}/${position}] ${tags ? `(${tags})` : ''}`;
+    // Build rich knowledge section from Gemini data
+    let knowledgeDetails: string[] = [];
+    
+    // Instructor tips - QUOTE THESE
+    if (v.instructorTips && Array.isArray(v.instructorTips) && v.instructorTips.length > 0) {
+      knowledgeDetails.push(`   INSTRUCTOR TIPS: ${v.instructorTips.slice(0, 2).join('; ')}`);
+    }
+    
+    // Common mistakes to avoid
+    if (v.commonMistakes && Array.isArray(v.commonMistakes) && v.commonMistakes.length > 0) {
+      knowledgeDetails.push(`   COMMON MISTAKES: ${v.commonMistakes.slice(0, 2).join('; ')}`);
+    }
+    
+    // Key concepts
+    if (v.keyConcepts && Array.isArray(v.keyConcepts) && v.keyConcepts.length > 0) {
+      knowledgeDetails.push(`   KEY CONCEPTS: ${v.keyConcepts.slice(0, 3).join('; ')}`);
+    }
+    
+    // Instructor quote
+    if (v.instructorQuote) {
+      knowledgeDetails.push(`   QUOTE: "${v.instructorQuote}"`);
+    }
+    
+    // Technique chains
+    if (v.chainsTo && Array.isArray(v.chainsTo) && v.chainsTo.length > 0) {
+      knowledgeDetails.push(`   CHAINS TO: ${v.chainsTo.slice(0, 3).join(', ')}`);
+    }
+    
+    // Timestamp for key content
+    if (v.timestampStart) {
+      knowledgeDetails.push(`   KEY TIMESTAMP: ${v.timestampStart}`);
+    } else if (v.keyTimestamps && typeof v.keyTimestamps === 'string' && v.keyTimestamps.length > 0) {
+      // Parse first timestamp from keyTimestamps field
+      const firstTs = v.keyTimestamps.match(/(\d{1,2}:\d{2})/);
+      if (firstTs) {
+        knowledgeDetails.push(`   KEY TIMESTAMP: ${firstTs[1]}`);
+      }
+    }
+    
+    // Summary
+    if (v.fullSummary) {
+      knowledgeDetails.push(`   SUMMARY: ${v.fullSummary.substring(0, 150)}${v.fullSummary.length > 150 ? '...' : ''}`);
+    }
+    
+    const header = `${idx + 1}. "${v.techniqueName || v.title}" by ${v.instructorName || 'Unknown'} [${type}/${position}] ${tags ? `(${tags})` : ''}`;
+    
+    if (knowledgeDetails.length > 0) {
+      return header + '\n' + knowledgeDetails.join('\n');
+    }
+    return header;
   });
   
-  let result = lines.join('\n');
+  let result = lines.join('\n\n');
   
   if (totalMatches > videos.length) {
     result += `\n\n(${totalMatches - videos.length} more videos available on this topic)`;

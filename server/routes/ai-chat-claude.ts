@@ -557,7 +557,9 @@ export async function handleClaudeStream(req: any, res: any) {
         techniqueType: aiVideoKnowledge.techniqueType,
         positionCategory: aiVideoKnowledge.positionCategory,
         qualityScore: aiVideoKnowledge.qualityScore,
-        videoUrl: aiVideoKnowledge.videoUrl
+        videoUrl: aiVideoKnowledge.videoUrl,
+        keyTimestamps: aiVideoKnowledge.keyTimestamps,
+        tags: aiVideoKnowledge.tags
       })
         .from(aiVideoKnowledge)
         .where(and(
@@ -1120,13 +1122,40 @@ export async function handleClaudeStream(req: any, res: any) {
         const videoId = youtubeMatch ? youtubeMatch[1] : '';
         
         if (videoId) {
+          // ═══════════════════════════════════════════════════════════════
+          // USE GEMINI TIMESTAMP: Extract best timestamp from video's Gemini analysis
+          // Priority: 1) AI-specified start time, 2) Gemini keyTimestamps, 3) Default 00:00
+          // ═══════════════════════════════════════════════════════════════
+          let bestTimestamp = startTime || '00:00';
+          
+          // If AI didn't specify a meaningful timestamp, use Gemini's key timestamp
+          if (bestTimestamp === '00:00' && matchingVideo.keyTimestamps) {
+            const keyTs = matchingVideo.keyTimestamps;
+            // keyTimestamps can be a string like "0:45 - Grip setup, 2:15 - Sweep mechanics"
+            // or an array of timestamp objects
+            if (typeof keyTs === 'string' && keyTs.length > 0) {
+              const firstTs = keyTs.match(/(\d{1,2}:\d{2})/);
+              if (firstTs) {
+                bestTimestamp = firstTs[1];
+              }
+            } else if (Array.isArray(keyTs) && keyTs.length > 0) {
+              const first = keyTs[0];
+              if (typeof first === 'object' && (first.time || first.timestamp)) {
+                bestTimestamp = first.time || first.timestamp;
+              } else if (typeof first === 'string') {
+                const match = first.match(/(\d{1,2}:\d{2})/);
+                if (match) bestTimestamp = match[1];
+              }
+            }
+          }
+          
           // Build the full token: [VIDEO: title | instructor | duration | videoId | id | startTime]
           // Duration: use "full" as placeholder (frontend can show "Watch Full Video")
           // CRITICAL: Include startTime (6th field) so frontend can display it and show action buttons
-          const fullToken = `[VIDEO: ${matchingVideo.techniqueName || titlePattern} | ${matchingVideo.instructorName || instructorPattern} | full | ${videoId} | ${matchingVideo.id} | ${startTime}]`;
+          const fullToken = `[VIDEO: ${matchingVideo.techniqueName || titlePattern} | ${matchingVideo.instructorName || instructorPattern} | full | ${videoId} | ${matchingVideo.id} | ${bestTimestamp}]`;
           
           replacements.push({ original: originalToken, replacement: fullToken });
-          console.log(`[VIDEO TOKEN] ✅ Matched (confidence: ${(bestScore * 100).toFixed(0)}%): ${titlePattern} → ${matchingVideo.techniqueName} @${startTime}`);
+          console.log(`[VIDEO TOKEN] ✅ Matched (confidence: ${(bestScore * 100).toFixed(0)}%): ${titlePattern} → ${matchingVideo.techniqueName} @${bestTimestamp}`);
         } else {
           console.warn('[VIDEO TOKEN] ⚠️  No YouTube ID found for:', matchingVideo.videoUrl);
         }
