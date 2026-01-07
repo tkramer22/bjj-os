@@ -3,15 +3,17 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Capacitor } from "@capacitor/core";
 
 export default function SignupPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const isIOS = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
   
   // Parse URL params for plan, referral code, and invite token
   const params = new URLSearchParams(window.location.search);
   const selectedPlan = params.get('plan') || 'monthly';
-  const referralCode = params.get('ref') || '';
+  const referralCode = isIOS ? '' : (params.get('ref') || '');
   const inviteToken = params.get('invite') || '';
   
   // Form state
@@ -412,7 +414,7 @@ export default function SignupPage() {
               Selected: {getPlanDisplay()}
             </div>
           )}
-          {!inviteValid && referralCode && (
+          {!inviteValid && referralCode && !isIOS && (
             <div className="referral-applied" data-testid="text-referral-applied">
               ✓ Referral code "{referralCode}" will be applied
             </div>

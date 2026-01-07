@@ -6,6 +6,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Check, CreditCard, Tag, X, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Capacitor } from "@capacitor/core";
+import { useSubscription } from "@/hooks/useSubscription";
+import { RestorePurchases } from "@/components/RestorePurchases";
 
 export default function PaymentPage() {
   const [, setLocation] = useLocation();
@@ -19,6 +22,9 @@ export default function PaymentPage() {
     discountDescription: string;
   } | null>(null);
   const [referralError, setReferralError] = useState("");
+  
+  const isIOS = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
+  const { subscribe: handleAppleSubscribe, isLoading: appleLoading } = useSubscription();
 
   // Get user info
   const { data: user, isLoading: userLoading } = useQuery<any>({
@@ -211,69 +217,71 @@ export default function PaymentPage() {
           </p>
         </div>
 
-        {/* Referral Code Section */}
-        <div className="referral-section">
-          <div className="referral-header">
-            <Tag className="w-4 h-4" />
-            <span>Have a referral code?</span>
-          </div>
-          
-          {referralApplied ? (
-            <div className="referral-applied" data-testid="referral-applied">
-              <div className="referral-applied-content">
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <div className="referral-applied-text">
-                  <span className="referral-code-display">{referralApplied.code}</span>
-                  <span className="referral-discount">{referralApplied.discountDescription}</span>
+        {/* Referral Code Section - Hidden on iOS */}
+        {!isIOS && (
+          <div className="referral-section">
+            <div className="referral-header">
+              <Tag className="w-4 h-4" />
+              <span>Have a referral code?</span>
+            </div>
+            
+            {referralApplied ? (
+              <div className="referral-applied" data-testid="referral-applied">
+                <div className="referral-applied-content">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <div className="referral-applied-text">
+                    <span className="referral-code-display">{referralApplied.code}</span>
+                    <span className="referral-discount">{referralApplied.discountDescription}</span>
+                  </div>
                 </div>
+                <button 
+                  onClick={handleRemoveReferral}
+                  className="referral-remove"
+                  data-testid="button-remove-referral"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button 
-                onClick={handleRemoveReferral}
-                className="referral-remove"
-                data-testid="button-remove-referral"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <div className="referral-input-container">
-              <Input
-                type="text"
-                placeholder="Enter referral code"
-                value={referralCode}
-                onChange={(e) => {
-                  setReferralCode(e.target.value.toUpperCase());
-                  setReferralError("");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleValidateReferral();
-                  }
-                }}
-                className="referral-input"
-                data-testid="input-referral-code"
-              />
-              <Button
-                onClick={handleValidateReferral}
-                disabled={!referralCode.trim() || referralValidating}
-                variant="outline"
-                className="referral-apply-btn"
-                data-testid="button-apply-referral"
-              >
-                {referralValidating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  "Apply"
-                )}
-              </Button>
-            </div>
-          )}
-          
-          {referralError && (
-            <p className="referral-error" data-testid="referral-error">{referralError}</p>
-          )}
-        </div>
+            ) : (
+              <div className="referral-input-container">
+                <Input
+                  type="text"
+                  placeholder="Enter referral code"
+                  value={referralCode}
+                  onChange={(e) => {
+                    setReferralCode(e.target.value.toUpperCase());
+                    setReferralError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleValidateReferral();
+                    }
+                  }}
+                  className="referral-input"
+                  data-testid="input-referral-code"
+                />
+                <Button
+                  onClick={handleValidateReferral}
+                  disabled={!referralCode.trim() || referralValidating}
+                  variant="outline"
+                  className="referral-apply-btn"
+                  data-testid="button-apply-referral"
+                >
+                  {referralValidating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Apply"
+                  )}
+                </Button>
+              </div>
+            )}
+            
+            {referralError && (
+              <p className="referral-error" data-testid="referral-error">{referralError}</p>
+            )}
+          </div>
+        )}
 
         {/* Features List */}
         <div className="features-list">
@@ -326,10 +334,27 @@ export default function PaymentPage() {
           )}
         </Button>
 
+        {/* iOS Restore Purchases */}
+        {isIOS && (
+          <div className="text-center mt-4">
+            <RestorePurchases />
+          </div>
+        )}
+
         {/* Trust Signals */}
         <div className="trust-signals">
-          <p className="trust-text">🔒 Secure payment powered by Stripe</p>
-          <p className="trust-text">✓ Cancel anytime, no questions asked</p>
+          <p className="trust-text">
+            {isIOS 
+              ? 'Payment will be charged to your Apple ID account'
+              : '🔒 Secure payment powered by Stripe'
+            }
+          </p>
+          <p className="trust-text">
+            {isIOS 
+              ? 'Subscription automatically renews unless canceled 24 hours before period end'
+              : '✓ Cancel anytime, no questions asked'
+            }
+          </p>
         </div>
       </div>
 

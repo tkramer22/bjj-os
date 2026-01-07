@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { Capacitor } from "@capacitor/core";
 
 export default function PricingPage() {
+  const isIOS = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
   const [, setLocation] = useLocation();
   const [referralCode, setReferralCode] = useState("");
   const [referralMessage, setReferralMessage] = useState("");
@@ -128,36 +130,38 @@ export default function PricingPage() {
           </button>
         </div>
 
-        {/* Referral Code Section */}
-        <div className="referral-section">
-          <div className="referral-header">Have a referral code?</div>
-          <div className="referral-input-group">
-            <input
-              type="text"
-              className={`referral-input ${referralValid ? 'valid' : ''} ${referralMessage && !referralValid ? 'invalid' : ''}`}
-              placeholder="Enter code"
-              value={referralCode}
-              onChange={(e) => handleReferralChange(e.target.value)}
-              maxLength={12}
-              readOnly={referralValid}
-              data-testid="input-referral"
-            />
-            <button 
-              className="apply-button"
-              onClick={handleApplyReferral}
-              disabled={referralValid}
-              data-testid="button-apply-referral"
-            >
-              Apply
-            </button>
-          </div>
-          {referralMessage && (
-            <div className={referralValid ? 'referral-success' : 'referral-error'} data-testid="text-referral-message">
-              {referralValid && <span className="success-indicator">✓</span>}
-              {referralMessage}
+        {/* Referral Code Section - Hidden on iOS */}
+        {!isIOS && (
+          <div className="referral-section">
+            <div className="referral-header">Have a referral code?</div>
+            <div className="referral-input-group">
+              <input
+                type="text"
+                className={`referral-input ${referralValid ? 'valid' : ''} ${referralMessage && !referralValid ? 'invalid' : ''}`}
+                placeholder="Enter code"
+                value={referralCode}
+                onChange={(e) => handleReferralChange(e.target.value)}
+                maxLength={12}
+                readOnly={referralValid}
+                data-testid="input-referral"
+              />
+              <button 
+                className="apply-button"
+                onClick={handleApplyReferral}
+                disabled={referralValid}
+                data-testid="button-apply-referral"
+              >
+                Apply
+              </button>
             </div>
-          )}
-        </div>
+            {referralMessage && (
+              <div className={referralValid ? 'referral-success' : 'referral-error'} data-testid="text-referral-message">
+                {referralValid && <span className="success-indicator">✓</span>}
+                {referralMessage}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
 
