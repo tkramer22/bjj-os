@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -15,7 +15,8 @@ interface SubscriptionStatus {
 export const useSubscription = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [product, setProduct] = useState<any>(null);
+  const [price, setPrice] = useState('$19.99');
+  const [isReady, setIsReady] = useState(false);
 
   const isIOS = ApplePurchaseService.isIOS();
   const isWeb = !Capacitor.isNativePlatform();
@@ -26,17 +27,9 @@ export const useSubscription = () => {
     retry: 1
   });
 
-  useEffect(() => {
-    if (isIOS) {
-      ApplePurchaseService.initialize().then(() => {
-        ApplePurchaseService.getProduct().then(setProduct);
-      });
-    }
-  }, [isIOS]);
-
   const verifyAppleMutation = useMutation({
-    mutationFn: async (receiptData: string) => {
-      const response = await apiRequest('POST', '/api/subscriptions/apple/verify', { receiptData });
+    mutationFn: async (data: { receiptData: string; transactionId?: string }) => {
+      const response = await apiRequest('POST', '/api/subscriptions/apple/verify', data);
       return response.json();
     },
     onSuccess: () => {
@@ -44,38 +37,80 @@ export const useSubscription = () => {
     }
   });
 
-  const subscribe = async (): Promise<{ success: boolean; error?: string }> => {
+  useEffect(() => {
+    if (isIOS) {
+      ApplePurchaseService.initialize().then(() => {
+        const productPrice = ApplePurchaseService.getPrice();
+        setPrice(productPrice);
+        setIsReady(ApplePurchaseService.isReady());
+      });
+    } else {
+      setIsReady(true);
+    }
+  }, [isIOS]);
+
+  const subscribe = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     setError(null);
 
     try {
       if (isIOS) {
-        await ApplePurchaseService.purchase();
-        return { success: true };
+        return new Promise((resolve) => {
+          ApplePurchaseService.purchase(async (result) => {
+            if (result.success && result.receiptData) {
+              try {
+                await verifyAppleMutation.mutateAsync({
+                  receiptData: result.receiptData,
+                  transactionId: result.transactionId
+                });
+                setIsLoading(false);
+                resolve({ success: true });
+              } catch (verifyError: any) {
+                setIsLoading(false);
+                setError(verifyError.message || 'Verification failed');
+                resolve({ success: false, error: verifyError.message });
+              }
+            } else {
+              setIsLoading(false);
+              setError(result.error || 'Purchase failed');
+              resolve({ success: false, error: result.error });
+            }
+          });
+        });
       } else {
         window.location.href = '/api/stripe/create-checkout-session';
         return { success: true };
       }
     } catch (err: any) {
+      setIsLoading(false);
       setError(err.message || 'Purchase failed');
       return { success: false, error: err.message };
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [isIOS, verifyAppleMutation]);
 
-  const restorePurchases = async () => {
-    if (!isIOS) return;
+  const restorePurchases = useCallback(async (): Promise<{ success: boolean; restored: number; error?: string }> => {
+    if (!isIOS) {
+      return { success: false, restored: 0, error: 'Only available on iOS' };
+    }
     
     setIsLoading(true);
+    setError(null);
+    
     try {
-      await ApplePurchaseService.restorePurchases();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
+      const result = await ApplePurchaseService.restorePurchases();
+      
+      if (result.success && result.restored > 0) {
+        queryClient.invalidateQueries({ queryKey: ['/api/user/subscription-status'] });
+      }
+      
       setIsLoading(false);
+      return result;
+    } catch (err: any) {
+      setIsLoading(false);
+      setError(err.message);
+      return { success: false, restored: 0, error: err.message };
     }
-  };
+  }, [isIOS]);
 
   return { 
     subscribe, 
@@ -87,10 +122,9 @@ export const useSubscription = () => {
     status: statusQuery.data?.status,
     expiresAt: statusQuery.data?.expiresAt,
     subscriptionType: statusQuery.data?.subscriptionType,
-    isLoading: isLoading || statusQuery.isLoading,
+    isLoading: isLoading || statusQuery.isLoading || verifyAppleMutation.isPending,
     error,
-    product,
-    price: product?.pricing?.price || '$19.99',
-    verifyAppleReceipt: verifyAppleMutation.mutateAsync
+    price,
+    isReady
   };
 };

@@ -24,7 +24,7 @@ export default function PaymentPage() {
   const [referralError, setReferralError] = useState("");
   
   const isIOS = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
-  const { subscribe: handleAppleSubscribe, isLoading: appleLoading } = useSubscription();
+  const { subscribe: handleAppleSubscribe, isLoading: appleLoading, price: applePrice, error: appleError } = useSubscription();
 
   // Get user info
   const { data: user, isLoading: userLoading } = useQuery<any>({
@@ -88,6 +88,24 @@ export default function PaymentPage() {
   };
 
   const handleStartTrial = async () => {
+    if (isIOS) {
+      const result = await handleAppleSubscribe();
+      if (result.success) {
+        toast({
+          title: "Subscription Active!",
+          description: "Welcome to BJJ OS Pro",
+        });
+        setLocation("/chat");
+      } else if (result.error) {
+        toast({
+          title: "Purchase Failed",
+          description: result.error,
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -107,14 +125,12 @@ export default function PaymentPage() {
       console.log('[PAYMENT] Checkout session created:', data);
 
       if (data.devBypass) {
-        // Development mode - redirect directly to success page
         toast({
           title: "Trial Started!",
           description: "Your 7-day trial is now active (dev mode)",
         });
         setLocation(data.url);
       } else {
-        // Production mode - redirect to Stripe
         window.location.href = data.url;
       }
     } catch (error: any) {
@@ -138,10 +154,12 @@ export default function PaymentPage() {
     );
   }
 
-  const monthlyPrice = "$19.99";
+  const monthlyPrice = isIOS ? applePrice : "$19.99";
   const annualPrice = "$179.88";
   const monthlySavings = "$0";
   const annualSavings = "$0";
+  
+  const currentLoading = isIOS ? appleLoading : isLoading;
 
   const trialEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const formattedTrialEnd = trialEndDate.toLocaleDateString('en-US', {
@@ -161,59 +179,75 @@ export default function PaymentPage() {
           </p>
         </div>
 
-        {/* Plan Selection */}
-        <div className="plan-selector">
-          <button
-            onClick={() => setSelectedPlan("monthly")}
-            className={`plan-card ${selectedPlan === "monthly" ? "plan-card-selected" : ""}`}
-            data-testid="button-plan-monthly"
-          >
-            <div className="plan-card-header">
-              <div className="plan-card-title">Monthly</div>
-              {selectedPlan === "monthly" && (
-                <div className="plan-card-badge">
-                  <Check className="w-4 h-4" />
-                </div>
-              )}
-            </div>
-            <div className="plan-card-price">
-              {monthlyPrice}<span className="plan-card-period">/month</span>
-            </div>
-            <div className="plan-card-description">
-              Billed monthly, cancel anytime
-            </div>
-          </button>
+        {/* Plan Selection - Hidden on iOS (only monthly via Apple) */}
+        {!isIOS && (
+          <div className="plan-selector">
+            <button
+              onClick={() => setSelectedPlan("monthly")}
+              className={`plan-card ${selectedPlan === "monthly" ? "plan-card-selected" : ""}`}
+              data-testid="button-plan-monthly"
+            >
+              <div className="plan-card-header">
+                <div className="plan-card-title">Monthly</div>
+                {selectedPlan === "monthly" && (
+                  <div className="plan-card-badge">
+                    <Check className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
+              <div className="plan-card-price">
+                {monthlyPrice}<span className="plan-card-period">/month</span>
+              </div>
+              <div className="plan-card-description">
+                Billed monthly, cancel anytime
+              </div>
+            </button>
 
-          <button
-            onClick={() => setSelectedPlan("annual")}
-            className={`plan-card ${selectedPlan === "annual" ? "plan-card-selected" : ""}`}
-            data-testid="button-plan-annual"
-          >
-            <div className="plan-card-header">
-              <div className="plan-card-title">Annual</div>
-              {selectedPlan === "annual" && (
-                <div className="plan-card-badge">
-                  <Check className="w-4 h-4" />
-                </div>
-              )}
-            </div>
-            <div className="plan-card-price">
-              {annualPrice}<span className="plan-card-period">/year</span>
-            </div>
-            <div className="plan-card-description">
-              Save 17% with annual billing
-            </div>
-          </button>
-        </div>
+            <button
+              onClick={() => setSelectedPlan("annual")}
+              className={`plan-card ${selectedPlan === "annual" ? "plan-card-selected" : ""}`}
+              data-testid="button-plan-annual"
+            >
+              <div className="plan-card-header">
+                <div className="plan-card-title">Annual</div>
+                {selectedPlan === "annual" && (
+                  <div className="plan-card-badge">
+                    <Check className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
+              <div className="plan-card-price">
+                {annualPrice}<span className="plan-card-period">/year</span>
+              </div>
+              <div className="plan-card-description">
+                Save 17% with annual billing
+              </div>
+            </button>
+          </div>
+        )}
+        
+        {/* iOS Price Display */}
+        {isIOS && (
+          <div className="ios-price-display">
+            <div className="ios-price">{monthlyPrice}<span className="ios-period">/month</span></div>
+            <div className="ios-billing-note">Billed monthly through App Store</div>
+          </div>
+        )}
 
-        {/* Trial Info */}
+        {/* Trial Info - Different messaging for iOS */}
         <div className="trial-info">
-          <div className="trial-info-badge">7-Day Free Trial</div>
+          <div className="trial-info-badge">{isIOS ? 'BJJ OS Pro' : '7-Day Free Trial'}</div>
           <p className="trial-info-text">
-            You won't be charged until <strong>{formattedTrialEnd}</strong>
+            {isIOS 
+              ? 'Unlimited access to Professor OS and 3,000+ technique videos'
+              : <>You won't be charged until <strong>{formattedTrialEnd}</strong></>
+            }
           </p>
           <p className="trial-info-subtext">
-            Cancel anytime before {formattedTrialEnd} - no charge
+            {isIOS 
+              ? 'Manage subscription in App Store Settings'
+              : `Cancel anytime before ${formattedTrialEnd} - no charge`
+            }
           </p>
         </div>
 
@@ -317,19 +351,19 @@ export default function PaymentPage() {
         {/* CTA Button */}
         <Button
           onClick={handleStartTrial}
-          disabled={isLoading}
+          disabled={currentLoading}
           className="payment-cta"
           data-testid="button-start-trial"
         >
-          {isLoading ? (
+          {currentLoading ? (
             <>
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              Starting Trial...
+              {isIOS ? 'Processing...' : 'Starting Trial...'}
             </>
           ) : (
             <>
               <CreditCard className="w-5 h-5 mr-2" />
-              Start 7-Day Free Trial
+              {isIOS ? `Subscribe - ${monthlyPrice}/month` : 'Start 7-Day Free Trial'}
             </>
           )}
         </Button>
@@ -415,6 +449,30 @@ export default function PaymentPage() {
           font-weight: 400;
           color: var(--gray-light);
           line-height: 1.6;
+        }
+
+        /* ==================== iOS PRICE DISPLAY ==================== */
+        .ios-price-display {
+          text-align: center;
+          margin-bottom: 32px;
+        }
+
+        .ios-price {
+          font-size: 48px;
+          font-weight: 700;
+          color: var(--white);
+        }
+
+        .ios-period {
+          font-size: 18px;
+          font-weight: 400;
+          color: var(--gray-light);
+        }
+
+        .ios-billing-note {
+          font-size: 14px;
+          color: var(--gray-medium);
+          margin-top: 8px;
         }
 
         /* ==================== PLAN SELECTOR ==================== */
