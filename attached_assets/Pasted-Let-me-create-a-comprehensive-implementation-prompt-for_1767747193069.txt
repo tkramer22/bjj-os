@@ -1,0 +1,555 @@
+Let me create a comprehensive implementation prompt for Replit. This will cover everything needed for Apple In-App Purchase integration.​​​​​​​​​​​​​​​​
+
+Now I have the full context. Let me create a comprehensive implementation prompt for Replit.
+
+-----
+
+**COPY THIS ENTIRE BLOCK AND SEND TO REPLIT AGENT:**
+
+```
+=== APPLE IN-APP PURCHASE IMPLEMENTATION FOR BJJ OS ===
+
+I need you to implement Apple In-App Purchase (IAP) for my iOS app. Currently we use Stripe for web payments, but Apple requires IAP for iOS app subscriptions.
+
+=== OVERVIEW ===
+
+The app needs to:
+1. Detect if running in iOS app vs web browser
+2. Show Apple IAP flow for iOS users
+3. Show Stripe flow for web users
+4. Verify Apple receipts on the backend
+5. Handle Apple webhook notifications for renewals/cancellations
+6. Check subscription status from BOTH sources (Apple + Stripe)
+
+=== PART 1: DATABASE SCHEMA UPDATES ===
+
+Add these columns to the subscriptions table (or create if doesn't exist):
+
+```sql
+-- Add Apple IAP fields to subscriptions table
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS payment_provider TEXT DEFAULT 'stripe';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS apple_original_transaction_id TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS apple_product_id TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS apple_receipt TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS apple_expires_at TIMESTAMP;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS apple_environment TEXT;
+```
+
+If using Prisma, update schema.prisma:
+
+```prisma
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Payment provider: 'stripe' or 'apple'
+  paymentProvider String @default("stripe")
+
+  // Stripe fields (existing)
+  stripeSubscriptionId String?
+  stripeCustomerId     String?
+  stripePriceId        String?
+
+  // Apple IAP fields (new)
+  appleOriginalTransactionId String?
+  appleProductId             String?
+  appleReceipt               String?
+  appleExpiresAt             DateTime?
+  appleEnvironment           String?
+
+  // Shared fields
+  planTier           String  @default("free")
+  status             String  @default("inactive")
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean @default(false)
+  canceledAt         DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([stripeSubscriptionId])
+  @@index([appleOriginalTransactionId])
+}
+```
+
+Run: npx prisma db push
+
+=== PART 2: ENVIRONMENT VARIABLES ===
+
+Add to .env:
+
+```
+APPLE_SHARED_SECRET=your_app_specific_shared_secret
+```
+
+This comes from App Store Connect → Your App → In-App Purchases → App-Specific Shared Secret
+
+=== PART 3: BACKEND - APPLE RECEIPT VERIFICATION ENDPOINT ===
+
+Create file: server/routes/apple.ts (or add to existing routes)
+
+```typescript
+import express from 'express';
+import { db } from '../db'; // Your database connection
+
+const router = express.Router();
+
+const APPLE_VERIFY_PRODUCTION = 'https://buy.itunes.apple.com/verifyReceipt';
+const APPLE_VERIFY_SANDBOX = 'https://sandbox.itunes.apple.com/verifyReceipt';
+
+// Verify receipt with Apple
+async function verifyWithApple(receiptData: string, url: string) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      'receipt-data': receiptData,
+      'password': process.env.APPLE_SHARED_SECRET,
+      'exclude-old-transactions': true
+    })
+  });
+  return response.json();
+}
+
+// POST /api/subscriptions/apple/verify
+router.post('/api/subscriptions/apple/verify', async (req, res) => {
+  try {
+    const { receiptData, transactionId } = req.body;
+    const userId = req.user?.id; // From your auth middleware
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!receiptData) {
+      return res.status(400).json({ error: 'Receipt data required' });
+    }
+
+    // Try production first
+    let verifyUrl = APPLE_VERIFY_PRODUCTION;
+    let response = await verifyWithApple(receiptData, verifyUrl);
+
+    // Status 21007 means sandbox receipt sent to production
+    if (response.status === 21007) {
+      verifyUrl = APPLE_VERIFY_SANDBOX;
+      response = await verifyWithApple(receiptData, verifyUrl);
+    }
+
+    // Status 0 = valid receipt
+    if (response.status !== 0) {
+      console.error('Apple receipt validation failed:', response.status);
+      return res.status(400).json({ 
+        error: 'Invalid receipt', 
+        appleStatus: response.status 
+      });
+    }
+
+    // Get the latest subscription info
+    const latestReceipt = response.latest_receipt_info?.[0];
+    
+    if (!latestReceipt) {
+      return res.status(400).json({ error: 'No subscription found in receipt' });
+    }
+
+    const expiresAt = new Date(parseInt(latestReceipt.expires_date_ms));
+    const isActive = expiresAt > new Date();
+    const environment = verifyUrl.includes('sandbox') ? 'sandbox' : 'production';
+
+    // Update or create subscription record
+    const existingSub = await db.subscription.findFirst({
+      where: { userId }
+    });
+
+    if (existingSub) {
+      await db.subscription.update({
+        where: { id: existingSub.id },
+        data: {
+          paymentProvider: 'apple',
+          planTier: 'pro',
+          status: isActive ? 'active' : 'expired',
+          appleOriginalTransactionId: latestReceipt.original_transaction_id,
+          appleProductId: latestReceipt.product_id,
+          appleReceipt: receiptData,
+          appleExpiresAt: expiresAt,
+          appleEnvironment: environment,
+          currentPeriodEnd: expiresAt,
+          updatedAt: new Date()
+        }
+      });
+    } else {
+      await db.subscription.create({
+        data: {
+          userId,
+          paymentProvider: 'apple',
+          planTier: 'pro',
+          status: isActive ? 'active' : 'expired',
+          appleOriginalTransactionId: latestReceipt.original_transaction_id,
+          appleProductId: latestReceipt.product_id,
+          appleReceipt: receiptData,
+          appleExpiresAt: expiresAt,
+          appleEnvironment: environment,
+          currentPeriodEnd: expiresAt
+        }
+      });
+    }
+
+    // Update user's subscription tier
+    await db.user.update({
+      where: { id: userId },
+      data: { subscriptionTier: isActive ? 'pro' : 'free' }
+    });
+
+    console.log(`Apple subscription verified for user ${userId}: ${isActive ? 'active' : 'expired'}`);
+
+    res.json({ 
+      success: true, 
+      isActive,
+      expiresAt,
+      productId: latestReceipt.product_id
+    });
+
+  } catch (error) {
+    console.error('Apple verification error:', error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+export default router;
+```
+
+=== PART 4: BACKEND - APPLE WEBHOOK HANDLER ===
+
+Create file: server/routes/webhooks/apple.ts
+
+```typescript
+import express from 'express';
+import { db } from '../../db';
+
+const router = express.Router();
+
+// Decode Apple's JWS (JSON Web Signature) payload
+function decodeAppleJWS(signedPayload: string) {
+  try {
+    const parts = signedPayload.split('.');
+    if (parts.length !== 3) {
+      throw new Error('Invalid JWS format');
+    }
+    const payload = Buffer.from(parts[1], 'base64').toString('utf8');
+    return JSON.parse(payload);
+  } catch (error) {
+    console.error('Failed to decode Apple JWS:', error);
+    throw error;
+  }
+}
+
+// POST /api/webhooks/apple
+router.post('/api/webhooks/apple', async (req, res) => {
+  try {
+    const { signedPayload } = req.body;
+
+    if (!signedPayload) {
+      console.log('Apple webhook: No signed payload');
+      return res.status(400).send('Missing payload');
+    }
+
+    // Decode the notification
+    const payload = decodeAppleJWS(signedPayload);
+    const { notificationType, subtype, data } = payload;
+
+    console.log('Apple webhook received:', notificationType, subtype);
+
+    // Decode transaction info
+    const transactionInfo = decodeAppleJWS(data.signedTransactionInfo);
+    const originalTransactionId = transactionInfo.originalTransactionId;
+
+    // Find subscription by Apple transaction ID
+    const subscription = await db.subscription.findFirst({
+      where: { appleOriginalTransactionId: originalTransactionId }
+    });
+
+    if (!subscription) {
+      console.log(`Apple webhook: No subscription found for transaction ${originalTransactionId}`);
+      return res.status(200).send('OK');
+    }
+
+    // Handle different notification types
+    switch (notificationType) {
+      case 'SUBSCRIBED':
+      case 'DID_RENEW':
+        const renewExpiry = new Date(transactionInfo.expiresDate);
+        await db.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: 'active',
+            appleExpiresAt: renewExpiry,
+            currentPeriodEnd: renewExpiry,
+            cancelAtPeriodEnd: false,
+            updatedAt: new Date()
+          }
+        });
+        await db.user.update({
+          where: { id: subscription.userId },
+          data: { subscriptionTier: 'pro' }
+        });
+        console.log(`Apple: Subscription renewed for user ${subscription.userId}`);
+        break;
+
+      case 'DID_FAIL_TO_RENEW':
+        await db.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: 'past_due',
+            updatedAt: new Date()
+          }
+        });
+        console.log(`Apple: Renewal failed for user ${subscription.userId}`);
+        break;
+
+      case 'EXPIRED':
+        await db.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: 'expired',
+            updatedAt: new Date()
+          }
+        });
+        await db.user.update({
+          where: { id: subscription.userId },
+          data: { subscriptionTier: 'free' }
+        });
+        console.log(`Apple: Subscription expired for user ${subscription.userId}`);
+        break;
+
+      case 'DID_CHANGE_RENEWAL_STATUS':
+        // User turned off auto-renew
+        const autoRenewOff = !transactionInfo.autoRenewStatus;
+        await db.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            cancelAtPeriodEnd: autoRenewOff,
+            updatedAt: new Date()
+          }
+        });
+        console.log(`Apple: Auto-renew ${autoRenewOff ? 'disabled' : 'enabled'} for user ${subscription.userId}`);
+        break;
+
+      case 'REFUND':
+        await db.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: 'refunded',
+            updatedAt: new Date()
+          }
+        });
+        await db.user.update({
+          where: { id: subscription.userId },
+          data: { subscriptionTier: 'free' }
+        });
+        console.log(`Apple: Subscription refunded for user ${subscription.userId}`);
+        break;
+
+      case 'GRACE_PERIOD_EXPIRED':
+        await db.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: 'expired',
+            updatedAt: new Date()
+          }
+        });
+        await db.user.update({
+          where: { id: subscription.userId },
+          data: { subscriptionTier: 'free' }
+        });
+        console.log(`Apple: Grace period expired for user ${subscription.userId}`);
+        break;
+
+      default:
+        console.log(`Apple webhook: Unhandled notification type: ${notificationType}`);
+    }
+
+    res.status(200).send('OK');
+
+  } catch (error) {
+    console.error('Apple webhook error:', error);
+    res.status(500).send('Error');
+  }
+});
+
+export default router;
+```
+
+=== PART 5: REGISTER ROUTES ===
+
+In your main server file (index.ts or server.ts), add:
+
+```typescript
+import appleRoutes from './routes/apple';
+import appleWebhookRoutes from './routes/webhooks/apple';
+
+// Add routes
+app.use(appleRoutes);
+app.use(appleWebhookRoutes);
+```
+
+=== PART 6: SUBSCRIPTION STATUS CHECK UTILITY ===
+
+Create file: server/utils/subscription.ts
+
+```typescript
+import { db } from '../db';
+
+export async function getSubscriptionStatus(userId: string) {
+  const subscription = await db.subscription.findFirst({
+    where: { userId },
+    orderBy: { updatedAt: 'desc' }
+  });
+
+  if (!subscription) {
+    return { isPro: false, provider: null, status: 'none' };
+  }
+
+  // Check Apple subscription
+  if (subscription.paymentProvider === 'apple') {
+    const isActive = subscription.status === 'active' && 
+                     subscription.appleExpiresAt && 
+                     new Date(subscription.appleExpiresAt) > new Date();
+    return { 
+      isPro: isActive, 
+      provider: 'apple', 
+      status: subscription.status,
+      expiresAt: subscription.appleExpiresAt
+    };
+  }
+
+  // Check Stripe subscription
+  if (subscription.paymentProvider === 'stripe') {
+    const isActive = subscription.status === 'active';
+    return { 
+      isPro: isActive, 
+      provider: 'stripe', 
+      status: subscription.status,
+      expiresAt: subscription.currentPeriodEnd
+    };
+  }
+
+  return { isPro: false, provider: null, status: 'unknown' };
+}
+
+// Middleware to check if user is Pro
+export async function requirePro(req: any, res: any, next: any) {
+  const userId = req.user?.id;
+  
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { isPro } = await getSubscriptionStatus(userId);
+  
+  if (!isPro) {
+    return res.status(403).json({ error: 'Pro subscription required' });
+  }
+
+  next();
+}
+```
+
+=== PART 7: API ENDPOINT TO CHECK STATUS ===
+
+Add to your user routes:
+
+```typescript
+import { getSubscriptionStatus } from '../utils/subscription';
+
+// GET /api/user/subscription-status
+router.get('/api/user/subscription-status', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const status = await getSubscriptionStatus(userId);
+    res.json(status);
+
+  } catch (error) {
+    console.error('Subscription status error:', error);
+    res.status(500).json({ error: 'Failed to get status' });
+  }
+});
+```
+
+=== PART 8: FRONTEND - PLATFORM DETECTION HOOK ===
+
+Create file: client/src/hooks/useSubscription.ts
+
+```typescript
+import { Capacitor } from '@capacitor/core';
+
+export const useSubscription = () => {
+  const isIOS = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
+  const isWeb = !Capacitor.isNativePlatform();
+
+  const subscribe = async () => {
+    if (isIOS) {
+      return await handleApplePurchase();
+    } else {
+      return await handleStripeCheckout();
+    }
+  };
+
+  const handleApplePurchase = async () => {
+    // This will be implemented after Capacitor IAP plugin is installed
+    // For now, return a placeholder
+    console.log('Apple purchase flow - to be implemented');
+    return { success: false, error: 'Not implemented yet' };
+  };
+
+  const handleStripeCheckout = async () => {
+    // Redirect to existing Stripe checkout
+    window.location.href = '/api/stripe/create-checkout-session';
+    return { success: true };
+  };
+
+  return { subscribe, isIOS, isWeb };
+};
+```
+
+=== SUMMARY ===
+
+After implementing this code:
+
+1. Database will have Apple IAP fields
+1. Backend can verify Apple receipts at POST /api/subscriptions/apple/verify
+1. Backend handles Apple webhooks at POST /api/webhooks/apple
+1. Subscription status checks both Apple and Stripe
+1. Frontend hook detects iOS vs web platform
+
+NEXT STEPS (after this is built):
+
+1. Set up In-App Purchase in App Store Connect:
+
+- Create subscription product: bjjos_pro_monthly at $19.99/month
+- Create subscription group
+- Get App-Specific Shared Secret
+- Set webhook URL to: <https://your-app.replit.app/api/webhooks/apple>
+
+1. Install Capacitor IAP plugin in iOS project:
+
+- npm install @capawesome-team/capacitor-in-app-purchases
+- npx cap sync ios
+
+1. Implement the actual Apple purchase flow in the frontend hook
+
+Build the backend pieces first, then we’ll add the Capacitor frontend integration.
+
+```
+---
+
+That's the complete backend implementation. Send that to Replit Agent to build the foundation.
+
+Once the backend is ready, we'll add the Capacitor plugin and frontend purchase flow for the iOS app. Want me to create that prompt next, or do you want to get the backend built first?​​​​​​​​​​​​​​​​
+```

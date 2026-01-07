@@ -168,6 +168,14 @@ export const bjjUsers = pgTable("bjj_users", {
   trialEndDate: timestamp("trial_end_date"),
   subscriptionEndDate: timestamp("subscription_end_date"),
   
+  // Apple In-App Purchase (iOS app subscriptions)
+  paymentProvider: text("payment_provider").default("stripe"), // 'stripe' or 'apple'
+  appleOriginalTransactionId: text("apple_original_transaction_id"), // Apple's unique transaction ID
+  appleProductId: text("apple_product_id"), // e.g., 'bjjos_pro_monthly'
+  appleReceipt: text("apple_receipt"), // Base64 encoded receipt for verification
+  appleExpiresAt: timestamp("apple_expires_at"), // When Apple subscription expires
+  appleEnvironment: text("apple_environment"), // 'sandbox' or 'production'
+  
   // Activity tracking
   lastActiveAt: timestamp("last_active_at"), // Last time user sent a message to Professor OS
   

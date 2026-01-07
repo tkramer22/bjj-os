@@ -49,6 +49,9 @@ import {
   signupLimiter, 
   videoSearchLimiter 
 } from './middleware/rateLimiter';
+import appleRoutes from './routes/apple';
+import appleWebhookRoutes from './routes/webhooks/apple';
+import { getSubscriptionStatus } from './utils/subscription';
 import { cache, CacheTTL } from './services/cache';
 import { professorOSCache } from './middleware/cacheMiddleware';
 import { securityMiddleware } from './middleware/inputValidation';
@@ -401,6 +404,29 @@ export function registerRoutes(app: Express): Server {
   // ANALYTICS API
   // ============================================================================
   app.use('/api/analytics', analyticsRouter);
+  
+  // ============================================================================
+  // APPLE IN-APP PURCHASE API
+  // ============================================================================
+  app.use(appleRoutes);
+  app.use(appleWebhookRoutes);
+  
+  // ============================================================================
+  // SUBSCRIPTION STATUS API
+  // ============================================================================
+  app.get('/api/user/subscription-status', requireAuth, async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      const status = await getSubscriptionStatus(userId);
+      res.json(status);
+    } catch (error) {
+      console.error('Subscription status error:', error);
+      res.status(500).json({ error: 'Failed to get status' });
+    }
+  });
   
   // ============================================================================
   // VERSION ENDPOINT (Cache Busting)
