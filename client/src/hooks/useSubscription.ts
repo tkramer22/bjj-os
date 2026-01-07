@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { ApplePurchaseService } from '../services/applePurchase';
 
 interface SubscriptionStatus {
   isPro: boolean;
@@ -11,7 +13,11 @@ interface SubscriptionStatus {
 }
 
 export const useSubscription = () => {
-  const isIOS = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [product, setProduct] = useState<any>(null);
+
+  const isIOS = ApplePurchaseService.isIOS();
   const isWeb = !Capacitor.isNativePlatform();
 
   const statusQuery = useQuery<SubscriptionStatus>({
@@ -19,6 +25,14 @@ export const useSubscription = () => {
     staleTime: 1000 * 60 * 5,
     retry: 1
   });
+
+  useEffect(() => {
+    if (isIOS) {
+      ApplePurchaseService.initialize().then(() => {
+        ApplePurchaseService.getProduct().then(setProduct);
+      });
+    }
+  }, [isIOS]);
 
   const verifyAppleMutation = useMutation({
     mutationFn: async (receiptData: string) => {
@@ -30,26 +44,42 @@ export const useSubscription = () => {
     }
   });
 
-  const handleApplePurchase = async (): Promise<{ success: boolean; error?: string }> => {
-    console.log('Apple purchase flow - to be implemented with Capacitor IAP plugin');
-    return { success: false, error: 'Apple IAP not yet implemented' };
+  const subscribe = async (): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (isIOS) {
+        await ApplePurchaseService.purchase();
+        return { success: true };
+      } else {
+        window.location.href = '/api/stripe/create-checkout-session';
+        return { success: true };
+      }
+    } catch (err: any) {
+      setError(err.message || 'Purchase failed');
+      return { success: false, error: err.message };
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleStripeCheckout = async (): Promise<{ success: boolean }> => {
-    window.location.href = '/api/stripe/create-checkout-session';
-    return { success: true };
-  };
-
-  const subscribe = async () => {
-    if (isIOS) {
-      return await handleApplePurchase();
-    } else {
-      return await handleStripeCheckout();
+  const restorePurchases = async () => {
+    if (!isIOS) return;
+    
+    setIsLoading(true);
+    try {
+      await ApplePurchaseService.restorePurchases();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return { 
     subscribe, 
+    restorePurchases,
     isIOS, 
     isWeb,
     isPro: statusQuery.data?.isPro ?? false,
@@ -57,7 +87,10 @@ export const useSubscription = () => {
     status: statusQuery.data?.status,
     expiresAt: statusQuery.data?.expiresAt,
     subscriptionType: statusQuery.data?.subscriptionType,
-    isLoading: statusQuery.isLoading,
+    isLoading: isLoading || statusQuery.isLoading,
+    error,
+    product,
+    price: product?.pricing?.price || '$19.99',
     verifyAppleReceipt: verifyAppleMutation.mutateAsync
   };
 };
