@@ -13,6 +13,7 @@ type PurchaseCallback = (result: { success: boolean; receiptData?: string; trans
 let purchaseCallback: PurchaseCallback | null = null;
 let isInitialized = false;
 let currentProduct: any = null;
+let storeRef: any = null;
 
 export const ApplePurchaseService = {
   isIOS: () => {
@@ -36,6 +37,7 @@ export const ApplePurchaseService = {
     }
 
     const { store, ProductType, Platform, LogLevel } = window.CdvPurchase;
+    storeRef = store;
 
     store.verbosity = LogLevel.DEBUG;
 
@@ -46,17 +48,25 @@ export const ApplePurchaseService = {
     }]);
 
     store.when()
+      .productUpdated((product: any) => {
+        if (product.id === PRODUCT_ID) {
+          console.log('[IAP] Product updated:', product.id, product.canPurchase);
+          currentProduct = product;
+        }
+      })
       .approved((transaction: any) => {
-        console.log('[IAP] Purchase approved:', transaction.transactionId);
+        console.log('[IAP] Transaction approved:', transaction.transactionId);
+        
+        const receipt = transaction.parentReceipt;
+        const receiptData = receipt?.nativeData?.appStoreReceipt;
         
         if (purchaseCallback) {
-          const receipt = store.localReceipts.find((r: any) => 
-            r.transactions.some((t: any) => t.transactionId === transaction.transactionId)
-          );
+          const callback = purchaseCallback;
+          purchaseCallback = null;
           
-          purchaseCallback({
+          callback({
             success: true,
-            receiptData: receipt?.nativeData?.appStoreReceipt || transaction.nativeData?.appStoreReceipt,
+            receiptData: receiptData,
             transactionId: transaction.transactionId
           });
         }
@@ -73,7 +83,9 @@ export const ApplePurchaseService = {
       .unverified((receipt: any) => {
         console.error('[IAP] Receipt verification failed:', receipt.reason);
         if (purchaseCallback) {
-          purchaseCallback({
+          const callback = purchaseCallback;
+          purchaseCallback = null;
+          callback({
             success: false,
             error: 'Receipt verification failed'
           });
@@ -83,7 +95,9 @@ export const ApplePurchaseService = {
     store.error((error: any) => {
       console.error('[IAP] Store error:', error);
       if (purchaseCallback) {
-        purchaseCallback({
+        const callback = purchaseCallback;
+        purchaseCallback = null;
+        callback({
           success: false,
           error: error.message || 'Purchase failed'
         });
@@ -96,7 +110,7 @@ export const ApplePurchaseService = {
     currentProduct = store.get(PRODUCT_ID, Platform.APPLE_APPSTORE);
     isInitialized = true;
     
-    console.log('[IAP] Initialized. Product:', currentProduct);
+    console.log('[IAP] Initialized. Product:', currentProduct?.id, 'canPurchase:', currentProduct?.canPurchase);
   },
 
   getProduct() {
@@ -133,14 +147,17 @@ export const ApplePurchaseService = {
 
     const offer = currentProduct.getOffer?.() || currentProduct.offers?.[0];
     if (!offer) {
+      purchaseCallback = null;
       callback({ success: false, error: 'No offer available for this product' });
       return;
     }
 
     try {
+      console.log('[IAP] Starting purchase for offer:', offer.id);
       await offer.order();
     } catch (error: any) {
       console.error('[IAP] Order error:', error);
+      purchaseCallback = null;
       callback({ success: false, error: error.message || 'Failed to start purchase' });
     }
   },
@@ -150,16 +167,21 @@ export const ApplePurchaseService = {
       return { success: false, restored: 0, error: 'Only available on iOS' };
     }
 
-    if (!window.CdvPurchase) {
+    if (!isInitialized) {
+      await this.initialize();
+    }
+
+    if (!storeRef) {
       return { success: false, restored: 0, error: 'Store not available' };
     }
 
-    const { store, Platform } = window.CdvPurchase;
+    const { Platform } = window.CdvPurchase;
     
     try {
-      await store.restorePurchases();
+      await storeRef.restorePurchases();
       
-      const owned = store.owned(PRODUCT_ID, Platform.APPLE_APPSTORE);
+      const product = storeRef.get(PRODUCT_ID, Platform.APPLE_APPSTORE);
+      const owned = product?.owned || false;
       
       return { 
         success: true, 

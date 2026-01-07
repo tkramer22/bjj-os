@@ -173,9 +173,12 @@ export default function PaymentPage() {
       <div className="payment-container">
         {/* Header */}
         <div className="payment-header">
-          <h1 className="payment-headline">Complete Your Setup</h1>
+          <h1 className="payment-headline">{isIOS ? 'Subscribe to BJJ OS Pro' : 'Complete Your Setup'}</h1>
           <p className="payment-subheadline">
-            Choose your plan and start your 7-day free trial
+            {isIOS 
+              ? 'Get unlimited access to Professor OS and 3,000+ technique videos'
+              : 'Choose your plan and start your 7-day free trial'
+            }
           </p>
         </div>
 
