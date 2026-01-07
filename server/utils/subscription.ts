@@ -66,7 +66,7 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
 }
 
 export async function requirePro(req: any, res: any, next: any) {
-  const userId = req.user?.id;
+  const userId = req.user?.userId;
   
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });

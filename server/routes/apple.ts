@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../db';
 import { bjjUsers } from '@shared/schema';
 import { eq } from 'drizzle-orm';
+import { requireAuth } from '../middleware/requireAuth';
 
 const router = Router();
 
@@ -34,10 +35,10 @@ async function verifyWithApple(receiptData: string, url: string): Promise<AppleV
   return response.json();
 }
 
-router.post('/api/subscriptions/apple/verify', async (req: Request, res: Response) => {
+router.post('/api/subscriptions/apple/verify', requireAuth, async (req: Request, res: Response) => {
   try {
     const { receiptData, transactionId } = req.body;
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
