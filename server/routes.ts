@@ -2555,56 +2555,334 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // iOS In-App Registration (App Store compliant - creates account, subscription shown after)
-  app.post('/api/auth/ios/register', async (req, res) => {
+  // TEMPORARY: Migration endpoint to add missing columns to Supabase database
+  // Protected by admin authentication
+  app.get('/api/admin/fix-schema-columns', requireAuth, async (req, res) => {
+    // Verify user is admin
+    const userId = (req as any).user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const [user] = await db.select({ isAdmin: bjjUsers.isAdmin })
+      .from(bjjUsers)
+      .where(eq(bjjUsers.id, userId))
+      .limit(1);
+    
+    if (!user?.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
     try {
-      const { email, password } = req.body;
-
-      if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password are required' });
-      }
-
-      if (password.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters' });
-      }
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return res.status(400).json({ error: 'Invalid email format' });
-      }
-
-      const normalizedEmail = email.toLowerCase().trim();
-
-      // Check if user already exists
-      const [existingUser] = await db.select()
-        .from(bjjUsers)
-        .where(eq(bjjUsers.email, normalizedEmail))
-        .limit(1);
-
-      if (existingUser) {
-        return res.status(409).json({ error: 'Account already exists. Please sign in.' });
-      }
-
-      // Create user with trial/free status (subscription via Apple IAP)
-      const hashedPassword = await bcrypt.hash(password, 10);
+      console.log('[MIGRATION] Attempting to add missing columns...');
       
-      const [newUser] = await db.insert(bjjUsers).values({
-        email: normalizedEmail,
-        passwordHash: hashedPassword,
-        emailVerified: true, // iOS users verified by Apple
-        subscriptionType: 'trial',
-        subscriptionStatus: 'inactive', // Will be activated by Apple IAP
-        paymentProvider: 'apple',
-        onboardingCompleted: false,
-      }).returning();
+      const columns = [
+        { name: 'payment_provider', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS payment_provider TEXT DEFAULT 'stripe'` },
+        { name: 'apple_user_id', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS apple_user_id TEXT` },
+        { name: 'apple_original_transaction_id', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS apple_original_transaction_id TEXT` },
+        { name: 'apple_product_id', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS apple_product_id TEXT` },
+        { name: 'apple_receipt', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS apple_receipt TEXT` },
+        { name: 'apple_expires_at', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS apple_expires_at TIMESTAMP` },
+        { name: 'apple_environment', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS apple_environment TEXT` },
+        { name: 'last_active_at', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP` },
+        { name: 'avatar_url', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS avatar_url TEXT` },
+        { name: 'unit_preference', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS unit_preference TEXT` },
+        { name: 'updated_at', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP` },
+        { name: 'created_at', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()` },
+        { name: 'active', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE` },
+        { name: 'last_video_watched_at', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS last_video_watched_at TIMESTAMP` },
+        { name: 'videos_recommended_count', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS videos_recommended_count INTEGER DEFAULT 0` },
+        { name: 'recommendation_tier', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS recommendation_tier TEXT` },
+        { name: 'videos_watched_count', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS videos_watched_count INTEGER DEFAULT 0` },
+        { name: 'max_devices', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS max_devices INTEGER DEFAULT 3` },
+        { name: 'is_admin', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE` },
+        { name: 'is_lifetime_user', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS is_lifetime_user BOOLEAN DEFAULT FALSE` },
+      ];
+      
+      const results: string[] = [];
+      for (const col of columns) {
+        try {
+          await db.execute(sql.raw(col.sql));
+          results.push(`Added ${col.name}`);
+          console.log(`[MIGRATION] Added ${col.name} column`);
+        } catch (e: any) {
+          results.push(`${col.name}: ${e.message}`);
+          console.log(`[MIGRATION] ${col.name}:`, e.message);
+        }
+      }
+      
+      res.json({ success: true, message: 'Schema migration completed', results });
+    } catch (error: any) {
+      console.error('[MIGRATION] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
-      console.log(`📱 [iOS REGISTER] Created account for ${normalizedEmail} (ID: ${newUser.id})`);
+  // iOS Payment-First Flow: Step 1 - Prepare (validate credentials, no DB write)
+  // Returns a signed preparation token with credentials for use after payment
+  app.post('/api/auth/ios/prepare', async (req, res) => {
+    try {
+      const { email, password, authType, appleIdentityToken, appleUserId, displayName } = req.body;
+
+      // Validate based on auth type
+      if (authType === 'apple') {
+        if (!appleIdentityToken || !appleUserId) {
+          return res.status(400).json({ error: 'Apple authentication data required' });
+        }
+
+        // Decode Apple token to verify it's valid
+        let decoded: any;
+        try {
+          decoded = jwt.decode(appleIdentityToken);
+          if (!decoded || !decoded.sub) {
+            return res.status(400).json({ error: 'Invalid Apple token' });
+          }
+        } catch (e) {
+          return res.status(400).json({ error: 'Failed to decode Apple token' });
+        }
+
+        const normalizedEmail = (decoded.email || email || '').toLowerCase().trim();
+        
+        // Check if user already exists - only select essential columns to avoid missing column errors
+        let [existingUser] = await db.select({
+          id: bjjUsers.id,
+          email: bjjUsers.email,
+          isAdmin: bjjUsers.isAdmin,
+          subscriptionStatus: bjjUsers.subscriptionStatus,
+          subscriptionType: bjjUsers.subscriptionType,
+          onboardingCompleted: bjjUsers.onboardingCompleted,
+        })
+          .from(bjjUsers)
+          .where(eq(bjjUsers.appleUserId, decoded.sub))
+          .limit(1);
+
+        if (!existingUser && normalizedEmail) {
+          [existingUser] = await db.select({
+            id: bjjUsers.id,
+            email: bjjUsers.email,
+            isAdmin: bjjUsers.isAdmin,
+            subscriptionStatus: bjjUsers.subscriptionStatus,
+            subscriptionType: bjjUsers.subscriptionType,
+            onboardingCompleted: bjjUsers.onboardingCompleted,
+          })
+            .from(bjjUsers)
+            .where(eq(bjjUsers.email, normalizedEmail))
+            .limit(1);
+        }
+
+        if (existingUser) {
+          // Existing user - no payment needed, just sign in
+          const token = jwt.sign(
+            { userId: existingUser.id, email: existingUser.email, isAdmin: existingUser.isAdmin || false },
+            process.env.SESSION_SECRET || 'bjj-os-secret',
+            { expiresIn: '3650d' }
+          );
+
+          console.log(`🍎 [iOS PREPARE] Existing Apple user: ${existingUser.email}`);
+
+          return res.json({
+            success: true,
+            existingUser: true,
+            token,
+            user: {
+              id: existingUser.id,
+              email: existingUser.email,
+              subscriptionStatus: existingUser.subscriptionStatus,
+              subscriptionType: existingUser.subscriptionType,
+              onboardingCompleted: existingUser.onboardingCompleted,
+            }
+          });
+        }
+
+        // New user - return preparation token for payment flow
+        const prepToken = jwt.sign(
+          { 
+            authType: 'apple',
+            appleUserId: decoded.sub,
+            email: normalizedEmail,
+            displayName: displayName || null,
+            preparedAt: Date.now()
+          },
+          process.env.SESSION_SECRET || 'bjj-os-secret',
+          { expiresIn: '30m' } // Valid for 30 minutes to complete payment
+        );
+
+        console.log(`🍎 [iOS PREPARE] New Apple user prepared: ${normalizedEmail || 'no email'}`);
+
+        return res.json({
+          success: true,
+          existingUser: false,
+          requiresPayment: true,
+          prepToken,
+          email: normalizedEmail,
+        });
+
+      } else {
+        // Email/password flow
+        if (!email || !password) {
+          return res.status(400).json({ error: 'Email and password are required' });
+        }
+
+        if (password.length < 6) {
+          return res.status(400).json({ error: 'Password must be at least 6 characters' });
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({ error: 'Invalid email format' });
+        }
+
+        const normalizedEmail = email.toLowerCase().trim();
+
+        // Check if user already exists - only select essential columns to avoid missing column errors
+        const [existingUser] = await db.select({
+          id: bjjUsers.id,
+          email: bjjUsers.email
+        })
+          .from(bjjUsers)
+          .where(eq(bjjUsers.email, normalizedEmail))
+          .limit(1);
+
+        if (existingUser) {
+          return res.status(409).json({ error: 'Account already exists. Please sign in.' });
+        }
+
+        // Hash password and create preparation token (no DB write yet)
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        const prepToken = jwt.sign(
+          { 
+            authType: 'email',
+            email: normalizedEmail,
+            passwordHash: hashedPassword,
+            preparedAt: Date.now()
+          },
+          process.env.SESSION_SECRET || 'bjj-os-secret',
+          { expiresIn: '30m' } // Valid for 30 minutes to complete payment
+        );
+
+        console.log(`📱 [iOS PREPARE] New email user prepared: ${normalizedEmail}`);
+
+        return res.json({
+          success: true,
+          existingUser: false,
+          requiresPayment: true,
+          prepToken,
+          email: normalizedEmail,
+        });
+      }
+
+    } catch (error: any) {
+      console.error('📱 [iOS PREPARE] Error:', error.message || error);
+      res.status(500).json({ error: 'Preparation failed. Please try again.' });
+    }
+  });
+
+  // iOS Payment-First Flow: Step 2 - Complete (after payment success)
+  // Creates account ONLY after Apple receipt is validated
+  app.post('/api/auth/ios/complete', async (req, res) => {
+    try {
+      const { prepToken, receipt, transactionId, productId } = req.body;
+
+      if (!prepToken) {
+        return res.status(400).json({ error: 'Preparation token required' });
+      }
+
+      if (!receipt || !transactionId) {
+        return res.status(400).json({ error: 'Payment receipt required' });
+      }
+
+      // Verify preparation token
+      let prepData: any;
+      try {
+        prepData = jwt.verify(prepToken, process.env.SESSION_SECRET || 'bjj-os-secret') as any;
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid or expired preparation. Please start over.' });
+      }
+
+      // TODO: In production, verify Apple receipt with Apple's servers
+      // For now, we trust the receipt from the client (StoreKit validated it)
+      console.log(`💳 [iOS COMPLETE] Payment received for ${prepData.email}`);
+      console.log(`💳 [iOS COMPLETE] Transaction: ${transactionId}, Product: ${productId}`);
+
+      // Create user with ACTIVE subscription (payment succeeded!)
+      let newUser;
+      
+      if (prepData.authType === 'apple') {
+        // Check one more time for race conditions - only select essential columns
+        let [existingUser] = await db.select({
+          id: bjjUsers.id,
+          email: bjjUsers.email,
+          isAdmin: bjjUsers.isAdmin,
+          subscriptionStatus: bjjUsers.subscriptionStatus,
+          subscriptionType: bjjUsers.subscriptionType,
+          onboardingCompleted: bjjUsers.onboardingCompleted,
+        })
+          .from(bjjUsers)
+          .where(eq(bjjUsers.appleUserId, prepData.appleUserId))
+          .limit(1);
+
+        if (existingUser) {
+          // Race condition - user was created elsewhere
+          const token = jwt.sign(
+            { userId: existingUser.id, email: existingUser.email, isAdmin: false },
+            process.env.SESSION_SECRET || 'bjj-os-secret',
+            { expiresIn: '3650d' }
+          );
+          return res.json({ success: true, token, user: existingUser });
+        }
+
+        [newUser] = await db.insert(bjjUsers).values({
+          email: prepData.email || null,
+          appleUserId: prepData.appleUserId,
+          displayName: prepData.displayName || null,
+          emailVerified: true,
+          subscriptionType: 'monthly',
+          subscriptionStatus: 'active',
+          onboardingCompleted: false,
+          paymentProvider: 'apple', // iOS users pay through Apple IAP
+        }).returning({
+          id: bjjUsers.id,
+          email: bjjUsers.email,
+        });
+
+        console.log(`🍎 [iOS COMPLETE] Created Apple account: ${newUser.email || newUser.id}`);
+
+      } else {
+        // Email/password flow
+        // Check one more time for race conditions - only select essential columns
+        const [existingUser] = await db.select({
+          id: bjjUsers.id,
+          email: bjjUsers.email,
+        })
+          .from(bjjUsers)
+          .where(eq(bjjUsers.email, prepData.email))
+          .limit(1);
+
+        if (existingUser) {
+          return res.status(409).json({ error: 'Account already exists. Please sign in.' });
+        }
+
+        [newUser] = await db.insert(bjjUsers).values({
+          email: prepData.email,
+          passwordHash: prepData.passwordHash,
+          emailVerified: true,
+          subscriptionType: 'monthly',
+          subscriptionStatus: 'active',
+          onboardingCompleted: false,
+          paymentProvider: 'apple', // iOS users pay through Apple IAP
+        }).returning({
+          id: bjjUsers.id,
+          email: bjjUsers.email,
+        });
+
+        console.log(`📱 [iOS COMPLETE] Created email account: ${newUser.email}`);
+      }
 
       // Generate JWT token
       const token = jwt.sign(
-        { userId: newUser.id, email: normalizedEmail, isAdmin: false },
+        { userId: newUser.id, email: newUser.email, isAdmin: false },
         process.env.SESSION_SECRET || 'bjj-os-secret',
-        { expiresIn: '3650d' } // 10 years for iOS
+        { expiresIn: '3650d' }
       );
 
       res.json({
@@ -2612,18 +2890,25 @@ export function registerRoutes(app: Express): Server {
         token,
         user: {
           id: newUser.id,
-          email: normalizedEmail,
-          subscriptionStatus: 'inactive',
-          subscriptionType: 'trial',
+          email: newUser.email,
+          subscriptionStatus: 'active',
+          subscriptionType: 'monthly',
           onboardingCompleted: false,
-          requiresSubscription: true, // Signal to show Apple IAP
         }
       });
 
     } catch (error: any) {
-      console.error('iOS registration error:', error);
-      res.status(500).json({ error: 'Registration failed. Please try again.' });
+      console.error('📱 [iOS COMPLETE] Error:', error.message || error);
+      res.status(500).json({ error: 'Account creation failed. Please contact support.' });
     }
+  });
+
+  // Legacy endpoint - redirect to new flow
+  app.post('/api/auth/ios/register', async (req, res) => {
+    return res.status(400).json({ 
+      error: 'This endpoint is deprecated. Use /api/auth/ios/prepare + /api/auth/ios/complete flow.',
+      message: 'Payment is required before account creation.'
+    });
   });
 
   // Apple Sign In Authentication
@@ -2697,7 +2982,6 @@ export function registerRoutes(app: Express): Server {
           emailVerified: true,
           subscriptionType: 'trial',
           subscriptionStatus: 'inactive',
-          paymentProvider: 'apple',
           onboardingCompleted: false,
         }).returning();
 

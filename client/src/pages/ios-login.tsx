@@ -25,6 +25,7 @@ export default function IOSLoginPage() {
   const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [showNoPasswordDialog, setShowNoPasswordDialog] = useState(false);
 
+  // Payment-first Apple Sign In flow
   const handleAppleSignIn = async () => {
     setError("");
     triggerHaptic('light');
@@ -43,50 +44,139 @@ export default function IOSLoginPage() {
 
       console.log('[APPLE SIGN IN] Response:', result.response);
 
-      const response = await fetch(getApiUrl('/api/auth/apple'), {
+      // Step 1: Prepare (check if existing user or new user)
+      const prepResponse = await fetch(getApiUrl('/api/auth/ios/prepare'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          identityToken: result.response.identityToken,
-          user: result.response.user,
+          authType: 'apple',
+          appleIdentityToken: result.response.identityToken,
+          appleUserId: result.response.user,
           email: result.response.email,
-          fullName: result.response.givenName || result.response.familyName ? {
-            givenName: result.response.givenName,
-            familyName: result.response.familyName,
-          } : null,
+          displayName: result.response.givenName || result.response.familyName ? 
+            `${result.response.givenName || ''} ${result.response.familyName || ''}`.trim() : null,
         }),
       });
 
-      const data = await response.json();
+      const prepData = await prepResponse.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Apple sign in failed');
+      if (!prepResponse.ok) {
+        throw new Error(prepData.error || 'Apple sign in failed');
       }
 
-      triggerHaptic('success');
+      // If existing user, sign them in directly
+      if (prepData.existingUser) {
+        triggerHaptic('success');
 
-      if (data.token) {
-        await saveAuthToken(data.token);
+        if (prepData.token) {
+          await saveAuthToken(prepData.token);
+        }
+
+        if (prepData.user) {
+          await saveUserData(prepData.user);
+          localStorage.setItem('mobileUserId', prepData.user.id?.toString() || '1');
+          await Preferences.set({ key: 'mobileUserId', value: prepData.user.id?.toString() || '1' });
+          window.dispatchEvent(new Event('bjjos-auth-change'));
+        }
+
+        toast({
+          title: "Welcome back!",
+          description: "You're now signed in",
+        });
+
+        if (!prepData.user?.onboardingCompleted) {
+          setLocation("/ios-onboarding");
+        } else {
+          setLocation("/ios-chat");
+        }
+        return;
       }
 
-      if (data.user) {
-        await saveUserData(data.user);
-        localStorage.setItem('mobileUserId', data.user.id?.toString() || '1');
-        await Preferences.set({ key: 'mobileUserId', value: data.user.id?.toString() || '1' });
-        window.dispatchEvent(new Event('bjjos-auth-change'));
-      }
+      // Step 2: New user - trigger Apple IAP payment
+      if (prepData.requiresPayment) {
+        console.log('[APPLE SIGN IN] New user - triggering Apple IAP payment...');
+        
+        try {
+          const { ApplePurchaseService } = await import('@/services/applePurchase');
+          
+          // Initialize the store if needed
+          await ApplePurchaseService.initialize();
+          
+          // Wrap callback-based purchase in a Promise
+          const purchaseResult = await new Promise<{ success: boolean; receipt?: string; transactionId?: string; error?: string }>((resolve) => {
+            ApplePurchaseService.purchase((result) => {
+              resolve({
+                success: result.success,
+                receipt: result.receiptData,
+                transactionId: result.transactionId,
+                error: result.error,
+              });
+            });
+          });
+          
+          if (!purchaseResult.success || !purchaseResult.receipt) {
+            setIsAppleLoading(false);
+            setError(purchaseResult.error || "Payment was not completed. Please try again.");
+            triggerHaptic('error');
+            return;
+          }
 
-      toast({
-        title: data.isNewUser ? "Account created!" : "Welcome back!",
-        description: data.isNewUser ? "Let's get you set up" : "You're now signed in",
-      });
+          console.log('[APPLE SIGN IN] Payment successful, completing account creation...');
 
-      if (data.user?.requiresSubscription) {
-        setLocation("/ios-subscribe");
-      } else if (!data.user?.onboardingCompleted) {
-        setLocation("/ios-onboarding");
-      } else {
-        setLocation("/ios-chat");
+          // Step 3: Complete account creation with receipt
+          const completeResponse = await fetch(getApiUrl('/api/auth/ios/complete'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prepToken: prepData.prepToken,
+              receipt: purchaseResult.receipt,
+              transactionId: purchaseResult.transactionId,
+              productId: 'bjjos_pro_monthly',
+            }),
+          });
+
+          const completeData = await completeResponse.json();
+
+          if (!completeResponse.ok) {
+            setIsAppleLoading(false);
+            setError(completeData.error || "Account creation failed. Please contact support.");
+            triggerHaptic('error');
+            return;
+          }
+
+          // Success! Save auth and navigate
+          triggerHaptic('success');
+
+          if (completeData.token) {
+            await saveAuthToken(completeData.token);
+          }
+
+          if (completeData.user) {
+            await saveUserData(completeData.user);
+            localStorage.setItem('mobileUserId', completeData.user.id?.toString() || '1');
+            await Preferences.set({ key: 'mobileUserId', value: completeData.user.id?.toString() || '1' });
+            window.dispatchEvent(new Event('bjjos-auth-change'));
+          }
+
+          toast({
+            title: "Welcome to Prof. OS!",
+            description: "Your subscription is now active",
+          });
+
+          setLocation("/ios-onboarding");
+
+        } catch (purchaseErr: any) {
+          console.error('[APPLE SIGN IN] Purchase error:', purchaseErr);
+          setIsAppleLoading(false);
+          
+          if (purchaseErr.message?.includes('cancel')) {
+            setError("Payment was cancelled. No account was created.");
+          } else {
+            setError("Payment failed. Please try again.");
+          }
+          triggerHaptic('error');
+          return;
+        }
       }
 
     } catch (err: any) {
@@ -201,6 +291,7 @@ export default function IOSLoginPage() {
     }
   };
 
+  // Payment-first registration flow
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -227,18 +318,19 @@ export default function IOSLoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(getApiUrl('/api/auth/ios/register'), {
+      // Step 1: Prepare credentials (no account created yet)
+      const prepResponse = await fetch(getApiUrl('/api/auth/ios/prepare'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, authType: 'email' }),
       });
 
-      const data = await response.json();
+      const prepData = await prepResponse.json();
 
-      if (!response.ok) {
+      if (!prepResponse.ok) {
         setIsLoading(false);
-        const errorLower = (data.error || '').toLowerCase();
-        let userMessage = data.error || "Something went wrong. Please try again.";
+        const errorLower = (prepData.error || '').toLowerCase();
+        let userMessage = prepData.error || "Something went wrong. Please try again.";
         
         if (errorLower.includes('already exists') || errorLower.includes('duplicate')) {
           userMessage = "An account with this email already exists. Please sign in.";
@@ -249,25 +341,92 @@ export default function IOSLoginPage() {
         return;
       }
 
-      triggerHaptic('success');
+      // Step 2: Trigger Apple IAP payment
+      if (prepData.requiresPayment) {
+        console.log('[REGISTER] Triggering Apple IAP payment...');
+        
+        try {
+          const { ApplePurchaseService } = await import('@/services/applePurchase');
+          
+          // Initialize the store if needed
+          await ApplePurchaseService.initialize();
+          
+          // Wrap callback-based purchase in a Promise
+          const purchaseResult = await new Promise<{ success: boolean; receipt?: string; transactionId?: string; error?: string }>((resolve) => {
+            ApplePurchaseService.purchase((result) => {
+              resolve({
+                success: result.success,
+                receipt: result.receiptData,
+                transactionId: result.transactionId,
+                error: result.error,
+              });
+            });
+          });
+          
+          if (!purchaseResult.success || !purchaseResult.receipt) {
+            setIsLoading(false);
+            setError(purchaseResult.error || "Payment was not completed. Please try again.");
+            triggerHaptic('error');
+            return;
+          }
 
-      if (data.token) {
-        await saveAuthToken(data.token);
+          console.log('[REGISTER] Payment successful, completing account creation...');
+
+          // Step 3: Complete account creation with receipt
+          const completeResponse = await fetch(getApiUrl('/api/auth/ios/complete'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prepToken: prepData.prepToken,
+              receipt: purchaseResult.receipt,
+              transactionId: purchaseResult.transactionId,
+              productId: 'bjjos_pro_monthly',
+            }),
+          });
+
+          const completeData = await completeResponse.json();
+
+          if (!completeResponse.ok) {
+            setIsLoading(false);
+            setError(completeData.error || "Account creation failed. Please contact support.");
+            triggerHaptic('error');
+            return;
+          }
+
+          // Success! Save auth and navigate
+          triggerHaptic('success');
+
+          if (completeData.token) {
+            await saveAuthToken(completeData.token);
+          }
+
+          if (completeData.user) {
+            await saveUserData(completeData.user);
+            localStorage.setItem('mobileUserId', completeData.user.id?.toString() || '1');
+            await Preferences.set({ key: 'mobileUserId', value: completeData.user.id?.toString() || '1' });
+            window.dispatchEvent(new Event('bjjos-auth-change'));
+          }
+
+          toast({
+            title: "Welcome to Prof. OS!",
+            description: "Your subscription is now active",
+          });
+
+          setLocation("/ios-onboarding");
+
+        } catch (purchaseErr: any) {
+          console.error('[REGISTER] Purchase error:', purchaseErr);
+          setIsLoading(false);
+          
+          if (purchaseErr.message?.includes('cancel')) {
+            setError("Payment was cancelled. No account was created.");
+          } else {
+            setError("Payment failed. Please try again.");
+          }
+          triggerHaptic('error');
+          return;
+        }
       }
-
-      if (data.user) {
-        await saveUserData(data.user);
-        localStorage.setItem('mobileUserId', data.user.id?.toString() || '1');
-        await Preferences.set({ key: 'mobileUserId', value: data.user.id?.toString() || '1' });
-        window.dispatchEvent(new Event('bjjos-auth-change'));
-      }
-
-      toast({
-        title: "Account created!",
-        description: "Let's get you set up",
-      });
-
-      setLocation("/ios-subscribe");
 
     } catch (err: any) {
       let userMessage = "Something went wrong. Please try again.";
