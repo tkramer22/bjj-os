@@ -117,6 +117,9 @@ export async function clearAuth(): Promise<void> {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
   localStorage.removeItem('mobileUserId');
+  
+  // Dispatch auth change event for App.tsx to update isNativeAuthenticated
+  window.dispatchEvent(new Event('bjjos-auth-change'));
 }
 
 export async function restoreAuthFromNative(): Promise<boolean> {
