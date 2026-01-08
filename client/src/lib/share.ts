@@ -75,7 +75,7 @@ export async function shareVideo(title: string, instructor: string, videoId: str
   }
   
   const url = `https://www.youtube.com/watch?v=${videoId}`;
-  const text = `${title}\n${instructor}\n\n🎥 ${url}\n\nProfessor OS found this - 2,500+ videos analyzed with timestamps and key details.\n\nhttps://bjjos.app`;
+  const text = `${title}\n${instructor}\n\n🎥 ${url}\n\nProfessor OS found this - 3,500+ videos analyzed with timestamps and key details.\n\nhttps://bjjos.app`;
   
   console.log('URL:', url);
   console.log('Calling shareContent...');
