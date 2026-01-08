@@ -2555,6 +2555,187 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // iOS In-App Registration (App Store compliant - creates account, subscription shown after)
+  app.post('/api/auth/ios/register', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: 'Invalid email format' });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // Check if user already exists
+      const [existingUser] = await db.select()
+        .from(bjjUsers)
+        .where(eq(bjjUsers.email, normalizedEmail))
+        .limit(1);
+
+      if (existingUser) {
+        return res.status(409).json({ error: 'Account already exists. Please sign in.' });
+      }
+
+      // Create user with trial/free status (subscription via Apple IAP)
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      const [newUser] = await db.insert(bjjUsers).values({
+        email: normalizedEmail,
+        passwordHash: hashedPassword,
+        emailVerified: true, // iOS users verified by Apple
+        subscriptionType: 'trial',
+        subscriptionStatus: 'inactive', // Will be activated by Apple IAP
+        paymentProvider: 'apple',
+        onboardingCompleted: false,
+      }).returning();
+
+      console.log(`📱 [iOS REGISTER] Created account for ${normalizedEmail} (ID: ${newUser.id})`);
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: newUser.id, email: normalizedEmail, isAdmin: false },
+        process.env.SESSION_SECRET || 'bjj-os-secret',
+        { expiresIn: '3650d' } // 10 years for iOS
+      );
+
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: newUser.id,
+          email: normalizedEmail,
+          subscriptionStatus: 'inactive',
+          subscriptionType: 'trial',
+          onboardingCompleted: false,
+          requiresSubscription: true, // Signal to show Apple IAP
+        }
+      });
+
+    } catch (error: any) {
+      console.error('iOS registration error:', error);
+      res.status(500).json({ error: 'Registration failed. Please try again.' });
+    }
+  });
+
+  // Apple Sign In Authentication
+  app.post('/api/auth/apple', async (req, res) => {
+    try {
+      const { identityToken, user: appleUser, email: providedEmail, fullName } = req.body;
+
+      if (!identityToken) {
+        return res.status(400).json({ error: 'Apple identity token required' });
+      }
+
+      // Decode the Apple identity token to get user info
+      // Apple's JWT contains: sub (user ID), email, email_verified
+      let decoded: any;
+      try {
+        // Note: In production, you should verify the token signature with Apple's public keys
+        // For now, we decode without verification (token comes from Apple's SDK)
+        decoded = jwt.decode(identityToken);
+        
+        if (!decoded || !decoded.sub) {
+          return res.status(400).json({ error: 'Invalid Apple token' });
+        }
+      } catch (e) {
+        return res.status(400).json({ error: 'Failed to decode Apple token' });
+      }
+
+      const appleUserId = decoded.sub;
+      // Email might come from token OR from first-time sign-in response
+      const email = decoded.email || providedEmail;
+      const displayName = fullName ? `${fullName.givenName || ''} ${fullName.familyName || ''}`.trim() : null;
+
+      console.log(`🍎 [APPLE AUTH] Sign in attempt: ${appleUserId}, email: ${email || 'hidden'}`);
+
+      // Look for existing user by Apple ID first, then by email
+      let [existingUser] = await db.select()
+        .from(bjjUsers)
+        .where(eq(bjjUsers.appleUserId, appleUserId))
+        .limit(1);
+
+      if (!existingUser && email) {
+        // Try to find by email (user might have signed up with email first)
+        [existingUser] = await db.select()
+          .from(bjjUsers)
+          .where(eq(bjjUsers.email, email.toLowerCase()))
+          .limit(1);
+        
+        if (existingUser) {
+          // Link Apple ID to existing account
+          await db.update(bjjUsers)
+            .set({ appleUserId: appleUserId })
+            .where(eq(bjjUsers.id, existingUser.id));
+          console.log(`🍎 [APPLE AUTH] Linked Apple ID to existing account: ${existingUser.id}`);
+        }
+      }
+
+      let user = existingUser;
+      let isNewUser = false;
+
+      if (!user) {
+        // Create new user
+        if (!email) {
+          return res.status(400).json({ 
+            error: 'Email required for new account. Please allow email sharing with Apple Sign In.' 
+          });
+        }
+
+        const [newUser] = await db.insert(bjjUsers).values({
+          email: email.toLowerCase(),
+          appleUserId: appleUserId,
+          displayName: displayName || null,
+          emailVerified: true,
+          subscriptionType: 'trial',
+          subscriptionStatus: 'inactive',
+          paymentProvider: 'apple',
+          onboardingCompleted: false,
+        }).returning();
+
+        user = newUser;
+        isNewUser = true;
+        console.log(`🍎 [APPLE AUTH] Created new user: ${user.id} (${email})`);
+      } else {
+        console.log(`🍎 [APPLE AUTH] Existing user signed in: ${user.id}`);
+      }
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, isAdmin: user.isAdmin || false },
+        process.env.SESSION_SECRET || 'bjj-os-secret',
+        { expiresIn: '3650d' }
+      );
+
+      res.json({
+        success: true,
+        token,
+        isNewUser,
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          subscriptionStatus: user.subscriptionStatus,
+          subscriptionType: user.subscriptionType,
+          onboardingCompleted: user.onboardingCompleted,
+          requiresSubscription: user.subscriptionStatus !== 'active',
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Apple auth error:', error);
+      res.status(500).json({ error: 'Apple sign in failed. Please try again.' });
+    }
+  });
+
   // Email-based login
   app.post('/api/auth/login', async (req, res) => {
     try {

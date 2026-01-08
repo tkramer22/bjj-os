@@ -98,6 +98,7 @@ import IOSSettingsPage from "@/pages/ios-settings";
 import IOSTermsPage from "@/pages/ios-terms";
 import IOSPrivacyPage from "@/pages/ios-privacy";
 import IOSHelpPage from "@/pages/ios-help";
+import IOSSubscribePage from "@/pages/ios-subscribe";
 
 // Native app landing redirect component
 function NativeAwareHome({ isAuthenticated, authRestored }: { isAuthenticated: boolean; authRestored: boolean }) {
@@ -270,6 +271,7 @@ export default function App() {
             <Route path="/ios-privacy" component={IOSPrivacyPage} />
             <Route path="/ios-help" component={IOSHelpPage} />
             <Route path="/ios-onboarding" component={MobileOnboardingPage} />
+            <Route path="/ios-subscribe" component={IOSSubscribePage} />
             
             {/* Web Chat */}
             <Route path="/chat" component={ChatPage} />

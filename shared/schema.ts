@@ -170,6 +170,7 @@ export const bjjUsers = pgTable("bjj_users", {
   
   // Apple In-App Purchase (iOS app subscriptions)
   paymentProvider: text("payment_provider").default("stripe"), // 'stripe' or 'apple'
+  appleUserId: text("apple_user_id"), // Apple Sign In user ID (sub claim from identity token)
   appleOriginalTransactionId: text("apple_original_transaction_id"), // Apple's unique transaction ID
   appleProductId: text("apple_product_id"), // e.g., 'bjjos_pro_monthly'
   appleReceipt: text("apple_receipt"), // Base64 encoded receipt for verification
