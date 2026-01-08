@@ -100,21 +100,29 @@ import IOSPrivacyPage from "@/pages/ios-privacy";
 import IOSHelpPage from "@/pages/ios-help";
 
 // Native app landing redirect component
-function NativeAwareHome() {
+function NativeAwareHome({ isAuthenticated, authRestored }: { isAuthenticated: boolean; authRestored: boolean }) {
   const [, setLocation] = useLocation();
-  const isAuthenticated = localStorage.getItem('mobileUserId') !== null;
   
   useEffect(() => {
+    // Wait for auth to be restored before making routing decisions
+    if (!authRestored) {
+      console.log('[NATIVE HOME] Waiting for auth restoration...');
+      return;
+    }
+    
     if (isNativeApp()) {
+      console.log('[NATIVE HOME] Auth restored, isAuthenticated:', isAuthenticated);
       // Native iOS app: use iOS-specific routes for consistent navigation
       if (isAuthenticated) {
+        console.log('[NATIVE HOME] Redirecting to /ios-chat');
         setLocation("/ios-chat"); // Use iOS chat page with IOSBottomNav
       } else {
+        console.log('[NATIVE HOME] Redirecting to /ios-login');
         // Use ios-login for App Store compliant login (email+password, no signup)
         setLocation("/ios-login");
       }
     }
-  }, [isAuthenticated, setLocation]);
+  }, [isAuthenticated, authRestored, setLocation]);
   
   // Only show landing page for web visitors
   if (isNativeApp()) {
@@ -126,17 +134,54 @@ function NativeAwareHome() {
 
 export default function App() {
   const [authRestored, setAuthRestored] = useState(!isNativeApp());
-  const isAuthenticated = localStorage.getItem('mobileUserId') !== null;
+  const [isNativeAuthenticated, setIsNativeAuthenticated] = useState(false);
 
   // Restore auth from Capacitor Preferences on native app startup
   useEffect(() => {
     async function initAuth() {
       if (isNativeApp()) {
-        await restoreAuthFromNative();
+        const restored = await restoreAuthFromNative();
+        console.log('[AUTH] Native auth restored:', restored);
+        console.log('[AUTH] mobileUserId after restore:', localStorage.getItem('mobileUserId'));
+        
+        // Check auth state AFTER restoration completes
+        const hasAuth = localStorage.getItem('mobileUserId') !== null;
+        setIsNativeAuthenticated(hasAuth);
         setAuthRestored(true);
       }
     }
     initAuth();
+  }, []);
+  
+  // For web, compute auth from localStorage directly
+  const isAuthenticated = isNativeApp() ? isNativeAuthenticated : localStorage.getItem('mobileUserId') !== null;
+
+  // Listen for storage changes (login/logout from other components)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      if (isNativeApp()) {
+        const hasAuth = localStorage.getItem('mobileUserId') !== null;
+        console.log('[AUTH] Storage changed, updating isNativeAuthenticated:', hasAuth);
+        setIsNativeAuthenticated(hasAuth);
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom auth change events (same-window updates)
+    const handleAuthChange = () => {
+      if (isNativeApp()) {
+        const hasAuth = localStorage.getItem('mobileUserId') !== null;
+        console.log('[AUTH] Auth change event, updating isNativeAuthenticated:', hasAuth);
+        setIsNativeAuthenticated(hasAuth);
+      }
+    };
+    window.addEventListener('bjjos-auth-change', handleAuthChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('bjjos-auth-change', handleAuthChange);
+    };
   }, []);
 
   // Check version on app load and force reload if changed
@@ -161,7 +206,9 @@ export default function App() {
           <ThemeProvider defaultTheme="dark">
             <Switch>
             {/* Public pages - Native app skips landing page */}
-            <Route path="/" component={NativeAwareHome} />
+            <Route path="/">
+              <NativeAwareHome isAuthenticated={isAuthenticated} authRestored={authRestored} />
+            </Route>
             <Route path="/pricing" component={Pricing} />
             <Route path="/success" component={Success} />
             <Route path="/terms" component={Terms} />

@@ -122,10 +122,27 @@ export function MobileChat() {
     };
   }, []);
 
-  // Get authenticated user from API
-  const { data: currentUser, isLoading: isLoadingUser } = useQuery<AuthUser>({
+  // Get authenticated user from API - handle 401 by redirecting to login
+  const { data: currentUser, isLoading: isLoadingUser, error: authError } = useQuery<AuthUser>({
     queryKey: ['/api/auth/me'],
+    retry: false,
   });
+  
+  // Handle 401 errors by redirecting to login
+  useEffect(() => {
+    if (authError && String(authError).includes('401')) {
+      console.error('[MOBILE-CHAT] 401 auth error, clearing auth and redirecting to login');
+      import('@/lib/capacitorAuth').then(({ clearAuth, isNativeApp }) => {
+        clearAuth().then(() => {
+          if (isNativeApp()) {
+            window.location.href = '/ios-login';
+          } else {
+            window.location.href = '/login';
+          }
+        });
+      });
+    }
+  }, [authError]);
 
   const userId = currentUser?.id?.toString() || localStorage.getItem('mobileUserId') || '1';
 

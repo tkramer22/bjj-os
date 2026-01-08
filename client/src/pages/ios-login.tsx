@@ -95,6 +95,9 @@ export default function IOSLoginPage() {
         await saveUserData(data.user);
         localStorage.setItem('mobileUserId', data.user.id?.toString() || '1');
         await Preferences.set({ key: 'mobileUserId', value: data.user.id?.toString() || '1' });
+        
+        // Dispatch auth change event for App.tsx to update isNativeAuthenticated
+        window.dispatchEvent(new Event('bjjos-auth-change'));
       }
 
       toast({
