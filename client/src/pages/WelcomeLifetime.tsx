@@ -9,7 +9,7 @@ export default function WelcomeLifetime() {
   
   const benefits = [
     "Unlimited Professor OS conversations",
-    "Complete curated video library (2,000+ techniques)",
+    "Complete curated video library (3,500+ techniques)",
     "Personalized recommendations for your game",
     "Training session tracking & progress",
     "All future features & updates",

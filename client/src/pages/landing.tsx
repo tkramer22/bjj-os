@@ -126,7 +126,7 @@ export default function Landing() {
           <h2 className="landing-section-header">YOUR VIDEO LIBRARY</h2>
           
           <p className="landing-library-body">
-            3,000+ videos searchable by technique, position, or instructor. Save what matters. Build your collection.
+            3,500+ videos searchable by technique, position, or instructor. Save what matters. Build your collection.
           </p>
           
           <p className="landing-library-note">
@@ -141,7 +141,7 @@ export default function Landing() {
           <div className="landing-checklist">
             <div className="landing-check-item">
               <span className="landing-check-icon">✓</span>
-              <span>3,000+ videos analyzed</span>
+              <span>3,500+ videos analyzed</span>
             </div>
             <div className="landing-check-item">
               <span className="landing-check-icon">✓</span>
