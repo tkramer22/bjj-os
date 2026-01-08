@@ -41,7 +41,8 @@ export function MobileChat() {
   
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  // Initialize isLoading based on whether history is already loaded (prevents spinner on tab return)
+  const [isLoading, setIsLoading] = useState(() => !chatContext.historyLoaded);
   // Use sessionStorage to persist loadedUserId across tab switches (prevents re-loading welcome message)
   // Only persist actual user IDs (not 'none'), so that a fresh login triggers proper history load
   const [loadedUserId, setLoadedUserIdInternal] = useState<string | null>(() => {

@@ -182,11 +182,23 @@ export default function IOSLoginPage() {
     } catch (err: any) {
       console.error('[APPLE SIGN IN] Error:', err);
       
-      if (err.message?.includes('canceled') || err.message?.includes('cancelled')) {
+      // Handle user cancellation gracefully - no error message
+      // Error code 1000 = ASAuthorizationError.canceled (user tapped Cancel)
+      // Error code 1001 = ASAuthorizationError.invalidResponse
+      // Also check for common cancel-related strings
+      const errorMessage = err.message || '';
+      if (
+        errorMessage.includes('canceled') || 
+        errorMessage.includes('cancelled') ||
+        errorMessage.includes('error 1000') ||
+        errorMessage.includes('AuthorizationError error 1000')
+      ) {
+        // User cancelled - just dismiss, no error
+        setIsAppleLoading(false);
         return;
       }
       
-      setError(err.message || "Apple sign in failed. Please try again.");
+      setError("Apple sign in failed. Please try again.");
       triggerHaptic('error');
     } finally {
       setIsAppleLoading(false);
@@ -509,8 +521,9 @@ export default function IOSLoginPage() {
     <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center p-6 ios-safe-area">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <img src="/bjjos-logo.png" alt="BJJ OS" className="h-12 w-auto mx-auto mb-2" />
-          <p className="text-gray-400 text-sm">Your AI BJJ Coach</p>
+          <img src="/bjjos-logo.png" alt="BJJ OS" className="h-12 w-auto mx-auto mb-3" />
+          <p className="text-gray-400 text-sm leading-relaxed">Thousands of techniques analyzed.</p>
+          <p className="text-gray-400 text-sm leading-relaxed">One coach who never forgets.</p>
         </div>
 
         <Button

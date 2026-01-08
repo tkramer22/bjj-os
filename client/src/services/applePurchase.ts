@@ -135,11 +135,29 @@ export const ApplePurchaseService = {
     }
 
     if (!isInitialized) {
+      console.log('[IAP] Not initialized, initializing now...');
       await this.initialize();
     }
 
+    // Try to refresh product if not available
+    if (!currentProduct && storeRef) {
+      console.log('[IAP] Product not available, trying to refresh...');
+      try {
+        await storeRef.update();
+        const { Platform } = window.CdvPurchase;
+        currentProduct = storeRef.get(PRODUCT_ID, Platform.APPLE_APPSTORE);
+        console.log('[IAP] After refresh - Product:', currentProduct?.id, 'canPurchase:', currentProduct?.canPurchase);
+      } catch (refreshError) {
+        console.error('[IAP] Failed to refresh product:', refreshError);
+      }
+    }
+
     if (!currentProduct) {
-      callback({ success: false, error: 'Product not available' });
+      console.error('[IAP] Product still not available after refresh. PRODUCT_ID:', PRODUCT_ID);
+      callback({ 
+        success: false, 
+        error: 'Product not available. Please check your internet connection and try again.' 
+      });
       return;
     }
 
