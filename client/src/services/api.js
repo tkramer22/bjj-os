@@ -54,8 +54,29 @@ export async function getChatHistory(userId, limit = 20, beforeTimestamp = null)
       headers,
       credentials: 'include'
     });
-    if (!response.ok) throw new Error('Failed to get history');
-    return await response.json();
+    
+    // Handle 401 - auth is invalid
+    if (response.status === 401) {
+      console.error('[API] getChatHistory 401 - auth invalid');
+      return { messages: [], hasMore: false, authError: true };
+    }
+    
+    if (!response.ok) {
+      console.error('[API] getChatHistory error:', response.status, response.statusText);
+      throw new Error('Failed to get history');
+    }
+    
+    const data = await response.json();
+    console.log('[API] getChatHistory response:', { 
+      hasData: !!data, 
+      messageCount: data?.messages?.length || 0 
+    });
+    
+    // Ensure we always return a valid structure
+    return {
+      messages: Array.isArray(data?.messages) ? data.messages : [],
+      hasMore: data?.hasMore || false
+    };
   } catch (error) {
     console.error('History API error:', error);
     return { messages: [], hasMore: false };

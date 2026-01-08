@@ -141,12 +141,42 @@ export default function App() {
     async function initAuth() {
       if (isNativeApp()) {
         const restored = await restoreAuthFromNative();
-        console.log('[AUTH] Native auth restored:', restored);
+        console.log('[AUTH] Native auth restored from Preferences:', restored);
         console.log('[AUTH] mobileUserId after restore:', localStorage.getItem('mobileUserId'));
+        console.log('[AUTH] token after restore:', localStorage.getItem('sessionToken')?.substring(0, 20) || 'none');
         
-        // Check auth state AFTER restoration completes
-        const hasAuth = localStorage.getItem('mobileUserId') !== null;
-        setIsNativeAuthenticated(hasAuth);
+        // CRITICAL: Validate restored auth with server before trusting it
+        if (restored) {
+          try {
+            const token = localStorage.getItem('sessionToken') || localStorage.getItem('token');
+            // Import getApiUrl and clearAuth directly - they're already exported from capacitorAuth
+            const capacitorModule = await import('@/lib/capacitorAuth');
+            const apiUrl = capacitorModule.getApiUrl('/api/auth/me');
+            console.log('[AUTH] Validating token with:', apiUrl);
+            
+            const response = await fetch(apiUrl, {
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+              credentials: 'include'
+            });
+            
+            if (response.ok) {
+              console.log('[AUTH] Token validated with server - auth is valid');
+              setIsNativeAuthenticated(true);
+            } else {
+              console.log('[AUTH] Token validation failed (status:', response.status, ') - clearing invalid auth');
+              await capacitorModule.clearAuth();
+              setIsNativeAuthenticated(false);
+            }
+          } catch (error) {
+            console.error('[AUTH] Token validation error:', error);
+            // On network error, still use local auth but mark for re-validation
+            const hasAuth = localStorage.getItem('mobileUserId') !== null;
+            setIsNativeAuthenticated(hasAuth);
+          }
+        } else {
+          setIsNativeAuthenticated(false);
+        }
+        
         setAuthRestored(true);
       }
     }

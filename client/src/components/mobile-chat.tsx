@@ -309,6 +309,22 @@ What are you working on right now?`,
     console.log('[HISTORY] Loading for user:', userIdParam);
     try {
       const data = await getChatHistory(userIdParam);
+      
+      // Handle auth error - redirect to login
+      if (data.authError) {
+        console.error('[HISTORY] Auth error - redirecting to login');
+        import('@/lib/capacitorAuth').then(({ clearAuth, isNativeApp }) => {
+          clearAuth().then(() => {
+            if (isNativeApp()) {
+              window.location.href = '/ios-login';
+            } else {
+              window.location.href = '/login';
+            }
+          });
+        });
+        return;
+      }
+      
       if (data.messages && data.messages.length > 0) {
         // Load history directly into context
         const contextMessages = data.messages.map((msg: any, idx: number) => ({
