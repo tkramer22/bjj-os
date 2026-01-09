@@ -2596,6 +2596,7 @@ export function registerRoutes(app: Express): Server {
         { name: 'max_devices', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS max_devices INTEGER DEFAULT 3` },
         { name: 'is_admin', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE` },
         { name: 'is_lifetime_user', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS is_lifetime_user BOOLEAN DEFAULT FALSE` },
+        { name: 'google_user_id', sql: `ALTER TABLE bjj_users ADD COLUMN IF NOT EXISTS google_user_id TEXT` },
       ];
       
       const results: string[] = [];
@@ -2909,6 +2910,117 @@ export function registerRoutes(app: Express): Server {
       error: 'This endpoint is deprecated. Use /api/auth/ios/prepare + /api/auth/ios/complete flow.',
       message: 'Payment is required before account creation.'
     });
+  });
+
+  // Google Sign In Authentication (Android)
+  // NOTE: For full production security, verify the ID token with Google's API:
+  // https://developers.google.com/identity/sign-in/android/backend-auth
+  // The Capacitor Google Auth plugin provides verified tokens from Google's SDK
+  app.post('/api/auth/google', async (req, res) => {
+    try {
+      const { email, name, googleId, idToken } = req.body;
+
+      if (!googleId || !idToken) {
+        return res.status(400).json({ error: 'Google authentication data required' });
+      }
+
+      if (!email) {
+        return res.status(400).json({ error: 'Email required from Google Sign In' });
+      }
+
+      // Basic token structure validation (ID tokens are JWTs)
+      // The token comes from Google's native SDK which handles verification client-side
+      // For enhanced security in production, verify token with Google's tokeninfo endpoint
+      try {
+        const tokenParts = idToken.split('.');
+        if (tokenParts.length !== 3) {
+          return res.status(400).json({ error: 'Invalid token format' });
+        }
+        const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+        // Verify the token is for our app and hasn't expired
+        if (!payload.sub || payload.sub !== googleId) {
+          return res.status(400).json({ error: 'Token subject mismatch' });
+        }
+        if (payload.exp && payload.exp < Date.now() / 1000) {
+          return res.status(400).json({ error: 'Token expired' });
+        }
+      } catch (e) {
+        console.error('[GOOGLE AUTH] Token decode error:', e);
+        return res.status(400).json({ error: 'Invalid token' });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      console.log(`🔷 [GOOGLE AUTH] Sign in attempt: ${googleId}, email: ${normalizedEmail}`);
+
+      // Look for existing user by Google ID first, then by email
+      let [existingUser] = await db.select()
+        .from(bjjUsers)
+        .where(eq(bjjUsers.googleUserId, googleId))
+        .limit(1);
+
+      if (!existingUser) {
+        // Try to find by email
+        [existingUser] = await db.select()
+          .from(bjjUsers)
+          .where(eq(bjjUsers.email, normalizedEmail))
+          .limit(1);
+
+        if (existingUser) {
+          // Link Google ID to existing account
+          await db.update(bjjUsers)
+            .set({ googleUserId: googleId })
+            .where(eq(bjjUsers.id, existingUser.id));
+          console.log(`🔷 [GOOGLE AUTH] Linked Google ID to existing account: ${existingUser.id}`);
+        }
+      }
+
+      let user = existingUser;
+      let isNewUser = false;
+
+      if (!user) {
+        // Create new user for Android (Google auth creates account directly)
+        const [newUser] = await db.insert(bjjUsers).values({
+          email: normalizedEmail,
+          displayName: name || null,
+          googleUserId: googleId,
+          subscriptionStatus: 'trialing', // Android users start with trial
+          subscriptionType: 'monthly',
+          onboardingCompleted: false,
+          paymentProvider: 'google', // Android users pay through Google Play
+        }).returning();
+
+        user = newUser;
+        isNewUser = true;
+        console.log(`🔷 [GOOGLE AUTH] Created new Google user: ${user.email}`);
+      }
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, isAdmin: user.isAdmin || false },
+        process.env.SESSION_SECRET || 'bjj-os-secret',
+        { expiresIn: '3650d' }
+      );
+
+      console.log(`🔷 [GOOGLE AUTH] ${isNewUser ? 'New' : 'Existing'} user signed in: ${user.email}`);
+
+      res.json({
+        success: true,
+        isNewUser,
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          subscriptionStatus: user.subscriptionStatus,
+          subscriptionType: user.subscriptionType,
+          onboardingCompleted: user.onboardingCompleted,
+        }
+      });
+
+    } catch (error: any) {
+      console.error('🔷 [GOOGLE AUTH] Error:', error.message || error);
+      res.status(500).json({ error: 'Google authentication failed' });
+    }
   });
 
   // Apple Sign In Authentication

@@ -1,0 +1,167 @@
+**Send this to Replit:**
+
+```
+ANDROID LOGIN - ADD GOOGLE SIGN-IN (DO NOT TOUCH iOS LOGIC)
+
+CRITICAL: The iOS app and "Continue with Apple" flow must remain EXACTLY as-is.
+Only ADD Android-specific logic. Do not modify ANY existing iOS code paths.
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION
+═══════════════════════════════════════════════════════════════════════════════
+
+In client/src/pages/ios-login.tsx (rename to auth-login.tsx if cleaner):
+
+1. ADD platform detection at top:
+
+import { Capacitor } from '@capacitor/core';
+
+const platform = Capacitor.getPlatform();
+const isAndroid = platform === 'android';
+const isIOS = platform === 'ios';
+
+2. KEEP existing Apple Sign-In button, wrap with iOS check:
+
+{isIOS && (
+  <button onClick={handleAppleSignIn} className="w-full bg-white text-black...">
+    <AppleIcon />
+    Continue with Apple
+  </button>
+)}
+
+3. ADD Google Sign-In button for Android ONLY:
+
+{isAndroid && (
+  <button onClick={handleGoogleSignIn} className="w-full bg-white text-black...">
+    <GoogleIcon />
+    Continue with Google
+  </button>
+)}
+
+4. Email/Password fields remain for BOTH platforms (unchanged)
+
+═══════════════════════════════════════════════════════════════════════════════
+GOOGLE SIGN-IN SETUP (ANDROID ONLY)
+═══════════════════════════════════════════════════════════════════════════════
+
+Install Capacitor Google Auth plugin:
+
+npm install @codetrix-studio/capacitor-google-auth
+npx cap sync android
+
+In capacitor.config.ts, add (ONLY for Android):
+
+plugins: {
+  GoogleAuth: {
+    scopes: ['profile', 'email'],
+    serverClientId: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
+    forceCodeForRefreshToken: true,
+  }
+}
+
+Create handleGoogleSignIn function:
+
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+
+const handleGoogleSignIn = async () => {
+  try {
+    const result = await GoogleAuth.signIn();
+    
+    // Send to your backend to create/login user
+    const response = await fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: result.email,
+        name: result.name,
+        googleId: result.id,
+        idToken: result.authentication.idToken
+      })
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      // Store token and navigate to app
+      localStorage.setItem('authToken', data.token);
+      navigate('/ios-chat');
+    }
+  } catch (error) {
+    console.error('Google sign-in failed:', error);
+    toast({ title: 'Sign in failed', variant: 'destructive' });
+  }
+};
+
+═══════════════════════════════════════════════════════════════════════════════
+BACKEND - ADD GOOGLE AUTH ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create POST /api/auth/google endpoint:
+
+- Verify Google ID token with Google's API
+- Check if user exists by email or googleId
+- If exists: log them in, return token
+- If new user: create account, return token
+- Same response format as Apple sign-in endpoint
+
+═══════════════════════════════════════════════════════════════════════════════
+VISUAL LAYOUT - BOTH PLATFORMS
+═══════════════════════════════════════════════════════════════════════════════
+
+iOS LOGIN SCREEN:
+┌─────────────────────────────────────────┐
+│            [BJJ OS LOGO]                │
+│                                         │
+│   [ Continue with Apple ]  ← iOS ONLY   │
+│                                         │
+│              ── or ──                   │
+│                                         │
+│   Email: [_______________]              │
+│   Password: [____________]              │
+│                                         │
+│         [ Sign In ]                     │
+│                                         │
+│   Forgot password?                      │
+│   Don't have an account?                │
+│   Visit bjjos.app to get started        │
+└─────────────────────────────────────────┘
+
+ANDROID LOGIN SCREEN:
+┌─────────────────────────────────────────┐
+│            [BJJ OS LOGO]                │
+│                                         │
+│   [ Continue with Google ] ← ANDROID    │
+│                                         │
+│              ── or ──                   │
+│                                         │
+│   Email: [_______________]              │
+│   Password: [____________]              │
+│                                         │
+│         [ Sign In ]                     │
+│                                         │
+│   Forgot password?                      │
+│   Don't have an account?                │
+│   Visit bjjos.app to get started        │
+└─────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+SAFETY CHECKS - DO NOT BREAK iOS
+═══════════════════════════════════════════════════════════════════════════════
+
+Before deploying:
+1. Test iOS app - "Continue with Apple" still works
+2. Test iOS app - Email/password login still works
+3. Test Android - "Continue with Google" appears (not Apple)
+4. Test Android - Email/password login works
+5. Verify no iOS code was modified, only wrapped in {isIOS && ...}
+
+The iOS app submission is pending. ANY change to iOS behavior will delay approval.
+```
+
+-----
+
+After Replit implements this, you’ll also need to:
+
+1. **Create a Google Cloud Project** and get OAuth credentials
+1. **Add SHA-1 fingerprint** from your Android app to Google Console
+
+Want me to walk you through the Google Cloud setup once Replit finishes the code? 🤙​​​​​​​​​​​​​​​​

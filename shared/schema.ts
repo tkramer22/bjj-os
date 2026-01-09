@@ -169,14 +169,17 @@ export const bjjUsers = pgTable("bjj_users", {
   subscriptionEndDate: timestamp("subscription_end_date"),
   
   // Apple In-App Purchase (iOS app subscriptions)
-  paymentProvider: text("payment_provider").default("stripe"), // 'stripe' or 'apple'
+  paymentProvider: text("payment_provider").default("stripe"), // 'stripe', 'apple', or 'google'
   // Note: appleUserId column must be added to database via db:push
   appleUserId: text("apple_user_id"), // Apple Sign In user ID (sub claim from identity token)
   appleOriginalTransactionId: text("apple_original_transaction_id"), // Apple's unique transaction ID
-  appleProductId: text("apple_product_id"), // e.g., 'bjjos_pro_monthly'
+  appleProductId: text("apple_product_id"), // e.g., 'bjjos_pro_monthlybjjos_pro_monthly'
   appleReceipt: text("apple_receipt"), // Base64 encoded receipt for verification
   appleExpiresAt: timestamp("apple_expires_at"), // When Apple subscription expires
   appleEnvironment: text("apple_environment"), // 'sandbox' or 'production'
+  
+  // Google Sign In (Android app)
+  googleUserId: text("google_user_id"), // Google Sign In user ID
   
   // Activity tracking
   lastActiveAt: timestamp("last_active_at"), // Last time user sent a message to Professor OS

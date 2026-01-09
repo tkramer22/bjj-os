@@ -36,6 +36,12 @@ const config: CapacitorConfig = {
       resize: 'native',
       style: 'dark',
     },
+    // Google Auth (Android only) - requires Google Cloud Console setup
+    GoogleAuth: {
+      scopes: ['profile', 'email'],
+      serverClientId: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com', // Replace with actual Client ID from Google Cloud Console
+      forceCodeForRefreshToken: true,
+    },
   },
 };
 
