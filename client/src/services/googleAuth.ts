@@ -14,6 +14,14 @@ interface GoogleAuthError {
   message: string;
 }
 
+// Dynamic import function that only loads on native Android
+// Uses a variable to prevent Vite from analyzing the import at build time
+async function loadGoogleAuthPlugin() {
+  const moduleName = '@codetrix-studio/capacitor-google-auth';
+  // @ts-ignore - Dynamic import with variable to avoid static analysis
+  return import(/* @vite-ignore */ moduleName);
+}
+
 export const GoogleAuthService = {
   async signIn(): Promise<GoogleAuthResult> {
     const platform = Capacitor.getPlatform();
@@ -23,7 +31,7 @@ export const GoogleAuthService = {
     }
 
     try {
-      const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
+      const { GoogleAuth } = await loadGoogleAuthPlugin();
       const result = await GoogleAuth.signIn();
       
       return {
@@ -68,7 +76,7 @@ export const GoogleAuthService = {
     }
 
     try {
-      const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
+      const { GoogleAuth } = await loadGoogleAuthPlugin();
       await GoogleAuth.signOut();
     } catch (error) {
       console.error('[GoogleAuth] Sign-out error:', error);
