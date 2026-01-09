@@ -219,9 +219,9 @@ export default function IOSLoginPage() {
     setIsGoogleLoading(true);
 
     try {
-      const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
+      const { GoogleAuthService } = await import('@/services/googleAuth');
       
-      const result = await GoogleAuth.signIn();
+      const result = await GoogleAuthService.signIn();
       console.log('[GOOGLE SIGN IN] Response:', result);
 
       // Send to backend to create/login user
