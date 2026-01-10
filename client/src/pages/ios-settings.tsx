@@ -64,6 +64,7 @@ export default function IOSSettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
   const [cancelModalMode, setCancelModalMode] = useState<'confirm' | 'lifetime' | 'already_cancelled'>('confirm');
   
   const { data: user } = useQuery<UserProfile>({
@@ -140,6 +141,30 @@ export default function IOSSettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       setShowCancelModal(false);
       triggerHaptic('success');
+    },
+  });
+
+  const deleteAccount = useMutation({
+    mutationFn: async () => {
+      const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
+      const response = await fetch(getApiUrl('/api/user/account'), {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}),
+        },
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete account');
+      }
+      return response.json();
+    },
+    onSuccess: async () => {
+      triggerHaptic('success');
+      setShowDeleteAccountModal(false);
+      await clearAuth();
+      navigate('/ios-login');
     },
   });
 
@@ -896,6 +921,30 @@ export default function IOSSettingsPage() {
           </span>
         </button>
 
+        {/* Delete Account Button - Required by Apple */}
+        <button
+          onClick={() => { triggerHaptic('medium'); setShowDeleteAccountModal(true); }}
+          data-testid="button-delete-account"
+          style={{
+            width: '100%',
+            background: '#DC2626',
+            border: 'none',
+            borderRadius: '16px',
+            padding: '16px',
+            marginTop: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+          }}
+        >
+          <Trash2 size={20} color="#FFFFFF" />
+          <span style={{ color: '#FFFFFF', fontSize: '15px', fontWeight: 600 }}>
+            Delete Account
+          </span>
+        </button>
+
         <p style={{
           marginTop: '16px',
           padding: '0 8px',
@@ -1248,6 +1297,93 @@ export default function IOSSettingsPage() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Modal - Required by Apple */}
+      {showDeleteAccountModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+          onClick={() => setShowDeleteAccountModal(false)}
+          data-testid="modal-delete-account-overlay"
+        >
+          <div 
+            style={{
+              background: '#1A1A1D',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '320px',
+              width: '100%',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ 
+              fontSize: '18px', 
+              fontWeight: 600, 
+              marginBottom: '12px',
+              color: '#FFFFFF'
+            }}>
+              Delete Account?
+            </h3>
+            <p style={{ 
+              fontSize: '14px', 
+              color: '#A1A1AA', 
+              lineHeight: 1.5,
+              marginBottom: '24px'
+            }}>
+              This will permanently delete your account and all data. Any active subscriptions will be cancelled. This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowDeleteAccountModal(false)}
+                data-testid="button-cancel-delete-account"
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: '#2A2A2E',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteAccount.mutate()}
+                disabled={deleteAccount.isPending}
+                data-testid="button-confirm-delete-account"
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  background: '#DC2626',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#FFFFFF',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  opacity: deleteAccount.isPending ? 0.5 : 1,
+                }}
+              >
+                {deleteAccount.isPending ? 'Deleting...' : 'Delete Account'}
+              </button>
+            </div>
           </div>
         </div>
       )}

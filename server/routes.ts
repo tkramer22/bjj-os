@@ -4538,6 +4538,94 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Delete user account completely (required by Apple App Store)
+  app.delete('/api/user/account', checkUserAuth, async (req: any, res) => {
+    try {
+      if (!req.user || !req.user.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      const userId = req.user.userId;
+      console.log('[ACCOUNT DELETION] Starting account deletion for user:', userId);
+
+      // 1. Get user data to check subscription
+      const [user] = await db.select()
+        .from(bjjUsers)
+        .where(eq(bjjUsers.id, userId));
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // 2. Cancel any active Stripe subscriptions
+      if (user.stripeSubscriptionId) {
+        try {
+          const Stripe = (await import('stripe')).default;
+          const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+          
+          // Check if subscription is still active before trying to cancel
+          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+          
+          if (subscription.status !== 'canceled') {
+            await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+            console.log('[ACCOUNT DELETION] Stripe subscription cancelled:', user.stripeSubscriptionId);
+          } else {
+            console.log('[ACCOUNT DELETION] Stripe subscription already cancelled');
+          }
+        } catch (stripeError: any) {
+          // If subscription doesn't exist (resource_missing), continue with deletion
+          if (stripeError.code === 'resource_missing') {
+            console.log('[ACCOUNT DELETION] Stripe subscription not found, continuing deletion');
+          } else {
+            // For other Stripe errors, fail the deletion to prevent orphaned billing
+            console.error('[ACCOUNT DELETION] Stripe cancellation error:', stripeError.message);
+            return res.status(500).json({ 
+              error: 'Unable to cancel subscription. Please contact support to delete your account.' 
+            });
+          }
+        }
+      }
+
+      // 3. Delete all conversation messages
+      await db.delete(aiConversationLearning)
+        .where(eq(aiConversationLearning.userId, userId));
+      console.log('[ACCOUNT DELETION] Deleted conversation history');
+
+      // 4. Delete user sessions
+      try {
+        await db.delete(userSessions).where(eq(userSessions.userId, userId));
+        console.log('[ACCOUNT DELETION] Deleted user sessions');
+      } catch (e) {
+        console.log('[ACCOUNT DELETION] Session deletion failed (non-critical):', e);
+      }
+
+      // 5. Clear any cached data
+      try {
+        const { professorOSCache } = await import('./services/professor-os-cache');
+        professorOSCache.invalidateUser(userId);
+      } catch (e) {
+        console.log('[ACCOUNT DELETION] Cache invalidation failed (non-critical):', e);
+      }
+
+      try {
+        const { clearSessionContext } = await import('./videoSearch');
+        clearSessionContext(userId.toString());
+      } catch (e) {
+        console.log('[ACCOUNT DELETION] Session context clear failed (non-critical):', e);
+      }
+
+      // 6. Delete the user record
+      await db.delete(bjjUsers).where(eq(bjjUsers.id, userId));
+      console.log('[ACCOUNT DELETION] User record deleted');
+
+      console.log('[ACCOUNT DELETION] Account deletion completed successfully for user:', userId);
+      res.json({ success: true, message: 'Account deleted successfully' });
+    } catch (error: any) {
+      console.error('[ACCOUNT DELETION] Error:', error);
+      res.status(500).json({ error: 'Failed to delete account' });
+    }
+  });
+
   // Add free user (admin only)
   app.post('/api/admin/add-free-user', checkAdminAuth, async (req, res) => {
     try {
