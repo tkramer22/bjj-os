@@ -733,6 +733,10 @@ export default function IOSLoginPage() {
             >
               Forgot password?
             </button>
+
+            <p className="text-xs text-zinc-500 text-center mt-6">
+              BJJ OS Pro: $19.99/month. Auto-renews monthly. Cancel anytime.
+            </p>
           </form>
         ) : (
           <form onSubmit={handleRegister} className="space-y-4">
@@ -793,6 +797,12 @@ export default function IOSLoginPage() {
                 {error}
               </p>
             )}
+
+            <div className="text-center my-6 p-4 bg-zinc-900 rounded-lg">
+              <p className="text-sm text-zinc-300">BJJ OS Pro Subscription</p>
+              <p className="text-2xl text-white font-bold">$19.99/month</p>
+              <p className="text-xs text-zinc-400 mt-1">Auto-renews monthly. Cancel anytime.</p>
+            </div>
 
             <Button
               type="submit"
