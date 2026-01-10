@@ -518,9 +518,10 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                       })()}
                     </p>
                   </div>
-                  {/* Buttons row - below text */}
-                  {segment.video.videoId && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                  {/* Buttons row - always show for all videos */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                    {/* Analysis button - only for enriched videos with database ID */}
+                    {segment.video.videoId && (
                       <button
                         onClick={() => setAnalysisVideoId(segment.video!.id)}
                         style={{
@@ -542,6 +543,9 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                         <Brain size={12} />
                         Analysis
                       </button>
+                    )}
+                    {/* Save button - only for enriched videos */}
+                    {segment.video.videoId && (
                       <button
                         onClick={() => toggleSaveVideo(segment.video!.id)}
                         style={{
@@ -567,32 +571,34 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                         )}
                         {savedVideoIds.has(segment.video.id) ? "Saved" : "Save"}
                       </button>
-                      <button
-                        onClick={async () => {
-                          triggerHaptic('light');
-                          await shareVideo(decodeHTML(segment.video!.title), segment.video!.instructor, segment.video!.videoId);
-                        }}
-                        style={{
-                          background: "rgba(16, 185, 129, 0.15)",
-                          border: "none",
-                          borderRadius: "6px",
-                          padding: "0.35rem 0.6rem",
-                          cursor: "pointer",
-                          color: "#10B981",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          fontSize: "0.7rem",
-                          fontWeight: 500,
-                        }}
-                        data-testid={`button-share-video-${segment.video.id}`}
-                        title="Share video"
-                      >
-                        <Share2 size={12} />
-                        Share
-                      </button>
-                    </div>
-                  )}
+                    )}
+                    {/* Share button - always show for all videos */}
+                    <button
+                      onClick={async () => {
+                        triggerHaptic('light');
+                        // For enriched videos, share direct link; for unenriched, share search link
+                        await shareVideo(decodeHTML(segment.video!.title), segment.video!.instructor, segment.video!.videoId || '');
+                      }}
+                      style={{
+                        background: "rgba(16, 185, 129, 0.15)",
+                        border: "none",
+                        borderRadius: "6px",
+                        padding: "0.35rem 0.6rem",
+                        cursor: "pointer",
+                        color: "#10B981",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        fontSize: "0.7rem",
+                        fontWeight: 500,
+                      }}
+                      data-testid={`button-share-video-${segment.video.id}`}
+                      title="Share video"
+                    >
+                      <Share2 size={12} />
+                      Share
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

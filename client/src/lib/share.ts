@@ -68,14 +68,19 @@ export async function shareVideo(title: string, instructor: string, videoId: str
   console.log('Instructor:', instructor);
   console.log('VideoId:', videoId);
   
-  // Validate videoId exists
-  if (!videoId) {
-    console.warn('Share failed: No video ID provided');
-    return false;
-  }
+  let url: string;
+  let text: string;
   
-  const url = `https://www.youtube.com/watch?v=${videoId}`;
-  const text = `${title}\n${instructor}\n\n🎥 ${url}\n\nProfessor OS found this - 3,500+ videos analyzed with timestamps and key details.\n\nhttps://bjjos.app`;
+  if (videoId) {
+    // Direct YouTube link for enriched videos
+    url = `https://www.youtube.com/watch?v=${videoId}`;
+    text = `${title}\n${instructor}\n\n${url}\n\nProfessor OS found this - 3,500+ videos analyzed with timestamps and key details.\n\nhttps://bjjos.app`;
+  } else {
+    // YouTube search link for unenriched videos
+    const searchQuery = encodeURIComponent(`${title} ${instructor} BJJ`);
+    url = `https://www.youtube.com/results?search_query=${searchQuery}`;
+    text = `${title} by ${instructor}\n\nSearch: ${url}\n\nProfessor OS recommended this technique - 3,500+ videos analyzed.\n\nhttps://bjjos.app`;
+  }
   
   console.log('URL:', url);
   console.log('Calling shareContent...');
