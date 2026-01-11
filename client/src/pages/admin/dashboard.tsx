@@ -159,7 +159,7 @@ function NavLink({ href, icon, label, onClick }: NavLinkProps) {
 
 interface QuickMetrics {
   curationRunning: boolean;
-  curationStatus?: 'active' | 'paused_target_reached' | 'offline';
+  curationStatus?: 'active' | 'scheduled' | 'paused_target_reached' | 'offline';
   targetReached?: boolean;
   minutesSinceRun: number;
   totalVideos: number;
@@ -184,6 +184,9 @@ interface QuickMetrics {
 function getCurationStatusDisplay(metrics: QuickMetrics): { text: string; color: string } {
   if (metrics.curationStatus === 'active' || metrics.curationRunning) {
     return { text: '✅ Active', color: 'text-green-500' };
+  }
+  if (metrics.curationStatus === 'scheduled') {
+    return { text: '🕐 Scheduled', color: 'text-yellow-500' };
   }
   if (metrics.curationStatus === 'paused_target_reached' || metrics.targetReached) {
     return { text: '⏸️ Target Reached', color: 'text-blue-500' };
@@ -538,11 +541,11 @@ export default function AdminDashboard() {
           </div>
         </CollapsibleSection>
 
-        {/* Activity Dashboard - Collapsible */}
+        {/* Activity Dashboard - Collapsible (expanded by default for visibility) */}
         <CollapsibleSection 
-          title="User Activity" 
+          title="User Activity (24h)" 
           icon="📈" 
-          defaultExpanded={false}
+          defaultExpanded={true}
           testId="section-activity"
         >
           <ActivityDashboard />

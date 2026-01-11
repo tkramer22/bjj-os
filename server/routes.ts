@@ -12953,6 +12953,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
             AND subscription_type IN ('monthly', 'yearly')
         `),
         // Elite Curator screening efficiency for today (FULL FUNNEL) from curation_runs table
+        // Include all runs today (completed AND running) to count manual + auto runs
         db.execute(sql`
           SELECT 
             COALESCE(SUM(videos_screened), 0) as discovered,
@@ -12961,7 +12962,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
             COALESCE(SUM(videos_rejected), 0) as rejected
           FROM curation_runs
           WHERE DATE(run_date) = ${today}
-            AND status = 'completed'
+            AND status IN ('completed', 'running')
         `),
         // Count videos processed by Gemini (same source as Videos page for consistency)
         db.execute(sql`SELECT COUNT(*) as count FROM video_watch_status WHERE processed = true`)
@@ -13010,12 +13011,27 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const TARGET_VIDEO_COUNT = 10000;
       const targetReached = videoCount >= TARGET_VIDEO_COUNT;
       
-      // Curation status: "active", "paused_target_reached", or "offline"
+      // Check if auto-curation is enabled directly from database (lightweight query)
+      const autoCurationSetting = await db.execute(sql`
+        SELECT setting_value FROM system_settings 
+        WHERE setting_key = 'auto_curation_enabled' 
+        LIMIT 1
+      `);
+      const autoCurationRows = getRows(autoCurationSetting);
+      const autoCurationEnabled = autoCurationRows[0]?.setting_value !== 'false';
+      
+      // Curation status: "active", "scheduled", "paused_target_reached", or "offline"
+      // - "active": Curation has run and completed successfully today
+      // - "scheduled": Auto-curation is enabled and waiting for next scheduled run
+      // - "paused_target_reached": Target video count reached
+      // - "offline": Auto-curation is disabled
       let curationStatus = 'offline';
       if (curationRanToday) {
         curationStatus = 'active';
       } else if (targetReached) {
         curationStatus = 'paused_target_reached';
+      } else if (autoCurationEnabled) {
+        curationStatus = 'scheduled';
       }
       
       res.json({
