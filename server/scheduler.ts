@@ -597,7 +597,7 @@ export function startScheduler() {
           status = 'Completed with quota exhaustion';
         } else if (result.instructorsCurated === 0) {
           subject = '⚠️ Daily Curation - No Instructors';
-          status = 'No eligible instructors found (all have 50+ videos)';
+          status = 'No instructors processed this run';
         } else {
           subject = '✅ Daily Curation Complete';
           status = 'Success';

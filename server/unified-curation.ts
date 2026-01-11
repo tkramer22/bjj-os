@@ -222,7 +222,6 @@ async function getNextInstructorsToCurate(count: number = 12): Promise<{ name: s
       GROUP BY instructor_name
     ) vc ON ic.name = vc.instructor_name
     LEFT JOIN curation_rotation cr ON ic.name = cr.instructor_name
-    WHERE COALESCE(vc.video_count, 0) < 50
     ORDER BY 
       cr.last_curated_at NULLS FIRST,
       COALESCE(vc.video_count, 0) ASC
@@ -244,16 +243,9 @@ async function getCurrentRotationCycle(): Promise<number> {
 async function checkAndIncrementRotationCycle(): Promise<number> {
   const currentCycle = await getCurrentRotationCycle();
   
-  // Count instructors eligible for curation (< 50 videos)
+  // Count ALL instructors eligible for curation (no video count limit)
   const eligibleInstructors = await db.execute(sql`
-    SELECT COUNT(*) as count FROM instructor_credibility ic
-    LEFT JOIN (
-      SELECT instructor_name, COUNT(*) as video_count
-      FROM ai_video_knowledge
-      WHERE instructor_name IS NOT NULL
-      GROUP BY instructor_name
-    ) vc ON ic.name = vc.instructor_name
-    WHERE COALESCE(vc.video_count, 0) < 50
+    SELECT COUNT(*) as count FROM instructor_credibility
   `);
   const eligibleCount = Number((eligibleInstructors.rows?.[0] as any)?.count || 0);
   

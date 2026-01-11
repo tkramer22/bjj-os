@@ -9892,7 +9892,7 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
                   status = 'Completed with quota exhaustion';
                 } else if (curationResult.instructorsCurated === 0) {
                   subject = '⚠️ BJJ OS Curation - No Instructors';
-                  status = 'No eligible instructors found (all have 50+ videos)';
+                  status = 'No instructors processed this run';
                 } else {
                   subject = '✅ BJJ OS Curation Complete';
                   status = 'Success';
