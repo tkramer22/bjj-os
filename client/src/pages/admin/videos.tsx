@@ -114,6 +114,7 @@ export default function AdminVideos() {
   const [selectedInstructor, setSelectedInstructor] = useState<string>("all");
   const [selectedTechnique, setSelectedTechnique] = useState<string>("all");
   const [knowledgeFilter, setKnowledgeFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "quality">("newest");
   const [authError, setAuthError] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
@@ -315,7 +316,21 @@ export default function AdminVideos() {
   }
 
   const stats = statsData || { total_videos: 0, unique_instructors: 0, unique_techniques: 0, avg_quality: 0 };
-  const videos = videosData?.videos || [];
+  const rawVideos = videosData?.videos || [];
+  
+  // Apply sorting to videos
+  const videos = useMemo(() => {
+    const sorted = [...rawVideos];
+    if (sortBy === "newest") {
+      return sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } else if (sortBy === "oldest") {
+      return sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    } else if (sortBy === "quality") {
+      return sorted.sort((a, b) => (b.quality_score || 0) - (a.quality_score || 0));
+    }
+    return sorted;
+  }, [rawVideos, sortBy]);
+  
   const knowledgeStatus = knowledgeStatusData || { totalVideos: 0, processed: 0, pending: 0, withTranscript: 0, totalTechniques: 0, percentComplete: 0 };
   const bulkStatus = bulkStatusData || { isActive: false, total: 0, processed: 0, succeeded: 0, failed: 0, currentBatch: 0, totalBatches: 0, isPaused: false, estimatedTimeRemaining: null };
 
@@ -573,6 +588,17 @@ export default function AdminVideos() {
                       Failed
                     </div>
                   </SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={sortBy} onValueChange={(value: "newest" | "oldest" | "quality") => setSortBy(value)}>
+                <SelectTrigger className="w-[140px]" data-testid="select-sort">
+                  <SelectValue placeholder="Sort By" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest First</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                  <SelectItem value="quality">Highest Quality</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -2,6 +2,43 @@ import { db } from './db';
 import { aiVideoKnowledge, videoKnowledge, videoWatchStatus } from '../shared/schema';
 import { sql, desc, and, or, eq, ilike, inArray, exists } from 'drizzle-orm';
 
+/**
+ * Filter out unavailable/deleted YouTube videos
+ * Videos are considered unavailable if:
+ * - No thumbnail URL
+ * - Thumbnail URL contains YouTube's default "no thumbnail" patterns
+ */
+function isVideoAvailable(video: any): boolean {
+  const thumbnail = video.thumbnailUrl || video.thumbnail_url;
+  
+  if (!thumbnail || thumbnail.trim() === '') {
+    return false;
+  }
+  
+  // YouTube deleted video thumbnail patterns
+  const unavailablePatterns = [
+    'hqdefault_live', // Live stream placeholder
+    'no_thumbnail',
+    'deleted',
+    'private',
+    'unavailable'
+  ];
+  
+  const lowerThumb = thumbnail.toLowerCase();
+  return !unavailablePatterns.some(pattern => lowerThumb.includes(pattern));
+}
+
+/**
+ * Filter array of videos to exclude unavailable ones
+ */
+function filterAvailableVideos<T>(videos: T[]): T[] {
+  const available = videos.filter(isVideoAvailable);
+  if (available.length < videos.length) {
+    console.log(`[VIDEO FILTER] Filtered out ${videos.length - available.length} unavailable videos`);
+  }
+  return available;
+}
+
 interface VideoSearchParams {
   userMessage: string;
   userId?: string; // For session context lookup
@@ -186,13 +223,16 @@ export async function searchGeminiFirst(technique: string): Promise<{
     // Deduplicate by video ID (multiple videoKnowledge rows can exist per video)
     const uniqueVideos = Array.from(new Map(verified.map(v => [v.id, v])).values());
     
-    console.log(`[GEMINI SEARCH] Returning ${uniqueVideos.length} unique videos`);
+    // Filter out unavailable/deleted YouTube videos
+    const availableVideos = filterAvailableVideos(uniqueVideos);
+    
+    console.log(`[GEMINI SEARCH] Returning ${availableVideos.length} available videos`);
     console.log(`═══════════════════════════════════════════════════════════════\n`);
     
     return {
-      videos: uniqueVideos,
+      videos: availableVideos,
       technique,
-      noMatchFound: uniqueVideos.length === 0
+      noMatchFound: availableVideos.length === 0
     };
     
   } catch (error) {
@@ -486,10 +526,13 @@ export async function searchByInstructor(instructorName: string, limit: number =
     
     console.log(`[INSTRUCTOR SEARCH] Searched for "${instructorName}": found ${videos.length} videos (${totalMatches} total)`);
     
+    // Filter out unavailable/deleted YouTube videos
+    const availableVideos = filterAvailableVideos(videos);
+    
     return {
-      videos,
+      videos: availableVideos,
       totalMatches,
-      instructorFound: videos.length > 0
+      instructorFound: availableVideos.length > 0
     };
   } catch (error) {
     console.error('[INSTRUCTOR SEARCH] Error:', error);
@@ -1429,13 +1472,16 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     });
     console.log('═══════════════════════════════════════════════════════════════');
     
+    // Filter out unavailable/deleted YouTube videos
+    const availableVideos = filterAvailableVideos(validatedVideos);
+    
     // Return noMatchFound=true if we have REAL technique terms but STILL zero results after last resort
     // Use hasTechniqueTerms (not searchTerms.length) to avoid false positives from fallback keywords
-    const noMatchFound = hasTechniqueTerms && validatedVideos.length === 0;
+    const noMatchFound = hasTechniqueTerms && availableVideos.length === 0;
     
     return {
-      videos: validatedVideos.slice(0, 50),
-      totalMatches: validatedVideos.length,
+      videos: availableVideos.slice(0, 50),
+      totalMatches: availableVideos.length,
       searchIntent: intent,
       noMatchFound,
       searchTermsValidated
@@ -1586,13 +1632,16 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
   
   console.log(`[FALLBACK SEARCH] Found ${videos.length} ANALYZED videos`);
   
+  // Filter out unavailable/deleted YouTube videos
+  const availableVideos = filterAvailableVideos(videos);
+  
   // Return noMatchFound=true if we have REAL technique terms but zero results
   // Use hasTechniqueTerms (not searchTerms.length) to avoid false positives from fallback keywords
-  const noMatchFound = intent.hasTechniqueTerms && videos.length === 0;
+  const noMatchFound = intent.hasTechniqueTerms && availableVideos.length === 0;
   
   return { 
-    videos, 
-    totalMatches: videos.length,
+    videos: availableVideos, 
+    totalMatches: availableVideos.length,
     searchIntent: intent,
     noMatchFound
   };
