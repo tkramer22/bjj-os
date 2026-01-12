@@ -209,26 +209,70 @@ async function getInstructorVideoCount(instructorName: string): Promise<number> 
 }
 
 async function getNextInstructorsToCurate(count: number = 12): Promise<{ name: string; videoCount: number }[]> {
-  const instructorVideoCounts = await db.execute(sql`
+  // Helper to extract rows from drizzle result (handles both array and .rows formats)
+  const getRows = (result: any): any[] => {
+    if (Array.isArray(result)) return result;
+    if (result?.rows && Array.isArray(result.rows)) return result.rows;
+    return [];
+  };
+
+  // First check if instructor_credibility has any entries
+  const credibilityResult = await db.execute(sql`SELECT COUNT(*) as count FROM instructor_credibility`);
+  const credibilityRows = getRows(credibilityResult);
+  const hasCredibilityData = Number(credibilityRows[0]?.count || 0) > 0;
+
+  if (hasCredibilityData) {
+    // Use instructor_credibility table (original logic)
+    const instructorResult = await db.execute(sql`
+      SELECT 
+        ic.name,
+        COALESCE(vc.video_count, 0)::int as video_count,
+        cr.last_curated_at
+      FROM instructor_credibility ic
+      LEFT JOIN (
+        SELECT instructor_name, COUNT(*) as video_count
+        FROM ai_video_knowledge
+        WHERE instructor_name IS NOT NULL
+        GROUP BY instructor_name
+      ) vc ON ic.name = vc.instructor_name
+      LEFT JOIN curation_rotation cr ON ic.name = cr.instructor_name
+      ORDER BY 
+        cr.last_curated_at NULLS FIRST,
+        COALESCE(vc.video_count, 0) ASC
+      LIMIT ${count}
+    `);
+
+    return getRows(instructorResult).map((row: any) => ({
+      name: row.name,
+      videoCount: parseInt(row.video_count) || 0,
+    }));
+  }
+
+  // FALLBACK: Use ai_video_knowledge directly when instructor_credibility is empty
+  console.log(`[UNIFIED] instructor_credibility is empty, falling back to ai_video_knowledge`);
+  
+  const instructorsFromVideos = await db.execute(sql`
     SELECT 
-      ic.name,
-      COALESCE(vc.video_count, 0)::int as video_count,
+      avk.instructor_name as name,
+      COUNT(*)::int as video_count,
       cr.last_curated_at
-    FROM instructor_credibility ic
-    LEFT JOIN (
-      SELECT instructor_name, COUNT(*) as video_count
-      FROM ai_video_knowledge
-      WHERE instructor_name IS NOT NULL
-      GROUP BY instructor_name
-    ) vc ON ic.name = vc.instructor_name
-    LEFT JOIN curation_rotation cr ON ic.name = cr.instructor_name
+    FROM ai_video_knowledge avk
+    LEFT JOIN curation_rotation cr ON avk.instructor_name = cr.instructor_name
+    WHERE avk.instructor_name IS NOT NULL 
+      AND avk.instructor_name != ''
+      AND avk.instructor_name NOT LIKE '%Unknown%'
+      AND avk.instructor_name NOT LIKE '%Not Identified%'
+    GROUP BY avk.instructor_name, cr.last_curated_at
     ORDER BY 
       cr.last_curated_at NULLS FIRST,
-      COALESCE(vc.video_count, 0) ASC
+      COUNT(*) ASC
     LIMIT ${count}
   `);
 
-  return (instructorVideoCounts.rows || []).map((row: any) => ({
+  const rows = getRows(instructorsFromVideos);
+  console.log(`[UNIFIED] Found ${rows.length} instructors from ai_video_knowledge`);
+  
+  return rows.map((row: any) => ({
     name: row.name,
     videoCount: parseInt(row.video_count) || 0,
   }));
@@ -243,11 +287,34 @@ async function getCurrentRotationCycle(): Promise<number> {
 async function checkAndIncrementRotationCycle(): Promise<number> {
   const currentCycle = await getCurrentRotationCycle();
   
-  // Count ALL instructors eligible for curation (no video count limit)
-  const eligibleInstructors = await db.execute(sql`
-    SELECT COUNT(*) as count FROM instructor_credibility
-  `);
-  const eligibleCount = Number((eligibleInstructors.rows?.[0] as any)?.count || 0);
+  // Helper to extract rows from drizzle result
+  const getRows = (result: any): any[] => {
+    if (Array.isArray(result)) return result;
+    if (result?.rows && Array.isArray(result.rows)) return result.rows;
+    return [];
+  };
+  
+  // Count ALL instructors eligible for curation (check instructor_credibility first, fallback to ai_video_knowledge)
+  let eligibleCount = 0;
+  const credibilityCheck = await db.execute(sql`SELECT COUNT(*) as count FROM instructor_credibility`);
+  const credibilityRows = getRows(credibilityCheck);
+  const credibilityCount = Number(credibilityRows[0]?.count || 0);
+  
+  if (credibilityCount > 0) {
+    eligibleCount = credibilityCount;
+  } else {
+    // Fallback: count distinct instructors from ai_video_knowledge
+    const videoInstructorCheck = await db.execute(sql`
+      SELECT COUNT(DISTINCT instructor_name) as count 
+      FROM ai_video_knowledge 
+      WHERE instructor_name IS NOT NULL 
+        AND instructor_name != '' 
+        AND instructor_name NOT LIKE '%Unknown%'
+        AND instructor_name NOT LIKE '%Not Identified%'
+    `);
+    const videoRows = getRows(videoInstructorCheck);
+    eligibleCount = Number(videoRows[0]?.count || 0);
+  }
   
   // Count how many have been curated in the current cycle
   const curatedThisCycle = await db.select({ count: sql<number>`count(*)` })
