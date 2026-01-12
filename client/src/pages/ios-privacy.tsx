@@ -106,7 +106,7 @@ export default function IOSPrivacyPage() {
           5. Third-Party Services
         </h2>
         <p style={{ color: '#A1A1AA', fontSize: '15px', marginBottom: '24px' }}>
-          We use trusted third-party services for payments (Stripe), analytics, and AI processing. These 
+          We use trusted third-party services for payments, analytics, and AI processing. These 
           services have their own privacy policies. We only share the minimum data necessary to provide 
           our services.
         </p>

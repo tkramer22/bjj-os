@@ -1,0 +1,85 @@
+```
+iOS APP - TWO CRITICAL FIXES FOR APP STORE APPROVAL
+
+Apple rejected the app for two issues. Both must be fixed before resubmission.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 1: PROFILE PHOTO CRASH (Guideline 2.1 - Performance)
+═══════════════════════════════════════════════════════════════════════════════
+
+The app crashes when user tries to upload a profile photo.
+
+CRASH STEPS (from Apple):
+1. Log in to the app
+2. Tap on 'Profile'
+3. Tap on camera icon on the profile photo
+4. Tap on 'Choose from Library' or 'Take Photo'
+5. App crashes
+
+DEVICE: iPad Air 11-inch (M3), iPadOS 26.2
+
+FIX REQUIRED:
+
+1. CHECK Info.plist has these permissions:
+   - NSCameraUsageDescription (camera access)
+   - NSPhotoLibraryUsageDescription (photo library access)
+   - NSPhotoLibraryAddUsageDescription (save to photo library)
+
+2. ADD proper permission handling:
+   - Request permission BEFORE accessing camera/library
+   - Handle permission denied gracefully (show alert, don't crash)
+   - Handle user cancellation gracefully
+
+3. FIX the image picker implementation:
+   - Ensure Capacitor Camera plugin is properly installed
+   - Handle all error cases (no camera on device, permission denied, user cancelled)
+   - Test on iPad specifically (Apple tested on iPad Air)
+
+4. ADD try/catch around camera/photo code to prevent crashes
+
+Show me the current profile photo code and the fix.
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 2: REMOVE ALL WEB SUBSCRIPTION REFERENCES (Guideline 3.1.1 - IAP)
+═══════════════════════════════════════════════════════════════════════════════
+
+Apple rejected because: "Your app accesses digital content purchased outside the app, such as Video Library subscriptions, but that content isn't available to purchase using in-app purchase."
+
+The iOS app must use Apple IAP as the ONLY subscription method. Remove all references to subscribing elsewhere.
+
+SEARCH AND REMOVE from iOS app:
+- Any mention of "bjjos.app" related to subscribing or payments
+- Any mention of "Stripe"
+- Any "subscribe on web" or "subscribe on website" text
+- Any external links for payment/subscription
+- Any text suggesting users can pay outside the app
+
+KEEP:
+- Apple IAP subscription flow (this is correct)
+- Login functionality (web subscribers can still log in)
+- The pricing text we added ($19.99/month)
+
+CHECK THESE FILES specifically:
+- ios-login.tsx
+- ios-signup.tsx  
+- ios-profile.tsx
+- Any subscription/paywall screens
+- Settings page
+- Any onboarding screens
+
+The message to users should be:
+- New users: Subscribe via Apple ($19.99/month)
+- No mention of alternatives
+
+DO NOT affect the web app - only the iOS app.
+
+═══════════════════════════════════════════════════════════════════════════════
+AFTER FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Test profile photo on iPad simulator specifically
+2. Verify no web subscription references remain in iOS
+3. Show me what was changed before publishing
+
+These fixes are required for App Store approval.
+```
