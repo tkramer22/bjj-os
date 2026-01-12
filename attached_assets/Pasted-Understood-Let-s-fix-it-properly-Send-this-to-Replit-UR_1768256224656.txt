@@ -1,0 +1,62 @@
+Understood. Let’s fix it properly.
+
+Send this to Replit:
+
+```
+URGENT: FIX CAPACITOR CAMERA PLUGIN - "UNIMPLEMENTED" ERROR
+
+The camera/photo library feature returns {"code":"UNIMPLEMENTED"} on real iOS device.
+
+This means the Capacitor Camera plugin is not properly installed or configured.
+
+═══════════════════════════════════════════════════════════════════════════════
+DIAGNOSE AND FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+1. CHECK if @capacitor/camera is installed:
+   npm list @capacitor/camera
+
+2. If NOT installed, install it:
+   npm install @capacitor/camera
+   npx cap sync ios
+
+3. CHECK the ios/App/Podfile includes the Camera pod
+
+4. CHECK ios/App/App/Info.plist has these EXACT keys:
+   <key>NSCameraUsageDescription</key>
+   <string>BJJ OS needs camera access to take your profile photo</string>
+   <key>NSPhotoLibraryUsageDescription</key>
+   <string>BJJ OS needs photo library access to choose your profile photo</string>
+   <key>NSPhotoLibraryAddUsageDescription</key>
+   <string>BJJ OS needs permission to save photos</string>
+
+5. CHECK the camera implementation in ios-profile.tsx is using the correct import:
+   import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+
+6. The getPhoto call should look like:
+   const image = await Camera.getPhoto({
+     quality: 90,
+     allowEditing: true,
+     resultType: CameraResultType.Uri,
+     source: CameraSource.Photos  // or CameraSource.Camera
+   });
+
+7. RUN these commands after any changes:
+   npm install
+   npx cap sync ios
+
+═══════════════════════════════════════════════════════════════════════════════
+SHOW ME
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Output of: npm list @capacitor/camera
+2. Contents of the camera-related code in ios-profile.tsx
+3. Contents of Info.plist permission entries
+4. Any errors during npm install or cap sync
+
+We need this working on a real iOS device, not just simulator.
+```
+
+-----
+
+After Replit responds, you’ll need to pull, rebuild, and test on your phone again. Let me know what they find! 🤙​​​​​​​​​​​​​​​​
