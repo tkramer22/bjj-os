@@ -2,10 +2,11 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
-import { User, Settings, ChevronRight, Loader2, X, Check, Camera, Image, Trash2 } from "lucide-react";
+import { User, Settings, ChevronRight, Loader2, X, Check, Camera as CameraIcon, Image, Trash2 } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { apiRequest } from "@/lib/queryClient";
 import { getApiUrl } from "@/lib/capacitorAuth";
+import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 
 console.log('✅ iOS PROFILE loaded');
 
@@ -236,6 +237,82 @@ export default function IOSProfilePage() {
     },
   });
 
+  // Native camera/photo handling with proper error handling for iOS
+  const handleNativePhoto = async (source: CameraSource) => {
+    setShowAvatarModal(false);
+    setIsUploadingAvatar(true);
+    
+    try {
+      // Request permission and capture photo using Capacitor Camera
+      const photo = await Camera.getPhoto({
+        quality: 80,
+        allowEditing: true,
+        resultType: CameraResultType.DataUrl,
+        source: source,
+        width: 400,
+        height: 400,
+      });
+      
+      if (!photo.dataUrl) {
+        console.log('[AVATAR] User cancelled or no photo returned');
+        setIsUploadingAvatar(false);
+        return;
+      }
+      
+      // Upload to server
+      await uploadAvatarToServer(photo.dataUrl);
+      
+    } catch (error: any) {
+      // Handle specific error cases gracefully
+      const errorMessage = error?.message || String(error);
+      
+      if (errorMessage.includes('cancelled') || errorMessage.includes('User cancelled')) {
+        console.log('[AVATAR] User cancelled photo selection');
+      } else if (errorMessage.includes('permission') || errorMessage.includes('denied')) {
+        console.error('[AVATAR] Permission denied:', errorMessage);
+        alert('Camera or photo access was denied. Please enable access in Settings.');
+      } else if (errorMessage.includes('no camera') || errorMessage.includes('unavailable')) {
+        console.error('[AVATAR] Camera unavailable:', errorMessage);
+        alert('Camera is not available on this device.');
+      } else {
+        console.error('[AVATAR] Photo error:', error);
+        // Don't crash - just log and continue
+      }
+      triggerHaptic('error');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const uploadAvatarToServer = async (dataUrl: string) => {
+    try {
+      // Resize if needed (max 400px)
+      const resizedUrl = await resizeImage(dataUrl, 400);
+      
+      // Upload to server
+      const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
+      const response = await fetch(getApiUrl('/api/auth/avatar'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ avatarUrl: resizedUrl }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to upload avatar');
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      triggerHaptic('success');
+    } catch (error) {
+      console.error('[AVATAR] Upload error:', error);
+      triggerHaptic('error');
+    }
+  };
+
   const handleAvatarUpload = async (file: File) => {
     // Check file size (2MB limit)
     if (file.size > 2 * 1024 * 1024) {
@@ -256,27 +333,7 @@ export default function IOSProfilePage() {
         reader.readAsDataURL(file);
       });
       
-      // Resize if too large (max 400px)
-      const resizedUrl = await resizeImage(base64Url, 400);
-      
-      // Upload to server
-      const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('token');
-      const response = await fetch(getApiUrl('/api/auth/avatar'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {}),
-        },
-        credentials: 'include',
-        body: JSON.stringify({ avatarUrl: resizedUrl }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to upload avatar');
-      }
-      
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      triggerHaptic('success');
+      await uploadAvatarToServer(base64Url);
     } catch (error) {
       console.error('Avatar upload error:', error);
       triggerHaptic('error');
@@ -527,7 +584,7 @@ export default function IOSProfilePage() {
               justifyContent: 'center',
               border: '2px solid #0A0A0B',
             }}>
-              <Camera size={12} color="#FFFFFF" />
+              <CameraIcon size={12} color="#FFFFFF" />
             </div>
           </button>
           <input
@@ -1176,7 +1233,29 @@ export default function IOSProfilePage() {
             }} />
             
             <button
-              onClick={() => { fileInputRef.current?.click(); setShowAvatarModal(false); }}
+              onClick={() => handleNativePhoto(CameraSource.Camera)}
+              data-testid="button-take-photo"
+              style={{
+                width: '100%',
+                padding: '16px',
+                background: '#2A2A2E',
+                border: 'none',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                cursor: 'pointer',
+                marginBottom: '8px',
+              }}
+            >
+              <CameraIcon size={20} color="#FFFFFF" />
+              <span style={{ color: '#FFFFFF', fontSize: '16px' }}>
+                Take Photo
+              </span>
+            </button>
+
+            <button
+              onClick={() => handleNativePhoto(CameraSource.Photos)}
               data-testid="button-choose-photo"
               style={{
                 width: '100%',
