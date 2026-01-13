@@ -347,6 +347,128 @@ async function searchYouTube(query: string, maxResults: number = 15): Promise<an
   }
 }
 
+/**
+ * QUOTA-EFFICIENT: Get channel's upload playlist ID
+ * Convert channel ID "UC..." to uploads playlist ID "UU..."
+ * This is a free transformation - no API call needed!
+ */
+function getUploadsPlaylistId(channelId: string): string {
+  if (channelId.startsWith('UC')) {
+    return 'UU' + channelId.slice(2);
+  }
+  return channelId;
+}
+
+/**
+ * QUOTA-EFFICIENT: Find channel ID for an instructor (100 units, but cached)
+ * Uses search.list ONCE to find channel, then caches it forever
+ */
+async function findInstructorChannelId(instructorName: string): Promise<string | null> {
+  try {
+    // First check if we already have it cached in the database
+    // db.execute returns { rows: [...] } not an array directly
+    const cachedResult = await db.execute(
+      sql`SELECT channel_id FROM instructors WHERE LOWER(name) = LOWER(${instructorName}) AND channel_id IS NOT NULL LIMIT 1`
+    );
+    
+    // Handle both Drizzle result formats (rows property or direct array)
+    const rows = Array.isArray(cachedResult) ? cachedResult : (cachedResult?.rows || []);
+    
+    if (rows.length > 0 && rows[0].channel_id) {
+      console.log(`   📦 Using cached channel ID for ${instructorName}`);
+      return rows[0].channel_id as string;
+    }
+    
+    // Search for the channel (costs 100 units - but only once per instructor!)
+    console.log(`   🔍 Looking up channel ID for ${instructorName} (one-time 100 unit cost)`);
+    const searchResponse = await youtube.search.list({
+      part: ['snippet'],
+      q: `${instructorName} BJJ`,
+      type: ['channel'],
+      maxResults: 1
+    });
+    
+    if (!searchResponse.data.items?.length) {
+      console.log(`   ⚠️ No channel found for ${instructorName}`);
+      return null;
+    }
+    
+    const channelId = searchResponse.data.items[0].id?.channelId;
+    if (!channelId) return null;
+    
+    // Cache it in the database for future use
+    try {
+      await db.execute(
+        sql`INSERT INTO instructors (name, channel_id) VALUES (${instructorName}, ${channelId})
+            ON CONFLICT (name) DO UPDATE SET channel_id = ${channelId}`
+      );
+      console.log(`   💾 Cached channel ID: ${channelId}`);
+    } catch (cacheError) {
+      console.log(`   ⚠️ Could not cache channel ID (non-critical)`);
+    }
+    
+    return channelId;
+  } catch (error: any) {
+    if (error.code === 403 || error.message?.includes('quota')) {
+      throw new Error('QUOTA_EXHAUSTED');
+    }
+    console.error(`[AUTO-CURATION] Channel lookup error:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * QUOTA-EFFICIENT: Get videos from channel's uploads playlist
+ * Uses playlistItems.list = 1 unit per 50 videos (vs search.list = 100 units per 15 videos!)
+ * 
+ * QUOTA COMPARISON:
+ * - OLD: 5 search.list calls × 100 units = 500 units per instructor
+ * - NEW: 1 playlistItems.list × 1 unit + 1 videos.list × 1 unit = 2 units per instructor!
+ */
+async function getChannelVideosEfficient(channelId: string, maxResults: number = 50): Promise<any[]> {
+  try {
+    const uploadsPlaylistId = getUploadsPlaylistId(channelId);
+    
+    // Get playlist items (1 unit per call - 50x cheaper than search!)
+    const playlistResponse = await youtube.playlistItems.list({
+      part: ['contentDetails'],
+      playlistId: uploadsPlaylistId,
+      maxResults: Math.min(maxResults, 50) // API max is 50 per call
+    });
+    
+    if (!playlistResponse.data.items?.length) {
+      console.log(`   📭 No videos in uploads playlist`);
+      return [];
+    }
+    
+    const videoIds = playlistResponse.data.items
+      .map(item => item.contentDetails?.videoId)
+      .filter(Boolean) as string[];
+    
+    if (!videoIds.length) return [];
+    
+    // Get video details (1 unit for up to 50 videos - batch call!)
+    const detailsResponse = await youtube.videos.list({
+      part: ['snippet', 'contentDetails', 'statistics'],
+      id: videoIds
+    });
+    
+    console.log(`   📹 Retrieved ${detailsResponse.data.items?.length || 0} videos (2 API units total)`);
+    return detailsResponse.data.items || [];
+  } catch (error: any) {
+    if (error.code === 403 || error.message?.includes('quota')) {
+      throw new Error('QUOTA_EXHAUSTED');
+    }
+    // Playlist not found is common for some channels
+    if (error.message?.includes('playlistNotFound')) {
+      console.log(`   ⚠️ Uploads playlist not found - channel may have different structure`);
+      return [];
+    }
+    console.error(`[AUTO-CURATION] Playlist fetch error:`, error.message);
+    return [];
+  }
+}
+
 async function queueForGeminiProcessing(videoId: number, youtubeUrl: string, youtubeId: string): Promise<void> {
   try {
     await db.insert(videoWatchStatus).values({
@@ -541,19 +663,24 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
       
       let instructorVideosAdded = 0;
       
-      for (const pattern of SEARCH_PATTERNS) {
-        if (result.quotaExhausted) break;
+      // QUOTA-EFFICIENT: Try channel playlist first (2 units vs 500+ units!)
+      try {
+        const channelId = await findInstructorChannelId(instructor.name);
         
-        const query = pattern.replace('{instructor}', instructor.name);
-        console.log(`   📹 Searching: "${query}"`);
-        
-        try {
-          const videos = await searchYouTube(query, 15);
+        if (channelId) {
+          console.log(`   📺 Using QUOTA-EFFICIENT playlist method (2 units vs 500+ old method)`);
+          const videos = await getChannelVideosEfficient(channelId, 50);
           
           for (const video of videos) {
+            if (result.quotaExhausted) break;
+            
             const videoId = video.id;
             const title = video.snippet?.title || '';
             const duration = parseDuration(video.contentDetails?.duration || 'PT0S');
+            
+            // Since we're fetching from known BJJ instructor channels, trust the content
+            // Only filter out obvious non-instructional content (podcasts, vlogs, etc.)
+            // The isNonInstructionalContent check below handles this
             
             if (duration < MIN_DURATION_SECONDS) {
               result.skippedReasons['too_short'] = (result.skippedReasons['too_short'] || 0) + 1;
@@ -584,7 +711,6 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
             if (qualityScore < QUALITY_THRESHOLD_UNKNOWN) {
               result.skippedReasons['low_quality'] = (result.skippedReasons['low_quality'] || 0) + 1;
               result.videosSkipped++;
-              console.log(`   ⏭️  Skip (score ${qualityScore.toFixed(1)} < ${QUALITY_THRESHOLD_UNKNOWN}): ${title.slice(0, 40)}...`);
               continue;
             }
             
@@ -609,7 +735,7 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
                 uploadDate: video.snippet?.publishedAt ? new Date(video.snippet.publishedAt) : new Date(),
                 viewCount: parseInt(video.statistics?.viewCount || '0'),
                 likeCount: parseInt(video.statistics?.likeCount || '0'),
-                source: 'auto_curation',
+                source: 'auto_curation_efficient',
                 curatedAt: new Date()
               }).returning({ id: aiVideoKnowledge.id });
               
@@ -629,13 +755,104 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
               }
             }
           }
-        } catch (searchError: any) {
-          if (searchError.message === 'QUOTA_EXHAUSTED') {
-            result.quotaExhausted = true;
-            break;
+        } else {
+          // Fallback to ONE search if no channel found (rare case)
+          console.log(`   ⚠️ No channel ID - falling back to single search (100 units)`);
+          const query = `${instructor.name} BJJ technique`;
+          
+          try {
+            const videos = await searchYouTube(query, 15);
+            
+            for (const video of videos) {
+              const videoId = video.id;
+              const title = video.snippet?.title || '';
+              const duration = parseDuration(video.contentDetails?.duration || 'PT0S');
+              
+              if (duration < MIN_DURATION_SECONDS) {
+                result.skippedReasons['too_short'] = (result.skippedReasons['too_short'] || 0) + 1;
+                result.videosSkipped++;
+                continue;
+              }
+              
+              if (duration > MAX_DURATION_SECONDS) {
+                result.skippedReasons['too_long'] = (result.skippedReasons['too_long'] || 0) + 1;
+                result.videosSkipped++;
+                continue;
+              }
+              
+              if (await videoExists(videoId)) {
+                result.skippedReasons['duplicate'] = (result.skippedReasons['duplicate'] || 0) + 1;
+                result.videosSkipped++;
+                continue;
+              }
+              
+              if (isNonInstructionalContent(title)) {
+                result.skippedReasons['non_instructional'] = (result.skippedReasons['non_instructional'] || 0) + 1;
+                result.videosSkipped++;
+                continue;
+              }
+              
+              const qualityScore = calculateQualityScore(video);
+              if (qualityScore < QUALITY_THRESHOLD_UNKNOWN) {
+                result.skippedReasons['low_quality'] = (result.skippedReasons['low_quality'] || 0) + 1;
+                result.videosSkipped++;
+                continue;
+              }
+            
+            result.videosAnalyzed++;
+            const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            
+            try {
+              const insertResult = await db.insert(aiVideoKnowledge).values({
+                videoUrl,
+                youtubeId: videoId,
+                title,
+                techniqueName: title,
+                instructorName: instructor.name,
+                techniqueType: 'technique',
+                positionCategory: 'universal',
+                giOrNogi: 'both',
+                qualityScore: qualityScore.toFixed(1),
+                duration,
+                channelName: video.snippet?.channelTitle || '',
+                thumbnailUrl: video.snippet?.thumbnails?.high?.url || '',
+                uploadDate: video.snippet?.publishedAt ? new Date(video.snippet.publishedAt) : new Date(),
+                viewCount: parseInt(video.statistics?.viewCount || '0'),
+                likeCount: parseInt(video.statistics?.likeCount || '0'),
+                source: 'auto_curation_fallback',
+                curatedAt: new Date()
+              }).returning({ id: aiVideoKnowledge.id });
+              
+              if (insertResult[0]?.id) {
+                await queueForGeminiProcessing(insertResult[0].id, videoUrl, videoId);
+                result.videosAdded++;
+                instructorVideosAdded++;
+                result.instructorResults[instructor.name].added++;
+                result.instructorResults[instructor.name].after++;
+                console.log(`   ✅ Added: ${title.slice(0, 50)}...`);
+              }
+            } catch (insertError: any) {
+              if (insertError.code === '23505') {
+                result.skippedReasons['duplicate'] = (result.skippedReasons['duplicate'] || 0) + 1;
+              } else {
+                result.errors.push(`Insert error: ${insertError.message}`);
+              }
+            }
+            }
+          } catch (searchError: any) {
+            if (searchError.message === 'QUOTA_EXHAUSTED') {
+              result.quotaExhausted = true;
+            } else {
+              result.errors.push(`Fallback search error for ${instructor.name}: ${searchError.message}`);
+            }
           }
-          result.errors.push(`Search error for ${instructor.name}: ${searchError.message}`);
         }
+      } catch (channelError: any) {
+        if (channelError.message === 'QUOTA_EXHAUSTED') {
+          result.quotaExhausted = true;
+          break;
+        }
+        result.errors.push(`Channel error for ${instructor.name}: ${channelError.message}`);
       }
       
       if (instructorVideosAdded === 0) {
