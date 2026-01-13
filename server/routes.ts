@@ -14511,6 +14511,85 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
+  // Get volume stats (today, this week, this month, unmet requests)
+  app.get('/api/admin/meta/volume-stats', checkAdminAuth, async (req, res) => {
+    try {
+      const { userTechniqueRequests } = await import('@shared/schema');
+      const { sql, gte, eq, and } = await import('drizzle-orm');
+      
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - 7);
+      const startOfMonth = new Date(now);
+      startOfMonth.setDate(now.getDate() - 30);
+      
+      // Today's requests
+      const [todayCount] = await db.select({ count: sql<number>`count(*)::int` })
+        .from(userTechniqueRequests)
+        .where(gte(userTechniqueRequests.requestedAt, startOfToday));
+      
+      // This week's requests
+      const [weekCount] = await db.select({ count: sql<number>`count(*)::int` })
+        .from(userTechniqueRequests)
+        .where(gte(userTechniqueRequests.requestedAt, startOfWeek));
+      
+      // This month's requests
+      const [monthCount] = await db.select({ count: sql<number>`count(*)::int` })
+        .from(userTechniqueRequests)
+        .where(gte(userTechniqueRequests.requestedAt, startOfMonth));
+      
+      // Unmet requests (hadVideoResult = false)
+      const [unmetCount] = await db.select({ count: sql<number>`count(*)::int` })
+        .from(userTechniqueRequests)
+        .where(eq(userTechniqueRequests.hadVideoResult, false));
+      
+      res.json({
+        today: todayCount?.count || 0,
+        thisWeek: weekCount?.count || 0,
+        thisMonth: monthCount?.count || 0,
+        unmetRequests: unmetCount?.count || 0,
+      });
+    } catch (error: any) {
+      console.error('[META API] Error fetching volume stats:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get unmet requests (requests where no videos were returned)
+  app.get('/api/admin/meta/unmet-requests', checkAdminAuth, async (req, res) => {
+    try {
+      const { userTechniqueRequests, users } = await import('@shared/schema');
+      const { desc, eq, sql: drizzleSql } = await import('drizzle-orm');
+      
+      const limit = parseInt(req.query.limit as string) || 50;
+      const requests = await db.select({
+        id: userTechniqueRequests.id,
+        userId: userTechniqueRequests.userId,
+        userName: users.name,
+        userEmail: users.email,
+        techniqueMentioned: userTechniqueRequests.techniqueMentioned,
+        requestContext: userTechniqueRequests.requestContext,
+        requestType: userTechniqueRequests.requestType,
+        beltLevel: userTechniqueRequests.beltLevel,
+        giPreference: userTechniqueRequests.giPreference,
+        hadVideoResult: userTechniqueRequests.hadVideoResult,
+        videoCountReturned: userTechniqueRequests.videoCountReturned,
+        requestedAt: userTechniqueRequests.requestedAt
+      })
+        .from(userTechniqueRequests)
+        .leftJoin(users, drizzleSql`${userTechniqueRequests.userId} = ${users.id}::text`)
+        .where(eq(userTechniqueRequests.hadVideoResult, false))
+        .orderBy(desc(userTechniqueRequests.requestedAt))
+        .limit(limit);
+      
+      res.json({ requests });
+    } catch (error: any) {
+      console.error('[META API] Error fetching unmet requests:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Trigger manual curation for a technique
   app.post('/api/admin/meta/curate', checkAdminAuth, async (req, res) => {
     try {
