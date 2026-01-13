@@ -239,10 +239,17 @@ export default function IOSProfilePage() {
 
   // Native camera/photo handling with proper error handling for iOS
   const handleNativePhoto = async (source: CameraSource) => {
+    console.log('[CAMERA] ====== CAMERA BUTTON TAPPED ======');
+    console.log('[CAMERA] Source:', source === CameraSource.Camera ? 'CAMERA' : 'PHOTOS');
+    
     setShowAvatarModal(false);
     setIsUploadingAvatar(true);
     
     try {
+      console.log('[CAMERA] About to call Camera.getPhoto...');
+      console.log('[CAMERA] Camera object exists:', !!Camera);
+      console.log('[CAMERA] Camera.getPhoto exists:', !!Camera?.getPhoto);
+      
       // Request permission and capture photo using Capacitor Camera
       const photo = await Camera.getPhoto({
         quality: 80,
@@ -253,33 +260,51 @@ export default function IOSProfilePage() {
         height: 400,
       });
       
+      console.log('[CAMERA] Camera.getPhoto returned successfully');
+      console.log('[CAMERA] Photo object:', photo);
+      console.log('[CAMERA] Has dataUrl:', !!photo?.dataUrl);
+      
       if (!photo.dataUrl) {
-        console.log('[AVATAR] User cancelled or no photo returned');
+        console.log('[CAMERA] No dataUrl - user cancelled or no photo returned');
         setIsUploadingAvatar(false);
         return;
       }
       
+      console.log('[CAMERA] dataUrl length:', photo.dataUrl.length);
+      
       // Upload to server
+      console.log('[CAMERA] Starting upload to server...');
       await uploadAvatarToServer(photo.dataUrl);
+      console.log('[CAMERA] Upload complete');
       
     } catch (error: any) {
+      console.error('[CAMERA] ====== CAMERA ERROR ======');
+      console.error('[CAMERA] Error object:', error);
+      console.error('[CAMERA] Error message:', error?.message);
+      console.error('[CAMERA] Error code:', error?.code);
+      console.error('[CAMERA] Full error JSON:', JSON.stringify(error, null, 2));
+      
       // Handle specific error cases gracefully
       const errorMessage = error?.message || String(error);
       
       if (errorMessage.includes('cancelled') || errorMessage.includes('User cancelled')) {
-        console.log('[AVATAR] User cancelled photo selection');
+        console.log('[CAMERA] User cancelled photo selection');
       } else if (errorMessage.includes('permission') || errorMessage.includes('denied')) {
-        console.error('[AVATAR] Permission denied:', errorMessage);
+        console.error('[CAMERA] Permission denied:', errorMessage);
         alert('Camera or photo access was denied. Please enable access in Settings.');
       } else if (errorMessage.includes('no camera') || errorMessage.includes('unavailable')) {
-        console.error('[AVATAR] Camera unavailable:', errorMessage);
+        console.error('[CAMERA] Camera unavailable:', errorMessage);
         alert('Camera is not available on this device.');
+      } else if (errorMessage.includes('UNIMPLEMENTED')) {
+        console.error('[CAMERA] Plugin not installed - UNIMPLEMENTED error');
+        alert('Camera plugin not installed. Please reinstall the app.');
       } else {
-        console.error('[AVATAR] Photo error:', error);
-        // Don't crash - just log and continue
+        console.error('[CAMERA] Unknown error:', error);
+        alert('Camera error: ' + errorMessage);
       }
       triggerHaptic('error');
     } finally {
+      console.log('[CAMERA] ====== CAMERA FLOW COMPLETE ======');
       setIsUploadingAvatar(false);
     }
   };
