@@ -1375,7 +1375,12 @@ export async function handleClaudeStream(req: any, res: any) {
     
     // PHASE 3C: Track technique requests for Meta Analyzer (async, non-blocking)
     // This feeds the curation prioritization system
-    extractTechniqueRequests(userId.toString(), message, userProfile?.beltLevel, userProfile?.style).catch(err => {
+    // Pass video result data for content gap analysis
+    const videoResultData = {
+      hadVideoResult: enrichedTokens > 0,
+      videoCount: enrichedTokens
+    };
+    extractTechniqueRequests(userId.toString(), message, userProfile?.beltLevel, userProfile?.style, videoResultData).catch(err => {
       console.error('❌ Meta tracker error (non-critical):', err);
     });
     
