@@ -46,7 +46,16 @@ interface UserRequest {
   requestType: string | null;
   beltLevel: string | null;
   giPreference: string | null;
+  hadVideoResult: boolean | null;
+  videoCountReturned: number | null;
   requestedAt: Date;
+}
+
+interface VolumeStats {
+  today: number;
+  thisWeek: number;
+  thisMonth: number;
+  unmetRequests: number;
 }
 
 export default function MetaInsightsPage() {
@@ -72,6 +81,16 @@ export default function MetaInsightsPage() {
   const { data: requestsData, isLoading: requestsLoading } = useQuery<{ requests: UserRequest[] }>({
     queryKey: ['/api/admin/meta/requests'],
     queryFn: () => adminApiRequest('/api/admin/meta/requests'),
+  });
+
+  const { data: volumeStats, isLoading: volumeLoading } = useQuery<VolumeStats>({
+    queryKey: ['/api/admin/meta/volume-stats'],
+    queryFn: () => adminApiRequest('/api/admin/meta/volume-stats'),
+  });
+
+  const { data: unmetData, isLoading: unmetLoading } = useQuery<{ requests: UserRequest[] }>({
+    queryKey: ['/api/admin/meta/unmet-requests'],
+    queryFn: () => adminApiRequest('/api/admin/meta/unmet-requests'),
   });
 
   const handleCurate = async (technique: string) => {
@@ -207,12 +226,65 @@ export default function MetaInsightsPage() {
         </Card>
       </div>
 
+      {/* Volume Stats */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Requests Today</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-requests-today">
+              {volumeLoading ? '...' : volumeStats?.today || 0}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">This Week</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-requests-week">
+              {volumeLoading ? '...' : volumeStats?.thisWeek || 0}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">This Month</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-requests-month">
+              {volumeLoading ? '...' : volumeStats?.thisMonth || 0}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-destructive/50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Unmet Requests</CardTitle>
+            <AlertCircle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive" data-testid="text-unmet-requests">
+              {volumeLoading ? '...' : volumeStats?.unmetRequests || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">No videos returned</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Main Content */}
       <Tabs defaultValue="trending" className="space-y-4">
         <TabsList>
           <TabsTrigger value="trending" data-testid="tab-trending">Trending Techniques</TabsTrigger>
           <TabsTrigger value="priorities" data-testid="tab-priorities">Curation Priorities</TabsTrigger>
           <TabsTrigger value="requests" data-testid="tab-requests">User Requests</TabsTrigger>
+          <TabsTrigger value="unmet" data-testid="tab-unmet">Unmet Requests</TabsTrigger>
         </TabsList>
 
         <TabsContent value="trending" className="space-y-4">
@@ -360,6 +432,77 @@ export default function MetaInsightsPage() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {formatDistanceToNow(new Date(request.requestedAt), { addSuffix: true })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="unmet" className="space-y-4">
+          <Card className="border-destructive/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                Unmet Requests - Content Gaps
+              </CardTitle>
+              <CardDescription>
+                User questions where Professor OS had no video recommendations - immediate curation opportunities
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {unmetLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              ) : (unmetData?.requests.length || 0) === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No unmet requests - all user questions have video coverage!
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Technique</TableHead>
+                      <TableHead>Belt</TableHead>
+                      <TableHead>Question</TableHead>
+                      <TableHead>When</TableHead>
+                      <TableHead>Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {unmetData?.requests.slice(0, 30).map((request) => (
+                      <TableRow key={request.id} data-testid={`row-unmet-${request.id}`}>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">
+                              {request.userName || 'Unknown'}
+                            </span>
+                            <span className="text-xs text-muted-foreground truncate max-w-[150px]">
+                              {request.userEmail || request.userId}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-medium capitalize">{request.techniqueMentioned}</TableCell>
+                        <TableCell>{request.beltLevel || '-'}</TableCell>
+                        <TableCell className="max-w-sm truncate text-sm text-muted-foreground">
+                          {request.requestContext}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDistanceToNow(new Date(request.requestedAt), { addSuffix: true })}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleCurate(request.techniqueMentioned)}
+                            disabled={curating === request.techniqueMentioned}
+                            data-testid={`button-curate-unmet-${request.id}`}
+                          >
+                            {curating === request.techniqueMentioned ? 'Curating...' : 'Curate'}
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
