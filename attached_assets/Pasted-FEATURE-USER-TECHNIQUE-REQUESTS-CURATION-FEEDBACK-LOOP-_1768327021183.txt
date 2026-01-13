@@ -1,0 +1,131 @@
+FEATURE: USER TECHNIQUE REQUESTS → CURATION FEEDBACK LOOP
+
+When users ask Professor OS about techniques, we should track these requests and use them to optimize curation. This creates a powerful feedback loop where user demand drives content acquisition.
+
+═══════════════════════════════════════════════════════════════════════════════
+⚠️ CRITICAL: DO NOT CHANGE EXISTING FUNCTIONALITY
+═══════════════════════════════════════════════════════════════════════════════
+
+This is an ADDITIVE feature only. DO NOT modify:
+- Professor OS prompts or response logic
+- Professor OS tone, style, or video recommendation behavior
+- Existing search/curation criteria
+- Video quality filters
+- Database schema for existing tables
+- Any currently working features
+
+This feature ONLY ADDS:
+- New tracking tables
+- Background logging (non-blocking)
+- New admin dashboard section
+
+If anything would require changing existing Professor OS behavior, STOP and ask first.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: TRACK ALL USER REQUESTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Track EVERY user message to Professor OS, not just technique questions:
+
+Table: user_requests
+- id (primary key)
+- user_id
+- timestamp
+- message_text (the user's actual message)
+- request_type (technique_question, general_question, feedback, other)
+- extracted_technique (normalized technique name, if applicable - NULL if not a technique question)
+- had_video_result (boolean - did response include video recommendations?)
+- video_count_returned (how many videos were shown)
+- conversation_id
+- session_id
+
+This captures EVERYTHING users ask, so we can analyze patterns.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: AGGREGATE TECHNIQUE DEMAND
+═══════════════════════════════════════════════════════════════════════════════
+
+Table: technique_demand (aggregated stats, updated daily or on-demand)
+- technique_name (unique, normalized)
+- total_requests (all-time count)
+- requests_last_7_days
+- requests_last_30_days
+- unique_users (how many different users asked)
+- videos_in_library (current count of matching videos)
+- avg_videos_at_request (were videos available when asked?)
+- gap_score (calculated: high requests + low videos = high priority)
+- last_requested (timestamp)
+- trending (boolean - significant recent increase)
+
+GAP SCORE FORMULA:
+gap_score = (requests_last_7_days * 3) + (requests_last_30_days * 2) + total_requests - (videos_in_library * 10)
+Higher score = bigger content gap = higher curation priority
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: ADMIN DASHBOARD - META SECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Update the Meta section in admin dashboard to show:
+
+1. ALL USER REQUESTS (Recent activity)
+   - Last 100 requests to Professor OS
+   - Shows: timestamp, user, message preview, type, videos returned
+   - Real-time view of what users are asking
+
+2. MOST REQUESTED TECHNIQUES (Top 20)
+   - Technique name
+   - Total requests
+   - Unique users
+   - Videos in library
+   - Gap score
+
+3. CONTENT GAPS (High demand, low supply)
+   - Filter: gap_score > 0
+   - Sorted by gap_score descending
+   - Shows techniques users want but we lack videos for
+
+4. UNMET REQUESTS 
+   - Requests where had_video_result = false
+   - Immediate curation opportunities
+
+5. REQUEST VOLUME STATS
+   - Total requests today / this week / this month
+   - Requests by type breakdown
+   - Peak usage times
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: IMPLEMENTATION (BACKGROUND ONLY)
+═══════════════════════════════════════════════════════════════════════════════
+
+Add tracking as BACKGROUND logging that does NOT affect response time:
+
+1. User sends message to Professor OS
+2. Professor OS responds normally (NO CHANGES to this flow)
+3. AFTER response is sent, async background job logs:
+   - The user's message
+   - Extracts technique name (if applicable)
+   - Records whether videos were included
+   - Saves to user_requests table
+
+Use fire-and-forget async logging - never delay user response.
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Create user_requests table (new table, doesn't touch existing)
+2. Create technique_demand table or view
+3. Add async background logging after Professor OS responses
+4. Build admin dashboard Meta section UI
+5. Test thoroughly - verify Professor OS behavior unchanged
+
+═══════════════════════════════════════════════════════════════════════════════
+SHOW ME BEFORE IMPLEMENTING
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Is any request tracking already implemented?
+2. What does the current Meta section in admin dashboard show?
+3. Proposed database schema for new tables
+4. Confirm this will NOT modify any existing Professor OS logic
+
+Show me the plan and get my approval before making any changes.
