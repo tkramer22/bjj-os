@@ -9,7 +9,8 @@ export async function extractTechniqueRequests(
   userId: string,
   message: string,
   beltLevel?: string | null,
-  style?: string | null
+  style?: string | null,
+  videoResultData?: { hadVideoResult: boolean; videoCount: number }
 ): Promise<void> {
   // Common BJJ technique keywords to detect
   const techniquePatterns = [
@@ -84,6 +85,8 @@ export async function extractTechniqueRequests(
         requestType,
         beltLevel: beltLevel || undefined,
         giPreference,
+        hadVideoResult: videoResultData?.hadVideoResult,
+        videoCountReturned: videoResultData?.videoCount,
       });
       
       console.log(`[META TRACKER] Tracked technique request: "${technique}" from user ${userId}`);

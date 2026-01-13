@@ -2577,6 +2577,10 @@ export const userTechniqueRequests = pgTable("user_technique_requests", {
   beltLevel: text("belt_level"),
   giPreference: text("gi_preference"), // gi, nogi, both
   
+  // Video result tracking (for content gap analysis)
+  hadVideoResult: boolean("had_video_result"), // Did the AI response include video recommendations?
+  videoCountReturned: integer("video_count_returned"), // How many videos were shown
+  
   requestedAt: timestamp("requested_at").defaultNow().notNull(),
 }, (table) => ({
   techniqueIdx: index("idx_user_requests_technique").on(table.techniqueMentioned, table.requestedAt),
