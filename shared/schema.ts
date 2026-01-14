@@ -173,7 +173,7 @@ export const bjjUsers = pgTable("bjj_users", {
   // Note: appleUserId column must be added to database via db:push
   appleUserId: text("apple_user_id"), // Apple Sign In user ID (sub claim from identity token)
   appleOriginalTransactionId: text("apple_original_transaction_id"), // Apple's unique transaction ID
-  appleProductId: text("apple_product_id"), // e.g., 'bjjos_pro_monthlybjjos_pro_monthly'
+  appleProductId: text("apple_product_id"), // e.g., 'bjjos'
   appleReceipt: text("apple_receipt"), // Base64 encoded receipt for verification
   appleExpiresAt: timestamp("apple_expires_at"), // When Apple subscription expires
   appleEnvironment: text("apple_environment"), // 'sandbox' or 'production'

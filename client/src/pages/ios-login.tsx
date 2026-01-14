@@ -138,7 +138,7 @@ export default function IOSLoginPage() {
               prepToken: prepData.prepToken,
               receipt: purchaseResult.receipt,
               transactionId: purchaseResult.transactionId,
-              productId: 'bjjos_pro_monthlybjjos_pro_monthly',
+              productId: 'bjjos',
             }),
           });
 
@@ -475,7 +475,7 @@ export default function IOSLoginPage() {
               prepToken: prepData.prepToken,
               receipt: purchaseResult.receipt,
               transactionId: purchaseResult.transactionId,
-              productId: 'bjjos_pro_monthlybjjos_pro_monthly',
+              productId: 'bjjos',
             }),
           });
 

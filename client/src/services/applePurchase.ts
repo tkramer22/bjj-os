@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 
-const PRODUCT_ID = 'bjjos_pro_monthlybjjos_pro_monthly';
+const PRODUCT_ID = 'bjjos';
 
 declare global {
   interface Window {
