@@ -735,7 +735,7 @@ export default function IOSLoginPage() {
             </button>
 
             <p className="text-xs text-zinc-500 text-center mt-6">
-              BJJ OS Pro: $19.99/month. Auto-renews monthly. Cancel anytime.
+              BJJ OS: $19.99/month. Auto-renews monthly. Cancel anytime.
             </p>
           </form>
         ) : (
@@ -799,7 +799,7 @@ export default function IOSLoginPage() {
             )}
 
             <div className="text-center my-6 p-4 bg-zinc-900 rounded-lg">
-              <p className="text-sm text-zinc-300">BJJ OS Pro Subscription</p>
+              <p className="text-sm text-zinc-300">BJJ OS Subscription</p>
               <p className="text-2xl text-white font-bold">$19.99/month</p>
               <p className="text-xs text-zinc-400 mt-1">Auto-renews monthly. Cancel anytime.</p>
             </div>

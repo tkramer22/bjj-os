@@ -93,7 +93,7 @@ export default function PaymentPage() {
       if (result.success) {
         toast({
           title: "Subscription Active!",
-          description: "Welcome to BJJ OS Pro",
+          description: "Welcome to BJJ OS",
         });
         setLocation("/chat");
       } else if (result.error) {
@@ -173,7 +173,7 @@ export default function PaymentPage() {
       <div className="payment-container">
         {/* Header */}
         <div className="payment-header">
-          <h1 className="payment-headline">{isIOS ? 'Subscribe to BJJ OS Pro' : 'Complete Your Setup'}</h1>
+          <h1 className="payment-headline">{isIOS ? 'Subscribe to BJJ OS' : 'Complete Your Setup'}</h1>
           <p className="payment-subheadline">
             {isIOS 
               ? 'Get unlimited access to Professor OS and 3,000+ technique videos'
@@ -239,7 +239,7 @@ export default function PaymentPage() {
 
         {/* Trial Info - Different messaging for iOS */}
         <div className="trial-info">
-          <div className="trial-info-badge">{isIOS ? 'BJJ OS Pro' : '7-Day Free Trial'}</div>
+          <div className="trial-info-badge">{isIOS ? 'BJJ OS' : '7-Day Free Trial'}</div>
           <p className="trial-info-text">
             {isIOS 
               ? 'Unlimited access to Professor OS and 3,000+ technique videos'

@@ -265,7 +265,7 @@ export default function MobileProfilePage() {
               }}>
                 <span style={{ color: "var(--mobile-text-secondary)", fontSize: "0.875rem" }}>Plan</span>
                 <span style={{ color: "var(--mobile-text-primary)", fontSize: "0.875rem", fontWeight: "500" }}>
-                  {(user as any)?.isLifetime ? 'BJJ OS Lifetime' : (user as any)?.isPro ? 'BJJ OS Pro' : 'Free'}
+                  {(user as any)?.isLifetime ? 'BJJ OS Lifetime' : (user as any)?.isPro ? 'BJJ OS' : 'Free'}
                 </span>
               </div>
               <div style={{

@@ -59,7 +59,7 @@ export default function IOSSubscribePage() {
         
         toast({
           title: "Subscription activated!",
-          description: "Welcome to BJJ OS Pro",
+          description: "Welcome to BJJ OS",
         });
 
         setLocation("/ios-onboarding");
@@ -97,7 +97,7 @@ export default function IOSSubscribePage() {
         
         toast({
           title: "Subscription restored!",
-          description: "Welcome back to BJJ OS Pro",
+          description: "Welcome back to BJJ OS",
         });
 
         setLocation("/ios-chat");
@@ -143,7 +143,7 @@ export default function IOSSubscribePage() {
             <div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] rounded-2xl flex items-center justify-center mb-4">
               <Sparkles className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-white">Unlock BJJ OS Pro</h1>
+            <h1 className="text-2xl font-bold text-white">Unlock BJJ OS</h1>
             <p className="text-gray-400">Your personal AI BJJ coach awaits</p>
           </div>
 
