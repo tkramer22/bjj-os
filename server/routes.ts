@@ -14626,6 +14626,58 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
+  // ============= DEMAND-DRIVEN CURATION API =============
+  
+  // Get demand curation status
+  app.get('/api/admin/demand-curation/status', checkAdminAuth, async (req, res) => {
+    try {
+      const { getDemandCurationStatus } = await import('./demand-driven-curation');
+      const status = getDemandCurationStatus();
+      res.json(status);
+    } catch (error: any) {
+      console.error('[DEMAND-CURATION API] Error fetching status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // Toggle demand curation on/off
+  app.post('/api/admin/demand-curation/toggle', checkAdminAuth, async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      const { setDemandCurationEnabled, isDemandCurationEnabled } = await import('./demand-driven-curation');
+      
+      // If enabled is not provided, toggle current state
+      const newState = enabled !== undefined ? enabled : !isDemandCurationEnabled();
+      const result = await setDemandCurationEnabled(newState);
+      
+      if (result.success) {
+        res.json({ success: true, enabled: newState });
+      } else {
+        res.status(500).json({ error: result.error });
+      }
+    } catch (error: any) {
+      console.error('[DEMAND-CURATION API] Error toggling:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
+  // Run demand curation manually
+  app.post('/api/admin/demand-curation/run', checkAdminAuth, async (req, res) => {
+    try {
+      const { runDemandDrivenCuration } = await import('./demand-driven-curation');
+      
+      // Run async, return immediately
+      runDemandDrivenCuration().catch(err => {
+        console.error('[DEMAND-CURATION API] Background run error:', err);
+      });
+      
+      res.json({ success: true, message: 'Demand-driven curation started in background' });
+    } catch (error: any) {
+      console.error('[DEMAND-CURATION API] Error starting curation:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ============= INSTRUCTOR CREDIBILITY API =============
   
   // Get all instructors with filters

@@ -58,10 +58,24 @@ interface VolumeStats {
   unmetRequests: number;
 }
 
+interface DemandCurationStatus {
+  enabled: boolean;
+  lastRunAt: string | null;
+  lastResult: {
+    success: boolean;
+    techniquesAnalyzed: number;
+    techniquesWithVideos: number;
+    totalVideosAdded: number;
+    stillUnmet: string[];
+  } | null;
+}
+
 export default function MetaInsightsPage() {
   const { toast } = useToast();
   const [curating, setCurating] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [togglingDemand, setTogglingDemand] = useState(false);
+  const [runningDemand, setRunningDemand] = useState(false);
 
   const { data: stats, isLoading: statsLoading } = useQuery<MetaStats>({
     queryKey: ['/api/admin/meta/stats'],
@@ -92,6 +106,60 @@ export default function MetaInsightsPage() {
     queryKey: ['/api/admin/meta/unmet-requests'],
     queryFn: () => adminApiRequest('/api/admin/meta/unmet-requests'),
   });
+
+  const { data: demandStatus, isLoading: demandStatusLoading, refetch: refetchDemandStatus } = useQuery<DemandCurationStatus>({
+    queryKey: ['/api/admin/demand-curation/status'],
+    queryFn: () => adminApiRequest('/api/admin/demand-curation/status'),
+  });
+
+  const handleToggleDemandCuration = async () => {
+    setTogglingDemand(true);
+    try {
+      const result = await adminApiRequest('/api/admin/demand-curation/toggle', 'POST', {
+        enabled: !demandStatus?.enabled
+      });
+      
+      if (result.success) {
+        toast({
+          title: result.enabled ? 'Demand Curation Enabled' : 'Demand Curation Disabled',
+          description: result.enabled 
+            ? 'Monday 3:15 AM runs will now use demand-driven curation'
+            : 'Monday runs will use regular instructor-based curation',
+        });
+        refetchDemandStatus();
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Toggle Failed',
+        description: error.message || 'Failed to toggle demand curation',
+        variant: 'destructive',
+      });
+    } finally {
+      setTogglingDemand(false);
+    }
+  };
+
+  const handleRunDemandCuration = async () => {
+    setRunningDemand(true);
+    try {
+      const result = await adminApiRequest('/api/admin/demand-curation/run', 'POST', {});
+      
+      if (result.success) {
+        toast({
+          title: 'Demand Curation Started',
+          description: 'Check email for results when complete',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Run Failed',
+        description: error.message || 'Failed to start demand curation',
+        variant: 'destructive',
+      });
+    } finally {
+      setRunningDemand(false);
+    }
+  };
 
   const handleCurate = async (technique: string) => {
     setCurating(technique);
@@ -277,6 +345,58 @@ export default function MetaInsightsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Demand-Driven Curation Controls */}
+      <Card className="border-primary/30">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-4 pb-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <span className="text-xl">🎯</span>
+              Weekly Demand-Driven Curation
+            </CardTitle>
+            <CardDescription>
+              Runs every Monday at 3:15 AM EST to fill content gaps based on user requests
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={demandStatus?.enabled ? 'default' : 'outline'}
+              size="sm"
+              onClick={handleToggleDemandCuration}
+              disabled={togglingDemand || demandStatusLoading}
+              data-testid="button-toggle-demand-curation"
+            >
+              {togglingDemand ? 'Updating...' : demandStatus?.enabled ? 'Enabled' : 'Disabled'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRunDemandCuration}
+              disabled={runningDemand || !demandStatus?.enabled}
+              data-testid="button-run-demand-curation"
+            >
+              {runningDemand ? 'Running...' : 'Run Now'}
+            </Button>
+          </div>
+        </CardHeader>
+        {demandStatus?.lastResult && (
+          <CardContent className="pt-0">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span>Last run: {demandStatus.lastRunAt ? formatDistanceToNow(new Date(demandStatus.lastRunAt), { addSuffix: true }) : 'Never'}</span>
+              <span>|</span>
+              <span>Techniques: {demandStatus.lastResult.techniquesAnalyzed}</span>
+              <span>|</span>
+              <span className="text-green-500">Videos added: {demandStatus.lastResult.totalVideosAdded}</span>
+              {demandStatus.lastResult.stillUnmet.length > 0 && (
+                <>
+                  <span>|</span>
+                  <span className="text-amber-500">Still unmet: {demandStatus.lastResult.stillUnmet.length}</span>
+                </>
+              )}
+            </div>
+          </CardContent>
+        )}
+      </Card>
 
       {/* Main Content */}
       <Tabs defaultValue="trending" className="space-y-4">

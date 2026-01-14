@@ -1,8 +1,10 @@
 import cron from 'node-cron';
+import { formatInTimeZone } from 'date-fns-tz';
 import { runAlertMonitor } from './alert-monitor-service';
 import { sendHourlyDigest } from './hourly-digest-service';
 import { processBatch as processVideoKnowledgeBatch } from './video-knowledge-service';
 import { runPermanentAutoCuration, initializeAutoCurationState } from './permanent-auto-curation';
+import { runDemandDrivenCuration, initializeDemandCurationState, isDemandCurationEnabled } from './demand-driven-curation';
 
 /**
  * SCHEDULED TASKS COORDINATOR
@@ -24,6 +26,7 @@ export async function initScheduledTasks() {
   
   // Initialize auto-curation state from database BEFORE starting schedulers
   await initializeAutoCurationState();
+  await initializeDemandCurationState();
   
   // ═══════════════════════════════════════════════════════════════
   // ALERT MONITOR - Every 2 minutes
@@ -102,12 +105,29 @@ export async function initScheduledTasks() {
   const cronOptions = { timezone: 'America/New_York' };
   
   // 3:15 AM EST/EDT - Primary run (right after YouTube quota reset at midnight PT)
+  // MONDAY: Demand-driven curation (user requests)
+  // TUESDAY-SUNDAY: Regular instructor-based curation
   cron.schedule('15 3 * * *', async () => {
-    console.log('🤖 [AUTO-CURATION] Starting 3:15 AM EST/EDT run...');
-    try {
-      await runPermanentAutoCuration();
-    } catch (error) {
-      console.error('❌ [AUTO-CURATION] 3:15 AM run failed:', error);
+    const now = new Date();
+    const dayOfWeek = formatInTimeZone(now, 'America/New_York', 'EEEE');
+    
+    if (dayOfWeek === 'Monday' && isDemandCurationEnabled()) {
+      console.log('🎯 [DEMAND-CURATION] Starting Monday 3:15 AM demand-driven curation...');
+      try {
+        await runDemandDrivenCuration();
+      } catch (error) {
+        console.error('❌ [DEMAND-CURATION] Monday 3:15 AM run failed:', error);
+        // Fall back to regular curation if demand curation fails
+        console.log('🔄 [AUTO-CURATION] Falling back to regular instructor-based curation...');
+        await runPermanentAutoCuration();
+      }
+    } else {
+      console.log('🤖 [AUTO-CURATION] Starting 3:15 AM EST/EDT run...');
+      try {
+        await runPermanentAutoCuration();
+      } catch (error) {
+        console.error('❌ [AUTO-CURATION] 3:15 AM run failed:', error);
+      }
     }
   }, cronOptions);
   
@@ -142,6 +162,8 @@ export async function initScheduledTasks() {
   }, cronOptions);
   
   console.log('  ✅ Permanent Auto-Curation: 4x daily (3:15am, 9am, 3pm, 9pm America/New_York)');
+  console.log('     📌 Monday 3:15 AM: Demand-driven curation (user requests)');
+  console.log('     📌 Tue-Sun 3:15 AM: Regular instructor-based curation');
   
   // ═══════════════════════════════════════════════════════════════
   // INITIAL RUN - Run alert monitor on startup
