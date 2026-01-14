@@ -5,7 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TrendingUp, TrendingDown, AlertCircle, Activity, PlayCircle, Search } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { TrendingUp, TrendingDown, AlertCircle, Activity, PlayCircle, Search, ChevronRight, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { adminApiRequest } from '@/lib/adminApi';
 import { useToast } from '@/hooks/use-toast';
@@ -70,12 +72,25 @@ interface DemandCurationStatus {
   } | null;
 }
 
+interface TrackedTechnique {
+  techniqueName: string;
+  metaStatus: string;
+  overallMetaScore: string;
+  videosInLibrary: number;
+  needsCuration: boolean;
+}
+
 export default function MetaInsightsPage() {
   const { toast } = useToast();
   const [curating, setCurating] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [togglingDemand, setTogglingDemand] = useState(false);
   const [runningDemand, setRunningDemand] = useState(false);
+  
+  // Modal states for clickable stat cards
+  const [showTechniquesModal, setShowTechniquesModal] = useState(false);
+  const [showRequestsModal, setShowRequestsModal] = useState(false);
+  const [showNeedsCurationModal, setShowNeedsCurationModal] = useState(false);
 
   const { data: stats, isLoading: statsLoading } = useQuery<MetaStats>({
     queryKey: ['/api/admin/meta/stats'],
@@ -105,6 +120,13 @@ export default function MetaInsightsPage() {
   const { data: unmetData, isLoading: unmetLoading } = useQuery<{ requests: UserRequest[] }>({
     queryKey: ['/api/admin/meta/unmet-requests'],
     queryFn: () => adminApiRequest('/api/admin/meta/unmet-requests'),
+  });
+
+  // Fetch all tracked techniques for the modal
+  const { data: allTechniquesData, isLoading: allTechniquesLoading } = useQuery<{ techniques: TrackedTechnique[] }>({
+    queryKey: ['/api/admin/meta/all-techniques'],
+    queryFn: () => adminApiRequest('/api/admin/meta/all-techniques'),
+    enabled: showTechniquesModal || showNeedsCurationModal,
   });
 
   const { data: demandStatus, isLoading: demandStatusLoading, refetch: refetchDemandStatus } = useQuery<DemandCurationStatus>({
@@ -243,46 +265,70 @@ export default function MetaInsightsPage() {
         </Button>
       </div>
 
-      {/* Stats Overview */}
+      {/* Stats Overview - Clickable Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <Card 
+          className="cursor-pointer hover-elevate transition-colors"
+          onClick={() => setShowTechniquesModal(true)}
+          data-testid="card-techniques-tracked"
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-2 pb-2">
             <CardTitle className="text-sm font-medium">Techniques Tracked</CardTitle>
-            <Search className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center gap-1">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-techniques-tracked">
               {statsLoading ? '...' : stats?.totalTechniquesTracked || 0}
             </div>
+            <p className="text-xs text-muted-foreground">Click to view all</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <Card 
+          className="cursor-pointer hover-elevate transition-colors"
+          onClick={() => setShowRequestsModal(true)}
+          data-testid="card-user-requests"
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-2 pb-2">
             <CardTitle className="text-sm font-medium">User Requests (7d)</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center gap-1">
+              <Activity className="h-4 w-4 text-muted-foreground" />
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-user-requests">
               {statsLoading ? '...' : stats?.userRequestsLast7Days || 0}
             </div>
+            <p className="text-xs text-muted-foreground">Click to view details</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <Card 
+          className="cursor-pointer hover-elevate transition-colors"
+          onClick={() => setShowNeedsCurationModal(true)}
+          data-testid="card-needs-curation"
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-2 pb-2">
             <CardTitle className="text-sm font-medium">Need Curation</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center gap-1">
+              <AlertCircle className="h-4 w-4 text-muted-foreground" />
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-needs-curation">
               {statsLoading ? '...' : stats?.techniquesNeedingCuration || 0}
             </div>
+            <p className="text-xs text-muted-foreground">Click to view techniques</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-2 pb-2">
             <CardTitle className="text-sm font-medium">Videos in Library</CardTitle>
             <PlayCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -419,7 +465,13 @@ export default function MetaInsightsPage() {
               {trendingLoading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading...</div>
               ) : (trendingData?.techniques.length || 0) === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No trending techniques yet</div>
+                <div className="text-center py-8 space-y-2">
+                  <p className="text-muted-foreground">No trending techniques yet</p>
+                  <p className="text-xs text-muted-foreground">
+                    Techniques become "trending" when they have HOT or RISING status based on user demand scores.
+                    Click "Run Analysis" to update technique statuses based on recent user requests.
+                  </p>
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -634,6 +686,170 @@ export default function MetaInsightsPage() {
         </TabsContent>
       </Tabs>
       </div>
+
+      {/* Modal: All Tracked Techniques */}
+      <Dialog open={showTechniquesModal} onOpenChange={setShowTechniquesModal}>
+        <DialogContent className="max-w-3xl max-h-[80vh]" data-testid="modal-techniques-tracked">
+          <DialogHeader>
+            <DialogTitle data-testid="text-modal-techniques-title">All Tracked Techniques ({stats?.totalTechniquesTracked || 0})</DialogTitle>
+            <DialogDescription>
+              Techniques being monitored for user demand and curation needs
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh]">
+            {allTechniquesLoading ? (
+              <div className="text-center py-8 text-muted-foreground" data-testid="text-modal-loading">Loading...</div>
+            ) : (
+              <Table data-testid="table-tracked-techniques">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Technique</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Score</TableHead>
+                    <TableHead>Videos</TableHead>
+                    <TableHead>Needs Curation</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allTechniquesData?.techniques.map((tech) => (
+                    <TableRow key={tech.techniqueName} data-testid={`row-technique-${tech.techniqueName}`}>
+                      <TableCell className="font-medium capitalize" data-testid={`cell-technique-name-${tech.techniqueName}`}>{tech.techniqueName}</TableCell>
+                      <TableCell data-testid={`cell-technique-status-${tech.techniqueName}`}>{getStatusBadge(tech.metaStatus)}</TableCell>
+                      <TableCell data-testid={`cell-technique-score-${tech.techniqueName}`}>{Number(tech.overallMetaScore).toFixed(1)}</TableCell>
+                      <TableCell data-testid={`cell-technique-videos-${tech.techniqueName}`}>{tech.videosInLibrary}</TableCell>
+                      <TableCell data-testid={`cell-technique-curation-${tech.techniqueName}`}>
+                        {tech.needsCuration ? (
+                          <Badge variant="destructive">Yes</Badge>
+                        ) : (
+                          <Badge variant="outline">No</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: User Requests (7 days) */}
+      <Dialog open={showRequestsModal} onOpenChange={setShowRequestsModal}>
+        <DialogContent className="max-w-4xl max-h-[80vh]" data-testid="modal-user-requests">
+          <DialogHeader>
+            <DialogTitle data-testid="text-modal-requests-title">User Requests - Last 7 Days ({stats?.userRequestsLast7Days || 0})</DialogTitle>
+            <DialogDescription>
+              All technique requests from user conversations
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh]">
+            {requestsLoading ? (
+              <div className="text-center py-8 text-muted-foreground" data-testid="text-modal-requests-loading">Loading...</div>
+            ) : (requestsData?.requests.length || 0) === 0 ? (
+              <div className="text-center py-8 text-muted-foreground" data-testid="text-modal-requests-empty">No requests in the last 7 days</div>
+            ) : (
+              <Table data-testid="table-user-requests">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Technique</TableHead>
+                    <TableHead>Belt</TableHead>
+                    <TableHead>Gi/NoGi</TableHead>
+                    <TableHead>Had Video?</TableHead>
+                    <TableHead>Videos Returned</TableHead>
+                    <TableHead>When</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {requestsData?.requests.map((request) => (
+                    <TableRow key={request.id} data-testid={`row-request-modal-${request.id}`}>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-sm" data-testid={`text-request-user-${request.id}`}>{request.userName || 'Unknown'}</span>
+                          <span className="text-xs text-muted-foreground truncate max-w-[150px]">
+                            {request.userEmail || request.userId}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium capitalize" data-testid={`text-request-technique-${request.id}`}>{request.techniqueMentioned}</TableCell>
+                      <TableCell>{request.beltLevel || '-'}</TableCell>
+                      <TableCell>{request.giPreference || '-'}</TableCell>
+                      <TableCell data-testid={`badge-request-video-result-${request.id}`}>
+                        {request.hadVideoResult === null ? (
+                          <Badge variant="outline">Unknown</Badge>
+                        ) : request.hadVideoResult ? (
+                          <Badge variant="default">Yes</Badge>
+                        ) : (
+                          <Badge variant="destructive">No</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell data-testid={`text-request-video-count-${request.id}`}>{request.videoCountReturned ?? '-'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDistanceToNow(new Date(request.requestedAt), { addSuffix: true })}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Techniques Needing Curation */}
+      <Dialog open={showNeedsCurationModal} onOpenChange={setShowNeedsCurationModal}>
+        <DialogContent className="max-w-3xl max-h-[80vh]" data-testid="modal-needs-curation">
+          <DialogHeader>
+            <DialogTitle data-testid="text-modal-curation-title">Techniques Needing Curation ({stats?.techniquesNeedingCuration || 0})</DialogTitle>
+            <DialogDescription>
+              High-demand techniques with insufficient video coverage
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh]">
+            {allTechniquesLoading ? (
+              <div className="text-center py-8 text-muted-foreground" data-testid="text-modal-curation-loading">Loading...</div>
+            ) : (
+              <Table data-testid="table-needs-curation">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Technique</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Score</TableHead>
+                    <TableHead>Current Videos</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allTechniquesData?.techniques
+                    .filter((tech) => tech.needsCuration)
+                    .map((tech) => (
+                      <TableRow key={tech.techniqueName} data-testid={`row-curation-${tech.techniqueName}`}>
+                        <TableCell className="font-medium capitalize" data-testid={`cell-curation-name-${tech.techniqueName}`}>{tech.techniqueName}</TableCell>
+                        <TableCell data-testid={`cell-curation-status-${tech.techniqueName}`}>{getStatusBadge(tech.metaStatus)}</TableCell>
+                        <TableCell data-testid={`cell-curation-score-${tech.techniqueName}`}>{Number(tech.overallMetaScore).toFixed(1)}</TableCell>
+                        <TableCell data-testid={`cell-curation-videos-${tech.techniqueName}`}>{tech.videosInLibrary}</TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setShowNeedsCurationModal(false);
+                              handleCurate(tech.techniqueName);
+                            }}
+                            disabled={curating === tech.techniqueName}
+                            data-testid={`button-curate-modal-${tech.techniqueName}`}
+                          >
+                            {curating === tech.techniqueName ? 'Curating...' : 'Curate'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }

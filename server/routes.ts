@@ -14511,6 +14511,29 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
+  // Get all tracked techniques (for clickable stat card modal)
+  app.get('/api/admin/meta/all-techniques', checkAdminAuth, async (req, res) => {
+    try {
+      const { techniqueMetaStatus } = await import('@shared/schema');
+      const { desc } = await import('drizzle-orm');
+      
+      const techniques = await db.select({
+        techniqueName: techniqueMetaStatus.techniqueName,
+        metaStatus: techniqueMetaStatus.metaStatus,
+        overallMetaScore: techniqueMetaStatus.overallMetaScore,
+        videosInLibrary: techniqueMetaStatus.videosInLibrary,
+        needsCuration: techniqueMetaStatus.needsCuration,
+      })
+        .from(techniqueMetaStatus)
+        .orderBy(desc(techniqueMetaStatus.overallMetaScore));
+      
+      res.json({ techniques });
+    } catch (error: any) {
+      console.error('[META API] Error fetching all techniques:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Get volume stats (today, this week, this month, unmet requests)
   app.get('/api/admin/meta/volume-stats', checkAdminAuth, async (req, res) => {
     try {
