@@ -52,7 +52,7 @@ export default function IOSSubscribePage() {
     try {
       const { purchaseProduct, restorePurchases } = await import('@/services/applePurchase');
       
-      const result = await purchaseProduct('bjjos');
+      const result = await purchaseProduct('bjjos_monthly');
 
       if (result.success) {
         triggerHaptic('success');
