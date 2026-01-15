@@ -2802,8 +2802,12 @@ export function registerRoutes(app: Express): Server {
       }
 
     } catch (error: any) {
-      console.error('📱 [iOS PREPARE] Error:', error.message || error);
-      res.status(500).json({ error: 'Preparation failed. Please try again.' });
+      console.error('📱 [iOS PREPARE] Error:', error);
+      console.error('📱 [iOS PREPARE] Stack:', error.stack);
+      res.status(500).json({ 
+        error: 'Preparation failed. Please try again.',
+        debug: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   });
 
@@ -2928,8 +2932,28 @@ export function registerRoutes(app: Express): Server {
       });
 
     } catch (error: any) {
-      console.error('📱 [iOS COMPLETE] Error:', error.message || error);
-      res.status(500).json({ error: 'Account creation failed. Please contact support.' });
+      console.error('🚨 [iOS COMPLETE] CRITICAL ERROR - Account creation failed!');
+      console.error('🚨 [iOS COMPLETE] Error:', error);
+      console.error('🚨 [iOS COMPLETE] Stack:', error.stack);
+      console.error('🚨 [iOS COMPLETE] Request body:', JSON.stringify(req.body, null, 2));
+      
+      // Determine specific error type for better user feedback
+      let userError = 'Account creation failed. Please try again.';
+      
+      if (error.message?.includes('duplicate') || error.message?.includes('unique')) {
+        userError = 'Account already exists. Please sign in instead.';
+      } else if (error.message?.includes('connection') || error.message?.includes('timeout')) {
+        userError = 'Connection error. Please try again.';
+      } else if (error.message?.includes('column') || error.message?.includes('schema')) {
+        userError = 'Server configuration error. Please try again later.';
+        console.error('🚨 [iOS COMPLETE] DATABASE SCHEMA ERROR - Check column definitions!');
+      }
+      
+      res.status(500).json({ 
+        error: userError,
+        code: 'ACCOUNT_CREATION_FAILED',
+        debug: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   });
 

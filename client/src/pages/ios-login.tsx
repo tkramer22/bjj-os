@@ -146,7 +146,10 @@ export default function IOSLoginPage() {
 
           if (!completeResponse.ok) {
             setIsAppleLoading(false);
-            setError(completeData.error || "Account creation failed. Please contact support.");
+            console.error('[APPLE SIGN IN] Complete failed:', completeData);
+            // Show specific error from server, or a user-friendly message
+            const errorMsg = completeData.error || "Account creation failed. Please try again.";
+            setError(errorMsg);
             triggerHaptic('error');
             return;
           }
@@ -483,7 +486,10 @@ export default function IOSLoginPage() {
 
           if (!completeResponse.ok) {
             setIsLoading(false);
-            setError(completeData.error || "Account creation failed. Please contact support.");
+            console.error('[REGISTER] Complete failed:', completeData);
+            // Show specific error from server, or a user-friendly message
+            const errorMsg = completeData.error || "Account creation failed. Please try again.";
+            setError(errorMsg);
             triggerHaptic('error');
             return;
           }
