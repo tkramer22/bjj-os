@@ -610,7 +610,36 @@ export function registerRoutes(app: Express): Server {
   });
   
   // ============================================================================
-  // DATABASE HEALTH CHECK ENDPOINTS
+  // HEALTH CHECK ENDPOINTS (for external uptime monitoring)
+  // ============================================================================
+  
+  app.get('/api/health', async (req, res) => {
+    try {
+      const result = await db.execute(sql`SELECT 1 as test`);
+      const rows = Array.isArray(result) ? result : (result.rows || []);
+      const dbHealthy = rows.length > 0;
+      
+      res.json({
+        status: 'ok',
+        timestamp: Date.now(),
+        timestampISO: new Date().toISOString(),
+        database: dbHealthy ? 'connected' : 'disconnected',
+        uptime: process.uptime(),
+        version: '6.0.13'
+      });
+    } catch (error: any) {
+      res.status(503).json({
+        status: 'error',
+        timestamp: Date.now(),
+        timestampISO: new Date().toISOString(),
+        database: 'disconnected',
+        error: error.message
+      });
+    }
+  });
+  
+  // ============================================================================
+  // DATABASE HEALTH CHECK ENDPOINTS (detailed)
   // ============================================================================
   
   app.get('/api/health/database', async (req, res) => {

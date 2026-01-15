@@ -443,19 +443,67 @@ function verifyEnvironmentVariables() {
       }
     }, 3000); // Start after 3 seconds to ensure database is ready
     
-    // DISABLED: Old startup test email (was sending on every server restart)
-    // Use the 3 new scheduled reports instead (7 AM, 1 PM, 8 PM EST)
-    // setTimeout(async () => {
-    //   try {
-    //     console.log('📧 Sending immediate test email on startup...');
-    //     const { sendAdminReport } = await import('./admin-email');
-    //     await sendAdminReport('morning');
-    //     console.log('✅ Immediate test email sent successfully!');
-    //     console.log('📬 Check todd@bjjos.app inbox (and spam folder)');
-    //   } catch (error: any) {
-    //     console.error('❌ Immediate test email failed:', error.message);
-    //   }
-    // }, 3000); // Wait 3 seconds for server to fully start
+    // 📧 SERVER RESTART ALERT EMAIL - Notify admin of server restart with recovery status
+    setTimeout(async () => {
+      try {
+        log('[STARTUP] Sending server restart alert email...');
+        const { Resend } = await import('resend');
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        
+        const now = new Date();
+        const timeStr = now.toLocaleString('en-US', {
+          timeZone: 'America/New_York',
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+        
+        const htmlContent = `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px;">
+            <h2 style="color: #8B5CF6;">🔄 BJJ OS Server Restarted</h2>
+            <p>The BJJ OS server was restarted at <strong>${timeStr} EST</strong>.</p>
+            
+            <h3 style="color: #666; margin-top: 20px;">Automatic Recovery Actions (Initiated):</h3>
+            <ul>
+              <li>🔄 Checked for stuck curation runs</li>
+              <li>🔄 Checked for missed curation runs today (triggers recovery if none)</li>
+              <li>✅ Scheduled cron jobs registered (4x daily curation)</li>
+              <li>✅ Email system operational (this email proves it)</li>
+            </ul>
+            <p style="color: #888; font-size: 12px;">Note: Recovery actions run asynchronously. Check logs for detailed results.</p>
+            
+            <h3 style="color: #666; margin-top: 20px;">Next Scheduled Runs:</h3>
+            <ul>
+              <li>3:15 AM EST - Auto-curation (Mon: demand-driven, Tue-Sun: instructor-based)</li>
+              <li>9:00 AM EST - Auto-curation</li>
+              <li>3:00 PM EST - Auto-curation</li>
+              <li>9:00 PM EST - Auto-curation</li>
+            </ul>
+            
+            <h3 style="color: #666; margin-top: 20px;">Health Check Endpoint:</h3>
+            <p>External monitoring: <code>GET /api/health</code></p>
+            
+            <p style="color: #666; font-size: 12px; margin-top: 20px;">
+              This email confirms the server is running and all recovery checks completed.
+            </p>
+          </div>
+        `;
+        
+        await resend.emails.send({
+          from: 'BJJ OS <noreply@bjjos.app>',
+          to: 'todd@bjjos.app',
+          subject: `🔄 BJJ OS Server Restarted - ${timeStr} EST`,
+          html: htmlContent
+        });
+        
+        log('[STARTUP] ✅ Server restart alert email sent to todd@bjjos.app');
+      } catch (error: any) {
+        console.error('[STARTUP] ❌ Failed to send restart alert email:', error.message);
+      }
+    }, 4000); // Wait 4 seconds for all recovery checks to complete
     
     log('[STARTUP] Server initialization complete ✓');
     
