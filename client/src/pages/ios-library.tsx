@@ -49,8 +49,22 @@ export default function IOSLibraryPage() {
     queryKey: ["/api/auth/me"],
   });
 
+  // Fetch techniques list from API (includes "Recently Added" as first option)
+  const { data: techniquesData } = useQuery<{ techniques: { name: string; count: number }[] }>({
+    queryKey: ["/api/ai/techniques"],
+  });
+
+  // Fetch videos - when "Recently Added" is selected, pass it to API for server-side filtering
   const { data: videosData, isLoading } = useQuery<{ count: number; videos: VideoApiResponse[] }>({
-    queryKey: ["/api/ai/videos"],
+    queryKey: ["/api/ai/videos", selectedTechnique === "Recently Added" ? "Recently Added" : null],
+    queryFn: async () => {
+      const url = selectedTechnique === "Recently Added" 
+        ? "/api/ai/videos?technique=Recently Added"
+        : "/api/ai/videos";
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch videos');
+      return res.json();
+    },
   });
 
   // Pull-to-refresh handler
@@ -58,6 +72,7 @@ export default function IOSLibraryPage() {
     setIsRefreshing(true);
     triggerHaptic('medium');
     await queryClient.invalidateQueries({ queryKey: ["/api/ai/videos"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/ai/techniques"] });
     await queryClient.invalidateQueries({ queryKey: [`/api/ai/saved-videos/${user?.id}`] });
     setTimeout(() => setIsRefreshing(false), 500);
   }, [queryClient, user?.id]);
@@ -134,13 +149,26 @@ export default function IOSLibraryPage() {
   }, [videos, selectedProfessor]);
 
   // Videos filtered by current technique selection (for professor dropdown)
+  // "Recently Added" videos are already filtered by API, just use them directly
   const videosFilteredByTechnique = useMemo(() => {
     if (selectedTechnique === "All") return videos;
+    if (selectedTechnique === "Recently Added") return videos; // API already filtered
     return videos.filter(v => (v.technique || 'Other') === selectedTechnique);
   }, [videos, selectedTechnique]);
 
-  // Build techniques dropdown - shows only techniques available for selected professor
+  // Build techniques dropdown - uses API data with "Recently Added" first
+  // When a professor is selected, we still compute from filtered videos for dynamic counts
   const techniquesWithCounts = useMemo(() => {
+    // If we have API techniques and no professor filter, use API data (includes "Recently Added" first)
+    if (techniquesData?.techniques && selectedProfessor === "All") {
+      const allCount = videos.length;
+      return [
+        { name: 'All', count: allCount },
+        ...techniquesData.techniques // Already has "Recently Added" first from API
+      ];
+    }
+    
+    // Fallback to computing from filtered videos when professor is selected
     const sourceVideos = videosFilteredByProfessor;
     const counts: Record<string, number> = {};
     sourceVideos.forEach(v => {
@@ -148,8 +176,14 @@ export default function IOSLibraryPage() {
       counts[tech] = (counts[tech] || 0) + 1;
     });
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    return [{ name: 'All', count: sourceVideos.length }, ...sorted.map(([name, count]) => ({ name, count }))];
-  }, [videosFilteredByProfessor]);
+    
+    // Always add "Recently Added" as first option after "All"
+    return [
+      { name: 'All', count: sourceVideos.length },
+      { name: 'Recently Added', count: 100 },
+      ...sorted.map(([name, count]) => ({ name, count }))
+    ];
+  }, [videosFilteredByProfessor, techniquesData, selectedProfessor, videos.length]);
 
   // Build professors dropdown - shows only professors who teach selected technique
   const professorsWithCounts = useMemo(() => {
@@ -170,7 +204,9 @@ export default function IOSLibraryPage() {
       video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       video.instructor.toLowerCase().includes(searchQuery.toLowerCase());
     
+    // "Recently Added" is handled server-side, so skip client-side technique filtering
     const matchesTechnique = selectedTechnique === "All" ||
+      selectedTechnique === "Recently Added" || // API already filtered these
       (video.technique || 'Other') === selectedTechnique;
     
     const matchesProfessor = selectedProfessor === "All" ||

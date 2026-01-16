@@ -8293,12 +8293,83 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
   });
 
   // Get all analyzed videos (user-facing library)
+  // Supports optional technique filter, including special "Recently Added" for 100 most recent
   app.get('/api/ai/videos', async (req, res) => {
     try {
+      const { technique } = req.query;
+      
       // Get TOTAL count first (for accurate dashboard display)
       const [totalCountResult] = await db.select({ count: sql<number>`COUNT(*)` })
         .from(aiVideoKnowledge);
       const totalCount = Number(totalCountResult?.count || 0);
+      
+      // Special handling for "Recently Added" - return 100 most recent videos
+      if (technique === 'Recently Added') {
+        const recentVideos = await db.select({
+          id: aiVideoKnowledge.id,
+          youtubeId: aiVideoKnowledge.youtubeId,
+          videoUrl: aiVideoKnowledge.videoUrl,
+          thumbnailUrl: aiVideoKnowledge.thumbnailUrl,
+          title: aiVideoKnowledge.title,
+          techniqueName: aiVideoKnowledge.techniqueName,
+          instructorName: aiVideoKnowledge.instructorName,
+          techniqueType: aiVideoKnowledge.techniqueType,
+          positionCategory: aiVideoKnowledge.positionCategory,
+          beltLevel: aiVideoKnowledge.beltLevel,
+          giOrNogi: aiVideoKnowledge.giOrNogi,
+          qualityScore: aiVideoKnowledge.qualityScore,
+          viewCount: aiVideoKnowledge.viewCount,
+          duration: aiVideoKnowledge.duration,
+          createdAt: aiVideoKnowledge.createdAt
+        })
+        .from(aiVideoKnowledge)
+        .where(
+          and(
+            isNotNull(aiVideoKnowledge.thumbnailUrl),
+            sql`${aiVideoKnowledge.thumbnailUrl} != ''`
+          )
+        )
+        .orderBy(desc(aiVideoKnowledge.createdAt))
+        .limit(100);
+        
+        const transformedVideos = recentVideos.map(video => ({
+          id: video.id,
+          videoId: video.youtubeId || extractYouTubeId(video.videoUrl),
+          thumbnailUrl: video.thumbnailUrl,
+          title: video.title || video.techniqueName,
+          techniqueName: video.techniqueName,
+          instructorName: video.instructorName || 'Unknown Instructor',
+          techniqueType: video.techniqueType || 'Technique',
+          positionCategory: video.positionCategory || null,
+          beltLevel: Array.isArray(video.beltLevel) && video.beltLevel.length > 0 
+            ? video.beltLevel[0] 
+            : 'all',
+          giOrNogi: video.giOrNogi || 'both',
+          qualityScore: video.qualityScore ? parseFloat(video.qualityScore.toString()) : 0,
+          viewCount: Number(video.viewCount ?? 0),
+          duration: formatDuration(video.duration),
+          createdAt: video.createdAt,
+          isRecentlyAdded: true, // Mark as recently added
+        }));
+        
+        return res.json({
+          count: transformedVideos.length,
+          totalCount: totalCount,
+          videos: transformedVideos,
+          filter: 'Recently Added'
+        });
+      }
+      
+      // Build query conditions for normal technique filter
+      const conditions = [
+        isNotNull(aiVideoKnowledge.thumbnailUrl),
+        sql`${aiVideoKnowledge.thumbnailUrl} != ''`
+      ];
+      
+      // Add technique filter if specified (and not "All")
+      if (technique && technique !== 'All' && technique !== 'Recently Added') {
+        conditions.push(eq(aiVideoKnowledge.techniqueType, technique as string));
+      }
       
       // Then get browsable videos (with thumbnails for display)
       const videos = await db.select({
@@ -8319,12 +8390,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         createdAt: aiVideoKnowledge.createdAt
       })
       .from(aiVideoKnowledge)
-      .where(
-        and(
-          isNotNull(aiVideoKnowledge.thumbnailUrl),
-          sql`${aiVideoKnowledge.thumbnailUrl} != ''`
-        )
-      )
+      .where(and(...conditions))
       .orderBy(desc(aiVideoKnowledge.qualityScore), desc(aiVideoKnowledge.createdAt));
       
       // Transform data for frontend compatibility
@@ -8562,6 +8628,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
   });
 
   // Get unique techniques for dropdown filter - WITH COUNTS
+  // "Recently Added" is always first, showing the 100 most recent videos
   app.get('/api/ai/techniques', async (req, res) => {
     try {
       // Get technique_type (grouped categories like "sweep", "pass", "submission") with counts
@@ -8587,8 +8654,14 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       // Calculate total
       const totalCount = techniques.reduce((sum: number, t: any) => sum + t.count, 0);
 
+      // Add "Recently Added" as the FIRST technique option (100 most recent videos)
+      const techniquesWithRecentlyAdded = [
+        { name: 'Recently Added', count: 100 },
+        ...techniques
+      ];
+
       res.json({ 
-        techniques,
+        techniques: techniquesWithRecentlyAdded,
         totalCount
       });
     } catch (error: any) {
