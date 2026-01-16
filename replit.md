@@ -39,6 +39,20 @@ The application uses a React TypeScript frontend and an Express.js backend with 
 ### System Design Choices
 The architecture emphasizes full automation for user management, scheduled content delivery, and interactive onboarding. It uses a database-driven personalization approach, a 6-stage multi-stage analysis pipeline for content quality, and an adaptive learning system. The application employs a secure referral architecture and a multi-interface architecture with a unified Vite/React app serving public, admin, and mobile PWA experiences with route-based separation. Database connection pooling is managed via Neon.
 
+### Server Stability (January 2026)
+The server includes multiple stability safeguards to prevent crashes and resource issues:
+- **Graceful Shutdown**: SIGTERM/SIGINT/SIGHUP handlers properly close the HTTP server and release port 5000 on exit
+- **Memory Monitoring**: Logs heap usage every 5 minutes, warning at 70%, critical email alerts at 85%
+- **Staggered Overnight Schedule**: Tasks are distributed to avoid resource spikes:
+  - 1:00 AM EST: Data Aggregation
+  - 3:05 AM EST: YouTube Quota Reset
+  - 3:15 AM EST: Primary Auto-Curation (isolated window, demand-driven on Mondays)
+  - 10:00 AM EST: Meta Analysis
+  - 11:00 AM EST: Population Intelligence
+  - 12:00 PM EST: User Profile Building
+  - 2:00 PM EST: Combat Sports Scraping + Emergency Curation
+- **Reduced Processing Frequency**: Video Knowledge Processing runs every 2 minutes (down from 30 seconds) to reduce memory churn
+
 ## External Dependencies
 - **PostgreSQL**: Primary database (Neon-backed).
 - **Claude AI (Anthropic)**: Powers Professor OS chat and intelligent BJJ technique curation (Sonnet 4.5).
