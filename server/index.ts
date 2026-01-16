@@ -130,12 +130,43 @@ export function forceGarbageCollection(taskName?: string): boolean {
 // ═══════════════════════════════════════════════════════════════
 // MEMORY MONITORING - Track heap usage for stability analysis
 // ═══════════════════════════════════════════════════════════════
+import v8 from 'v8';
+
 const MEMORY_WARNING_THRESHOLD = 0.70; // 70% of heap
 const MEMORY_CRITICAL_THRESHOLD = 0.85; // 85% of heap
 let lastMemoryAlert: Date | null = null;
 
 function formatBytes(bytes: number): string {
   return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function formatGB(bytes: number): string {
+  return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+}
+
+// Log V8 heap configuration on startup
+function logHeapConfiguration() {
+  const heapStats = v8.getHeapStatistics();
+  const nodeOptions = process.env.NODE_OPTIONS || '(not set)';
+  
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('🧠 V8 HEAP CONFIGURATION');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log(`  NODE_OPTIONS: ${nodeOptions}`);
+  console.log(`  Heap Size Limit: ${formatGB(heapStats.heap_size_limit)} (${formatBytes(heapStats.heap_size_limit)})`);
+  console.log(`  Total Available Size: ${formatGB(heapStats.total_available_size)}`);
+  console.log(`  Total Heap Size: ${formatGB(heapStats.total_heap_size)}`);
+  console.log(`  Used Heap Size: ${formatBytes(heapStats.used_heap_size)}`);
+  console.log('═══════════════════════════════════════════════════════════════');
+  
+  // Verify the limit is set correctly
+  const expectedLimit = 7168 * 1024 * 1024; // 7168 MB in bytes
+  if (heapStats.heap_size_limit >= expectedLimit * 0.9) {
+    console.log('✅ Heap limit correctly configured for 7GB+');
+  } else {
+    console.warn(`⚠️  Heap limit (${formatGB(heapStats.heap_size_limit)}) is lower than expected 7GB`);
+    console.warn('   Check NODE_OPTIONS environment variable in deployment settings');
+  }
 }
 
 async function logMemoryUsage() {
@@ -353,6 +384,9 @@ function verifyEnvironmentVariables() {
     'TWILIO_AUTH_TOKEN',
     'ELEVENLABS_API_KEY',
   ];
+  
+  // Log heap configuration immediately on startup
+  logHeapConfiguration();
   
   log('[STARTUP] Verifying environment variables...');
   
