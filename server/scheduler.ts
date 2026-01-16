@@ -539,8 +539,8 @@ export function startScheduler() {
     }
   });
   
-  // Job 6: User Profile Building (runs daily at 4 AM)
-  cron.schedule('0 4 * * *', async () => {
+  // Job 6: User Profile Building (runs daily at 12 PM EST) - moved from 4 AM to avoid overnight congestion
+  cron.schedule('0 12 * * *', async () => {
     try {
       console.log('Running daily user profile building...');
       const { updateAllUserProfiles } = await import('./ranking/profile-builder');
@@ -550,10 +550,10 @@ export function startScheduler() {
       console.error('[SCHEDULER] User profile building error:', error.message || error);
       recordFailure();
     }
-  });
+  }, { timezone: 'America/New_York' });
   
-  // Job 7: Meta Analysis (runs daily at 5 AM)
-  cron.schedule('0 5 * * *', async () => {
+  // Job 7: Meta Analysis (runs daily at 10 AM EST) - moved from 5 AM to avoid overnight congestion
+  cron.schedule('0 10 * * *', async () => {
     try {
       console.log('[META ANALYZER] Running daily technique meta analysis...');
       const { metaAnalyzer } = await import('./meta-analyzer');
@@ -563,7 +563,7 @@ export function startScheduler() {
       console.error('[META ANALYZER] Error during meta analysis:', error.message || error);
       recordFailure();
     }
-  });
+  }, { timezone: 'America/New_York' });
   
   // Job 8: UNIFIED DAILY CURATION (3 AM EST / 8 AM UTC)
   // Uses proven search method: pick 12 instructors with lowest counts, 5 searches each
@@ -867,8 +867,8 @@ View library: https://bjjos.app/admin/videos`
   console.log('Weekly recap scheduler started - sends recaps on Sundays at 6 PM');
   console.log('Revenue calculation scheduler started - runs daily at midnight');
   console.log('Video quality management scheduler started - runs daily at 3 AM');
-  console.log('User profile building scheduler started - runs daily at 4 AM');
-  console.log('[META ANALYZER] Meta analysis scheduler started - runs daily at 5 AM');
+  console.log('User profile building scheduler started - runs daily at 12 PM EST (moved from 4 AM)');
+  console.log('[META ANALYZER] Meta analysis scheduler started - runs daily at 10 AM EST (moved from 5 AM)');
   console.log('[AUTO CURATOR] ⛔ AUTOMATIC CURATION DISABLED - Use Command Center for manual triggering');
   console.log('');
   console.log('═══════════════════════════════════════════════════════════════');

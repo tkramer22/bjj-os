@@ -24,8 +24,8 @@ export class IntelligenceSchedulers {
   start() {
     console.log('[SCHEDULERS] Starting all intelligence schedulers...');
 
-    // 1. Daily Combat Sports Scraping (6:00 AM EST)
-    const scrapeTask = cron.schedule('0 6 * * *', async () => {
+    // 1. Daily Combat Sports Scraping (2:00 PM EST) - moved from 6 AM to avoid overnight congestion
+    const scrapeTask = cron.schedule('0 14 * * *', async () => {
       console.log('[SCHEDULER] Running daily combat sports scrape...');
       try {
         await combatSportsScraper.scrapeAll();
@@ -39,8 +39,8 @@ export class IntelligenceSchedulers {
 
     this.tasks.push(scrapeTask);
 
-    // 2. Daily Population Intelligence Aggregation (7:00 AM EST)
-    const aggregateTask = cron.schedule('0 7 * * *', async () => {
+    // 2. Daily Population Intelligence Aggregation (11:00 AM EST) - moved from 7 AM to avoid overnight congestion
+    const aggregateTask = cron.schedule('0 11 * * *', async () => {
       console.log('[SCHEDULER] Running daily population intelligence aggregation...');
       try {
         await populationIntelligence.runAllAggregations();
@@ -101,9 +101,9 @@ export class IntelligenceSchedulers {
 
     this.tasks.push(patternTask);
 
-    // 5. Daily Data Aggregation Jobs (2:00 AM EST - off-peak)
+    // 5. Daily Data Aggregation Jobs (1:00 AM EST) - moved from 2 AM to give buffer before 3:15 AM curation
     // Aggregates technique journeys, learning profiles, ecosystem data
-    const dataAggregationTask = cron.schedule('0 2 * * *', async () => {
+    const dataAggregationTask = cron.schedule('0 1 * * *', async () => {
       console.log('[SCHEDULER] Running daily data aggregation jobs...');
       try {
         const { runAllDailyAggregations } = await import('./utils/data-aggregation');
@@ -118,10 +118,10 @@ export class IntelligenceSchedulers {
     this.tasks.push(dataAggregationTask);
 
     console.log(`[SCHEDULERS] ✅ Started ${this.tasks.length} schedulers`);
-    console.log('[SCHEDULERS] Schedule:');
-    console.log('  - 2:00 AM EST: Daily Data Aggregation (technique journeys, learning profiles, ecosystem)');
-    console.log('  - 6:00 AM EST: Daily Combat Sports Scraping');
-    console.log('  - 7:00 AM EST: Daily Population Intelligence Aggregation');
+    console.log('[SCHEDULERS] Schedule (STAGGERED for stability):');
+    console.log('  - 1:00 AM EST: Daily Data Aggregation (moved from 2 AM)');
+    console.log('  - 11:00 AM EST: Daily Population Intelligence Aggregation (moved from 7 AM)');
+    console.log('  - 2:00 PM EST: Daily Combat Sports Scraping (moved from 6 AM)');
     console.log('  - 8:00 AM EST (Sunday): Weekly Cognitive Profile Updates');
     console.log('  - 8:00 PM EST: Daily Pattern Detection');
   }

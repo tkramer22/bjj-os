@@ -71,11 +71,12 @@ export async function initScheduledTasks() {
   console.log('  ✅ Quota Auto-Fix: Every 15 minutes');
   
   // ═══════════════════════════════════════════════════════════════
-  // VIDEO KNOWLEDGE PROCESSING - TURBO MODE with PARALLEL dual keys
-  // 20 videos/batch, every 30 seconds = 40 videos/min = 2,400/hour
-  // With 2 keys processing in parallel, we maximize throughput
+  // VIDEO KNOWLEDGE PROCESSING - OPTIMIZED for stability
+  // 20 videos/batch, every 2 minutes = 10 videos/min = 600/hour
+  // Reduced from 30s to 2min to lower memory churn and improve stability
+  // With 2 keys processing in parallel when available
   // ═══════════════════════════════════════════════════════════════
-  cron.schedule('*/30 * * * * *', async () => {
+  cron.schedule('*/2 * * * *', async () => {
     try {
       // Only process if at least one Gemini API key is configured
       if (!process.env.GEMINI_API_KEY) {
@@ -83,7 +84,7 @@ export async function initScheduledTasks() {
       }
       
       const dualKeyMode = process.env.GEMINI_API_KEY_2 ? '⚡ PARALLEL DUAL-KEY' : '🔑 SINGLE KEY';
-      console.log(`🚀 [VIDEO-KNOWLEDGE] ${dualKeyMode} TURBO batch starting (20 videos)...`);
+      console.log(`🚀 [VIDEO-KNOWLEDGE] ${dualKeyMode} batch starting (20 videos)...`);
       const result = await processVideoKnowledgeBatch(20);
       
       if (result.processed > 0) {
@@ -93,8 +94,8 @@ export async function initScheduledTasks() {
       console.error('❌ [SCHEDULER] Video knowledge processing failed:', error);
     }
   });
-  const keyMode = process.env.GEMINI_API_KEY_2 ? 'PARALLEL DUAL-KEY TURBO' : 'single key';
-  console.log(`  ✅ Video Knowledge Processing: Every 30 sec (20 videos/batch, ${keyMode})`);
+  const keyMode = process.env.GEMINI_API_KEY_2 ? 'PARALLEL DUAL-KEY' : 'single key';
+  console.log(`  ✅ Video Knowledge Processing: Every 2 min (20 videos/batch, ${keyMode})`);
   
   // ═══════════════════════════════════════════════════════════════
   // PERMANENT AUTO-CURATION - 4x daily (EST/EDT times with timezone)
@@ -231,7 +232,7 @@ export function getSchedulerStatus() {
       },
       {
         name: 'Video Knowledge Processing',
-        schedule: 'Every 30 seconds',
+        schedule: 'Every 2 minutes',
         enabled: isInitialized && !!process.env.GEMINI_API_KEY
       },
       {

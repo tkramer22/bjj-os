@@ -1,0 +1,71 @@
+Now I have the full context. Let me craft a comprehensive prompt that addresses the server stability issues while being mindful of your architecture.
+
+-----
+
+```
+## Server Stability Fix - Complete Implementation
+
+### CONTEXT
+Investigation confirmed 6 server restarts between 3:25 AM - 6:47 AM on Jan 16 due to:
+1. Port collision (EADDRINUSE: address already in use 0.0.0.0:5000)
+2. Heavy scheduled task congestion in overnight window
+3. No graceful shutdown handling
+4. Memory accumulation from continuous background processes
+
+### IMPLEMENT ALL 4 FIXES
+
+#### FIX 1: Graceful Shutdown Handler
+Add SIGTERM and SIGINT handlers that:
+- Log shutdown initiation with timestamp
+- Stop accepting new connections
+- Close existing connections gracefully
+- Release port 5000 properly before exit
+- Set a 10-second timeout for forced shutdown if graceful fails
+
+#### FIX 2: Process Cleanup on Startup
+Before the server binds to port 5000:
+- Check if port 5000 is already in use
+- If occupied, attempt to kill the orphaned process
+- Add 2-second delay before binding to ensure clean slate
+- Log any cleanup actions taken
+
+#### FIX 3: Memory Monitoring
+Add proactive memory tracking:
+- Log heap usage every 5 minutes to a dedicated log or database table
+- Set warning threshold at 70% of available memory
+- Set critical threshold at 85% - trigger alert email if exceeded
+- Include memory stats in server restart notification emails
+
+#### FIX 4: Stagger Overnight Tasks
+Redistribute scheduled tasks to avoid resource spikes. New schedule:
+
+| Current Time | Task | New Time |
+|--------------|------|----------|
+| 2:00 AM | Daily Data Aggregation | 1:00 AM |
+| 3:05 AM | YouTube Quota Reset | 3:05 AM (keep) |
+| 3:15 AM | Auto-Curation Run | 3:15 AM (keep - this is the main job) |
+| 4:00 AM | User Profile Building | 7:00 AM |
+| 5:00 AM | Meta Analysis | 11:00 AM |
+| 6:00 AM | Emergency Curation + Combat Sports | 2:00 PM |
+
+This ensures Auto-Curation (the heaviest job) runs in isolation with a 2+ hour buffer before/after.
+
+#### ADDITIONAL OPTIMIZATION
+Reduce Video Knowledge Processing frequency:
+- Current: Every 30 seconds (20 videos/batch)
+- New: Every 2 minutes (20 videos/batch)
+- This reduces memory churn while maintaining throughput (600 videos/hour vs 2400 potential)
+
+### REQUIREMENTS
+- Do NOT disrupt the 4x daily curation schedule (3:15am, 9am, 3pm, 9pm EST)
+- Maintain all existing functionality
+- Add logging for all new systems so I can verify they're working
+- Test graceful shutdown by triggering it manually and confirming clean restart
+
+### VERIFICATION
+After implementation, confirm:
+1. Server starts cleanly with no port collision errors
+2. Memory is being logged every 5 minutes
+3. Scheduled tasks reflect new times
+4. Graceful shutdown handler fires on SIGTERM
+```

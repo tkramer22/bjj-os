@@ -107,9 +107,9 @@ export function startIntelligenceScheduler() {
     }
   });
 
-  // 6. EMERGENCY VIDEO CURATION - Daily at 6:00 AM EST
+  // 6. EMERGENCY VIDEO CURATION - Daily at 2:00 PM EST (moved from 6 AM to avoid overnight congestion)
   // This bypasses normal controls when emergency_curation_override is TRUE
-  cron.schedule('0 6 * * *', async () => {
+  cron.schedule('0 14 * * *', async () => {
     if (intelligenceDisabled) return;
     
     try {
@@ -117,10 +117,10 @@ export function startIntelligenceScheduler() {
       const overrideEnabled = await checkEmergencyOverride();
       
       if (overrideEnabled) {
-        console.log("🚨 EMERGENCY OVERRIDE ACTIVE - Running emergency curation at 6 AM EST");
+        console.log("🚨 EMERGENCY OVERRIDE ACTIVE - Running emergency curation at 2 PM EST");
         await emergencyCurationRun();
       } else {
-        console.log("📅 6 AM EST check: Emergency override not active");
+        console.log("📅 2 PM EST check: Emergency override not active");
       }
     } catch (error: any) {
       console.error("[EMERGENCY CURATION] Error:", error.message || error);
@@ -129,13 +129,13 @@ export function startIntelligenceScheduler() {
     timezone: "America/New_York" // Automatic EST/EDT handling
   });
 
-  console.log("✅ Intelligence scheduler started:");
+  console.log("✅ Intelligence scheduler started (STAGGERED for stability):");
   console.log("   - Instructor Priority Recalculation: Nightly at 1 AM");
   console.log("   - Instructor Discovery: Weekly (Sundays 2 AM)");
   console.log("   - Competition Meta: Monthly (1st at 3 AM)");
   console.log("   - Quality Review: Quarterly (Jan/Apr/Jul/Oct 1st at 4 AM)");
-  console.log("   - ✅ Content-First QUOTA-SAFE Curation: Every 4 hours (900 videos/day analyzed, 12-48 added/day with Stage 4 QC)");
-  console.log("   - 🚨 EMERGENCY CURATION: Daily at 6:00 AM EST (when override enabled)");
+  console.log("   - ✅ Content-First QUOTA-SAFE Curation: Every 4 hours");
+  console.log("   - 🚨 EMERGENCY CURATION: Daily at 2:00 PM EST (moved from 6 AM)");
 }
 
 // Manual trigger for instructor priority recalculation

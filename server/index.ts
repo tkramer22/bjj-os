@@ -11,6 +11,167 @@ import { noCacheMiddleware } from "./middleware/noCache";
 import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from './stripeClient';
 import { WebhookHandlers } from './webhookHandlers';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execPromise = promisify(exec);
+
+// ═══════════════════════════════════════════════════════════════
+// GRACEFUL SHUTDOWN HANDLER - Properly release port on exit
+// ═══════════════════════════════════════════════════════════════
+let serverInstance: any = null;
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal: string) {
+  if (isShuttingDown) {
+    console.log(`[SHUTDOWN] Already shutting down, ignoring ${signal}`);
+    return;
+  }
+  
+  isShuttingDown = true;
+  const shutdownTime = new Date().toISOString();
+  console.log(`\n🛑 [SHUTDOWN] ${signal} received at ${shutdownTime}`);
+  console.log('[SHUTDOWN] Initiating graceful shutdown...');
+  
+  // Stop accepting new connections
+  if (serverInstance) {
+    console.log('[SHUTDOWN] Closing server to new connections...');
+    
+    // Set a timeout for forced shutdown
+    const forceShutdownTimeout = setTimeout(() => {
+      console.error('[SHUTDOWN] ⚠️  Forced shutdown after 10s timeout');
+      process.exit(1);
+    }, 10000);
+    
+    serverInstance.close((err: any) => {
+      if (err) {
+        console.error('[SHUTDOWN] Error closing server:', err.message);
+      } else {
+        console.log('[SHUTDOWN] ✅ Server closed gracefully');
+      }
+      
+      clearTimeout(forceShutdownTimeout);
+      console.log('[SHUTDOWN] Port 5000 released, exiting process');
+      process.exit(0);
+    });
+  } else {
+    console.log('[SHUTDOWN] No server instance to close');
+    process.exit(0);
+  }
+}
+
+// Register shutdown handlers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
+
+// ═══════════════════════════════════════════════════════════════
+// PORT CLEANUP - Safe check with no automatic killing
+// ═══════════════════════════════════════════════════════════════
+async function cleanupPort(port: number): Promise<boolean> {
+  console.log(`[STARTUP] Checking if port ${port} is in use...`);
+  
+  try {
+    // Check if port is in use by looking for node processes on this port
+    const { stdout } = await execPromise(`lsof -i :${port} 2>/dev/null || echo ""`);
+    const lines = stdout.trim().split('\n').filter(Boolean);
+    
+    if (lines.length <= 1) { // Only header or empty
+      console.log(`[STARTUP] Port ${port} is free ✓`);
+      return true;
+    }
+    
+    // Parse lsof output to identify what's using the port
+    const nodeProcesses = lines.filter(line => 
+      line.toLowerCase().includes('node') || 
+      line.toLowerCase().includes('tsx')
+    );
+    
+    if (nodeProcesses.length === 0) {
+      console.log(`[STARTUP] Port ${port} is free ✓`);
+      return true;
+    }
+    
+    // Just log a warning - don't kill anything automatically
+    // The graceful shutdown handler should prevent orphaned processes
+    console.warn(`[STARTUP] ⚠️  Port ${port} may be occupied by another process`);
+    console.warn(`[STARTUP] If startup fails, previous server may still be running`);
+    console.warn(`[STARTUP] Graceful shutdown should prevent this - check for SIGTERM handling`);
+    
+    // Small delay to allow any exiting process to release the port
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    return true;
+  } catch (error: any) {
+    // lsof may not be available in all environments
+    console.log('[STARTUP] Port check skipped (lsof not available)');
+    return true;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MEMORY MONITORING - Track heap usage for stability analysis
+// ═══════════════════════════════════════════════════════════════
+const MEMORY_WARNING_THRESHOLD = 0.70; // 70% of heap
+const MEMORY_CRITICAL_THRESHOLD = 0.85; // 85% of heap
+let lastMemoryAlert: Date | null = null;
+
+function formatBytes(bytes: number): string {
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+async function logMemoryUsage() {
+  const mem = process.memoryUsage();
+  const heapUsedPercent = mem.heapUsed / mem.heapTotal;
+  const timestamp = new Date().toISOString();
+  
+  console.log(`📊 [MEMORY] ${timestamp} | Heap: ${formatBytes(mem.heapUsed)}/${formatBytes(mem.heapTotal)} (${(heapUsedPercent * 100).toFixed(1)}%) | RSS: ${formatBytes(mem.rss)} | External: ${formatBytes(mem.external)}`);
+  
+  // Check thresholds
+  if (heapUsedPercent >= MEMORY_CRITICAL_THRESHOLD) {
+    console.error(`🚨 [MEMORY] CRITICAL: Heap usage at ${(heapUsedPercent * 100).toFixed(1)}% - approaching OOM!`);
+    
+    // Send alert email if not sent in last hour
+    const now = new Date();
+    if (!lastMemoryAlert || (now.getTime() - lastMemoryAlert.getTime() > 60 * 60 * 1000)) {
+      lastMemoryAlert = now;
+      try {
+        const { Resend } = await import('resend');
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        await resend.emails.send({
+          from: 'BJJ OS <noreply@bjjos.app>',
+          to: 'todd@bjjos.app',
+          subject: '🚨 BJJ OS Critical Memory Alert',
+          html: `
+            <h2 style="color: #dc2626;">Critical Memory Warning</h2>
+            <p>Server heap usage has reached <strong>${(heapUsedPercent * 100).toFixed(1)}%</strong></p>
+            <ul>
+              <li>Heap Used: ${formatBytes(mem.heapUsed)}</li>
+              <li>Heap Total: ${formatBytes(mem.heapTotal)}</li>
+              <li>RSS: ${formatBytes(mem.rss)}</li>
+              <li>Time: ${timestamp}</li>
+            </ul>
+            <p>Consider restarting the server or investigating memory leaks.</p>
+          `
+        });
+        console.log('[MEMORY] ✅ Critical memory alert email sent');
+      } catch (error: any) {
+        console.error('[MEMORY] Failed to send alert email:', error.message);
+      }
+    }
+  } else if (heapUsedPercent >= MEMORY_WARNING_THRESHOLD) {
+    console.warn(`⚠️  [MEMORY] WARNING: Heap usage at ${(heapUsedPercent * 100).toFixed(1)}%`);
+  }
+  
+  return {
+    heapUsed: mem.heapUsed,
+    heapTotal: mem.heapTotal,
+    heapUsedPercent,
+    rss: mem.rss,
+    external: mem.external,
+    timestamp
+  };
+}
 
 const app = express();
 
@@ -331,8 +492,23 @@ function verifyEnvironmentVariables() {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
+  
+  // FIX 2: Clean up orphaned processes before binding
+  await cleanupPort(port);
+  
+  // Store server instance for graceful shutdown
+  serverInstance = server;
+  
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
+    
+    // ═══════════════════════════════════════════════════════════════
+    // FIX 3: MEMORY MONITORING - Log every 5 minutes with alerts
+    // ═══════════════════════════════════════════════════════════════
+    console.log('[STARTUP] Starting memory monitoring (every 5 minutes)...');
+    setInterval(logMemoryUsage, 5 * 60 * 1000);
+    // Log initial memory state
+    logMemoryUsage();
     
     // Wrap scheduler initialization in try-catch to prevent deployment crashes
     try {
