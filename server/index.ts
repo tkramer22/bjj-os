@@ -110,6 +110,24 @@ async function cleanupPort(port: number): Promise<boolean> {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// GARBAGE COLLECTION - Force GC after heavy tasks if available
+// ═══════════════════════════════════════════════════════════════
+export function forceGarbageCollection(taskName?: string): boolean {
+  // Check if garbage collection is exposed (requires --expose-gc flag)
+  if (typeof global.gc === 'function') {
+    const before = process.memoryUsage().heapUsed;
+    global.gc();
+    const after = process.memoryUsage().heapUsed;
+    const freed = (before - after) / 1024 / 1024;
+    if (taskName) {
+      console.log(`🧹 [GC] After ${taskName}: freed ${freed.toFixed(1)} MB`);
+    }
+    return true;
+  }
+  return false;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MEMORY MONITORING - Track heap usage for stability analysis
 // ═══════════════════════════════════════════════════════════════
 const MEMORY_WARNING_THRESHOLD = 0.70; // 70% of heap
