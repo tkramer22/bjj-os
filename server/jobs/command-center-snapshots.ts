@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { db } from '../db';
-import { systemSnapshots, aiVideoKnowledge, bjjUsers, videoCurationLog as curationLog } from '@shared/schema';
+import { systemSnapshots, aiVideoKnowledge, bjjUsers, curationRuns } from '@shared/schema';
 import { eq, and, gte, sql as sqlBuilder, desc } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -53,10 +53,10 @@ export async function collectSystemMetrics(): Promise<SystemMetrics> {
       .from(bjjUsers);
     const userCount = userCountResult[0]?.count || 0;
     
-    // Get curation runs today
+    // Get curation runs today (from curationRuns table, not videoCurationLog)
     const curationRunsResult = await db.select({ count: sqlBuilder`count(*)::int` })
-      .from(curationLog)
-      .where(gte(curationLog.runAt, todayStart));
+      .from(curationRuns)
+      .where(gte(curationRuns.createdAt, todayStart));
     const curationRunsToday = curationRunsResult[0]?.count || 0;
     
     // Calculate approval rate from today's curation runs
@@ -64,8 +64,8 @@ export async function collectSystemMetrics(): Promise<SystemMetrics> {
       accepted: sqlBuilder<number>`COALESCE(SUM(videos_added), 0)::int`,
       analyzed: sqlBuilder<number>`COALESCE(SUM(videos_analyzed), 0)::int`
     })
-      .from(curationLog)
-      .where(gte(curationLog.runAt, todayStart));
+      .from(curationRuns)
+      .where(gte(curationRuns.createdAt, todayStart));
     
     const accepted = approvalData[0]?.accepted || 0;
     const analyzed = approvalData[0]?.analyzed || 0;

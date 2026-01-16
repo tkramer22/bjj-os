@@ -443,14 +443,27 @@ function verifyEnvironmentVariables() {
       }
     }, 3000); // Start after 3 seconds to ensure database is ready
     
-    // 📧 SERVER RESTART ALERT EMAIL - Notify admin of server restart with recovery status
+    // 📧 SERVER RESTART ALERT EMAIL - Throttled to max 1 per 24 hours
     setTimeout(async () => {
       try {
+        const { getSetting, updateSetting } = await import('./curation-controller');
+        const now = new Date();
+        
+        // Check if we've sent a restart email in the last 24 hours
+        const lastRestartEmailSent = await getSetting('last_restart_email_sent', null);
+        if (lastRestartEmailSent) {
+          const lastSentTime = new Date(lastRestartEmailSent);
+          const hoursSinceLastEmail = (now.getTime() - lastSentTime.getTime()) / (1000 * 60 * 60);
+          
+          if (hoursSinceLastEmail < 24) {
+            log(`[STARTUP] Skipping restart email - already sent ${hoursSinceLastEmail.toFixed(1)} hours ago (throttled to 1 per 24h)`);
+            return;
+          }
+        }
+        
         log('[STARTUP] Sending server restart alert email...');
         const { Resend } = await import('resend');
         const resend = new Resend(process.env.RESEND_API_KEY);
-        
-        const now = new Date();
         const timeStr = now.toLocaleString('en-US', {
           timeZone: 'America/New_York',
           weekday: 'short',
@@ -498,6 +511,9 @@ function verifyEnvironmentVariables() {
           subject: `🔄 BJJ OS Server Restarted - ${timeStr} EST`,
           html: htmlContent
         });
+        
+        // Record that we sent the email to prevent spam
+        await updateSetting('last_restart_email_sent', now.toISOString(), 'system');
         
         log('[STARTUP] ✅ Server restart alert email sent to todd@bjjos.app');
       } catch (error: any) {

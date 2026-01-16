@@ -28,18 +28,21 @@ export async function runAlertMonitor() {
     
     if (lastRun) {
       const minutesSinceLastRun = Math.floor((now.getTime() - new Date(lastRun.createdAt).getTime()) / 60000);
+      const hoursSinceLastRun = Math.round(minutesSinceLastRun / 60 * 10) / 10;
       
-      if (minutesSinceLastRun > 60) {
+      // Curation runs 4x daily (3:15am, 9am, 3pm, 9pm EST) = up to 6 hours between runs
+      // Alert if no run in 8+ hours (accounts for schedule variance)
+      if (minutesSinceLastRun > 480) { // 8 hours = critical
         alerts.push({
           severity: 'critical',
           title: '🔴 Curation Pipeline Offline',
-          message: `Last curation run was ${minutesSinceLastRun} minutes ago. Expected run interval is 20 minutes.`
+          message: `Last curation run was ${hoursSinceLastRun} hours ago. Expected interval is 6 hours max.`
         });
-      } else if (minutesSinceLastRun > 30) {
+      } else if (minutesSinceLastRun > 420) { // 7 hours = warning
         alerts.push({
           severity: 'warning',
           title: '⚠️ Curation Pipeline Delayed',
-          message: `Last curation run was ${minutesSinceLastRun} minutes ago. Normal interval is 20 minutes.`
+          message: `Last curation run was ${hoursSinceLastRun} hours ago. Next scheduled run may have been missed.`
         });
       }
       

@@ -15993,7 +15993,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         .map(q => ({
           timestamp: q.createdAt ? new Date(q.createdAt).toISOString() : null,
           userAnonymized: q.userId ? `***${q.userId.slice(-4)}` : 'Unknown',
-          question: q.userQuestion,
+          question: q.userQuestion || q.query || 'Unknown', // Fallback to query if userQuestion is null
           videosRecommended: (q.recommendedVideos as any[] || []).length,
           multiAgent: q.useMultiAgent || false,
           responseTime: q.responseTime || null

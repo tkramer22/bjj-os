@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { AdminLayout } from "./dashboard";
+import { formatDistanceToNow } from "date-fns";
 
 interface QATestResult {
   id: string;
@@ -1319,7 +1320,7 @@ export default function CommandCenter() {
                       </div>
                     </div>
                     <div className="text-xs text-muted-foreground text-right">
-                      <div>{new Date(log.timestamp).toLocaleString()}</div>
+                      <div>{formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}</div>
                       <div className="text-[10px]">{log.executionTimeMs}ms</div>
                     </div>
                   </div>

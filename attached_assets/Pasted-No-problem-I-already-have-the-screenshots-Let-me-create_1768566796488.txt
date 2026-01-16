@@ -1,0 +1,68 @@
+No problem! I already have the screenshots. Let me create the comprehensive prompt now based on everything we’ve discussed:
+
+**Copy this to Replit Agent:**
+
+```
+COMPREHENSIVE FIX: Admin Dashboard, Curation Metrics, Emails, and New Feature
+
+====== ISSUE 1: Admin Dashboard Fixes ======
+
+Command Center shows all zeros (0/0/0/0) but Videos page shows real data (653/58/58/595)
+- Fix Command Center to pull from correct data source (production Supabase)
+
+User Activity (24h) fails to load
+- Error: column "user_question" does not exist
+- Find and use the correct column name
+
+Meta Insights Dashboard not interactive
+- "Techniques Tracked: 35" should be clickable to show the list
+- "User Requests (7d): 3" should be clickable to show what users asked
+- "Need Curation: 32" should show what needs curation
+- Bottom tabs (Trending Techniques, Curation Priorities, User Requests, Unmet Requests) show empty/no data - populate them
+
+Execution Log time format
+- Currently shows "71 ms" - not useful
+- Change to: "X hours ago" for recent runs
+- Change to: "X days ago" when over 24 hours
+
+====== ISSUE 2: Curation Metric Discrepancy ======
+
+- Dashboard shows "Curation Runs Today: 0" but startup check says "3 curation runs completed today"
+- The metrics collection query isn't counting runs correctly
+- Fix so the displayed number matches actual completed runs
+
+====== ISSUE 3: Stale Alert ======
+
+- "Curation Pipeline Offline" alert is flagged but curation IS working (75 videos added today)
+- This is a false positive / stale alert
+- Fix the alert logic so it clears when curation is actually running
+- Alert should only show if NO videos have been added in 24+ hours
+
+====== ISSUE 4: Server Restart Emails ======
+
+- Server restarted 6 times between 3:25 AM and 6:47 AM - too many emails
+- Change to: Only send ONE restart email per 24-hour period
+- OR: Only send if server was down for more than 5 minutes
+- Keep curation completion emails (like "Curation Complete: +22 videos")
+- Add "restart_email_sent_at" timestamp to prevent spam
+
+====== ISSUE 5: Manual Curation Throttling ======
+
+- Confirm that manually running curation (by instructor, technique, position, meta) does NOT interfere with scheduled auto-curation
+- The 4x daily auto-curation (3:15am, 9am, 3pm, 9pm EST) should NEVER be throttled or skipped because of a manual run
+- Document how this works
+
+====== NEW FEATURE: "Recently Added" in Video Library ======
+
+Add "Recently Added" as the first option in the Technique list in Video Library
+- Display "100" as the count next to it
+- When selected, return the 100 most recently added videos (ORDER BY created_at DESC LIMIT 100)
+- Must appear BEFORE alphabetized techniques (not alphabetized with them)
+- Newest video appears first in the list
+- This is API-only change - no frontend rebuild needed
+- Updates automatically as curation adds new videos
+
+====== SUMMARY ======
+
+Fix all dashboard display issues, metric counting, stale alerts, email spam, and add the Recently Added feature. All data exists in production Supabase - the dashboard just needs to display it correctly.
+```
