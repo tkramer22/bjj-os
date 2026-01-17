@@ -34,20 +34,41 @@ export default function IOSLoginPage() {
 
   // Payment-first Apple Sign In flow
   const handleAppleSignIn = async () => {
+    // Prevent double-tap
+    if (isAppleLoading) {
+      console.log('[APPLE SIGN IN] Already in progress, ignoring tap');
+      return;
+    }
+    
     setError("");
     triggerHaptic('light');
     setIsAppleLoading(true);
 
     try {
-      const { SignInWithApple } = await import('@capacitor-community/apple-sign-in');
+      console.log('[APPLE SIGN IN] Starting authentication...');
       
-      const result = await SignInWithApple.authorize({
-        clientId: 'app.bjjos.ios',
-        redirectURI: 'https://bjjos.app/auth/apple/callback',
-        scopes: 'email name',
-        state: 'bjjos-auth',
-        nonce: Math.random().toString(36).substring(7),
+      // Import the module (may take a moment on first call)
+      const { SignInWithApple } = await import('@capacitor-community/apple-sign-in');
+      console.log('[APPLE SIGN IN] Module loaded, calling authorize...');
+      
+      // Create a timeout promise (30 seconds)
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('APPLE_SIGNIN_TIMEOUT'));
+        }, 30000);
       });
+      
+      // Race between the actual auth and the timeout
+      const result = await Promise.race([
+        SignInWithApple.authorize({
+          clientId: 'app.bjjos.ios',
+          redirectURI: 'https://bjjos.app/auth/apple/callback',
+          scopes: 'email name',
+          state: 'bjjos-auth',
+          nonce: Math.random().toString(36).substring(7),
+        }),
+        timeoutPromise,
+      ]);
 
       console.log('[APPLE SIGN IN] Response:', result.response);
 
@@ -192,23 +213,42 @@ export default function IOSLoginPage() {
     } catch (err: any) {
       console.error('[APPLE SIGN IN] Error:', err);
       
-      // Handle user cancellation gracefully - no error message
-      // Error code 1000 = ASAuthorizationError.canceled (user tapped Cancel)
-      // Error code 1001 = ASAuthorizationError.invalidResponse
-      // Also check for common cancel-related strings
       const errorMessage = err.message || '';
-      if (
-        errorMessage.includes('canceled') || 
-        errorMessage.includes('cancelled') ||
-        errorMessage.includes('error 1000') ||
-        errorMessage.includes('AuthorizationError error 1000')
-      ) {
-        // User cancelled - just dismiss, no error
+      
+      // Handle timeout
+      if (errorMessage === 'APPLE_SIGNIN_TIMEOUT') {
+        console.log('[APPLE SIGN IN] Timed out after 30 seconds');
+        setError("Sign in timed out. Please check your connection and try again.");
+        triggerHaptic('error');
         setIsAppleLoading(false);
         return;
       }
       
-      setError("Apple sign in failed. Please try again.");
+      // Handle user cancellation gracefully - no error message
+      // Error code 1000 = ASAuthorizationError.canceled (user tapped Cancel)
+      // Error code 1001 = ASAuthorizationError.invalidResponse
+      // Also check for common cancel-related strings
+      if (
+        errorMessage.includes('canceled') || 
+        errorMessage.includes('cancelled') ||
+        errorMessage.includes('error 1000') ||
+        errorMessage.includes('AuthorizationError error 1000') ||
+        errorMessage.includes('The operation couldn')
+      ) {
+        // User cancelled - just dismiss, no error
+        console.log('[APPLE SIGN IN] User cancelled');
+        setIsAppleLoading(false);
+        return;
+      }
+      
+      // Handle other known errors
+      if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        setError("Connection error. Please check your network and try again.");
+      } else if (errorMessage.includes('invalid') || errorMessage.includes('1001')) {
+        setError("Apple sign in returned an invalid response. Please try again.");
+      } else {
+        setError("Apple sign in failed. Please try again.");
+      }
       triggerHaptic('error');
     } finally {
       setIsAppleLoading(false);
