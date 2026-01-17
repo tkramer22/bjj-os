@@ -189,6 +189,32 @@ export default function IOSSubscribePage() {
             )}
           </Button>
 
+          <div className="text-xs text-zinc-500 text-center mt-6 space-y-2">
+            <p>BJJ OS · $19.99/month · Renews monthly</p>
+            <p>Cancel anytime in Settings</p>
+            <div className="flex justify-center gap-3 mt-3">
+              <a 
+                href="https://bjjos.app/apple/terms" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="underline"
+                data-testid="link-terms"
+              >
+                Terms of Use
+              </a>
+              <span>·</span>
+              <a 
+                href="https://bjjos.app/apple/privacy" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="underline"
+                data-testid="link-privacy"
+              >
+                Privacy Policy
+              </a>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-3">
             <button
               onClick={handleRestore}
@@ -207,10 +233,6 @@ export default function IOSSubscribePage() {
               Continue with limited access
             </button>
           </div>
-
-          <p className="text-gray-500 text-xs text-center leading-relaxed">
-            Subscription automatically renews monthly. Cancel anytime in Settings → Apple ID → Subscriptions.
-          </p>
         </div>
       </div>
     </div>
