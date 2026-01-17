@@ -98,6 +98,10 @@ import IOSSettingsPage from "@/pages/ios-settings";
 import IOSTermsPage from "@/pages/ios-terms";
 import IOSPrivacyPage from "@/pages/ios-privacy";
 import IOSHelpPage from "@/pages/ios-help";
+
+// Apple App Store Legal Pages (web-accessible for App Store links)
+import ApplePrivacy from "@/pages/apple/privacy";
+import AppleTerms from "@/pages/apple/terms";
 import IOSSubscribePage from "@/pages/ios-subscribe";
 
 // Native app landing redirect component
@@ -272,6 +276,10 @@ export default function App() {
             <Route path="/ios-help" component={IOSHelpPage} />
             <Route path="/ios-onboarding" component={MobileOnboardingPage} />
             <Route path="/ios-subscribe" component={IOSSubscribePage} />
+            
+            {/* Apple App Store Legal Pages (web-accessible for App Store links) */}
+            <Route path="/apple/privacy" component={ApplePrivacy} />
+            <Route path="/apple/terms" component={AppleTerms} />
             
             {/* Web Chat */}
             <Route path="/chat" component={ChatPage} />
