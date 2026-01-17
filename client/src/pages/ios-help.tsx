@@ -10,7 +10,7 @@ interface FAQItem {
 const faqs: FAQItem[] = [
   {
     question: "How does Professor OS work?",
-    answer: "Professor OS is your AI coach with perfect memory. It learns your game - your strengths, struggles, and goals. The more you share about your training, the smarter it gets. It draws from over 3,500 analyzed technique videos to give you personalized recommendations with exact timestamps."
+    answer: "Professor OS is your AI coach with perfect memory. It learns your game - your strengths, struggles, and goals. The more you share about your training, the smarter it gets. It draws from over 4,500 analyzed technique videos to give you personalized recommendations with exact timestamps."
   },
   {
     question: "Can I cancel my subscription anytime?",

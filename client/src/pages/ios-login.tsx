@@ -651,7 +651,7 @@ export default function IOSLoginPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           <img src="/bjjos-logo.png" alt="BJJ OS" className="h-12 w-auto mx-auto mb-3" />
-          <p className="text-gray-400 text-sm leading-relaxed">Thousands of techniques analyzed.</p>
+          <p className="text-gray-400 text-sm leading-relaxed">4,500+ techniques analyzed.</p>
           <p className="text-gray-400 text-sm leading-relaxed">One coach who never forgets.</p>
         </div>
 
