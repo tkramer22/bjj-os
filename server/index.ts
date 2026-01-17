@@ -132,9 +132,13 @@ export function forceGarbageCollection(taskName?: string): boolean {
 // ═══════════════════════════════════════════════════════════════
 import v8 from 'v8';
 
-const MEMORY_WARNING_THRESHOLD = 0.70; // 70% of heap
-const MEMORY_CRITICAL_THRESHOLD = 0.85; // 85% of heap
+const MEMORY_NORMAL_THRESHOLD = 0.65;   // 65% - Normal operation
+const MEMORY_WARNING_THRESHOLD = 0.75;   // 75% - Start warning (lowered from 70%)
+const MEMORY_HIGH_THRESHOLD = 0.80;      // 80% - Proactive alert (NEW)
+const MEMORY_CRITICAL_THRESHOLD = 0.85;  // 85% - Critical alert + email
+const MEMORY_EMERGENCY_THRESHOLD = 0.90; // 90% - Emergency measures (NEW)
 let lastMemoryAlert: Date | null = null;
+let lastHighMemoryLog: Date | null = null;
 
 function formatBytes(bytes: number): string {
   return (bytes / 1024 / 1024).toFixed(1) + ' MB';
@@ -173,15 +177,34 @@ async function logMemoryUsage() {
   const mem = process.memoryUsage();
   const heapUsedPercent = mem.heapUsed / mem.heapTotal;
   const timestamp = new Date().toISOString();
+  const now = new Date();
   
   console.log(`📊 [MEMORY] ${timestamp} | Heap: ${formatBytes(mem.heapUsed)}/${formatBytes(mem.heapTotal)} (${(heapUsedPercent * 100).toFixed(1)}%) | RSS: ${formatBytes(mem.rss)} | External: ${formatBytes(mem.external)}`);
   
-  // Check thresholds
-  if (heapUsedPercent >= MEMORY_CRITICAL_THRESHOLD) {
+  // Check thresholds (most severe first)
+  if (heapUsedPercent >= MEMORY_EMERGENCY_THRESHOLD) {
+    console.error(`🚨🚨 [MEMORY] EMERGENCY: Heap at ${(heapUsedPercent * 100).toFixed(1)}% - OOM imminent!`);
+    
+    // Try emergency GC
+    if (typeof global.gc === 'function') {
+      console.log('[MEMORY] Attempting emergency garbage collection...');
+      for (let i = 0; i < 3; i++) {
+        global.gc();
+      }
+      const afterGC = process.memoryUsage();
+      const freedMB = (mem.heapUsed - afterGC.heapUsed) / 1024 / 1024;
+      console.log(`[MEMORY] Emergency GC freed ${freedMB.toFixed(1)} MB`);
+    }
+    
+  } else if (heapUsedPercent >= MEMORY_CRITICAL_THRESHOLD) {
     console.error(`🚨 [MEMORY] CRITICAL: Heap usage at ${(heapUsedPercent * 100).toFixed(1)}% - approaching OOM!`);
     
+    // Force GC if available
+    if (typeof global.gc === 'function') {
+      global.gc();
+    }
+    
     // Send alert email if not sent in last hour
-    const now = new Date();
     if (!lastMemoryAlert || (now.getTime() - lastMemoryAlert.getTime() > 60 * 60 * 1000)) {
       lastMemoryAlert = now;
       try {
@@ -208,8 +231,26 @@ async function logMemoryUsage() {
         console.error('[MEMORY] Failed to send alert email:', error.message);
       }
     }
+    
+  } else if (heapUsedPercent >= MEMORY_HIGH_THRESHOLD) {
+    // Log warning every 10 minutes at high usage
+    if (!lastHighMemoryLog || (now.getTime() - lastHighMemoryLog.getTime() > 10 * 60 * 1000)) {
+      lastHighMemoryLog = now;
+      console.warn(`🟠 [MEMORY] HIGH: Heap usage at ${(heapUsedPercent * 100).toFixed(1)}% - monitoring closely`);
+      
+      // Attempt GC to prevent escalation
+      if (typeof global.gc === 'function') {
+        global.gc();
+        const afterGC = process.memoryUsage();
+        const freedMB = (mem.heapUsed - afterGC.heapUsed) / 1024 / 1024;
+        if (freedMB > 1) {
+          console.log(`[MEMORY] Preemptive GC freed ${freedMB.toFixed(1)} MB`);
+        }
+      }
+    }
+    
   } else if (heapUsedPercent >= MEMORY_WARNING_THRESHOLD) {
-    console.warn(`⚠️  [MEMORY] WARNING: Heap usage at ${(heapUsedPercent * 100).toFixed(1)}%`);
+    console.warn(`🟡 [MEMORY] WARNING: Heap usage at ${(heapUsedPercent * 100).toFixed(1)}%`);
   }
   
   return {

@@ -3,6 +3,7 @@ import { discoverNewInstructors } from "./instructor-discovery";
 import { analyzeCompetitionMeta } from "./competition-meta-tracker";
 import { batchQualityReview } from "./quality-decay-detector";
 import { recalculateAllInstructorPriorities } from "./utils/instructorPriority";
+import { withMemoryManagement, forceGC, shouldSkipDueToMemory } from "./utils/memory-management";
 
 // Circuit breaker shared with main scheduler
 let intelligenceFailures = 0;
@@ -91,19 +92,24 @@ export function startIntelligenceScheduler() {
   cron.schedule('0 */4 * * *', async () => {
     if (intelligenceDisabled) return;
     
+    // Skip if memory is critically low
+    if (shouldSkipDueToMemory()) {
+      console.log("⏸️ [INTELLIGENCE] Skipping content-first curation due to memory pressure");
+      return;
+    }
+    
     console.log("📅 Running content-first video curation (QUOTA-SAFE)...");
     try {
-      const { runContentFirstCuration } = await import('./content-first-curator');
-      // QUOTA-SAFE: 15 techniques × 10 videos = 150 search calls per run
-      // Daily quota usage: 6 runs × 150 calls × 100 units = 9,000 units (under 10,000 limit)
-      // Expected acceptance: 2-5% with Stage 4 QC = 2-8 videos added per run
-      // Daily total: 12-48 videos added per day (sustainable growth to 2,000 videos in ~30-100 days)
-      const result = await runContentFirstCuration(15, 10);
-      console.log(`✅ Content-first curation complete: ${result.videosSaved} videos saved, ${result.newInstructorsDiscovered} new instructors`);
+      await withMemoryManagement('Content-First Curation', async () => {
+        const { runContentFirstCuration } = await import('./content-first-curator');
+        const result = await runContentFirstCuration(15, 10);
+        console.log(`✅ Content-first curation complete: ${result.videosSaved} videos saved, ${result.newInstructorsDiscovered} new instructors`);
+      });
       recordIntelligenceSuccess();
     } catch (error: any) {
       console.error("[INTELLIGENCE] Error in content-first curation:", error.message || error);
       recordIntelligenceFailure();
+      forceGC('Content-First Error Recovery');
     }
   });
 

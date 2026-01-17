@@ -5,6 +5,7 @@ import { sendHourlyDigest } from './hourly-digest-service';
 import { processBatch as processVideoKnowledgeBatch } from './video-knowledge-service';
 import { runPermanentAutoCuration, initializeAutoCurationState } from './permanent-auto-curation';
 import { runDemandDrivenCuration, initializeDemandCurationState, isDemandCurationEnabled } from './demand-driven-curation';
+import { withMemoryManagement, forceGC, shouldSkipDueToMemory, logMemory } from './utils/memory-management';
 
 /**
  * SCHEDULED TASKS COORDINATOR
@@ -83,15 +84,24 @@ export async function initScheduledTasks() {
         return;
       }
       
+      // Skip if memory is critically low
+      if (shouldSkipDueToMemory()) {
+        console.log('⏸️ [VIDEO-KNOWLEDGE] Skipping batch due to memory pressure');
+        return;
+      }
+      
       const dualKeyMode = process.env.GEMINI_API_KEY_2 ? '⚡ PARALLEL DUAL-KEY' : '🔑 SINGLE KEY';
       console.log(`🚀 [VIDEO-KNOWLEDGE] ${dualKeyMode} batch starting (20 videos)...`);
-      const result = await processVideoKnowledgeBatch(20);
       
-      if (result.processed > 0) {
-        console.log(`✅ [VIDEO-KNOWLEDGE] Processed ${result.succeeded}/${result.processed} videos (${result.techniquesAdded} techniques)`);
-      }
+      await withMemoryManagement('Video Knowledge Processing', async () => {
+        const result = await processVideoKnowledgeBatch(20);
+        if (result.processed > 0) {
+          console.log(`✅ [VIDEO-KNOWLEDGE] Processed ${result.succeeded}/${result.processed} videos (${result.techniquesAdded} techniques)`);
+        }
+      });
     } catch (error) {
       console.error('❌ [SCHEDULER] Video knowledge processing failed:', error);
+      forceGC('Video Knowledge Error Recovery');
     }
   });
   const keyMode = process.env.GEMINI_API_KEY_2 ? 'PARALLEL DUAL-KEY' : 'single key';
@@ -112,53 +122,74 @@ export async function initScheduledTasks() {
     const now = new Date();
     const dayOfWeek = formatInTimeZone(now, 'America/New_York', 'EEEE');
     
+    // Skip if memory is critically low
+    if (shouldSkipDueToMemory()) {
+      console.log('⏸️ [AUTO-CURATION] Skipping 3:15 AM run due to memory pressure');
+      return;
+    }
+    
     if (dayOfWeek === 'Monday' && isDemandCurationEnabled()) {
       console.log('🎯 [DEMAND-CURATION] Starting Monday 3:15 AM demand-driven curation...');
       try {
-        await runDemandDrivenCuration();
+        await withMemoryManagement('Demand-Driven Curation', runDemandDrivenCuration);
       } catch (error) {
         console.error('❌ [DEMAND-CURATION] Monday 3:15 AM run failed:', error);
-        // Fall back to regular curation if demand curation fails
         console.log('🔄 [AUTO-CURATION] Falling back to regular instructor-based curation...');
-        await runPermanentAutoCuration();
+        await withMemoryManagement('Auto-Curation Fallback', runPermanentAutoCuration);
       }
     } else {
       console.log('🤖 [AUTO-CURATION] Starting 3:15 AM EST/EDT run...');
       try {
-        await runPermanentAutoCuration();
+        await withMemoryManagement('Auto-Curation 3:15AM', runPermanentAutoCuration);
       } catch (error) {
         console.error('❌ [AUTO-CURATION] 3:15 AM run failed:', error);
+        forceGC('Auto-Curation Error Recovery');
       }
     }
   }, cronOptions);
   
   // 9:00 AM EST/EDT - Morning run
   cron.schedule('0 9 * * *', async () => {
+    if (shouldSkipDueToMemory()) {
+      console.log('⏸️ [AUTO-CURATION] Skipping 9:00 AM run due to memory pressure');
+      return;
+    }
     console.log('🤖 [AUTO-CURATION] Starting 9:00 AM EST/EDT run...');
     try {
-      await runPermanentAutoCuration();
+      await withMemoryManagement('Auto-Curation 9AM', runPermanentAutoCuration);
     } catch (error) {
       console.error('❌ [AUTO-CURATION] 9:00 AM run failed:', error);
+      forceGC('Auto-Curation Error Recovery');
     }
   }, cronOptions);
   
   // 3:00 PM EST/EDT - Afternoon run
   cron.schedule('0 15 * * *', async () => {
+    if (shouldSkipDueToMemory()) {
+      console.log('⏸️ [AUTO-CURATION] Skipping 3:00 PM run due to memory pressure');
+      return;
+    }
     console.log('🤖 [AUTO-CURATION] Starting 3:00 PM EST/EDT run...');
     try {
-      await runPermanentAutoCuration();
+      await withMemoryManagement('Auto-Curation 3PM', runPermanentAutoCuration);
     } catch (error) {
       console.error('❌ [AUTO-CURATION] 3:00 PM run failed:', error);
+      forceGC('Auto-Curation Error Recovery');
     }
   }, cronOptions);
   
   // 9:00 PM EST/EDT - Evening run
   cron.schedule('0 21 * * *', async () => {
+    if (shouldSkipDueToMemory()) {
+      console.log('⏸️ [AUTO-CURATION] Skipping 9:00 PM run due to memory pressure');
+      return;
+    }
     console.log('🤖 [AUTO-CURATION] Starting 9:00 PM EST/EDT run...');
     try {
-      await runPermanentAutoCuration();
+      await withMemoryManagement('Auto-Curation 9PM', runPermanentAutoCuration);
     } catch (error) {
       console.error('❌ [AUTO-CURATION] 9:00 PM run failed:', error);
+      forceGC('Auto-Curation Error Recovery');
     }
   }, cronOptions);
   

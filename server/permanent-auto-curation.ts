@@ -23,6 +23,7 @@ import { aiVideoKnowledge, fullyMinedInstructors, curationRuns, videoWatchStatus
 import { sql, eq, lt, and, isNull, or, gte, desc, ne } from 'drizzle-orm';
 import { google } from 'googleapis';
 import { Resend } from 'resend';
+import { forceGC, clearArray } from './utils/memory-management';
 
 const youtube = google.youtube({
   version: 'v3',
@@ -901,6 +902,15 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
   } catch (error: any) {
     result.errors.push(`Fatal error: ${error.message}`);
     console.error(`[AUTO-CURATION] Fatal error:`, error);
+  } finally {
+    // Memory cleanup after curation completes - clear large arrays
+    if (result.instructorsProcessed.length > 0) {
+      clearArray(result.instructorsProcessed);
+    }
+    if (result.errors.length > 0) {
+      clearArray(result.errors);
+    }
+    forceGC('Post-Curation Cleanup');
   }
   
   return result;

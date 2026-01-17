@@ -708,7 +708,10 @@ export async function processBatch(batchSize: number = 20): Promise<{
     // Check progress milestone
     await logProgressIfNeeded();
     
-    return { processed: videos.length, succeeded, failed, techniquesAdded, errors };
+    // Clear arrays to help GC
+    errors.length = 0;
+    
+    return { processed: videos.length, succeeded, failed, techniquesAdded, errors: [] };
   } finally {
     batchProcessingInProgress = false;
   }
