@@ -783,6 +783,29 @@ export default function IOSLoginPage() {
             <p className="text-xs text-zinc-500 text-center mt-6">
               BJJ OS: $19.99/month. Auto-renews monthly. Cancel anytime.
             </p>
+            <div className="text-xs text-zinc-500 text-center mt-4 space-y-1">
+              <div className="flex justify-center gap-3">
+                <a 
+                  href="https://bjjos.app/apple/terms" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline"
+                  data-testid="link-terms-login"
+                >
+                  Terms of Use
+                </a>
+                <span>·</span>
+                <a 
+                  href="https://bjjos.app/apple/privacy" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline"
+                  data-testid="link-privacy-login"
+                >
+                  Privacy Policy
+                </a>
+              </div>
+            </div>
           </form>
         ) : (
           <form onSubmit={handleRegister} className="space-y-4">
@@ -848,6 +871,27 @@ export default function IOSLoginPage() {
               <p className="text-sm text-zinc-300">BJJ OS Subscription</p>
               <p className="text-2xl text-white font-bold">$19.99/month</p>
               <p className="text-xs text-zinc-400 mt-1">Auto-renews monthly. Cancel anytime.</p>
+              <div className="flex justify-center gap-3 mt-3">
+                <a 
+                  href="https://bjjos.app/apple/terms" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-xs text-zinc-500 underline"
+                  data-testid="link-terms-register"
+                >
+                  Terms of Use
+                </a>
+                <span className="text-xs text-zinc-500">·</span>
+                <a 
+                  href="https://bjjos.app/apple/privacy" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-xs text-zinc-500 underline"
+                  data-testid="link-privacy-register"
+                >
+                  Privacy Policy
+                </a>
+              </div>
             </div>
 
             <Button
