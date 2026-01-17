@@ -89,7 +89,15 @@ export async function collectSystemMetrics(): Promise<SystemMetrics> {
     
   } catch (error) {
     console.error('❌ [SNAPSHOT] Failed to collect metrics:', error);
-    throw error;
+    // Return fallback metrics instead of crashing
+    return {
+      videoCount: 0,
+      videosAddedToday: 0,
+      userCount: 0,
+      curationRunsToday: 0,
+      approvalRate: 0,
+      apiQuotaUsed: 0
+    };
   }
 }
 
