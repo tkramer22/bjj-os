@@ -2028,13 +2028,20 @@ export function registerRoutes(app: Express): Server {
           { expiresIn: '24h' }
         );
 
+        // Detect environment for proper cookie settings
+        const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+        const isProduction = req.hostname?.endsWith('bjjos.app') || req.hostname?.endsWith('.replit.dev');
+        
         // Set session cookie (httpOnly for security)
         res.cookie('admin_session', token, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
+          secure: isHttps,
           maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
-          sameSite: 'strict'
+          sameSite: isHttps ? 'none' : 'lax', // 'none' for HTTPS cross-site, 'lax' for local dev
+          ...(isProduction && req.hostname?.endsWith('bjjos.app') && { domain: '.bjjos.app' })
         });
+        
+        console.log('[Admin Login] Cookie set with:', { isHttps, isProduction, hostname: req.hostname });
 
         // Return token for localStorage (for isAdminAuthenticated check)
         res.json({
@@ -2058,17 +2065,22 @@ export function registerRoutes(app: Express): Server {
 
   // Admin logout endpoint
   app.post('/api/admin/logout', (req, res) => {
+    // Detect environment for proper cookie settings (must match login settings)
+    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    const isProduction = req.hostname?.endsWith('bjjos.app') || req.hostname?.endsWith('.replit.dev');
+    
+    const cookieOptions = {
+      httpOnly: true,
+      secure: isHttps,
+      sameSite: (isHttps ? 'none' : 'lax') as 'none' | 'lax',
+      ...(isProduction && req.hostname?.endsWith('bjjos.app') && { domain: '.bjjos.app' })
+    };
+    
     // Clear both cookies (old admin_auth and new admin_session)
-    res.clearCookie('admin_session', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    });
-    res.clearCookie('admin_auth', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    });
+    res.clearCookie('admin_session', cookieOptions);
+    res.clearCookie('admin_auth', cookieOptions);
+    
+    console.log('[Admin Logout] Cookies cleared with:', { isHttps, isProduction, hostname: req.hostname });
     res.json({ success: true, message: 'Logged out successfully' });
   });
 
