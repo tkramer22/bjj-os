@@ -352,8 +352,11 @@ export default function AdminDashboard() {
       });
       
       if (res.status === 401) {
+        // Clear stale localStorage auth before redirecting
+        clearAdminAuth();
         window.location.href = '/admin/login';
-        throw new Error('Authentication required');
+        // Return never-resolving promise to prevent further processing
+        return new Promise(() => {});
       }
       
       if (!res.ok) {
