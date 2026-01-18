@@ -2056,6 +2056,22 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Admin logout endpoint
+  app.post('/api/admin/logout', (req, res) => {
+    // Clear both cookies (old admin_auth and new admin_session)
+    res.clearCookie('admin_session', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict'
+    });
+    res.clearCookie('admin_auth', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict'
+    });
+    res.json({ success: true, message: 'Logged out successfully' });
+  });
+
   // ============================================
   // MAGIC LINK ENDPOINTS (BETA ACCESS CONTROL)
   // ============================================
