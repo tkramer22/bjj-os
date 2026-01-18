@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { clearAdminAuth } from "@/lib/adminApi";
+import { clearAdminAuth, getAdminToken } from "@/lib/adminApi";
 import { ActivityDashboard } from "@/components/admin/ActivityDashboard";
 
 interface AdminLayoutProps {
@@ -343,11 +343,15 @@ export default function AdminDashboard() {
   const { data: metrics, isLoading, isError, error, refetch } = useQuery<QuickMetrics>({
     queryKey: ['/api/admin/quick-metrics'],
     queryFn: async () => {
+      // Get token from localStorage for Authorization header (fallback when cookies blocked)
+      const token = getAdminToken();
+      
       const res = await fetch('/api/admin/quick-metrics', {
         credentials: 'include',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
         },
       });
       

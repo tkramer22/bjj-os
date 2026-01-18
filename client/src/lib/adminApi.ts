@@ -84,14 +84,18 @@ export async function adminApiRequest<T = any>(
   method: string = 'GET',
   body?: any
 ): Promise<T> {
+  // Get token from localStorage for Authorization header (fallback when cookies blocked)
+  const token = getAdminToken();
+  
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` }),
   };
 
   const options: RequestInit = {
     method,
     headers,
-    credentials: 'include', // Send cookies automatically
+    credentials: 'include', // Send cookies automatically (primary auth method)
   };
 
   if (body && method !== 'GET') {

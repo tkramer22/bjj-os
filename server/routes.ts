@@ -1959,26 +1959,35 @@ export function registerRoutes(app: Express): Server {
   // Note: JWT_SECRET and checkUserAuth are defined earlier in the file
 
   // Middleware to check JWT token for admin authentication (session-based)
+  // Supports both cookie-based auth AND Authorization header fallback for iframe/third-party cookie scenarios
   const checkAdminAuth = (req: any, res: any, next: any) => {
     const JWT_SECRET = process.env.SESSION_SECRET!;
     const adminSession = req.cookies?.admin_session;
+    
+    // Also check Authorization header as fallback (for iframe/third-party cookie blocked scenarios)
+    const authHeader = req.headers.authorization;
+    const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
     console.log('[checkAdminAuth] Checking admin auth for:', req.path);
     console.log('[checkAdminAuth] admin_session cookie:', adminSession ? 'PRESENT' : 'MISSING');
+    console.log('[checkAdminAuth] Authorization header:', headerToken ? 'PRESENT' : 'MISSING');
     console.log('[checkAdminAuth] All cookies:', Object.keys(req.cookies || {}));
+    
+    // Use cookie first, fallback to header token
+    const token = adminSession || headerToken;
 
-    if (!adminSession) {
-      console.log('❌ [checkAdminAuth] No admin_session cookie - returning 401');
+    if (!token) {
+      console.log('❌ [checkAdminAuth] No admin_session cookie or Authorization header - returning 401');
       return res.status(401).json({ 
         error: "Unauthorized",
         redirect: '/admin/login',
-        debug: 'No admin_session cookie found'
+        debug: 'No admin_session cookie or Authorization header found'
       });
     }
 
     try {
-      const decoded = jwt.verify(adminSession, JWT_SECRET) as any;
-      console.log('[checkAdminAuth] Token decoded:', { role: decoded.role });
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      console.log('[checkAdminAuth] Token decoded:', { role: decoded.role, source: adminSession ? 'cookie' : 'header' });
       
       if (decoded.role !== 'admin') {
         console.log('❌ [checkAdminAuth] Not admin role - returning 403');
