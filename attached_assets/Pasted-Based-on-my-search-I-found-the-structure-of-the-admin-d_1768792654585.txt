@@ -1,0 +1,86 @@
+Based on my search, I found the structure of the admin dashboard. Let me create a precise prompt.
+
+**Send this to Replit Agent:**
+
+```
+CRITICAL: TWO ISSUES MUST BE FIXED - DO NOT MARK COMPLETE UNTIL VERIFIED
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: MEMORY - NODE_OPTIONS MUST BE IN PRODUCTION DEPLOYMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+The production deployment is still showing Heap Total of ~119 MB instead of 7GB.
+
+This means NODE_OPTIONS is NOT set in the PRODUCTION DEPLOYMENT environment.
+
+YOU MUST:
+1. Go to the Replit Deployments panel (not Secrets, not Shell)
+2. Click on the ACTIVE DEPLOYMENT for bjjos.app
+3. Go to Settings → Environment Variables
+4. ADD this exact variable:
+   Name: NODE_OPTIONS
+   Value: --max-old-space-size=7168
+
+5. REDEPLOY the production deployment
+
+6. VERIFY by checking startup logs that Heap Limit shows 7168 MB (7GB)
+
+If you cannot access deployment settings, tell me explicitly "I cannot access deployment environment variables" so Todd can do it manually.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: ADMIN DASHBOARD STUCK ON "LOADING METRICS..."
+═══════════════════════════════════════════════════════════════════════════════
+
+The admin dashboard has been broken for over 24 hours. It shows "Loading metrics..." and never loads.
+
+DO NOT try to fix the complex metrics. Instead, REPLACE with a simple working version:
+
+STEP 1: Create a simple endpoint /api/admin/simple-stats
+
+app.get('/api/admin/simple-stats', requireAdmin, async (req, res) => {
+  try {
+    const [videos, users] = await Promise.all([
+      db.query('SELECT COUNT(*) as count FROM videos'),
+      db.query('SELECT COUNT(*) as count FROM users')
+    ]);
+    
+    res.json({
+      success: true,
+      totalVideos: parseInt(videos.rows[0].count),
+      totalUsers: parseInt(users.rows[0].count),
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Simple stats error:', error);
+    res.json({
+      success: false,
+      totalVideos: 0,
+      totalUsers: 0,
+      error: error.message
+    });
+  }
+});
+
+STEP 2: Update the admin dashboard component to use /api/admin/simple-stats
+
+Replace the complex metrics fetch with this simple one. Display:
+- Total Videos: X
+- Total Users: X
+- Last Updated: timestamp
+
+STEP 3: TEST IT
+
+Call curl http://localhost:5000/api/admin/simple-stats and show me the response.
+Then load the admin dashboard and confirm it shows data.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION REQUIRED
+═══════════════════════════════════════════════════════════════════════════════
+
+Before marking complete, show me:
+
+1. MEMORY: Screenshot or log showing Heap Limit is 7168 MB in PRODUCTION
+2. DASHBOARD: The actual admin dashboard loading with video and user counts displayed
+
+Do not say "done" until both are verified working.
+```

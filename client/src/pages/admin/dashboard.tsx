@@ -358,9 +358,8 @@ export default function AdminDashboard() {
       if (res.status === 401) {
         // Clear stale localStorage auth before redirecting
         clearAdminAuth();
-        window.location.href = '/admin/login';
-        // Return never-resolving promise to prevent further processing
-        return new Promise(() => {});
+        // Throw error immediately instead of never-resolving promise
+        throw new Error('Session expired - redirecting to login');
       }
       
       if (!res.ok) {
@@ -371,7 +370,14 @@ export default function AdminDashboard() {
       return res.json();
     },
     refetchInterval: 30000,
-    retry: 2,
+    retry: (failureCount, error) => {
+      // Don't retry on auth errors
+      if (error?.message?.includes('Session expired')) {
+        window.location.href = '/admin/login';
+        return false;
+      }
+      return failureCount < 2;
+    },
     retryDelay: 1000
   });
 

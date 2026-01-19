@@ -13049,6 +13049,40 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
+  // Simple Stats - Lightweight fallback for dashboard
+  app.get('/api/admin/simple-stats', checkAdminAuth, async (req, res) => {
+    console.log('[SIMPLE-STATS] Fetching simple stats...');
+    try {
+      const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
+      
+      const [videosResult, usersResult] = await Promise.all([
+        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`),
+        db.execute(sql`SELECT COUNT(*) as count FROM bjj_users`)
+      ]);
+      
+      const totalVideos = Number(getRows(videosResult)[0]?.count || 0);
+      const totalUsers = Number(getRows(usersResult)[0]?.count || 0);
+      
+      console.log('[SIMPLE-STATS] Success:', { totalVideos, totalUsers });
+      
+      res.json({
+        success: true,
+        totalVideos,
+        totalUsers,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('[SIMPLE-STATS] Error:', error);
+      res.json({
+        success: false,
+        totalVideos: 0,
+        totalUsers: 0,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   // Quick Metrics for Mobile (Compact)
   app.get('/api/admin/quick-metrics', checkAdminAuth, async (req, res) => {
     console.log('[QUICK-METRICS] Starting quick metrics fetch...');
