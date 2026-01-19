@@ -340,11 +340,12 @@ function GeminiAnalysisCard({ metrics, onRefresh }: GeminiAnalysisCardProps) {
 export default function AdminDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  const { data: metrics, isLoading, isError, error, refetch } = useQuery<QuickMetrics>({
+  const { data: metrics, isLoading, isError, error, refetch, fetchStatus } = useQuery<QuickMetrics>({
     queryKey: ['/api/admin/quick-metrics'],
     queryFn: async () => {
-      // Get token from localStorage for Authorization header (fallback when cookies blocked)
+      console.log('[DASHBOARD] Starting fetch for /api/admin/quick-metrics...');
       const token = getAdminToken();
+      console.log('[DASHBOARD] Token present:', token ? 'YES' : 'NO');
       
       const res = await fetch('/api/admin/quick-metrics', {
         credentials: 'include',
@@ -355,24 +356,29 @@ export default function AdminDashboard() {
         },
       });
       
+      console.log('[DASHBOARD] Response status:', res.status);
+      
       if (res.status === 401) {
-        // Clear stale localStorage auth before redirecting
+        console.log('[DASHBOARD] Got 401 - clearing auth and redirecting...');
         clearAdminAuth();
-        // Throw error immediately instead of never-resolving promise
         throw new Error('Session expired - redirecting to login');
       }
       
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
+        console.log('[DASHBOARD] Non-OK response:', errorData);
         throw new Error(errorData.error || `Failed to fetch metrics (${res.status})`);
       }
       
-      return res.json();
+      const data = await res.json();
+      console.log('[DASHBOARD] Metrics received successfully:', Object.keys(data));
+      return data;
     },
     refetchInterval: 30000,
     retry: (failureCount, error) => {
-      // Don't retry on auth errors
+      console.log('[DASHBOARD] Retry called, failureCount:', failureCount, 'error:', error?.message);
       if (error?.message?.includes('Session expired')) {
+        console.log('[DASHBOARD] Session expired - redirecting to /admin/login');
         window.location.href = '/admin/login';
         return false;
       }
@@ -380,6 +386,8 @@ export default function AdminDashboard() {
     },
     retryDelay: 1000
   });
+
+  console.log('[DASHBOARD] Render state:', { isLoading, isError, fetchStatus, hasMetrics: !!metrics, errorMsg: error?.message });
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
