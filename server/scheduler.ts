@@ -869,7 +869,7 @@ View library: https://bjjos.app/admin/videos`
   console.log('Video quality management scheduler started - runs daily at 3 AM');
   console.log('User profile building scheduler started - runs daily at 12 PM EST (moved from 4 AM)');
   console.log('[META ANALYZER] Meta analysis scheduler started - runs daily at 10 AM EST (moved from 5 AM)');
-  console.log('[AUTO CURATOR] ⛔ AUTOMATIC CURATION DISABLED - Use Command Center for manual triggering');
+  console.log('[OLD AUTO CURATOR] ⛔ DISABLED (replaced by Permanent Auto-Curation in scheduled-tasks.ts)');
   console.log('');
   console.log('═══════════════════════════════════════════════════════════════');
   console.log('📧 COMPREHENSIVE EMAIL SYSTEM INITIALIZED (V2)');

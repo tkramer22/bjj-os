@@ -17867,6 +17867,36 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
+  // TEST endpoint to trigger PERMANENT auto-curation (NO AUTH - FOR TESTING ONLY)
+  app.post('/api/test/permanent-auto-curation/run', async (req, res) => {
+    try {
+      console.log('[TEST] Manual PERMANENT auto-curation triggered');
+      
+      const { runPermanentAutoCuration } = await import('./permanent-auto-curation');
+      
+      // Respond immediately
+      res.json({
+        success: true,
+        message: 'Permanent auto-curation started. Check server logs for progress.',
+        startedAt: new Date().toISOString(),
+      });
+      
+      // Run in background
+      (async () => {
+        try {
+          const result = await runPermanentAutoCuration();
+          console.log('[TEST] Permanent auto-curation result:', JSON.stringify(result, null, 2));
+        } catch (error: any) {
+          console.error('[TEST] Permanent auto-curation error:', error.message);
+        }
+      })();
+      
+    } catch (error: any) {
+      console.error('[TEST] Permanent auto-curation trigger error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // TEST endpoint to check video curation status (NO AUTH - FOR TESTING ONLY)
   app.get('/api/test/video-curation/status', async (req, res) => {
     try {
