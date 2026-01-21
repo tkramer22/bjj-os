@@ -130,12 +130,51 @@ export default function MobileOnboardingPage() {
               />
             ))}
           </div>
-          <p style={{ 
-            fontSize: "0.875rem", 
-            color: "var(--mobile-text-secondary)" 
-          }}>
-            Step {step} of 4
-          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <p style={{ 
+              fontSize: "0.875rem", 
+              color: "var(--mobile-text-secondary)" 
+            }}>
+              Step {step} of 4
+            </p>
+            {/* Skip button - Required by App Store Guideline 4.0 */}
+            <button
+              onClick={async () => {
+                setIsLoading(true);
+                try {
+                  await apiRequest("PATCH", "/api/auth/profile", {
+                    onboardingCompleted: true,
+                  });
+                  await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+                  
+                  if (isNativeApp()) {
+                    const userId = localStorage.getItem('mobileUserId') || '1';
+                    await Preferences.set({ key: 'mobileUserId', value: userId });
+                    setLocation('/ios-chat');
+                  } else {
+                    window.location.href = '/chat';
+                  }
+                } catch (error: any) {
+                  toast({
+                    title: "Error",
+                    description: error.message || "Failed to skip onboarding",
+                    variant: "destructive",
+                  });
+                  setIsLoading(false);
+                }
+              }}
+              disabled={isLoading}
+              style={{
+                fontSize: "0.875rem",
+                color: "var(--mobile-primary-purple)",
+                background: "transparent",
+                padding: "0.5rem",
+              }}
+              data-testid="button-skip-onboarding"
+            >
+              Skip
+            </button>
+          </div>
         </div>
 
         {/* Step 1: Name */}

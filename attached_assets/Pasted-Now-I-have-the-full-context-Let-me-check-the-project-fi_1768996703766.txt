@@ -1,0 +1,109 @@
+Now I have the full context. Let me check the project files for the exact code structure.​​​​​​​​​​​​​​​​
+
+Now I have the full context. Based on my research:
+
+**Your iOS app structure:**
+
+- Login file: `client/src/pages/ios-login.tsx`
+- IAP service: `client/src/services/applePurchase.ts`
+- Uses `cordova-plugin-purchase` with `CdvPurchase`
+- Product ID: `bjjos` (changed from earlier longer ID)
+- Sign in with Apple already works via `@capacitor-community/apple-sign-in`
+
+**Send this to Replit Agent:**
+
+```
+APPLE APP STORE REJECTION FIX - BUILD ON EXISTING CODE
+
+Apple rejected for 2 issues. Fix ONLY these issues. Do NOT rebuild anything.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: ADD "RESTORE PURCHASES" BUTTON (Guideline 3.1.1)
+═══════════════════════════════════════════════════════════════════════════════
+
+Location: The paywall/subscription screen where user sees $19.99/month
+
+We already have cordova-plugin-purchase installed and working. The store object is already initialized.
+
+ADD a "Restore Purchases" button below the Subscribe button.
+
+Find where the Subscribe button is rendered and add this below it:
+
+<button
+  onClick={handleRestorePurchases}
+  className="text-sm text-gray-500 underline mt-4"
+>
+  Restore Purchases
+</button>
+
+Add this handler function in the same component:
+
+const handleRestorePurchases = async () => {
+  try {
+    const { store } = window.CdvPurchase;
+    await store.restorePurchases();
+    // The 'approved' and 'verified' handlers already exist in applePurchase.ts
+    // They will handle the restored transactions
+  } catch (error) {
+    console.error('Restore failed:', error);
+    alert('Could not restore purchases. Please try again.');
+  }
+};
+
+The button must be VISIBLE on the subscription screen - not hidden in settings.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: REMOVE NAME/EMAIL FORM AFTER APPLE SIGN IN (Guideline 4.0)
+═══════════════════════════════════════════════════════════════════════════════
+
+Apple says we're asking for name/email AFTER Sign in with Apple. This is not allowed.
+
+Find where Apple Sign In completes and check if there's ANY form asking for additional info.
+
+The Apple Sign In response already provides:
+- email (on first sign-in)
+- fullName.givenName / familyName (on first sign-in)
+- user (always - the unique identifier)
+
+After Apple Sign In succeeds, the user should go DIRECTLY to:
+- The subscription screen (if not subscribed), OR
+- The main app (if subscribed)
+
+DO NOT show any form asking for name, email, phone, or other info after Apple auth.
+
+Check ios-login.tsx and any onboarding screens for forms that appear after Apple Sign In.
+
+If there's an onboarding form, either:
+1. REMOVE it entirely, OR
+2. Make it OPTIONAL with a clear "Skip" button that works
+
+═══════════════════════════════════════════════════════════════════════════════
+FILES TO CHECK
+═══════════════════════════════════════════════════════════════════════════════
+
+1. client/src/pages/ios-login.tsx - Apple Sign In flow
+2. client/src/services/applePurchase.ts - IAP service (already has store setup)
+3. Any paywall/subscription component that shows the $19.99 price
+4. Any onboarding screens after login
+
+═══════════════════════════════════════════════════════════════════════════════
+DO NOT CHANGE
+═══════════════════════════════════════════════════════════════════════════════
+
+- Product ID (bjjos) - already correct
+- Store initialization - already works
+- Apple Sign In button - already works
+- Purchase flow - already works
+- Any Professor OS code
+- Backend endpoints
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After changes, show me:
+1. The subscription screen code with the new Restore Purchases button
+2. The Apple Sign In completion handler - confirm no forms appear after auth
+
+These are small targeted fixes, not a rebuild.
+```
