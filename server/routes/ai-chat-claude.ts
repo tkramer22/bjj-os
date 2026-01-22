@@ -540,6 +540,7 @@ export async function handleClaudeStream(req: any, res: any) {
       positionCategory: v.positionCategory,
       qualityScore: v.qualityScore,
       videoUrl: v.videoUrl,
+      youtubeId: v.youtubeId,
       tags: v.tags || [],
       relevanceScore: Number(v.qualityScore) || 0,
       keyTimestamps: v.keyTimestamps || []
@@ -558,6 +559,7 @@ export async function handleClaudeStream(req: any, res: any) {
         positionCategory: aiVideoKnowledge.positionCategory,
         qualityScore: aiVideoKnowledge.qualityScore,
         videoUrl: aiVideoKnowledge.videoUrl,
+        youtubeId: aiVideoKnowledge.youtubeId,
         keyTimestamps: aiVideoKnowledge.keyTimestamps,
         tags: aiVideoKnowledge.tags
       })
@@ -1137,7 +1139,8 @@ export async function handleClaudeStream(req: any, res: any) {
           techniqueType: v.techniqueType,
           positionCategory: v.positionCategory,
           qualityScore: v.qualityScore,
-          videoUrl: v.videoUrl
+          videoUrl: v.videoUrl,
+          youtubeId: v.youtubeId
         }))
       ];
       
@@ -1250,10 +1253,13 @@ export async function handleClaudeStream(req: any, res: any) {
       
       const matchingVideo = bestScore >= MIN_CONFIDENCE ? bestMatch : null;
       
-      if (matchingVideo && matchingVideo.videoUrl) {
-        // Extract YouTube video ID from URL
-        const youtubeMatch = matchingVideo.videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
-        const videoId = youtubeMatch ? youtubeMatch[1] : '';
+      if (matchingVideo && (matchingVideo.youtubeId || matchingVideo.videoUrl)) {
+        // Use youtubeId directly if available, otherwise extract from URL
+        let videoId = matchingVideo.youtubeId || '';
+        if (!videoId && matchingVideo.videoUrl) {
+          const youtubeMatch = matchingVideo.videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+          videoId = youtubeMatch ? youtubeMatch[1] : '';
+        }
         
         if (videoId) {
           // ═══════════════════════════════════════════════════════════════
