@@ -14,6 +14,23 @@ import { WebhookHandlers } from './webhookHandlers';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
+// ═══════════════════════════════════════════════════════════════
+// CONTINUOUS MEMORY MONITORING - Every 5 minutes
+// ═══════════════════════════════════════════════════════════════
+setInterval(() => {
+  const used = process.memoryUsage();
+  const heapUsedMB = Math.round(used.heapUsed / 1024 / 1024);
+  const heapTotalMB = Math.round(used.heapTotal / 1024 / 1024);
+  const percentage = Math.round((used.heapUsed / used.heapTotal) * 100);
+  
+  console.log(`[MEMORY] ${heapUsedMB}MB / ${heapTotalMB}MB (${percentage}%)`);
+  
+  if (percentage > 80) {
+    console.warn(`[MEMORY WARNING] Usage at ${percentage}% - triggering GC`);
+    if (global.gc) global.gc();
+  }
+}, 5 * 60 * 1000); // Every 5 minutes
+
 const execPromise = promisify(exec);
 
 // ═══════════════════════════════════════════════════════════════
