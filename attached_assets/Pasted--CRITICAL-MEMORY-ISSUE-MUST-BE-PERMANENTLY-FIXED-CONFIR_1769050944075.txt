@@ -1,0 +1,125 @@
+```
+CRITICAL: MEMORY ISSUE MUST BE PERMANENTLY FIXED - CONFIRM EACH STEP
+
+The server keeps hitting 95%+ memory despite having 8GB RAM available. This has been an ongoing issue that keeps reverting. I need this fixed PERMANENTLY with confirmation at each step.
+
+══════════════════════════════════════════════════════════════════════════════
+STEP 1: VERIFY NODE_OPTIONS IN DEPLOYMENT (NOT DEV)
+══════════════════════════════════════════════════════════════════════════════
+
+The NODE_OPTIONS environment variable MUST be set in the DEPLOYMENT environment, not just the development environment.
+
+1. Go to Deployments → Your Active Deployment → Settings → Environment Variables
+2. Add or verify this variable exists:
+   
+   NODE_OPTIONS="--max-old-space-size=7168"
+
+3. CONFIRM: Screenshot or show me the deployment environment variables list
+
+If this variable is only in .replit or project Secrets, it does NOT apply to production.
+
+══════════════════════════════════════════════════════════════════════════════
+STEP 2: ADD STARTUP MEMORY VERIFICATION LOG
+══════════════════════════════════════════════════════════════════════════════
+
+Add this at the VERY FIRST LINE of server/index.ts (before any imports):
+
+```typescript
+const v8 = require('v8');
+const heapStats = v8.getHeapStatistics();
+console.log('═══════════════════════════════════════════════════════');
+console.log('MEMORY CONFIG ON STARTUP');
+console.log('Heap Size Limit:', Math.round(heapStats.heap_size_limit / 1024 / 1024), 'MB');
+console.log('Total Available:', Math.round(heapStats.total_available_size / 1024 / 1024), 'MB');
+console.log('═══════════════════════════════════════════════════════');
+
+if (heapStats.heap_size_limit < 2000000000) {
+  console.error('⚠️ WARNING: Heap limit is below 2GB! NODE_OPTIONS not applied!');
+}
+```
+
+CONFIRM: Show me this code added to server/index.ts
+
+══════════════════════════════════════════════════════════════════════════════
+STEP 3: REPUBLISH TO PRODUCTION
+══════════════════════════════════════════════════════════════════════════════
+
+After adding the environment variable and startup log:
+
+1. Click “Republish” or “Redeploy” (NOT just restart dev server)
+1. Wait for deployment to complete
+1. Check the deployment logs for the startup memory output
+
+CONFIRM: Show me the deployment logs showing:
+
+- “Heap Size Limit: 7168 MB” (or close to it)
+- NOT “Heap Size Limit: 108 MB” or “236 MB”
+
+If the heap limit shows less than 2000 MB, the NODE_OPTIONS variable is NOT being applied.
+
+══════════════════════════════════════════════════════════════════════════════
+STEP 4: ADD CONTINUOUS MEMORY MONITORING
+══════════════════════════════════════════════════════════════════════════════
+
+Add a memory check that runs every 5 minutes and logs to console:
+
+```typescript
+setInterval(() => {
+  const used = process.memoryUsage();
+  const heapUsedMB = Math.round(used.heapUsed / 1024 / 1024);
+  const heapTotalMB = Math.round(used.heapTotal / 1024 / 1024);
+  const percentage = Math.round((used.heapUsed / used.heapTotal) * 100);
+  
+  console.log(`[MEMORY] ${heapUsedMB}MB / ${heapTotalMB}MB (${percentage}%)`);
+  
+  if (percentage > 80) {
+    console.warn(`[MEMORY WARNING] Usage at ${percentage}% - triggering GC`);
+    if (global.gc) global.gc();
+  }
+}, 5 * 60 * 1000); // Every 5 minutes
+```
+
+CONFIRM: Show me this code added
+
+══════════════════════════════════════════════════════════════════════════════
+STEP 5: FIX WHISPER API QUOTA EXCEEDED
+══════════════════════════════════════════════════════════════════════════════
+
+The logs show “Whisper API quota exceeded errors”. This is a separate issue.
+
+1. Add rate limiting to voice transcription (max 10 requests per minute per user)
+1. Add a fallback error message when quota is exceeded:
+   “Voice transcription temporarily unavailable. Please type your message.”
+1. Consider caching transcription results for identical audio
+
+CONFIRM: Show me the rate limiting added to the Whisper/transcription endpoint
+
+══════════════════════════════════════════════════════════════════════════════
+STEP 6: FINAL VERIFICATION
+══════════════════════════════════════════════════════════════════════════════
+
+After ALL changes are deployed to production, provide:
+
+1. Screenshot of deployment environment variables showing NODE_OPTIONS
+1. Deployment log showing “Heap Size Limit: 7168 MB” on startup
+1. Current memory usage from the 5-minute monitor
+1. Confirmation that the admin dashboard loads properly
+1. Confirmation that videos page loads without infinite spinner
+
+══════════════════════════════════════════════════════════════════════════════
+EXPECTED RESULTS AFTER FIX
+══════════════════════════════════════════════════════════════════════════════
+
+|Metric         |Before (Broken) |After (Fixed)  |
+|---------------|----------------|---------------|
+|Heap Limit     |108-236 MB      |7,168 MB       |
+|Usage %        |90-96%          |5-20%          |
+|Crashes        |Multiple daily  |Zero           |
+|Admin Dashboard|Stuck loading   |Loads instantly|
+|Videos Page    |Infinite spinner|Shows videos   |
+
+DO NOT MARK THIS COMPLETE UNTIL ALL 6 STEPS ARE CONFIRMED.
+
+```
+
+```
