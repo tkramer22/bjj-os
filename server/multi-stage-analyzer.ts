@@ -198,7 +198,9 @@ async function stage2KeyDetailExtraction(video: VideoCandidate): Promise<Stage2R
            OR ${channelLower} LIKE '%' || LOWER(instructor_name) || '%'
       `);
       
-      isEliteInstructor = (eliteCheck.rows[0] as any).count > 0;
+      // Handle both array result (postgres-js) and { rows: [...] } format
+      const rows = Array.isArray(eliteCheck) ? eliteCheck : (eliteCheck.rows || []);
+      isEliteInstructor = rows.length > 0 && (rows[0] as any).count > 0;
       
       if (isEliteInstructor) {
         console.log(`  ✨ ELITE INSTRUCTOR BYPASS: ${channelName} - proceeding without transcript`);

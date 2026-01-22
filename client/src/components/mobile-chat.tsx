@@ -704,7 +704,7 @@ What are you working on right now?`,
         style={{
           flex: 1,
           overflowY: 'auto',
-          paddingBottom: 20,
+          paddingBottom: 'calc(180px + env(safe-area-inset-bottom, 0px))',
         }}
       >
         {isLoadingMore && (
