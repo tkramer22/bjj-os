@@ -16,17 +16,21 @@ import { promisify } from 'util';
 
 // ═══════════════════════════════════════════════════════════════
 // CONTINUOUS MEMORY MONITORING - Every 5 minutes
+// Uses heap LIMIT (7GB) not current allocation for accurate percentage
 // ═══════════════════════════════════════════════════════════════
 setInterval(() => {
   const used = process.memoryUsage();
+  const heapStats = v8.getHeapStatistics();
   const heapUsedMB = Math.round(used.heapUsed / 1024 / 1024);
-  const heapTotalMB = Math.round(used.heapTotal / 1024 / 1024);
-  const percentage = Math.round((used.heapUsed / used.heapTotal) * 100);
+  const heapLimitGB = (heapStats.heap_size_limit / 1024 / 1024 / 1024).toFixed(2);
+  // Calculate percentage against actual LIMIT, not current allocation
+  const percentage = Math.round((used.heapUsed / heapStats.heap_size_limit) * 100);
   
-  console.log(`[MEMORY] ${heapUsedMB}MB / ${heapTotalMB}MB (${percentage}%)`);
+  console.log(`[MEMORY] ${heapUsedMB}MB / ${heapLimitGB}GB limit (${percentage}%)`);
   
-  if (percentage > 80) {
-    console.warn(`[MEMORY WARNING] Usage at ${percentage}% - triggering GC`);
+  // Only warn if we're actually using significant portion of the 7GB limit
+  if (percentage > 50) {
+    console.warn(`[MEMORY WARNING] Usage at ${percentage}% of limit - triggering GC`);
     if (global.gc) global.gc();
   }
 }, 5 * 60 * 1000); // Every 5 minutes
@@ -192,11 +196,14 @@ function logHeapConfiguration() {
 
 async function logMemoryUsage() {
   const mem = process.memoryUsage();
-  const heapUsedPercent = mem.heapUsed / mem.heapTotal;
+  const heapStats = v8.getHeapStatistics();
+  // Use the actual heap LIMIT (7GB), not current allocation (which is much smaller)
+  const heapLimit = heapStats.heap_size_limit;
+  const heapUsedPercent = mem.heapUsed / heapLimit;
   const timestamp = new Date().toISOString();
   const now = new Date();
   
-  console.log(`📊 [MEMORY] ${timestamp} | Heap: ${formatBytes(mem.heapUsed)}/${formatBytes(mem.heapTotal)} (${(heapUsedPercent * 100).toFixed(1)}%) | RSS: ${formatBytes(mem.rss)} | External: ${formatBytes(mem.external)}`);
+  console.log(`📊 [MEMORY] ${timestamp} | Heap: ${formatBytes(mem.heapUsed)}/${formatGB(heapLimit)} limit (${(heapUsedPercent * 100).toFixed(1)}%) | RSS: ${formatBytes(mem.rss)} | External: ${formatBytes(mem.external)}`);
   
   // Check thresholds (most severe first)
   if (heapUsedPercent >= MEMORY_EMERGENCY_THRESHOLD) {
