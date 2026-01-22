@@ -685,7 +685,9 @@ What are you working on right now?`,
           <h2 style={{ fontSize: "1.25rem", marginBottom: "0.25rem" }}>Prof. OS</h2>
           <p style={{ 
             fontSize: "0.875rem", 
-            color: "var(--mobile-text-secondary)" 
+            color: "var(--mobile-text-secondary)",
+            whiteSpace: "nowrap",
+            overflow: "visible"
           }}>
             Your Training Partner
           </p>
