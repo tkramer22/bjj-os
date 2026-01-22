@@ -13708,7 +13708,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
   // ═══════════════════════════════════════════════════════════════════════════════
 
   // Get video library with filters and pagination
-  app.get('/api/admin/videos', async (req, res) => {
+  app.get('/api/admin/videos', checkAdminAuth, async (req, res) => {
     try {
       const {
         search,
