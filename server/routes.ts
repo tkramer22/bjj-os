@@ -13086,172 +13086,117 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
   // Quick Metrics for Mobile (Compact)
   app.get('/api/admin/quick-metrics', checkAdminAuth, async (req, res) => {
     console.log('[QUICK-METRICS] Starting quick metrics fetch...');
+    const startTime = Date.now();
+    
     try {
       const today = new Date().toISOString().split('T')[0];
-      console.log('[QUICK-METRICS] Today:', today);
       
       // Helper to safely get rows from db.execute result (handles both array and {rows} formats)
       const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
       
-      // Check if Elite Curator COMPLETED successfully TODAY
-      const lastCurationRun = await db.execute(sql`
-        SELECT run_date, status, completed_at FROM curation_runs
-        ORDER BY run_date DESC
-        LIMIT 1
-      `);
-      const lastCurationRows = getRows(lastCurationRun);
-      
-      const minutesSinceLastRun = lastCurationRows[0]
-        ? Math.floor((Date.now() - new Date(lastCurationRows[0].run_date).getTime()) / 60000)
-        : 999;
-      
-      // Check if curation COMPLETED successfully today (not just started)
-      const completedRunsToday = await db.execute(sql`
-        SELECT COUNT(*) as count FROM curation_runs
-        WHERE DATE(run_date) = ${today}
-          AND status = 'completed'
-          AND completed_at IS NOT NULL
-      `);
-      const completedRows = getRows(completedRunsToday);
-      
-      const curationRanToday = completedRows[0] && Number(completedRows[0].count) > 0;
-      
-      // Quick counts + Elite Curator Efficiency Metrics
-      const [
-        totalVideos, 
-        totalUsers, 
-        videosToday, 
-        usersToday, 
-        activeSubscriptions, 
-        mrr,
-        todayScreening,
-        geminiAnalyzed
-      ] = await Promise.all([
-        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`),
-        db.execute(sql`SELECT COUNT(*) as count FROM bjj_users`),
-        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE DATE(created_at) = ${today}`),
-        db.execute(sql`SELECT COUNT(*) as count FROM bjj_users WHERE DATE(created_at) = ${today}`),
-        db.execute(sql`
-          SELECT COUNT(*) as count FROM bjj_users 
-          WHERE (subscription_status = 'active' OR subscription_status = 'trialing')
-            AND subscription_type NOT IN ('free_trial', 'lifetime')
-            AND subscription_type IS NOT NULL
-        `),
-        db.execute(sql`
-          SELECT COALESCE(SUM(
-            CASE 
-              WHEN subscription_type = 'monthly' THEN 19.99
-              WHEN subscription_type = 'yearly' THEN 149.99/12
-              ELSE 0
-            END
-          ), 0) as mrr
-          FROM bjj_users
-          WHERE (subscription_status = 'active' OR subscription_status = 'trialing')
-            AND subscription_type IN ('monthly', 'yearly')
-        `),
-        // Elite Curator screening efficiency for today (FULL FUNNEL) from curation_runs table
-        // Include all runs today (completed AND running) to count manual + auto runs
+      // OPTIMIZED: Use a single combined query for core metrics to reduce DB connections
+      // This consolidates what was 11+ queries into 2-3 queries
+      const [coreMetrics, curationMetrics] = await Promise.all([
+        // Combined query for videos, users, and subscriptions
         db.execute(sql`
           SELECT 
-            COALESCE(SUM(videos_screened), 0) as discovered,
-            COALESCE(SUM(videos_analyzed), 0) as analyzed,
-            COALESCE(SUM(videos_added), 0) as accepted,
-            COALESCE(SUM(videos_rejected), 0) as rejected
-          FROM curation_runs
-          WHERE DATE(run_date) = ${today}
-            AND status IN ('completed', 'running')
+            (SELECT COUNT(*) FROM ai_video_knowledge) as total_videos,
+            (SELECT COUNT(*) FROM ai_video_knowledge WHERE DATE(created_at) = ${today}) as videos_today,
+            (SELECT COUNT(*) FROM bjj_users) as total_users,
+            (SELECT COUNT(*) FROM bjj_users WHERE DATE(created_at) = ${today}) as users_today,
+            (SELECT COUNT(*) FROM bjj_users 
+             WHERE (subscription_status = 'active' OR subscription_status = 'trialing')
+               AND subscription_type NOT IN ('free_trial', 'lifetime')
+               AND subscription_type IS NOT NULL) as active_subscriptions,
+            (SELECT COALESCE(SUM(
+              CASE 
+                WHEN subscription_type = 'monthly' THEN 19.99
+                WHEN subscription_type = 'yearly' THEN 149.99/12
+                ELSE 0
+              END
+            ), 0)
+             FROM bjj_users
+             WHERE (subscription_status = 'active' OR subscription_status = 'trialing')
+               AND subscription_type IN ('monthly', 'yearly')) as mrr,
+            (SELECT COUNT(*) FROM video_watch_status WHERE processed = true) as gemini_analyzed,
+            (SELECT COALESCE(setting_value, 'true') FROM system_settings 
+             WHERE setting_key = 'auto_curation_enabled' LIMIT 1) as auto_curation_enabled
         `),
-        // Count videos processed by Gemini (same source as Videos page for consistency)
-        db.execute(sql`SELECT COUNT(*) as count FROM video_watch_status WHERE processed = true`)
+        // Curation run metrics
+        db.execute(sql`
+          SELECT 
+            (SELECT run_date FROM curation_runs ORDER BY run_date DESC LIMIT 1) as last_run_date,
+            (SELECT COUNT(*) FROM curation_runs 
+             WHERE DATE(run_date) = ${today} AND status = 'completed' AND completed_at IS NOT NULL) as completed_today,
+            (SELECT COALESCE(SUM(videos_analyzed), 0) FROM curation_runs 
+             WHERE DATE(run_date) = ${today} AND status IN ('completed', 'running')) as analyzed,
+            (SELECT COALESCE(SUM(videos_added), 0) FROM curation_runs 
+             WHERE DATE(run_date) = ${today} AND status IN ('completed', 'running')) as accepted,
+            (SELECT COALESCE(SUM(videos_rejected), 0) FROM curation_runs 
+             WHERE DATE(run_date) = ${today} AND status IN ('completed', 'running')) as rejected
+        `)
       ]);
       
-      console.log('[QUICK-METRICS] All queries completed successfully');
+      const coreRows = getRows(coreMetrics);
+      const curationRows = getRows(curationMetrics);
       
-      // Safely extract rows from all results
-      const totalVideosRows = getRows(totalVideos);
-      const videosTodayRows = getRows(videosToday);
-      const totalUsersRows = getRows(totalUsers);
-      const usersTodayRows = getRows(usersToday);
-      const activeSubsRows = getRows(activeSubscriptions);
-      const mrrRows = getRows(mrr);
-      const screeningRows = getRows(todayScreening);
-      const geminiAnalyzedRows = getRows(geminiAnalyzed);
+      const core = coreRows[0] || {};
+      const curation = curationRows[0] || {};
       
-      // Calculate full curation funnel metrics - with safe fallbacks
-      const screening = screeningRows[0];
-      const analyzed = screening ? Number(screening.analyzed || 0) : 0;
-      const accepted = screening ? Number(screening.accepted || 0) : 0;
-      const rejected = screening ? Number(screening.rejected || 0) : 0;
-      // FIXED: Discovered = analyzed + rejected (total videos that went through the pipeline)
-      // videos_screened column was not being populated correctly
+      console.log('[QUICK-METRICS] Queries completed in', Date.now() - startTime, 'ms');
+      
+      // Calculate curation metrics
+      const analyzed = Number(curation.analyzed || 0);
+      const accepted = Number(curation.accepted || 0);
+      const rejected = Number(curation.rejected || 0);
       const discovered = analyzed + rejected;
-      const skipped = 0; // Skipped is no longer used in the new funnel
-      
-      // Calculate acceptance rate based on DISCOVERED (total found from YouTube)
-      // Return as number, not string - frontend will format it
       const acceptanceRate = discovered > 0 ? parseFloat(((accepted / discovered) * 100).toFixed(1)) : 0;
       
-      // Determine efficiency status
+      // Efficiency status
       let efficiencyStatus = 'unknown';
       if (analyzed > 0) {
-        const rate = parseFloat(acceptanceRate);
-        // Elite Curator targets 60-80% approval rate
-        if (rate < 30) efficiencyStatus = 'too_strict';
-        else if (rate >= 30 && rate < 50) efficiencyStatus = 'strict';
-        else if (rate >= 50 && rate <= 85) efficiencyStatus = 'optimal';
-        else if (rate > 85 && rate <= 95) efficiencyStatus = 'loose';
+        if (acceptanceRate < 30) efficiencyStatus = 'too_strict';
+        else if (acceptanceRate < 50) efficiencyStatus = 'strict';
+        else if (acceptanceRate <= 85) efficiencyStatus = 'optimal';
+        else if (acceptanceRate <= 95) efficiencyStatus = 'loose';
         else efficiencyStatus = 'too_loose';
       }
       
-      // Determine curation pipeline status
-      const videoCount = Number(totalVideosRows[0]?.count || 0);
+      // Curation status
+      const videoCount = Number(core.total_videos || 0);
       const TARGET_VIDEO_COUNT = 10000;
       const targetReached = videoCount >= TARGET_VIDEO_COUNT;
+      const curationRanToday = Number(curation.completed_today || 0) > 0;
+      const autoCurationEnabled = core.auto_curation_enabled !== 'false';
       
-      // Check if auto-curation is enabled directly from database (lightweight query)
-      const autoCurationSetting = await db.execute(sql`
-        SELECT setting_value FROM system_settings 
-        WHERE setting_key = 'auto_curation_enabled' 
-        LIMIT 1
-      `);
-      const autoCurationRows = getRows(autoCurationSetting);
-      const autoCurationEnabled = autoCurationRows[0]?.setting_value !== 'false';
+      const minutesSinceLastRun = curation.last_run_date
+        ? Math.floor((Date.now() - new Date(curation.last_run_date).getTime()) / 60000)
+        : 999;
       
-      // Curation status: "active", "scheduled", "paused_target_reached", or "offline"
-      // - "active": Curation has run and completed successfully today
-      // - "scheduled": Auto-curation is enabled and waiting for next scheduled run
-      // - "paused_target_reached": Target video count reached
-      // - "offline": Auto-curation is disabled
       let curationStatus = 'offline';
-      if (curationRanToday) {
-        curationStatus = 'active';
-      } else if (targetReached) {
-        curationStatus = 'paused_target_reached';
-      } else if (autoCurationEnabled) {
-        curationStatus = 'scheduled';
-      }
+      if (curationRanToday) curationStatus = 'active';
+      else if (targetReached) curationStatus = 'paused_target_reached';
+      else if (autoCurationEnabled) curationStatus = 'scheduled';
       
       res.json({
-        curationRunning: curationRanToday, // Legacy field for backward compatibility
-        curationStatus, // New: "active", "paused_target_reached", or "offline"
+        curationRunning: curationRanToday,
+        curationStatus,
         targetReached,
         minutesSinceRun: minutesSinceLastRun,
-        totalVideos: Number(totalVideosRows[0]?.count || 0),
-        videosToday: Number(videosTodayRows[0]?.count || 0),
-        totalUsers: Number(totalUsersRows[0]?.count || 0),
-        signedUpToday: Number(usersTodayRows[0]?.count || 0),
-        activeSubscriptions: Number(activeSubsRows[0]?.count || 0),
-        mrr: Number(mrrRows[0]?.mrr || 0).toFixed(0),
-        geminiAnalyzed: Number(geminiAnalyzedRows[0]?.count || 0), // Videos with Gemini knowledge extracted
-        // Curation Efficiency Metrics (THE CORE BUSINESS METRIC)
-        // FULL FUNNEL: Discovered → Analyzed → Accepted/Rejected
+        totalVideos: Number(core.total_videos || 0),
+        videosToday: Number(core.videos_today || 0),
+        totalUsers: Number(core.total_users || 0),
+        signedUpToday: Number(core.users_today || 0),
+        activeSubscriptions: Number(core.active_subscriptions || 0),
+        mrr: Number(core.mrr || 0).toFixed(0),
+        geminiAnalyzed: Number(core.gemini_analyzed || 0),
         curationEfficiency: {
-          discovered,      // Videos found from YouTube
-          analyzed,        // Videos that went through AI analysis
-          accepted,        // Videos added to library
-          rejected,        // Videos rejected by AI
-          skipped,         // Videos filtered before analysis (discovered - analyzed)
-          acceptanceRate: parseFloat(acceptanceRate), // % of analyzed that were accepted
+          discovered,
+          analyzed,
+          accepted,
+          rejected,
+          skipped: 0,
+          acceptanceRate: parseFloat(acceptanceRate),
           status: efficiencyStatus
         }
       });
