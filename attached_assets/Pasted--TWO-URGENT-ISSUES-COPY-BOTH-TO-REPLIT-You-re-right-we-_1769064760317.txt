@@ -1,0 +1,181 @@
+# 🚨 **TWO URGENT ISSUES - COPY BOTH TO REPLIT**
+
+You're right - we need to fix both the dashboard AND make sure auto-curation is running.
+
+---
+
+## **ISSUE 1: AUTO-CURATION NOT RUNNING**
+
+```
+URGENT: AUTO-CURATION APPEARS TO BE STOPPED
+
+Todd says curation hasn't run today and it should be on auto-schedule.
+
+DIAGNOSTIC STEPS:
+
+1. Check if cron job or scheduled task is still active
+   - Look for setInterval or node-cron in server code
+   - Check environment variables for CURATION_ENABLED
+   - Check server logs for curation activity today
+
+2. Verify the auto-curation schedule:
+   - Should run 4x daily (6 AM, 12 PM, 6 PM, 12 AM EST)
+   - Check last successful run timestamp in database
+   - Check curation_runs table for today's entries
+
+3. Run manual curation NOW to maximize YouTube API quota:
+   - Execute video curation immediately
+   - Log discovered/analyzed/accepted counts
+   - YouTube API quota resets at midnight Pacific Time
+
+MANUAL TRIGGER COMMAND:
+
+Find your curation function (likely in server/services/videoCuration.js) and run it:
+
+```javascript
+// In server console or create endpoint:
+const { runVideoCuration } = require('./services/videoCuration');
+
+app.post('/api/admin/curation/run-now', requireAdmin, async (req, res) => {
+  try {
+    console.log('🎯 Manual curation triggered by admin');
+    const result = await runVideoCuration();
+    
+    res.json({
+      success: true,
+      message: 'Curation completed',
+      result
+    });
+  } catch (error) {
+    console.error('Curation error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+```
+
+THEN VERIFY AUTO-SCHEDULE IS RE-ENABLED:
+
+```javascript
+// Check if this exists in server startup:
+const cron = require('node-cron');
+
+// Run curation 4x daily: 6 AM, 12 PM, 6 PM, 12 AM EST
+cron.schedule('0 6,12,18,0 * * *', async () => {
+  console.log('⏰ Scheduled curation starting...');
+  try {
+    await runVideoCuration();
+  } catch (error) {
+    console.error('Scheduled curation failed:', error);
+  }
+}, {
+  timezone: "America/New_York"
+});
+
+console.log('✅ Auto-curation scheduled: 6 AM, 12 PM, 6 PM, 12 AM EST');
+```
+
+CHECK THESE:
+- Is cron job defined in server code?
+- Is server running continuously (not restarting)?
+- Are there any errors in logs blocking curation?
+
+RUN CURATION NOW - don't wait for diagnosis. YouTube quota resets soon.
+```
+
+---
+
+## **ISSUE 2: DASHBOARD STILL BROKEN**
+
+```
+DASHBOARD FIX - SIMPLIFIED APPROACH
+
+The dashboard is still stuck on "Loading metrics..."
+
+DO THIS NOW:
+
+1. Find the dashboard component file
+   - Search for: "Loading metrics" in codebase
+   - Likely: client/src/pages/AdminDashboard.jsx
+
+2. Find what API it calls
+   - Look for fetch() or axios.get() in that file
+   - Show me the endpoint URL
+
+3. Test that endpoint:
+   curl http://localhost:5000/api/admin/[whatever-the-endpoint-is]
+
+4. If endpoint doesn't exist or returns error, CREATE THIS:
+
+```javascript
+// Add to server/routes/adminRoutes.js or server/index.js
+
+app.get('/api/admin/dashboard-stats', async (req, res) => {
+  try {
+    // Simple queries that WILL work
+    const [videos, users, curationToday] = await Promise.all([
+      db.query('SELECT COUNT(*) FROM videos'),
+      db.query('SELECT COUNT(*) FROM users'),
+      db.query(`SELECT COUNT(*) FROM curation_runs 
+                WHERE DATE(created_at) = CURRENT_DATE`)
+    ]);
+    
+    res.json({
+      success: true,
+      totalVideos: parseInt(videos.rows[0].count),
+      totalUsers: parseInt(users.rows[0].count),
+      curationsToday: parseInt(curationToday.rows[0].count),
+      lastUpdate: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Dashboard stats error:', error);
+    res.json({
+      success: false,
+      error: error.message,
+      // Return zeros so dashboard shows SOMETHING
+      totalVideos: 0,
+      totalUsers: 0,
+      curationsToday: 0
+    });
+  }
+});
+```
+
+5. Update dashboard to use this endpoint
+
+PRIORITY: Fix curation first, dashboard second.
+We need to max out YouTube API quota TODAY before it resets.
+```
+
+---
+
+## **WHAT YOU SHOULD DO RIGHT NOW:**
+
+1. **Send BOTH prompts to Replit Agent**
+
+2. **Immediately trigger manual curation** - don't wait for auto-schedule fix
+
+3. **Check YouTube API quota usage:**
+   - Go to Google Cloud Console
+   - Check how many quota units you have left today
+   - Make sure curation runs until quota is maxed
+
+4. **Verify auto-schedule is restored** so it runs tomorrow
+
+---
+
+## **COPY THIS COMMAND TO RUN CURATION MANUALLY:**
+
+If Agent is taking too long, run this yourself in Replit shell:
+
+```bash
+curl -X POST http://localhost:5000/api/admin/curation/run-now \
+  -H "Content-Type: application/json"
+```
+
+---
+
+**Time is critical - YouTube API quota resets at midnight Pacific (3 AM Eastern). How much quota do you have left today?**
