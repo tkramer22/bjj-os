@@ -1,0 +1,249 @@
+# 🚨 **CRITICAL ISSUE: CURATION LOGGING IS BROKEN**
+
+**The Facts:**
+
+- ✅ Curation IS running (quota hit at 3:30 AM)
+- ✅ Videos ARE being added (18 videos added)
+- ❌ Dashboard shows only 4 videos
+- ❌ Metrics are completely wrong
+
+**This means:** Videos are being added to the database, but the curation metrics aren’t being logged correctly.
+
+-----
+
+## **COPY THIS TO REPLIT AGENT:**
+
+```
+URGENT: CURATION METRICS LOGGING IS BROKEN
+
+FACTS:
+- Email at 3:30 AM said quota was hit (curation ran successfully)
+- 18 videos were actually added to database
+- Dashboard shows only 4 discovered/analyzed/accepted
+- Curation IS working but metrics tracking is NOT
+
+ROOT CAUSE:
+The curation process is adding videos to the database but NOT logging the correct metrics to the curation_runs table (or wherever metrics are stored).
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: VERIFY ACTUAL VIDEOS ADDED TODAY
+═══════════════════════════════════════════════════════════════════════════════
+
+Run this query RIGHT NOW:
+
+```sql
+SELECT COUNT(*) as actual_videos_added
+FROM videos
+WHERE DATE(created_at) = CURRENT_DATE;
+```
+
+Todd says this should return 18 (or close to it).
+
+If it returns less than 18, the videos might have been added yesterday or the timezone is wrong.
+
+Try this too:
+
+```sql
+SELECT COUNT(*) as videos_last_24_hours
+FROM videos
+WHERE created_at >= NOW() - INTERVAL '24 hours';
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: FIND THE CURATION FUNCTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Find where video curation happens:
+
+- Likely: server/services/videoCuration.js
+- Or: server/services/curation.js
+- Or: server/cron/videoCuration.js
+
+Show me the ENTIRE curation function code.
+
+I need to see:
+
+1. Where it fetches videos from YouTube
+1. Where it adds videos to the database
+1. Where it’s SUPPOSED to log metrics (but isn’t working)
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: CHECK CURATION_RUNS TABLE
+═══════════════════════════════════════════════════════════════════════════════
+
+```sql
+SELECT * FROM curation_runs
+WHERE DATE(created_at) = CURRENT_DATE
+ORDER BY created_at DESC;
+```
+
+This will show what’s actually being logged.
+
+Also check table structure:
+
+```sql
+\d curation_runs
+```
+
+Verify columns exist: discovered, analyzed, accepted, rejected, skipped
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: FIX THE METRICS LOGGING
+═══════════════════════════════════════════════════════════════════════════════
+
+The curation function needs to:
+
+1. Track counts as it processes videos
+1. Insert a record into curation_runs table at the end
+1. Include ALL the metrics
+
+Example of what the code SHOULD look like:
+
+```javascript
+async function runVideoCuration() {
+  const startTime = Date.now();
+  let metrics = {
+    discovered: 0,
+    analyzed: 0,
+    accepted: 0,
+    rejected: 0,
+    skipped: 0
+  };
+  
+  try {
+    // 1. Fetch videos from YouTube
+    const youtubeVideos = await fetchFromYouTube();
+    metrics.discovered = youtubeVideos.length;
+    console.log(`📥 Discovered ${metrics.discovered} videos from YouTube`);
+    
+    // 2. Filter out duplicates/pre-filtered
+    const newVideos = youtubeVideos.filter(v => !isDuplicate(v));
+    metrics.skipped = metrics.discovered - newVideos.length;
+    
+    // 3. Analyze with AI
+    for (const video of newVideos) {
+      try {
+        const analysis = await analyzeWithAI(video);
+        metrics.analyzed++;
+        
+        // 4. Quality check
+        if (meetsQualityStandards(analysis)) {
+          await db.query(`
+            INSERT INTO videos (title, youtube_id, channel, analysis, created_at)
+            VALUES ($1, $2, $3, $4, NOW())
+          `, [video.title, video.youtubeId, video.channel, analysis]);
+          
+          metrics.accepted++;
+          console.log(`✅ Accepted: ${video.title}`);
+        } else {
+          metrics.rejected++;
+          console.log(`❌ Rejected: ${video.title}`);
+        }
+      } catch (error) {
+        console.error(`Error processing ${video.title}:`, error);
+        metrics.rejected++;
+      }
+    }
+    
+    // 5. LOG THE METRICS - THIS IS CRITICAL
+    await db.query(`
+      INSERT INTO curation_runs (
+        discovered,
+        analyzed,
+        accepted,
+        rejected,
+        skipped,
+        duration_ms,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `, [
+      metrics.discovered,
+      metrics.analyzed,
+      metrics.accepted,
+      metrics.rejected,
+      metrics.skipped,
+      Date.now() - startTime
+    ]);
+    
+    console.log('📊 Metrics logged:', metrics);
+    
+    return metrics;
+    
+  } catch (error) {
+    console.error('❌ Curation failed:', error);
+    
+    // Log failed run
+    await db.query(`
+      INSERT INTO curation_runs (
+        discovered, analyzed, accepted, rejected, skipped,
+        error_message, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `, [
+      metrics.discovered,
+      metrics.analyzed,
+      metrics.accepted,
+      metrics.rejected,
+      metrics.skipped,
+      error.message
+    ]);
+    
+    throw error;
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: VERIFY THE FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+After fixing the logging:
+
+1. Run manual curation:
+
+- Should process some videos
+- Should log accurate metrics
+
+1. Check curation_runs table:
+   
+   ```sql
+   SELECT * FROM curation_runs ORDER BY created_at DESC LIMIT 1;
+   ```
+1. Check dashboard:
+
+- Should show the correct numbers
+- Discovered, analyzed, accepted should match
+
+═══════════════════════════════════════════════════════════════════════════════
+THE ISSUE:
+═══════════════════════════════════════════════════════════════════════════════
+
+Right now, your curation code is probably:
+
+- ✅ Fetching videos from YouTube
+- ✅ Adding them to videos table
+- ❌ NOT logging metrics to curation_runs table
+- ❌ OR logging metrics in wrong format
+- ❌ OR dashboard is reading from wrong source
+
+FIND THE CURATION FUNCTION CODE AND SHOW ME.
+
+Then I’ll tell you exactly what’s broken and how to fix it.
+
+```
+---
+
+## **WHAT YOU NEED TO DO:**
+
+1. **Send that prompt to Replit Agent**
+
+2. **Also check your email from 3:30 AM** - what exactly did it say?
+   - Did it show 18 videos?
+   - Or did it show 4 videos?
+   - This will tell us if the problem is in logging or in the dashboard query
+
+3. **If the email also showed only 4 videos**, then the curation function itself has the bug
+
+4. **If the email showed 18 videos**, then the dashboard query is wrong
+
+**Which is it? What did the 3:30 AM email say?**
+```

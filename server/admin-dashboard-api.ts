@@ -1554,10 +1554,10 @@ router.get('/curation/auto-status', requireAdmin, async (req, res) => {
     ]);
     
     const lastRunData = lastRun[0] ? {
-      discovered: lastRun[0].discovered || 0,
-      analyzed: lastRun[0].analyzed || 0,
-      accepted: lastRun[0].approved || 0,
-      rejected: lastRun[0].rejected || 0,
+      discovered: lastRun[0].videosScreened || 0,
+      analyzed: lastRun[0].videosAnalyzed || 0,
+      accepted: lastRun[0].videosAdded || 0,
+      rejected: lastRun[0].videosRejected || 0,
       timestamp: lastRun[0].createdAt
     } : null;
     
