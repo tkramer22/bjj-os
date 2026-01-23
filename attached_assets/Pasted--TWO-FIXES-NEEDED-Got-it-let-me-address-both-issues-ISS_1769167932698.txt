@@ -1,0 +1,313 @@
+# 🎯 **TWO FIXES NEEDED**
+
+Got it - let me address both issues.
+
+-----
+
+## **ISSUE 1: ADD 30-DAY TRIAL OPTION TO LIFETIME ACCESS**
+
+## **ISSUE 2: NO CURATION EMAIL AT 3AM**
+
+-----
+
+## **COPY THIS TO REPLIT AGENT:**
+
+```
+TWO URGENT FIXES NEEDED:
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 1: ADD 30-DAY TRIAL OPTION TO LIFETIME ACCESS FEATURE
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT STATE:
+- Admin can grant "Lifetime Access" to users by email
+- Only one option: Lifetime (permanent free access)
+
+NEW REQUIREMENT:
+- Add dropdown to choose between:
+  1. "Lifetime Access" (permanent, never expires)
+  2. "30-Day Trial" (free for 30 days, then expires)
+
+IMPLEMENTATION:
+
+1. Find the "Grant Lifetime Access" form in admin dashboard
+   - Likely location: client/src/pages/admin/Dashboard.jsx or similar
+   - Or: client/src/components/admin/LifetimeAccessForm.jsx
+
+2. Update the form to include a dropdown:
+
+```jsx
+const [accessType, setAccessType] = useState('lifetime');
+
+<form onSubmit={handleGrantAccess}>
+  <input 
+    type="email" 
+    placeholder="User email"
+    value={email}
+    onChange={(e) => setEmail(e.target.value)}
+    required
+  />
+  
+  <select 
+    value={accessType} 
+    onChange={(e) => setAccessType(e.target.value)}
+    required
+  >
+    <option value="lifetime">Lifetime Access (Permanent)</option>
+    <option value="trial_30">30-Day Trial</option>
+  </select>
+  
+  <button type="submit">Grant Access</button>
+</form>
+```
+
+1. Update the backend endpoint to handle both types:
+
+```javascript
+app.post('/api/admin/grant-access', requireAdmin, async (req, res) => {
+  const { email, accessType } = req.body;
+  
+  try {
+    // Find user by email
+    const userResult = await db.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    const userId = userResult.rows[0].id;
+    let expiresAt = null;
+    let subscriptionStatus = 'active';
+    
+    if (accessType === 'trial_30') {
+      // 30-day trial: expires in 30 days
+      expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      subscriptionStatus = 'trial';
+      
+      console.log(`✅ Granting 30-day trial to ${email}, expires: ${expiresAt}`);
+    } else {
+      // Lifetime: never expires
+      expiresAt = null;
+      subscriptionStatus = 'lifetime';
+      
+      console.log(`✅ Granting lifetime access to ${email}`);
+    }
+    
+    // Update user subscription
+    await db.query(`
+      UPDATE users 
+      SET 
+        subscription_status = $1,
+        subscription_expires_at = $2,
+        updated_at = NOW()
+      WHERE id = $3
+    `, [subscriptionStatus, expiresAt, userId]);
+    
+    // Log the grant in admin activity
+    await db.query(`
+      INSERT INTO admin_activity (
+        admin_id,
+        action,
+        target_user_id,
+        details,
+        created_at
+      ) VALUES ($1, $2, $3, $4, NOW())
+    `, [
+      req.user.id,
+      'grant_access',
+      userId,
+      JSON.stringify({ email, accessType, expiresAt })
+    ]);
+    
+    res.json({
+      success: true,
+      message: accessType === 'trial_30' 
+        ? `30-day trial granted to ${email} (expires ${expiresAt.toLocaleDateString()})`
+        : `Lifetime access granted to ${email}`,
+      user: {
+        email,
+        accessType,
+        expiresAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('Grant access error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+```
+
+1. Make sure the users table has the necessary columns:
+
+```sql
+-- Check if columns exist, add if needed
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMP,
+ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50) DEFAULT 'inactive';
+```
+
+1. Add a cron job to check for expired trials daily:
+
+```javascript
+// In server startup code
+cron.schedule('0 0 * * *', async () => {
+  console.log('⏰ Checking for expired trials...');
+  
+  try {
+    const result = await db.query(`
+      UPDATE users
+      SET subscription_status = 'expired'
+      WHERE subscription_status = 'trial'
+      AND subscription_expires_at < NOW()
+      AND subscription_expires_at IS NOT NULL
+      RETURNING email
+    `);
+    
+    if (result.rows.length > 0) {
+      console.log(`⚠️ Expired ${result.rows.length} trials:`, 
+        result.rows.map(r => r.email)
+      );
+    }
+  } catch (error) {
+    console.error('Trial expiration check failed:', error);
+  }
+});
+```
+
+VERIFY IT WORKS:
+
+1. Go to admin dashboard
+1. Find “Grant Lifetime Access” section
+1. See dropdown with two options
+1. Grant 30-day trial to test email
+1. Check database that expires_at is set to 30 days from now
+1. Check that user can access the app
+
+═══════════════════════════════════════════════════════════════════════════════
+FIX 2: CURATION EMAIL NOT SENT AT 3 AM
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEM:
+
+- Todd says curation ran at 3:30 AM (quota was hit)
+- But NO email was received
+- Email system is broken or not triggering
+
+DIAGNOSTIC STEPS:
+
+1. Check server logs for 3:00-4:00 AM EST today
+
+- Look for: “Sending curation email”
+- Look for: Email service errors
+- Look for: Curation completion logs
+
+1. Find the email sending code:
+
+- Where does curation trigger the email?
+- Is it using nodemailer, sendgrid, or other service?
+- Show me the code
+
+1. Check if email schedule exists:
+
+```javascript
+// Should be in server code
+cron.schedule('30 3 * * *', async () => {
+  console.log('📧 Sending 3:30 AM curation email...');
+  await sendCurationEmail();
+}, {
+  timezone: "America/New_York"
+});
+```
+
+1. Test email sending manually:
+
+```javascript
+app.post('/api/admin/test-email', requireAdmin, async (req, res) => {
+  try {
+    console.log('📧 Testing email send...');
+    
+    const result = await sendCurationEmail();
+    
+    res.json({
+      success: true,
+      message: 'Test email sent',
+      result
+    });
+  } catch (error) {
+    console.error('Email test failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+```
+
+1. Check email service configuration:
+
+- Are API keys set correctly?
+- Is email service active?
+- Check environment variables:
+  - SENDGRID_API_KEY (if using SendGrid)
+  - SMTP credentials (if using nodemailer)
+
+1. Verify Todd’s email is correct in the system:
+
+- What email should receive curation reports?
+- Is it stored in environment variable? Database?
+
+QUESTIONS FOR TODD:
+
+- What email address should receive curation reports?
+- Did you receive ANY emails today? (test emails, user notifications?)
+- What email service are we using? (SendGrid, AWS SES, nodemailer?)
+
+FIX THE EMAIL:
+Once I see the code, I’ll tell you exactly what’s broken.
+
+Most likely issues:
+
+- Email schedule not running (cron job missing)
+- Email sending after curation but failing silently
+- Wrong recipient email
+- Email service credentials expired/invalid
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. FIX LIFETIME ACCESS DROPDOWN (30 min) - this is straightforward
+1. DIAGNOSE EMAIL ISSUE (15 min) - need to see logs/code
+1. FIX EMAIL (30 min) - depends on what’s broken
+
+START WITH THE DROPDOWN - it’s easier and we know exactly what to do.
+Then investigate the email issue.
+
+```
+---
+
+## **TODD - I NEED FROM YOU:**
+
+**For Email Issue:**
+1. **What email address should receive curation reports?** (yours? admin@bjjos.app?)
+2. **Did you receive ANY automated emails today?** (user signups, password resets, anything?)
+3. **Do you have access to Replit server logs from 3:00-4:00 AM EST?** (Can you check them?)
+
+**For Testing:**
+Once the 30-day trial dropdown is added, test it with a dummy email to make sure it works before using on real users.
+
+---
+
+**Send that full prompt to Replit Agent and let me know what questions you have!**
+```

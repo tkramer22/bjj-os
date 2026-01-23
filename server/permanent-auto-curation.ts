@@ -68,6 +68,65 @@ export function isAutoCurationEnabled(): boolean {
   return autoCurationEnabled;
 }
 
+// Startup check for missed curation emails - resends emails for completed runs without email audit
+export async function checkAndResendMissedCurationEmails(): Promise<void> {
+  try {
+    console.log('[AUTO-CURATION EMAIL RECOVERY] Checking for missed curation emails in last 24 hours...');
+    
+    // Find completed runs in the last 24 hours
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentRuns = await db.select()
+      .from(curationRuns)
+      .where(and(
+        eq(curationRuns.status, 'completed'),
+        gte(curationRuns.runDate, oneDayAgo)
+      ))
+      .orderBy(desc(curationRuns.runDate))
+      .limit(10);
+    
+    if (recentRuns.length === 0) {
+      console.log('[AUTO-CURATION EMAIL RECOVERY] No completed runs in last 24 hours');
+      return;
+    }
+    
+    // Check which runs have email audit logs
+    for (const run of recentRuns) {
+      const emailLog = await db.execute(sql`
+        SELECT id FROM admin_activity_log 
+        WHERE action = 'curation_email_sent' 
+        AND target_id = ${run.id}
+        LIMIT 1
+      `);
+      
+      if (!emailLog.rows || emailLog.rows.length === 0) {
+        // This run has no email audit - resend
+        console.log(`[AUTO-CURATION EMAIL RECOVERY] ⚠️ Found run ${run.id} without email. Resending...`);
+        
+        // Build result object with all required fields for CurationResult interface
+        const result: CurationResult = {
+          success: true,
+          runId: run.id,
+          videosAnalyzed: run.videosAnalyzed || 0,
+          videosAdded: run.videosAdded || 0,
+          videosSkipped: run.videosRejected || 0,
+          instructorsProcessed: [],
+          instructorResults: {},
+          skippedReasons: {},
+          errors: [],
+          quotaExhausted: false
+        };
+        
+        await sendCurationEmail(result);
+        console.log(`[AUTO-CURATION EMAIL RECOVERY] ✅ Recovered email for run ${run.id}`);
+      }
+    }
+    
+    console.log('[AUTO-CURATION EMAIL RECOVERY] Check complete');
+  } catch (error) {
+    console.error('[AUTO-CURATION EMAIL RECOVERY] Error checking for missed emails:', error);
+  }
+}
+
 export async function setAutoCurationEnabled(enabled: boolean): Promise<{ success: boolean; error?: string }> {
   // Persist to database FIRST, then update memory
   try {
@@ -1123,16 +1182,69 @@ async function sendCurationEmail(result: CurationResult): Promise<void> {
       </div>
     `;
     
-    await resend.emails.send({
-      from: 'BJJ OS <noreply@bjjos.app>',
-      to: [ADMIN_EMAIL],
-      subject,
-      html: htmlContent
-    });
+    console.log(`[AUTO-CURATION] 📧 Sending curation email to ${ADMIN_EMAIL}...`);
     
-    console.log(`[AUTO-CURATION] ✅ Email sent: ${subject}`);
-  } catch (error) {
-    console.error(`[AUTO-CURATION] Failed to send email:`, error);
+    // Retry logic with 3 attempts
+    let lastError: any = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const emailResult = await resend.emails.send({
+          from: 'BJJ OS <noreply@bjjos.app>',
+          to: [ADMIN_EMAIL],
+          subject,
+          html: htmlContent
+        });
+        
+        console.log(`[AUTO-CURATION] ✅ Email sent successfully on attempt ${attempt}: ${subject}`);
+        console.log(`[AUTO-CURATION] 📧 Email ID: ${emailResult.data?.id || 'N/A'}`);
+        
+        // Log successful email send to database for audit
+        try {
+          await db.execute(sql`
+            INSERT INTO admin_activity_log (admin_id, action, target_type, target_id, details, created_at)
+            VALUES ('system', 'curation_email_sent', 'curation_run', ${result.runId || 'unknown'}, ${JSON.stringify({
+              videosAdded: result.videosAdded,
+              emailId: emailResult.data?.id,
+              subject,
+              attempt
+            })}, NOW())
+          `);
+        } catch (auditErr) {
+          console.warn(`[AUTO-CURATION] Failed to audit email send (non-critical):`, auditErr);
+        }
+        
+        return; // Success - exit function
+      } catch (error: any) {
+        lastError = error;
+        console.error(`[AUTO-CURATION] ❌ Email attempt ${attempt}/3 failed:`, error?.message || error);
+        
+        if (attempt < 3) {
+          console.log(`[AUTO-CURATION] Retrying in ${attempt * 2} seconds...`);
+          await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+        }
+      }
+    }
+    
+    // All retries failed
+    console.error(`[AUTO-CURATION] ❌ FAILED to send email after 3 attempts to ${ADMIN_EMAIL}`);
+    console.error(`[AUTO-CURATION] Final error:`, JSON.stringify(lastError, null, 2));
+    
+    // Log failed email attempt to database for debugging
+    try {
+      await db.execute(sql`
+        INSERT INTO admin_activity_log (admin_id, action, target_type, target_id, details, created_at)
+        VALUES ('system', 'curation_email_failed', 'curation_run', ${result.runId || 'unknown'}, ${JSON.stringify({
+          videosAdded: result.videosAdded,
+          errorMessage: lastError?.message,
+          subject,
+          attempts: 3
+        })}, NOW())
+      `);
+    } catch (auditErr) {
+      console.warn(`[AUTO-CURATION] Failed to audit email failure (non-critical):`, auditErr);
+    }
+  } catch (error: any) {
+    console.error(`[AUTO-CURATION] ❌ Unexpected error in sendCurationEmail:`, error?.message || error);
   }
 }
 

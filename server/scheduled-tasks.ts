@@ -3,7 +3,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { runAlertMonitor } from './alert-monitor-service';
 import { sendHourlyDigest } from './hourly-digest-service';
 import { processBatch as processVideoKnowledgeBatch } from './video-knowledge-service';
-import { runPermanentAutoCuration, initializeAutoCurationState } from './permanent-auto-curation';
+import { runPermanentAutoCuration, initializeAutoCurationState, checkAndResendMissedCurationEmails } from './permanent-auto-curation';
 import { runDemandDrivenCuration, initializeDemandCurationState, isDemandCurationEnabled } from './demand-driven-curation';
 import { withMemoryManagement, forceGC, shouldSkipDueToMemory, logMemory } from './utils/memory-management';
 
@@ -28,6 +28,9 @@ export async function initScheduledTasks() {
   // Initialize auto-curation state from database BEFORE starting schedulers
   await initializeAutoCurationState();
   await initializeDemandCurationState();
+  
+  // Check for missed curation emails on startup (recovery mechanism)
+  await checkAndResendMissedCurationEmails();
   
   // ═══════════════════════════════════════════════════════════════
   // ALERT MONITOR - Every 2 minutes

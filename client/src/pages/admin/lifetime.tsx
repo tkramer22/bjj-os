@@ -64,6 +64,7 @@ export default function AdminLifetime() {
   // Email invitation states
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteReason, setInviteReason] = useState<string>("");
+  const [accessType, setAccessType] = useState<"lifetime" | "trial_30">("lifetime");
   const [sendEmailChecked, setSendEmailChecked] = useState(false);
   const [emailSubject, setEmailSubject] = useState("BJJ OS lifetime access for free");
   const [emailBody, setEmailBody] = useState(`Hey [Name],
@@ -192,7 +193,7 @@ Os!
   
   // Instant grant mutation
   const instantGrantMutation = useMutation({
-    mutationFn: async (data: { email: string; reason: string; sendEmail: boolean; emailSubject?: string; emailBody?: string }) => {
+    mutationFn: async (data: { email: string; reason: string; accessType: "lifetime" | "trial_30"; sendEmail: boolean; emailSubject?: string; emailBody?: string }) => {
       return await adminApiRequest('/api/admin/lifetime/grant-instant', 'POST', data);
     },
     onSuccess: (data) => {
@@ -203,6 +204,7 @@ Os!
       });
       setInviteEmail("");
       setInviteReason("");
+      setAccessType("lifetime");
       setSendEmailChecked(false);
     },
     onError: (error: any) => {
@@ -247,6 +249,7 @@ Os!
     instantGrantMutation.mutate({
       email: inviteEmail,
       reason: inviteReason,
+      accessType: accessType,
       sendEmail: sendEmailChecked,
       emailSubject: sendEmailChecked ? emailSubject : undefined,
       emailBody: sendEmailChecked ? emailBody : undefined,
@@ -315,7 +318,7 @@ Os!
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="invite-reason">Reason for Lifetime Access *</Label>
+                <Label htmlFor="invite-reason">Reason for Access *</Label>
                 <Select value={inviteReason} onValueChange={setInviteReason} required>
                   <SelectTrigger id="invite-reason" data-testid="select-invite-reason">
                     <SelectValue placeholder="Select a reason" />
@@ -333,6 +336,22 @@ Os!
                     <SelectItem value="Other">Other</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="access-type">Access Type *</Label>
+                <Select value={accessType} onValueChange={(val: "lifetime" | "trial_30") => setAccessType(val)} required>
+                  <SelectTrigger id="access-type" data-testid="select-access-type">
+                    <SelectValue placeholder="Select access type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="lifetime">Lifetime Access (Permanent)</SelectItem>
+                    <SelectItem value="trial_30">30-Day Trial (Expires after 30 days)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {accessType === "trial_30" && (
+                  <p className="text-sm text-muted-foreground">User will have full access for 30 days, then access will expire.</p>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">
@@ -393,10 +412,15 @@ Os!
                 type="submit"
                 disabled={!inviteEmail || !inviteReason || instantGrantMutation.isPending}
                 className="w-full"
-                data-testid="button-grant-lifetime"
+                data-testid="button-grant-access"
               >
                 <Star className="h-4 w-4 mr-2" />
-                {instantGrantMutation.isPending ? "Granting..." : (sendEmailChecked ? "Grant Lifetime Access & Send Email" : "Grant Lifetime Access")}
+                {instantGrantMutation.isPending 
+                  ? "Granting..." 
+                  : accessType === "trial_30"
+                    ? (sendEmailChecked ? "Grant 30-Day Trial & Send Email" : "Grant 30-Day Trial")
+                    : (sendEmailChecked ? "Grant Lifetime Access & Send Email" : "Grant Lifetime Access")
+                }
               </Button>
             </form>
           </CardContent>

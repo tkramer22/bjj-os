@@ -5604,10 +5604,10 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
   // LIFETIME INVITATION SYSTEM
   // ========================================================================
 
-  // Instant grant lifetime access with optional email (admin only)
+  // Instant grant lifetime or trial access with optional email (admin only)
   app.post('/api/admin/lifetime/grant-instant', checkAdminAuth, async (req, res) => {
     try {
-      const { email, reason, sendEmail = false, emailSubject, emailBody } = req.body;
+      const { email, reason, accessType = 'lifetime', sendEmail = false, emailSubject, emailBody } = req.body;
       const adminUser = req.user;
       const { lifetimeMemberships } = await import("@shared/schema");
       
@@ -5625,6 +5625,18 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       if (!emailRegex.test(emailLower)) {
         return res.status(400).json({ success: false, error: 'Invalid email format' });
       }
+      
+      // Validate accessType
+      if (accessType && !['lifetime', 'trial_30'].includes(accessType)) {
+        return res.status(400).json({ success: false, error: 'Invalid access type. Must be "lifetime" or "trial_30"' });
+      }
+      
+      // Determine subscription settings based on access type
+      const isTrial = accessType === 'trial_30';
+      const subscriptionType = isTrial ? 'free_admin_grant' : 'lifetime';
+      const subscriptionEndDate = isTrial 
+        ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+        : null;
 
       // Check if user already exists
       let existingUser = await db.query.bjjUsers.findFirst({
@@ -5632,31 +5644,31 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       });
       
       if (existingUser) {
-        // User exists - update to lifetime access if not already
-        if (existingUser.subscriptionType !== 'lifetime') {
-          await db.update(bjjUsers)
-            .set({
-              subscriptionType: 'lifetime',
-              isLifetimeUser: true,
-              updatedAt: new Date(),
-            })
-            .where(eq(bjjUsers.id, existingUser.id));
-          
-          console.log(`✅ Updated existing user ${emailLower} to lifetime access`);
-        } else {
-          console.log(`ℹ️ User ${emailLower} already has lifetime access`);
-        }
+        // User exists - update subscription
+        await db.update(bjjUsers)
+          .set({
+            subscriptionType: subscriptionType,
+            subscriptionStatus: 'active',
+            subscriptionEndDate: subscriptionEndDate,
+            isLifetimeUser: !isTrial,
+            updatedAt: new Date(),
+          })
+          .where(eq(bjjUsers.id, existingUser.id));
+        
+        console.log(`✅ Updated existing user ${emailLower} to ${isTrial ? '30-day trial' : 'lifetime'} access${isTrial ? ` (expires: ${subscriptionEndDate?.toLocaleDateString()})` : ''}`);
       } else {
-        // Create new user with lifetime access flag
+        // Create new user with access
         const [newUser] = await db.insert(bjjUsers).values({
           email: emailLower,
-          subscriptionType: 'lifetime',
-          isLifetimeUser: true,
+          subscriptionType: subscriptionType,
+          subscriptionStatus: 'active',
+          subscriptionEndDate: subscriptionEndDate,
+          isLifetimeUser: !isTrial,
           verified: true,
         }).returning();
         
         existingUser = newUser;
-        console.log(`✅ Created new user ${emailLower} with lifetime access`);
+        console.log(`✅ Created new user ${emailLower} with ${isTrial ? '30-day trial' : 'lifetime'} access${isTrial ? ` (expires: ${subscriptionEndDate?.toLocaleDateString()})` : ''}`);
       }
 
       // Create or update lifetime membership record with reason
@@ -5684,6 +5696,9 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       }
 
       // Optionally send email with custom message
+      const accessLabel = isTrial ? '30-day trial' : 'Lifetime access';
+      const expiryInfo = isTrial && subscriptionEndDate ? ` (expires ${subscriptionEndDate.toLocaleDateString()})` : '';
+      
       if (sendEmail) {
         const { sendLifetimeAccessEmail } = await import('./email');
         const emailResult = await sendLifetimeAccessEmail(emailLower, emailSubject, emailBody);
@@ -5692,27 +5707,31 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           console.error(`⚠️ Failed to send email to ${emailLower}:`, emailResult.error);
           return res.status(200).json({
             success: true,
-            message: `Lifetime access granted to ${emailLower}, but email failed to send`,
+            message: `${accessLabel} granted to ${emailLower}${expiryInfo}, but email failed to send`,
             userId: existingUser.id,
             emailSent: false,
+            accessType: accessType,
+            expiresAt: subscriptionEndDate,
           });
         }
         
-        console.log(`✅ Lifetime access email sent to ${emailLower}`);
+        console.log(`✅ ${accessLabel} email sent to ${emailLower}`);
       }
 
       res.status(200).json({
         success: true,
         message: sendEmail 
-          ? `Lifetime access granted and email sent to ${emailLower}`
-          : `Lifetime access granted to ${emailLower}`,
+          ? `${accessLabel} granted and email sent to ${emailLower}${expiryInfo}`
+          : `${accessLabel} granted to ${emailLower}${expiryInfo}`,
         userId: existingUser.id,
         emailSent: sendEmail,
+        accessType: accessType,
+        expiresAt: subscriptionEndDate,
       });
 
     } catch (error: any) {
-      console.error('❌ Error granting instant lifetime access:', error);
-      res.status(500).json({ success: false, error: 'Failed to grant lifetime access. Please try again.' });
+      console.error('❌ Error granting access:', error);
+      res.status(500).json({ success: false, error: 'Failed to grant access. Please try again.' });
     }
   });
 
