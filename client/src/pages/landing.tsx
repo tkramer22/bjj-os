@@ -5,6 +5,11 @@ import { ChevronDown, X, Star, Smartphone, Award } from "lucide-react";
 
 const APP_STORE_URL = "https://apps.apple.com/us/app/bjj-os/id6757207452";
 
+// Mobile-optimized App Store navigation
+const openAppStore = () => {
+  window.location.href = APP_STORE_URL;
+};
+
 export default function Landing() {
   const [, setLocation] = useLocation();
   const [showMobileBanner, setShowMobileBanner] = useState(false);
@@ -66,15 +71,13 @@ export default function Landing() {
               <strong>BJJ OS</strong>
               <span>Get the app for the best experience</span>
             </div>
-            <a 
-              href={APP_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button 
+              onClick={openAppStore}
               className="banner-cta"
               data-testid="link-app-store-banner"
             >
               GET
-            </a>
+            </button>
             <button 
               onClick={dismissBanner}
               className="banner-close"
@@ -140,19 +143,19 @@ export default function Landing() {
               Start 7-Day Free Trial
             </button>
             
-            <a 
-              href={APP_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <div 
+              onClick={openAppStore}
               className="app-store-link"
               data-testid="link-app-store-hero"
+              style={{ cursor: 'pointer', WebkitTapHighlightColor: 'rgba(124, 77, 255, 0.2)', touchAction: 'manipulation' }}
             >
               <img 
                 src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us"
                 alt="Download on the App Store"
                 className="app-store-badge"
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
               />
-            </a>
+            </div>
           </div>
           
           <p className="landing-price-note">
@@ -247,19 +250,19 @@ export default function Landing() {
           </p>
           
           <div className="download-options">
-            <a 
-              href={APP_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <div 
+              onClick={openAppStore}
               className="download-badge-link"
               data-testid="link-app-store-download-section"
+              style={{ cursor: 'pointer', WebkitTapHighlightColor: 'rgba(124, 77, 255, 0.2)', touchAction: 'manipulation' }}
             >
               <img 
                 src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us"
                 alt="Download on the App Store"
                 className="download-app-store-badge"
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
               />
-            </a>
+            </div>
             
             <button 
               className="download-web-button"
@@ -292,18 +295,18 @@ export default function Landing() {
         <div className="landing-footer-content">
           <div className="footer-downloads">
             <h4 className="footer-downloads-title">Download the App</h4>
-            <a 
-              href={APP_STORE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <div 
+              onClick={openAppStore}
               data-testid="link-app-store-footer"
+              style={{ cursor: 'pointer', WebkitTapHighlightColor: 'rgba(124, 77, 255, 0.2)', touchAction: 'manipulation' }}
             >
               <img 
                 src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us"
                 alt="Download on the App Store"
                 className="footer-app-store-badge"
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
               />
-            </a>
+            </div>
             <p className="coming-soon">Android coming soon</p>
           </div>
           
