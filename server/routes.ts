@@ -5619,6 +5619,77 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
   });
 
   // ========================================================================
+  // DATABASE MIGRATION ENDPOINT (Admin Only)
+  // ========================================================================
+
+  // Run platform tracking migration on production database
+  app.post('/api/admin/migrate-platform-columns', checkAdminAuth, async (req, res) => {
+    try {
+      console.log('🔄 [MIGRATION] Starting platform tracking migration...');
+      
+      // Step 1: Add columns to bjj_users table using raw SQL
+      console.log('[MIGRATION] Adding columns to bjj_users table...');
+      await db.execute(sql`
+        ALTER TABLE bjj_users 
+        ADD COLUMN IF NOT EXISTS last_platform TEXT,
+        ADD COLUMN IF NOT EXISTS ios_user BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS web_user BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP
+      `);
+      console.log('✅ [MIGRATION] Columns added to bjj_users table');
+      
+      // Step 2: Create login_history table if not exists
+      console.log('[MIGRATION] Creating login_history table...');
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS login_history (
+          id SERIAL PRIMARY KEY,
+          user_id VARCHAR(255),
+          platform TEXT,
+          user_agent TEXT,
+          ip_address VARCHAR(50),
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      console.log('✅ [MIGRATION] login_history table created');
+      
+      // Step 3: Add indexes
+      console.log('[MIGRATION] Adding indexes...');
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_login_history_user ON login_history(user_id)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_login_history_platform ON login_history(platform)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_login_history_created ON login_history(created_at)`);
+      console.log('✅ [MIGRATION] Indexes added');
+      
+      // Step 4: Verify columns exist
+      const verifyResult = await db.execute(sql`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'bjj_users' 
+        AND column_name IN ('last_platform', 'ios_user', 'web_user', 'last_active_at')
+      `);
+      
+      const columns = Array.isArray(verifyResult) ? verifyResult : ((verifyResult as any).rows || []);
+      const columnNames = columns.map((r: any) => r.column_name);
+      
+      console.log('✅ [MIGRATION] Migration complete. Columns verified:', columnNames);
+      
+      res.json({
+        success: true,
+        message: 'Platform tracking migration completed successfully',
+        columnsAdded: columnNames,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error: any) {
+      console.error('❌ [MIGRATION] Migration failed:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        detail: error.detail || null
+      });
+    }
+  });
+
+  // ========================================================================
   // LIFETIME INVITATION SYSTEM
   // ========================================================================
 
