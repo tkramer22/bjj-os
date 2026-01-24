@@ -8,6 +8,8 @@
  * - Array/object cleanup helpers
  */
 
+import * as v8 from 'v8';
+
 // Memory thresholds for alerts
 export const MEMORY_THRESHOLDS = {
   NORMAL: 0.65,     // 65% - Normal operation
@@ -47,14 +49,24 @@ export function getMemoryLevel(heapUsedPercent: number): MemorySnapshot['level']
 
 /**
  * Take a memory snapshot
+ * 
+ * IMPORTANT: We compare heapUsed against heap_size_limit (from V8), NOT heapTotal!
+ * - heapTotal is the currently ALLOCATED heap (grows dynamically)
+ * - heap_size_limit is the MAXIMUM allowed (set by --max-old-space-size)
+ * 
+ * Without this fix, heapUsed/heapTotal shows 90%+ even when using only 2% of the limit.
  */
 export function getMemorySnapshot(): MemorySnapshot {
   const mem = process.memoryUsage();
-  const heapUsedPercent = mem.heapUsed / mem.heapTotal;
+  const heapStats = v8.getHeapStatistics();
+  
+  // Use heap_size_limit (7GB) as the denominator, not heapTotal (~200MB)
+  const heapSizeLimit = heapStats.heap_size_limit;
+  const heapUsedPercent = mem.heapUsed / heapSizeLimit;
   
   return {
     heapUsed: mem.heapUsed,
-    heapTotal: mem.heapTotal,
+    heapTotal: heapSizeLimit, // Use limit instead of allocated
     heapUsedPercent,
     rss: mem.rss,
     external: mem.external,
@@ -215,7 +227,6 @@ export function verifyHeapConfiguration(): {
   const nodeOptions = process.env.NODE_OPTIONS || null;
   
   // Get actual heap limit from V8
-  const v8 = require('v8');
   const heapStats = v8.getHeapStatistics();
   const heapLimitGB = heapStats.heap_size_limit / (1024 * 1024 * 1024);
   
