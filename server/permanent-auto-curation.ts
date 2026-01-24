@@ -106,6 +106,7 @@ export async function checkAndResendMissedCurationEmails(): Promise<void> {
         const result: CurationResult = {
           success: true,
           runId: run.id,
+          videosScreened: run.videosScreened || 0,
           videosAnalyzed: run.videosAnalyzed || 0,
           videosAdded: run.videosAdded || 0,
           videosSkipped: run.videosRejected || 0,
@@ -247,6 +248,7 @@ function calculateQualityScore(video: any): number {
 interface CurationResult {
   success: boolean;
   runId?: string;
+  videosScreened: number;  // Total videos discovered from YouTube
   videosAnalyzed: number;
   videosAdded: number;
   videosSkipped: number;
@@ -556,6 +558,7 @@ async function runTechniqueFallbackSearch(result: CurationResult): Promise<void>
   
   try {
     const videos = await searchYouTube(query, 20);
+    result.videosScreened += videos.length; // Track total discovered
     
     for (const video of videos) {
       const videoId = video.id;
@@ -648,6 +651,7 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
   
   const result: CurationResult = {
     success: false,
+    videosScreened: 0,  // Total videos discovered from YouTube
     videosAnalyzed: 0,
     videosAdded: 0,
     videosSkipped: 0,
@@ -730,6 +734,7 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
         if (channelId) {
           console.log(`   📺 Using QUOTA-EFFICIENT playlist method (2 units vs 500+ old method)`);
           const videos = await getChannelVideosEfficient(channelId, 50);
+          result.videosScreened += videos.length; // Track total discovered
           
           for (const video of videos) {
             if (result.quotaExhausted) break;
@@ -822,6 +827,7 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
           
           try {
             const videos = await searchYouTube(query, 15);
+            result.videosScreened += videos.length; // Track total discovered
             
             for (const video of videos) {
               const videoId = video.id;
@@ -933,6 +939,7 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
       .set({
         status: result.quotaExhausted ? 'quota_exhausted' : 'completed',
         completedAt: new Date(),
+        videosScreened: result.videosScreened,  // Total discovered
         videosAnalyzed: result.videosAnalyzed,
         videosAdded: result.videosAdded,
         videosRejected: result.videosSkipped,
