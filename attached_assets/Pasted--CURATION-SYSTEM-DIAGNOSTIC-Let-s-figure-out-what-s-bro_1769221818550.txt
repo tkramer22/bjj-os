@@ -1,0 +1,486 @@
+# 🚨 **CURATION SYSTEM DIAGNOSTIC**
+
+Let's figure out what's broken with curation. This is critical since it's your content pipeline.
+
+---
+
+## **COPY THIS TO REPLIT AGENT:**
+
+```
+URGENT: CURATION SYSTEM NOT WORKING - COMPREHENSIVE DIAGNOSTIC
+
+Todd reports curation isn't working. Need full diagnostic and fix.
+
+═══════════════════════════════════════════════════════════════════════════════
+DIAGNOSTIC STEP 1: CHECK IF CURATION IS SCHEDULED
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Search codebase for cron job or scheduled task:
+   - Look for: node-cron, setInterval, cron.schedule
+   - Look in: server/index.js, server/cron/, server/services/
+
+2. Show me the EXACT code that schedules curation
+
+3. Check if it's actually running:
+   - Look in server logs for: "curation", "scheduled", "auto-curation"
+   - Search logs from last 24 hours
+
+4. Run this in server console to test if cron is active:
+   ```javascript
+   // Check what cron jobs are registered
+   console.log('Active cron jobs:', cron.getTasks ? cron.getTasks() : 'No cron tasks found');
+   ```
+
+═══════════════════════════════════════════════════════════════════════════════
+DIAGNOSTIC STEP 2: CHECK DATABASE FOR RECENT CURATION RUNS
+═══════════════════════════════════════════════════════════════════════════════
+
+Run these queries:
+
+```sql
+-- Check when curation last ran
+SELECT 
+  created_at,
+  discovered,
+  analyzed,
+  accepted,
+  rejected,
+  skipped
+FROM curation_runs
+ORDER BY created_at DESC
+LIMIT 10;
+
+-- Check if ANY curation runs exist
+SELECT COUNT(*) as total_runs FROM curation_runs;
+
+-- Check videos added in last 24 hours
+SELECT COUNT(*) as videos_added_today
+FROM videos
+WHERE created_at >= NOW() - INTERVAL '24 hours';
+
+-- Check videos added in last 7 days
+SELECT 
+  DATE(created_at) as date,
+  COUNT(*) as videos_added
+FROM videos
+WHERE created_at >= NOW() - INTERVAL '7 days'
+GROUP BY DATE(created_at)
+ORDER BY date DESC;
+```
+
+Show Todd the results:
+- When did curation last run?
+- How many videos were added?
+- Is there a pattern (stopped on specific date)?
+
+═══════════════════════════════════════════════════════════════════════════════
+DIAGNOSTIC STEP 3: CHECK YOUTUBE API QUOTA
+═══════════════════════════════════════════════════════════════════════════════
+
+Curation might be failing due to quota limits:
+
+1. Check environment variables:
+   - YOUTUBE_API_KEY is set?
+   - Not expired or revoked?
+
+2. Test YouTube API directly:
+   ```javascript
+   const { google } = require('googleapis');
+   const youtube = google.youtube('v3');
+   
+   // Test API call
+   youtube.search.list({
+     key: process.env.YOUTUBE_API_KEY,
+     part: 'snippet',
+     q: 'bjj techniques',
+     maxResults: 1,
+     type: 'video'
+   }).then(response => {
+     console.log('✅ YouTube API working:', response.data);
+   }).catch(error => {
+     console.error('❌ YouTube API error:', error.message);
+   });
+   ```
+
+3. Check Google Cloud Console:
+   - Go to console.cloud.google.com
+   - APIs & Services → Dashboard
+   - Check YouTube Data API v3 quota usage
+   - Current quota: 0 / 10,000 units used?
+
+═══════════════════════════════════════════════════════════════════════════════
+DIAGNOSTIC STEP 4: MANUALLY TRIGGER CURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Find the curation function and run it manually:
+
+```javascript
+// Find the curation function (likely in server/services/videoCuration.js)
+// Then create temporary test endpoint:
+
+app.post('/api/admin/test-curation', requireAdmin, async (req, res) => {
+  try {
+    console.log('🧪 MANUAL CURATION TEST STARTED');
+    console.log('Time:', new Date().toISOString());
+    
+    // Call your curation function
+    const result = await runVideoCuration();
+    
+    console.log('✅ MANUAL CURATION COMPLETE');
+    console.log('Result:', JSON.stringify(result, null, 2));
+    
+    res.json({
+      success: true,
+      message: 'Curation test complete',
+      result
+    });
+    
+  } catch (error) {
+    console.error('❌ MANUAL CURATION FAILED');
+    console.error('Error:', error);
+    console.error('Stack:', error.stack);
+    
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+```
+
+Then test it:
+```bash
+curl -X POST http://localhost:5000/api/admin/test-curation
+```
+
+Watch server logs for:
+- Does it start?
+- Does it make YouTube API calls?
+- Does it analyze videos?
+- Where does it fail?
+
+═══════════════════════════════════════════════════════════════════════════════
+DIAGNOSTIC STEP 5: CHECK FOR COMMON FAILURE POINTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Common reasons curation fails:
+
+A. YOUTUBE API ISSUES:
+□ API key missing or invalid
+□ Quota exceeded (hit 10,000 units/day limit)
+□ API disabled in Google Cloud Console
+□ Wrong project selected
+
+B. GEMINI AI ISSUES:
+□ Gemini API key missing/invalid
+□ Rate limiting (too many requests)
+□ Quota exceeded
+□ API errors not handled
+
+C. DATABASE ISSUES:
+□ Connection timeout
+□ Table doesn't exist (curation_runs)
+□ Constraint violations
+□ Disk full
+
+D. SCHEDULING ISSUES:
+□ Cron job never set up
+□ Server restarted and lost schedule
+□ Timezone incorrect (should be EST)
+□ Schedule syntax error
+
+E. CODE ERRORS:
+□ Unhandled promise rejection
+□ Try-catch missing
+□ Function not exported
+□ Module import error
+
+═══════════════════════════════════════════════════════════════════════════════
+DIAGNOSTIC STEP 6: CHECK SERVER LOGS FOR ERRORS
+═══════════════════════════════════════════════════════════════════════════════
+
+Search server logs for these patterns:
+
+```bash
+# In Replit console or wherever logs are:
+
+# Check for curation mentions
+grep -i "curation" server.log | tail -50
+
+# Check for YouTube API errors
+grep -i "youtube" server.log | grep -i "error" | tail -20
+
+# Check for Gemini errors
+grep -i "gemini" server.log | grep -i "error" | tail -20
+
+# Check for unhandled errors
+grep -i "unhandled" server.log | tail -20
+
+# Check for quota errors
+grep -i "quota" server.log | tail -20
+```
+
+Show Todd what errors appear.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 7: REBUILD CURATION SYSTEM (IF BROKEN)
+═══════════════════════════════════════════════════════════════════════════════
+
+If curation is completely broken, rebuild it properly:
+
+```javascript
+// server/services/videoCuration.js
+
+const { google } = require('googleapis');
+const youtube = google.youtube('v3');
+
+async function runVideoCuration() {
+  console.log('🎯 Starting video curation');
+  const startTime = Date.now();
+  
+  const metrics = {
+    discovered: 0,
+    analyzed: 0,
+    accepted: 0,
+    rejected: 0,
+    skipped: 0,
+    errors: []
+  };
+  
+  try {
+    // 1. Fetch videos from YouTube
+    console.log('📥 Fetching videos from YouTube...');
+    
+    const channels = [
+      'UCXJd_QVdlj_XqDKI3Bvc3Ng', // JT Torres
+      // Add more channel IDs
+    ];
+    
+    const allVideos = [];
+    
+    for (const channelId of channels) {
+      try {
+        const response = await youtube.search.list({
+          key: process.env.YOUTUBE_API_KEY,
+          part: 'snippet',
+          channelId: channelId,
+          type: 'video',
+          maxResults: 50,
+          order: 'date',
+          publishedAfter: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        });
+        
+        allVideos.push(...response.data.items);
+      } catch (error) {
+        console.error(`Failed to fetch from channel ${channelId}:`, error.message);
+        metrics.errors.push(`YouTube API: ${error.message}`);
+      }
+    }
+    
+    metrics.discovered = allVideos.length;
+    console.log(`✅ Discovered ${metrics.discovered} videos`);
+    
+    // 2. Filter out duplicates
+    const existingVideos = await db.query('SELECT youtube_id FROM videos');
+    const existingIds = new Set(existingVideos.rows.map(v => v.youtube_id));
+    
+    const newVideos = allVideos.filter(v => !existingIds.has(v.id.videoId));
+    metrics.skipped = metrics.discovered - newVideos.length;
+    
+    console.log(`⏭️ Skipped ${metrics.skipped} duplicates`);
+    console.log(`🆕 Processing ${newVideos.length} new videos`);
+    
+    // 3. Analyze and add videos
+    for (const video of newVideos) {
+      try {
+        console.log(`🔍 Analyzing: ${video.snippet.title}`);
+        
+        // Analyze with Gemini
+        const analysis = await analyzeVideoWithGemini({
+          youtubeId: video.id.videoId,
+          title: video.snippet.title,
+          channel: video.snippet.channelTitle,
+          description: video.snippet.description
+        });
+        
+        metrics.analyzed++;
+        
+        // Quality check
+        if (analysis && analysis.techniques && analysis.difficulty) {
+          // Add to database
+          await db.query(`
+            INSERT INTO videos (
+              youtube_id, title, channel, description,
+              analysis, analysis_complete, created_at
+            ) VALUES ($1, $2, $3, $4, $5, true, NOW())
+          `, [
+            video.id.videoId,
+            video.snippet.title,
+            video.snippet.channelTitle,
+            video.snippet.description,
+            JSON.stringify(analysis)
+          ]);
+          
+          metrics.accepted++;
+          console.log(`✅ Accepted: ${video.snippet.title}`);
+        } else {
+          metrics.rejected++;
+          console.log(`❌ Rejected (incomplete analysis): ${video.snippet.title}`);
+        }
+        
+      } catch (error) {
+        metrics.rejected++;
+        console.error(`❌ Failed to process ${video.snippet.title}:`, error.message);
+        metrics.errors.push(`${video.snippet.title}: ${error.message}`);
+      }
+    }
+    
+    // 4. Log metrics to database
+    await db.query(`
+      INSERT INTO curation_runs (
+        discovered, analyzed, accepted, rejected, skipped,
+        duration_ms, errors, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    `, [
+      metrics.discovered,
+      metrics.analyzed,
+      metrics.accepted,
+      metrics.rejected,
+      metrics.skipped,
+      Date.now() - startTime,
+      JSON.stringify(metrics.errors)
+    ]);
+    
+    console.log('📊 Curation metrics:', metrics);
+    console.log(`⏱️ Duration: ${Date.now() - startTime}ms`);
+    
+    return metrics;
+    
+  } catch (error) {
+    console.error('❌ Curation failed:', error);
+    
+    // Log failed run
+    await db.query(`
+      INSERT INTO curation_runs (
+        discovered, analyzed, accepted, rejected, skipped,
+        error_message, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `, [
+      metrics.discovered,
+      metrics.analyzed,
+      metrics.accepted,
+      metrics.rejected,
+      metrics.skipped,
+      error.message
+    ]);
+    
+    throw error;
+  }
+}
+
+module.exports = { runVideoCuration };
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 8: SET UP PROPER SCHEDULING
+═══════════════════════════════════════════════════════════════════════════════
+
+```javascript
+// server/index.js or server/cron/scheduler.js
+
+const cron = require('node-cron');
+const { runVideoCuration } = require('./services/videoCuration');
+
+// Schedule curation 4x daily: 6 AM, 12 PM, 6 PM, 12 AM EST
+cron.schedule('0 6,12,18,0 * * *', async () => {
+  console.log('⏰ SCHEDULED CURATION TRIGGERED');
+  console.log('Time:', new Date().toISOString());
+  
+  try {
+    const result = await runVideoCuration();
+    console.log('✅ Scheduled curation complete:', result);
+  } catch (error) {
+    console.error('❌ Scheduled curation failed:', error);
+  }
+}, {
+  timezone: "America/New_York"
+});
+
+console.log('✅ Auto-curation scheduled: 6 AM, 12 PM, 6 PM, 12 AM EST');
+
+// Keep process alive
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, stopping gracefully');
+  process.exit(0);
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After fixes:
+
+□ Manual curation trigger works (test endpoint)
+□ YouTube API calls succeed
+□ Gemini analysis works
+□ Videos are added to database
+□ Metrics are logged to curation_runs table
+□ Cron schedule is active
+□ Server logs show scheduled runs
+□ Dashboard shows updated metrics
+□ Todd receives email notification
+
+DO NOT mark complete until:
+1. Manual curation works
+2. Auto-scheduling is active
+3. Todd confirms videos are being added
+```
+
+---
+
+## **TODD - IMMEDIATE QUESTIONS:**
+
+1. **When did you last see videos added?** (Today? Yesterday? Last week?)
+
+2. **Did you receive any curation emails recently?** (They should come 6x daily)
+
+3. **Can you check YouTube API quota?**
+   - Go to: console.cloud.google.com
+   - APIs & Services → Dashboard
+   - YouTube Data API v3
+   - Screenshot the quota usage
+
+4. **What does the admin dashboard show?**
+   - Total videos count
+   - Videos added today
+   - Last curation run time
+
+5. **Can you access Replit server logs?**
+   - Search for "curation" in logs
+   - Any errors showing up?
+
+---
+
+## **QUICK TEST YOU CAN DO:**
+
+In Replit console, run:
+
+```sql
+-- Check recent videos
+SELECT created_at, title FROM videos ORDER BY created_at DESC LIMIT 5;
+
+-- Check recent curation runs
+SELECT * FROM curation_runs ORDER BY created_at DESC LIMIT 5;
+```
+
+Send me:
+- Last 5 videos added (with timestamps)
+- Last 5 curation runs (if any exist)
+
+This will tell me exactly what's broken.
+
+---
+
+**What specific symptoms are you seeing? No new videos at all? Curation runs but adds nothing? Dashboard shows errors?**
