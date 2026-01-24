@@ -5682,7 +5682,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           subscriptionStatus: 'active',
           subscriptionEndDate: subscriptionEndDate,
           isLifetimeUser: !isTrial,
-          verified: true,
+          emailVerified: true,
         }).returning();
         
         existingUser = newUser;
@@ -5749,7 +5749,18 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
 
     } catch (error: any) {
       console.error('❌ Error granting access:', error);
-      res.status(500).json({ success: false, error: 'Failed to grant access. Please try again.' });
+      console.error('❌ Error details:', {
+        message: error.message,
+        code: error.code,
+        detail: error.detail,
+        constraint: error.constraint,
+        stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+      });
+      res.status(500).json({ 
+        success: false, 
+        error: `Failed to grant access: ${error.message || 'Unknown error'}`,
+        details: error.detail || error.code || 'No additional details'
+      });
     }
   });
 
