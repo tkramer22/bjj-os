@@ -268,10 +268,11 @@ export const bjjUsers = pgTable("bjj_users", {
   videosRecommendedCount: integer("videos_recommended_count").default(0), // Total recommendations given
   lastVideoWatchedAt: timestamp("last_video_watched_at"), // Last time user watched a video
   
-  // Platform Tracking (iOS App vs Web)
-  lastPlatform: text("last_platform"), // ios_iphone, ios_ipad, ios_app, mobile_web, desktop_web
-  iosUser: boolean("ios_user").default(false), // Has used iOS app
-  webUser: boolean("web_user").default(false), // Has used web browser
+  // Platform Tracking (iOS App vs Web) - COLUMNS DISABLED UNTIL MIGRATION RUNS
+  // TODO: Uncomment after running /api/admin/migrate-platform-columns in production
+  // lastPlatform: text("last_platform"), // ios_iphone, ios_ipad, ios_app, mobile_web, desktop_web
+  // iosUser: boolean("ios_user").default(false), // Has used iOS app
+  // webUser: boolean("web_user").default(false), // Has used web browser
   
   active: boolean("active").default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
