@@ -178,6 +178,9 @@ export async function searchGeminiFirst(technique: string): Promise<{
       and(
         // Quality threshold
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`,
+        // Completeness filter: Must have technique_name AND at least one of key_concepts or full_summary
+        sql`${videoKnowledge.techniqueName} IS NOT NULL AND ${videoKnowledge.techniqueName} != ''`,
+        sql`(${videoKnowledge.keyConcepts} IS NOT NULL OR ${videoKnowledge.fullSummary} IS NOT NULL)`,
         // Match technique in ANY Gemini-analyzed field
         or(
           sql`LOWER(${videoKnowledge.techniqueName}) LIKE LOWER(${searchTerm})`,
@@ -916,12 +919,21 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     conditions.push(sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`);
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // NOTE: Removed mandatory videoKnowledge filter that was excluding all unanalyzed videos
-    // Previously this required Gemini-analyzed knowledge records, but this was blocking
-    // valid guillotine/technique searches when videoKnowledge table was empty or sparse.
-    // The title/tag/techniqueName search is sufficient for finding relevant videos.
+    // MANDATORY: Only return videos with COMPLETE Gemini analysis
+    // User-facing searches should ONLY show videos that have been fully analyzed
+    // Criteria: Must have technique_name AND at least one of key_concepts or full_summary
     // ═══════════════════════════════════════════════════════════════════════════
-    console.log(`[VIDEO SEARCH] ✅ Searching ALL qualifying videos (Gemini analysis not required)`);
+    const completeAnalysisFilter = exists(
+      db.select({ one: sql`1` })
+        .from(videoKnowledge)
+        .where(and(
+          eq(videoKnowledge.videoId, aiVideoKnowledge.id),
+          sql`${videoKnowledge.techniqueName} IS NOT NULL AND ${videoKnowledge.techniqueName} != ''`,
+          sql`(${videoKnowledge.keyConcepts} IS NOT NULL OR ${videoKnowledge.fullSummary} IS NOT NULL)`
+        ))
+    );
+    conditions.push(completeAnalysisFilter);
+    console.log(`[VIDEO SEARCH] ✅ Searching only videos with COMPLETE Gemini analysis`);
     
     // ═══════════════════════════════════════════════════════════════════════════
     // STEP 0: INSTRUCTOR FILTER - ONLY apply when NO technique is specified
@@ -1521,11 +1533,16 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
 export async function fallbackSearch(userMessage: string): Promise<VideoSearchResult> {
   const intent = extractSearchIntent(userMessage);
   
-  // CRITICAL: Only return videos with Gemini-extracted knowledge
+  // CRITICAL: Only return videos with COMPLETE Gemini-extracted knowledge
+  // Must have technique_name AND at least one of key_concepts or full_summary
   const analyzedVideoFilter = exists(
     db.select({ one: sql`1` })
       .from(videoKnowledge)
-      .where(eq(videoKnowledge.videoId, aiVideoKnowledge.id))
+      .where(and(
+        eq(videoKnowledge.videoId, aiVideoKnowledge.id),
+        sql`${videoKnowledge.techniqueName} IS NOT NULL AND ${videoKnowledge.techniqueName} != ''`,
+        sql`(${videoKnowledge.keyConcepts} IS NOT NULL OR ${videoKnowledge.fullSummary} IS NOT NULL)`
+      ))
   );
   
   let videos;

@@ -13990,6 +13990,294 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════
+  // VIDEO ANALYSIS GAP MANAGEMENT
+  // ═══════════════════════════════════════════════════════════════
+
+  // /api/admin/videos/analysis-gaps - Get videos missing Gemini analysis (comprehensive check)
+  app.get('/api/admin/videos/analysis-gaps', checkAdminAuth, async (req, res) => {
+    try {
+      const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
+      
+      // Comprehensive analysis gap detection with proper COUNT queries:
+      // 1. Videos with NO video_knowledge rows at all
+      // 2. Videos with video_knowledge but incomplete/empty analysis (missing technique_name OR missing both key_concepts AND full_summary)
+      const [
+        totalResult, 
+        withCompleteAnalysisResult,
+        noAnalysisCountResult,
+        incompleteCountResult,
+        noAnalysisVideosResult,
+        incompleteVideosResult
+      ] = await Promise.all([
+        // Total videos
+        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`),
+        
+        // Videos with COMPLETE analysis (has meaningful content in video_knowledge)
+        db.execute(sql`
+          SELECT COUNT(DISTINCT v.video_id) as count 
+          FROM video_knowledge v
+          WHERE v.technique_name IS NOT NULL 
+            AND v.technique_name != ''
+            AND (v.key_concepts IS NOT NULL OR v.full_summary IS NOT NULL)
+        `),
+        
+        // COUNT of videos with NO analysis rows at all
+        db.execute(sql`
+          SELECT COUNT(*) as count
+          FROM ai_video_knowledge a
+          LEFT JOIN video_knowledge v ON a.id = v.video_id
+          WHERE v.video_id IS NULL
+        `),
+        
+        // COUNT of videos with INCOMPLETE analysis
+        db.execute(sql`
+          SELECT COUNT(DISTINCT a.id) as count
+          FROM ai_video_knowledge a
+          INNER JOIN video_knowledge v ON a.id = v.video_id
+          WHERE (v.technique_name IS NULL OR v.technique_name = '')
+             OR (v.key_concepts IS NULL AND v.full_summary IS NULL)
+        `),
+        
+        // Sample videos with NO analysis (for display, limited to 50)
+        db.execute(sql`
+          SELECT 
+            a.id, a.youtube_id, a.title, a.instructor_name, a.channel_name, 
+            a.quality_score, a.created_at, a.thumbnail_url,
+            'NO_ANALYSIS' as gap_type
+          FROM ai_video_knowledge a
+          LEFT JOIN video_knowledge v ON a.id = v.video_id
+          WHERE v.video_id IS NULL
+          ORDER BY a.created_at DESC
+          LIMIT 50
+        `),
+        
+        // Sample videos with INCOMPLETE analysis (for display, limited to 50)
+        db.execute(sql`
+          SELECT DISTINCT ON (a.id)
+            a.id, a.youtube_id, a.title, a.instructor_name, a.channel_name, 
+            a.quality_score, a.created_at, a.thumbnail_url,
+            'INCOMPLETE' as gap_type
+          FROM ai_video_knowledge a
+          INNER JOIN video_knowledge v ON a.id = v.video_id
+          WHERE (v.technique_name IS NULL OR v.technique_name = '')
+             OR (v.key_concepts IS NULL AND v.full_summary IS NULL)
+          ORDER BY a.id, a.created_at DESC
+          LIMIT 50
+        `)
+      ]);
+      
+      const totalVideos = parseInt(getRows(totalResult)[0]?.count || '0');
+      const withCompleteAnalysis = parseInt(getRows(withCompleteAnalysisResult)[0]?.count || '0');
+      const noAnalysisCount = parseInt(getRows(noAnalysisCountResult)[0]?.count || '0');
+      const incompleteCount = parseInt(getRows(incompleteCountResult)[0]?.count || '0');
+      const noAnalysisVideos = getRows(noAnalysisVideosResult);
+      const incompleteVideos = getRows(incompleteVideosResult);
+      
+      const totalGaps = noAnalysisCount + incompleteCount;
+      
+      // Combine and format missing videos
+      const allMissingVideos = [...noAnalysisVideos, ...incompleteVideos].map((v: any) => ({
+        id: v.id,
+        youtubeId: v.youtube_id,
+        title: v.title,
+        instructor: v.instructor_name,
+        channel: v.channel_name,
+        qualityScore: v.quality_score,
+        createdAt: v.created_at,
+        thumbnail: v.thumbnail_url,
+        gapType: v.gap_type // 'NO_ANALYSIS' or 'INCOMPLETE'
+      }));
+      
+      res.json({
+        totalVideos,
+        withCompleteAnalysis,
+        totalGaps,
+        coverageRate: totalVideos > 0 ? ((withCompleteAnalysis / totalVideos) * 100).toFixed(1) : '0',
+        gapBreakdown: {
+          noAnalysis: noAnalysisCount,
+          incomplete: incompleteCount
+        },
+        missingVideos: allMissingVideos
+      });
+    } catch (error: any) {
+      console.error('[ADMIN ANALYSIS GAPS] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // /api/admin/videos/:id/reanalyze - Re-analyze a single video with Gemini
+  app.post('/api/admin/videos/:id/reanalyze', checkAdminAuth, async (req, res) => {
+    try {
+      const videoId = parseInt(req.params.id);
+      
+      // Import the processing function
+      const { processVideoKnowledge } = await import('./video-knowledge-service');
+      
+      console.log(`[ADMIN REANALYZE] Starting re-analysis for video ${videoId}`);
+      
+      // Process the video
+      const result = await processVideoKnowledge(videoId);
+      
+      if (result.success) {
+        console.log(`[ADMIN REANALYZE] ✅ Successfully re-analyzed video ${videoId}, ${result.techniquesAdded} techniques added`);
+        res.json({
+          success: true,
+          message: `Video re-analyzed successfully`,
+          techniquesAdded: result.techniquesAdded
+        });
+      } else {
+        console.error(`[ADMIN REANALYZE] ❌ Failed to re-analyze video ${videoId}: ${result.error}`);
+        res.status(400).json({
+          success: false,
+          error: result.error
+        });
+      }
+    } catch (error: any) {
+      console.error('[ADMIN REANALYZE] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // In-memory tracking for bulk reanalysis jobs
+  const bulkReanalysisJobs: Map<string, {
+    status: 'running' | 'completed' | 'failed';
+    total: number;
+    processed: number;
+    successful: number;
+    failed: number;
+    startedAt: Date;
+    completedAt?: Date;
+    errors: { videoId: number; title: string; error: string }[];
+  }> = new Map();
+
+  // /api/admin/videos/bulk-reanalyze - Re-analyze all videos missing analysis (non-blocking)
+  app.post('/api/admin/videos/bulk-reanalyze', checkAdminAuth, async (req, res) => {
+    try {
+      const { limit = 50 } = req.body;
+      const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
+      
+      // Get videos missing analysis using same completeness criteria as gap detection:
+      // 1. Videos with NO video_knowledge rows at all
+      // 2. Videos with INCOMPLETE analysis (missing technique_name OR missing both key_concepts AND full_summary)
+      const missingResult = await db.execute(sql`
+        SELECT DISTINCT a.id, a.youtube_id, a.title
+        FROM ai_video_knowledge a
+        LEFT JOIN video_knowledge v ON a.id = v.video_id
+        WHERE v.video_id IS NULL
+           OR (v.technique_name IS NULL OR v.technique_name = '')
+           OR (v.key_concepts IS NULL AND v.full_summary IS NULL)
+        ORDER BY a.id
+        LIMIT ${limit}
+      `);
+      
+      const videos = getRows(missingResult);
+      
+      if (videos.length === 0) {
+        return res.json({
+          success: true,
+          message: 'No videos missing analysis',
+          jobId: null,
+          total: 0
+        });
+      }
+      
+      // Generate job ID and start background processing
+      const jobId = `reanalyze_${Date.now()}`;
+      
+      bulkReanalysisJobs.set(jobId, {
+        status: 'running',
+        total: videos.length,
+        processed: 0,
+        successful: 0,
+        failed: 0,
+        startedAt: new Date(),
+        errors: []
+      });
+      
+      console.log(`[BULK REANALYZE] Started job ${jobId} for ${videos.length} videos`);
+      
+      // Return immediately - processing happens in background
+      res.json({
+        success: true,
+        message: `Bulk re-analysis started for ${videos.length} videos`,
+        jobId,
+        total: videos.length,
+        statusUrl: `/api/admin/videos/bulk-reanalyze/status/${jobId}`
+      });
+      
+      // Fire-and-forget background processing
+      (async () => {
+        const { processVideoKnowledge } = await import('./video-knowledge-service');
+        const job = bulkReanalysisJobs.get(jobId)!;
+        
+        for (const video of videos) {
+          try {
+            console.log(`[BULK REANALYZE] [${jobId}] Processing: ${video.title}`);
+            const result = await processVideoKnowledge(video.id);
+            
+            job.processed++;
+            if (result.success) {
+              job.successful++;
+              console.log(`✅ [${jobId}] ${job.processed}/${job.total} - ${video.title}`);
+            } else {
+              job.failed++;
+              job.errors.push({ videoId: video.id, title: video.title, error: result.error || 'Unknown error' });
+              console.log(`❌ [${jobId}] Failed: ${video.title} - ${result.error}`);
+            }
+            
+            // Rate limiting - wait 3 seconds between videos
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          } catch (error: any) {
+            job.processed++;
+            job.failed++;
+            job.errors.push({ videoId: video.id, title: video.title, error: error.message });
+            console.error(`❌ [${jobId}] Error processing ${video.title}:`, error.message);
+          }
+        }
+        
+        job.status = 'completed';
+        job.completedAt = new Date();
+        console.log(`[BULK REANALYZE] [${jobId}] Complete: ${job.successful} successful, ${job.failed} failed`);
+        
+        // Clean up old jobs after 1 hour
+        setTimeout(() => bulkReanalysisJobs.delete(jobId), 3600000);
+      })();
+      
+    } catch (error: any) {
+      console.error('[BULK REANALYZE] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // /api/admin/videos/bulk-reanalyze/status/:jobId - Check bulk reanalysis job status
+  app.get('/api/admin/videos/bulk-reanalyze/status/:jobId', checkAdminAuth, async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const job = bulkReanalysisJobs.get(jobId);
+      
+      if (!job) {
+        return res.status(404).json({ error: 'Job not found or expired' });
+      }
+      
+      res.json({
+        jobId,
+        status: job.status,
+        total: job.total,
+        processed: job.processed,
+        successful: job.successful,
+        failed: job.failed,
+        progressPercent: job.total > 0 ? Math.round((job.processed / job.total) * 100) : 0,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        errors: job.errors.slice(0, 10) // Limit errors in response
+      });
+    } catch (error: any) {
+      console.error('[BULK REANALYZE STATUS] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Get Curation V2 statistics
   app.get('/api/admin/curation/v2/stats', checkAdminAuth, async (req, res) => {
     try {
