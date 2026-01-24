@@ -129,7 +129,7 @@ export default function IOSSubscribePage() {
 
   const features = [
     "Unlimited AI coaching with Professor OS",
-    "4,500+ curated BJJ technique videos",
+    "5,000+ curated BJJ technique videos",
     "Personalized training recommendations",
     "Progress tracking & insights",
     "New videos added daily",

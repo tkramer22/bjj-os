@@ -176,7 +176,7 @@ export default function PaymentPage() {
           <h1 className="payment-headline">{isIOS ? 'Subscribe to BJJ OS' : 'Complete Your Setup'}</h1>
           <p className="payment-subheadline">
             {isIOS 
-              ? 'Get unlimited access to Professor OS and 4,500+ technique videos'
+              ? 'Get unlimited access to Professor OS and 5,000+ technique videos'
               : 'Choose your plan and start your 7-day free trial'
             }
           </p>
@@ -242,7 +242,7 @@ export default function PaymentPage() {
           <div className="trial-info-badge">{isIOS ? 'BJJ OS' : '7-Day Free Trial'}</div>
           <p className="trial-info-text">
             {isIOS 
-              ? 'Unlimited access to Professor OS and 4,500+ technique videos'
+              ? 'Unlimited access to Professor OS and 5,000+ technique videos'
               : <>You won't be charged until <strong>{formattedTrialEnd}</strong></>
             }
           </p>
@@ -346,7 +346,7 @@ export default function PaymentPage() {
             </div>
             <div className="feature-item">
               <Check className="feature-icon" />
-              <span>Access to 4,500+ curated BJJ technique videos</span>
+              <span>Access to 5,000+ curated BJJ technique videos</span>
             </div>
           </div>
         </div>
