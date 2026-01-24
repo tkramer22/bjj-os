@@ -55,6 +55,7 @@ import { getSubscriptionStatus } from './utils/subscription';
 import { cache, CacheTTL } from './services/cache';
 import { professorOSCache } from './middleware/cacheMiddleware';
 import { securityMiddleware } from './middleware/inputValidation';
+import { getPlatformStats, trackPlatformLogin, trackPlatformActivity } from './platform-tracking';
 
 // Extend Express Request type to include user property set by JWT middleware
 declare module 'express-serve-static-core' {
@@ -4925,6 +4926,23 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
     } catch (error: any) {
       console.error('User activity error:', error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get platform usage stats (iOS vs Web) - Admin only
+  app.get('/api/admin/platform-stats', checkAdminAuth, async (req, res) => {
+    try {
+      const stats = await getPlatformStats();
+      res.json({
+        success: true,
+        data: stats
+      });
+    } catch (error: any) {
+      console.error('Platform stats error:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
     }
   });
 

@@ -9,6 +9,7 @@ import {
   generateVerificationCode 
 } from './device-fingerprint';
 import jwt from 'jsonwebtoken';
+import { trackPlatformLogin } from './platform-tracking';
 
 const ADMIN_BYPASS_CODE = process.env.ADMIN_BYPASS_CODE || '999999';
 const ADMIN_EMAIL = 'toddkramer@mac.com';
@@ -420,6 +421,11 @@ export function registerEmailAuthRoutes(app: Express) {
         
         console.log(`🍪 [EMAIL-AUTH] Session cookie set for ${deviceInfo.name} (persistent: ${rememberMe}, sameSite: ${isHttps ? 'none' : 'lax'})`);
         
+        // Track platform login (iOS vs Web) - fire and forget
+        const userAgent = req.headers['user-agent'];
+        const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress;
+        trackPlatformLogin(user.id, userAgent, ipAddress).catch(err => console.error('[PLATFORM] Tracking error:', err));
+        
         // Determine redirect for first-time lifetime users
         let redirectUrl = undefined;
         if (isFirstLogin && user.subscriptionType === 'lifetime') {
@@ -502,6 +508,11 @@ export function registerEmailAuthRoutes(app: Express) {
       res.cookie('sessionToken', jwtToken, newSessionCookieOptions);
       
       console.log(`🍪 [EMAIL-AUTH] Session cookie set for ${deviceInfo.name} (persistent: ${rememberMe}, sameSite: ${isHttps ? 'none' : 'lax'})`);
+      
+      // Track platform login (iOS vs Web) - fire and forget
+      const newUserAgent = req.headers['user-agent'];
+      const newIpAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress;
+      trackPlatformLogin(user.id, newUserAgent, newIpAddress).catch(err => console.error('[PLATFORM] Tracking error:', err));
       
       // Determine redirect for first-time lifetime users
       let redirectUrl = undefined;

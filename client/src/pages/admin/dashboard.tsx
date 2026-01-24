@@ -5,13 +5,14 @@ import {
   LayoutDashboard, Users, Gift, Star, 
   FileText, LogOut, Menu, X, MessageSquare,
   ThumbsUp, Award, Video, Link2, Shield, Calculator, RefreshCw, BarChart, Zap,
-  ChevronDown, ChevronRight, Play
+  ChevronDown, ChevronRight, Play, Smartphone, Globe
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { clearAdminAuth, getAdminToken } from "@/lib/adminApi";
 import { ActivityDashboard } from "@/components/admin/ActivityDashboard";
+import { PlatformStats } from "@/components/admin/PlatformStats";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -211,7 +212,7 @@ function FloatingActionButton() {
 // Collapsible Section Component
 interface CollapsibleSectionProps {
   title: string;
-  icon: string;
+  icon: string | React.ReactNode;
   children: React.ReactNode;
   defaultExpanded?: boolean;
   testId?: string;
@@ -228,7 +229,11 @@ function CollapsibleSection({ title, icon, children, defaultExpanded = false, te
         data-testid={`${testId}-toggle`}
       >
         <div className="flex items-center gap-3">
-          <span className="text-2xl">{icon}</span>
+          {typeof icon === 'string' ? (
+            <span className="text-2xl">{icon}</span>
+          ) : (
+            <span>{icon}</span>
+          )}
           <h3 className="text-lg font-semibold text-left">{title}</h3>
         </div>
         {isExpanded ? (
@@ -535,6 +540,16 @@ export default function AdminDashboard() {
               </p>
             </div>
           </div>
+        </CollapsibleSection>
+
+        {/* Platform Usage - iOS vs Web - Collapsible */}
+        <CollapsibleSection 
+          title="Platform Usage (iOS vs Web)" 
+          icon={<Smartphone className="w-5 h-5" />} 
+          defaultExpanded={false}
+          testId="section-platform-usage"
+        >
+          <PlatformStats />
         </CollapsibleSection>
 
         {/* System Overview - Collapsible */}

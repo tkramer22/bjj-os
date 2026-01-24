@@ -268,6 +268,11 @@ export const bjjUsers = pgTable("bjj_users", {
   videosRecommendedCount: integer("videos_recommended_count").default(0), // Total recommendations given
   lastVideoWatchedAt: timestamp("last_video_watched_at"), // Last time user watched a video
   
+  // Platform Tracking (iOS App vs Web)
+  lastPlatform: text("last_platform"), // ios_iphone, ios_ipad, ios_app, mobile_web, desktop_web
+  iosUser: boolean("ios_user").default(false), // Has used iOS app
+  webUser: boolean("web_user").default(false), // Has used web browser
+  
   active: boolean("active").default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -294,6 +299,28 @@ export const insertBjjUserSchema = createInsertSchema(bjjUsers).omit({
 
 export type InsertBjjUser = z.infer<typeof insertBjjUserSchema>;
 export type BjjUser = typeof bjjUsers.$inferSelect;
+
+// Login History - Platform tracking for iOS vs Web usage
+export const loginHistory = pgTable("login_history", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(), // References bjj_users.id
+  platform: varchar("platform", { length: 20 }).notNull(), // ios_iphone, ios_ipad, ios_app, mobile_web, desktop_web
+  userAgent: text("user_agent"),
+  ipAddress: varchar("ip_address", { length: 50 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("login_history_user_idx").on(table.userId),
+  platformIdx: index("login_history_platform_idx").on(table.platform),
+  createdIdx: index("login_history_created_idx").on(table.createdAt),
+}));
+
+export const insertLoginHistorySchema = createInsertSchema(loginHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertLoginHistory = z.infer<typeof insertLoginHistorySchema>;
+export type LoginHistory = typeof loginHistory.$inferSelect;
 
 // Email Verification Codes - For email-based authentication
 export const emailVerificationCodes = pgTable("email_verification_codes", {
