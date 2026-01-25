@@ -1,0 +1,819 @@
+# 🛡️ **COMPLETE PRODUCTION RESILIENCE SYSTEM**
+
+Here’s the comprehensive prompt to implement ALL safeguards:
+
+-----
+
+## **COPY THIS ENTIRE PROMPT TO REPLIT AGENT:**
+
+```
+IMPLEMENT COMPLETE PRODUCTION RESILIENCE & MONITORING SYSTEM
+
+We need to ensure the Professor OS system never crashes again and automatically recovers from issues.
+
+Implement ALL of the following safeguards:
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: AUTOMATIC RESTART ON CRASH
+═══════════════════════════════════════════════════════════════════════════════
+
+Add PM2 or nodemon for automatic server restart on crash:
+
+OPTION A: Using PM2 (recommended for production)
+
+1. Install PM2:
+```bash
+npm install pm2 -g
+```
+
+1. Create ecosystem.config.js in root:
+
+```javascript
+module.exports = {
+  apps: [{
+    name: 'bjj-os',
+    script: './server.js',
+    instances: 1,
+    autorestart: true,
+    watch: false,
+    max_memory_restart: '3G',
+    env: {
+      NODE_ENV: 'production',
+      NODE_OPTIONS: '--max-old-space-size=4096'
+    },
+    error_file: './logs/error.log',
+    out_file: './logs/out.log',
+    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    merge_logs: true,
+    // Restart settings
+    min_uptime: '10s',
+    max_restarts: 10,
+    restart_delay: 4000,
+    // Auto-restart on memory threshold
+    max_memory_restart: '3G'
+  }]
+};
+```
+
+1. Update package.json start script:
+
+```json
+{
+  "scripts": {
+    "start": "pm2 start ecosystem.config.js --env production",
+    "stop": "pm2 stop bjj-os",
+    "restart": "pm2 restart bjj-os",
+    "logs": "pm2 logs bjj-os",
+    "status": "pm2 status"
+  }
+}
+```
+
+OPTION B: Using nodemon (simpler, development-friendly)
+
+1. Install nodemon:
+
+```bash
+npm install nodemon --save-dev
+```
+
+1. Create nodemon.json:
+
+```json
+{
+  "watch": ["server"],
+  "ext": "js,json",
+  "ignore": ["node_modules"],
+  "delay": "2000",
+  "env": {
+    "NODE_ENV": "production",
+    "NODE_OPTIONS": "--max-old-space-size=4096"
+  }
+}
+```
+
+1. Update package.json:
+
+```json
+{
+  "scripts": {
+    "start": "nodemon server.js"
+  }
+}
+```
+
+CHOOSE ONE and implement it now.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: HEALTH CHECK ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Add comprehensive health monitoring endpoint:
+
+```javascript
+// Add to server/routes or server.js
+
+app.get('/api/health', async (req, res) => {
+  const health = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV,
+    checks: {}
+  };
+  
+  try {
+    // 1. Database Check
+    const dbStart = Date.now();
+    try {
+      await db.query('SELECT NOW()');
+      health.checks.database = {
+        status: 'ok',
+        latency: `${Date.now() - dbStart}ms`
+      };
+    } catch (dbError) {
+      health.status = 'degraded';
+      health.checks.database = {
+        status: 'error',
+        error: dbError.message,
+        code: dbError.code
+      };
+    }
+    
+    // 2. Memory Check
+    const usage = process.memoryUsage();
+    const heapStats = require('v8').getHeapStatistics();
+    const heapLimit = heapStats.heap_size_limit;
+    const memoryPercent = ((usage.heapUsed / heapLimit) * 100).toFixed(1);
+    
+    health.checks.memory = {
+      status: memoryPercent > 90 ? 'critical' : memoryPercent > 75 ? 'warning' : 'ok',
+      heapUsedMB: (usage.heapUsed / 1024 / 1024).toFixed(2),
+      heapTotalMB: (usage.heapTotal / 1024 / 1024).toFixed(2),
+      heapLimitMB: (heapLimit / 1024 / 1024).toFixed(2),
+      percentUsed: `${memoryPercent}%`,
+      rss: (usage.rss / 1024 / 1024).toFixed(2)
+    };
+    
+    if (memoryPercent > 90) {
+      health.status = 'critical';
+    } else if (memoryPercent > 75) {
+      health.status = 'warning';
+    }
+    
+    // 3. Claude API Check
+    health.checks.claude_api = {
+      status: process.env.ANTHROPIC_API_KEY ? 'configured' : 'missing',
+      keyExists: !!process.env.ANTHROPIC_API_KEY
+    };
+    
+    if (!process.env.ANTHROPIC_API_KEY) {
+      health.status = 'critical';
+    }
+    
+    // 4. Supabase Check
+    health.checks.supabase = {
+      status: (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) ? 'configured' : 'missing',
+      urlExists: !!process.env.SUPABASE_URL,
+      keyExists: !!process.env.SUPABASE_KEY
+    };
+    
+    // 5. Recent Errors Check (if you have error logging)
+    // Add your error tracking here
+    
+    // 6. Curation Status
+    try {
+      const lastCuration = await db.query(
+        'SELECT created_at, discovered, accepted FROM curation_runs ORDER BY created_at DESC LIMIT 1'
+      );
+      
+      if (lastCuration.rows.length > 0) {
+        const lastRun = lastCuration.rows[0];
+        const hoursSinceLastRun = (Date.now() - new Date(lastRun.created_at)) / (1000 * 60 * 60);
+        
+        health.checks.curation = {
+          status: hoursSinceLastRun > 24 ? 'warning' : 'ok',
+          lastRun: lastRun.created_at,
+          hoursSinceLastRun: hoursSinceLastRun.toFixed(1),
+          lastDiscovered: lastRun.discovered,
+          lastAccepted: lastRun.accepted
+        };
+      }
+    } catch (curationError) {
+      health.checks.curation = {
+        status: 'unknown',
+        error: curationError.message
+      };
+    }
+    
+  } catch (error) {
+    health.status = 'error';
+    health.error = error.message;
+  }
+  
+  // Return appropriate HTTP status
+  const statusCode = health.status === 'ok' ? 200 : 
+                     health.status === 'warning' ? 200 : 
+                     health.status === 'degraded' ? 503 : 500;
+  
+  res.status(statusCode).json(health);
+});
+
+// Public health endpoint (no auth required for monitoring)
+app.get('/health', async (req, res) => {
+  try {
+    await db.query('SELECT 1');
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(503).json({ status: 'error', error: error.message });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: COMPREHENSIVE ERROR LOGGING
+═══════════════════════════════════════════════════════════════════════════════
+
+Add detailed error logging to catch issues:
+
+```javascript
+// Create utils/logger.js
+
+const fs = require('fs');
+const path = require('path');
+
+const logsDir = path.join(__dirname, '../logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+
+const logger = {
+  error: (message, error, context = {}) => {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level: 'ERROR',
+      message,
+      error: error ? {
+        message: error.message,
+        stack: error.stack,
+        code: error.code
+      } : null,
+      context
+    };
+    
+    console.error('❌ ERROR:', JSON.stringify(logEntry, null, 2));
+    
+    // Write to file
+    fs.appendFileSync(
+      path.join(logsDir, 'error.log'),
+      JSON.stringify(logEntry) + '\n'
+    );
+  },
+  
+  warn: (message, context = {}) => {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level: 'WARN',
+      message,
+      context
+    };
+    
+    console.warn('⚠️ WARNING:', message, context);
+    
+    fs.appendFileSync(
+      path.join(logsDir, 'warn.log'),
+      JSON.stringify(logEntry) + '\n'
+    );
+  },
+  
+  info: (message, context = {}) => {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level: 'INFO',
+      message,
+      context
+    };
+    
+    console.log('ℹ️ INFO:', message, context);
+  },
+  
+  critical: (message, error, context = {}) => {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level: 'CRITICAL',
+      message,
+      error: error ? {
+        message: error.message,
+        stack: error.stack,
+        code: error.code
+      } : null,
+      context
+    };
+    
+    console.error('🚨 CRITICAL:', JSON.stringify(logEntry, null, 2));
+    
+    fs.appendFileSync(
+      path.join(logsDir, 'critical.log'),
+      JSON.stringify(logEntry) + '\n'
+    );
+  }
+};
+
+module.exports = logger;
+```
+
+Update chat endpoint to use logger:
+
+```javascript
+const logger = require('./utils/logger');
+
+app.post('/api/chat', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { message, conversationId } = req.body;
+    const userId = req.user?.id;
+    
+    logger.info('Chat request received', {
+      userId,
+      messageLength: message?.length,
+      hasConversationId: !!conversationId
+    });
+    
+    // Your chat logic here...
+    const response = await generateProfessorOSResponse(message, userId);
+    
+    logger.info('Chat response generated', {
+      userId,
+      duration: Date.now() - startTime,
+      responseLength: response?.length
+    });
+    
+    res.json({ success: true, response });
+    
+  } catch (error) {
+    logger.error('Chat endpoint failed', error, {
+      userId: req.user?.id,
+      duration: Date.now() - startTime,
+      url: req.url,
+      method: req.method
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Having trouble right now. Please try again.'
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: MEMORY MONITORING & AUTO-CLEANUP
+═══════════════════════════════════════════════════════════════════════════════
+
+Add automatic garbage collection when memory is high:
+
+```javascript
+// Add to server startup (server.js)
+
+const logger = require('./utils/logger');
+
+// Memory monitoring interval
+setInterval(() => {
+  const usage = process.memoryUsage();
+  const heapStats = require('v8').getHeapStatistics();
+  const heapLimit = heapStats.heap_size_limit;
+  const percentUsed = (usage.heapUsed / heapLimit * 100).toFixed(1);
+  
+  // Log memory status every 5 minutes
+  logger.info('Memory status', {
+    heapUsedMB: (usage.heapUsed / 1024 / 1024).toFixed(2),
+    heapLimitMB: (heapLimit / 1024 / 1024).toFixed(2),
+    percentUsed: `${percentUsed}%`
+  });
+  
+  // Warning at 75%
+  if (percentUsed > 75) {
+    logger.warn('High memory usage detected', {
+      percentUsed: `${percentUsed}%`,
+      heapUsedMB: (usage.heapUsed / 1024 / 1024).toFixed(2)
+    });
+  }
+  
+  // Critical at 85%
+  if (percentUsed > 85) {
+    logger.critical('CRITICAL memory usage', null, {
+      percentUsed: `${percentUsed}%`,
+      heapUsedMB: (usage.heapUsed / 1024 / 1024).toFixed(2)
+    });
+    
+    // Force garbage collection if available
+    if (global.gc) {
+      logger.info('Forcing garbage collection');
+      global.gc();
+      
+      const afterGC = process.memoryUsage();
+      const afterPercent = (afterGC.heapUsed / heapLimit * 100).toFixed(1);
+      logger.info('After garbage collection', {
+        percentUsed: `${afterPercent}%`,
+        freedMB: ((usage.heapUsed - afterGC.heapUsed) / 1024 / 1024).toFixed(2)
+      });
+    }
+  }
+  
+  // Emergency at 95% - skip operations
+  if (percentUsed > 95) {
+    logger.critical('EMERGENCY: Memory at 95%+, entering emergency mode');
+    // Set flag to skip non-critical operations
+    global.EMERGENCY_MEMORY_MODE = true;
+  } else {
+    global.EMERGENCY_MEMORY_MODE = false;
+  }
+  
+}, 5 * 60 * 1000); // Every 5 minutes
+
+// Update NODE_OPTIONS to expose garbage collection
+// In ecosystem.config.js or nodemon.json, add:
+// NODE_OPTIONS: '--max-old-space-size=4096 --expose-gc'
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: GRACEFUL ERROR RECOVERY IN CHAT ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Ensure chat endpoint never crashes the entire server:
+
+```javascript
+app.post('/api/chat', async (req, res) => {
+  // Wrap in try-catch at multiple levels
+  try {
+    // Check emergency mode
+    if (global.EMERGENCY_MEMORY_MODE) {
+      logger.warn('Request rejected - emergency memory mode');
+      return res.status(503).json({
+        success: false,
+        error: 'Service temporarily unavailable. Please try again in a moment.'
+      });
+    }
+    
+    const { message } = req.body;
+    const userId = req.user?.id;
+    
+    if (!message || !userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request'
+      });
+    }
+    
+    // Use withRetry for database operations
+    const response = await withRetry(async () => {
+      return await generateProfessorOSResponse(message, userId);
+    }, 3); // Retry up to 3 times
+    
+    res.json({ success: true, response });
+    
+  } catch (error) {
+    logger.error('Chat request failed', error, {
+      userId: req.user?.id,
+      errorType: error.name,
+      errorCode: error.code
+    });
+    
+    // Return user-friendly error based on type
+    let errorMessage = 'Having trouble right now. Please try again.';
+    
+    if (error.code === 'ECONNREFUSED' || error.message?.includes('timeout')) {
+      errorMessage = 'Connection issue. Please try again in a moment.';
+    } else if (error.message?.includes('API key')) {
+      errorMessage = 'Service configuration issue. Please contact support.';
+      logger.critical('Claude API key issue', error);
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: errorMessage
+    });
+  }
+});
+
+// withRetry utility (if not already present)
+async function withRetry(fn, maxRetries = 3, delay = 1000) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+      
+      logger.warn(`Retry ${i + 1}/${maxRetries} after error`, {
+        error: error.message,
+        willRetry: true
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+    }
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: RESET MEMORY TESTING ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Add test endpoint to verify reset memory works:
+
+```javascript
+app.post('/api/admin/test-reset-memory', requireAdmin, async (req, res) => {
+  const testResults = {
+    timestamp: new Date().toISOString(),
+    tests: []
+  };
+  
+  try {
+    // Test 1: Can we query messages?
+    try {
+      await db.query('SELECT COUNT(*) FROM messages WHERE user_id = $1', [req.user.id]);
+      testResults.tests.push({
+        name: 'Database Query',
+        status: 'PASS',
+        message: 'Can query messages table'
+      });
+    } catch (error) {
+      testResults.tests.push({
+        name: 'Database Query',
+        status: 'FAIL',
+        error: error.message
+      });
+    }
+    
+    // Test 2: Can we reset memory?
+    try {
+      await db.query(
+        'UPDATE messages SET deleted_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL',
+        [req.user.id]
+      );
+      testResults.tests.push({
+        name: 'Reset Memory',
+        status: 'PASS',
+        message: 'Successfully reset user memory'
+      });
+    } catch (error) {
+      testResults.tests.push({
+        name: 'Reset Memory',
+        status: 'FAIL',
+        error: error.message
+      });
+    }
+    
+    // Test 3: Can we send a new message after reset?
+    try {
+      const response = await generateProfessorOSResponse('test message', req.user.id);
+      testResults.tests.push({
+        name: 'New Message After Reset',
+        status: 'PASS',
+        message: 'Professor OS responds after memory reset',
+        responseLength: response?.length
+      });
+    } catch (error) {
+      testResults.tests.push({
+        name: 'New Message After Reset',
+        status: 'FAIL',
+        error: error.message
+      });
+    }
+    
+    const allPassed = testResults.tests.every(t => t.status === 'PASS');
+    
+    res.json({
+      success: allPassed,
+      summary: `${testResults.tests.filter(t => t.status === 'PASS').length}/${testResults.tests.length} tests passed`,
+      results: testResults
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      results: testResults
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 7: STARTUP CHECKS
+═══════════════════════════════════════════════════════════════════════════════
+
+Add system checks on server startup:
+
+```javascript
+// Add to server.js startup
+
+async function performStartupChecks() {
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🚀 BJJ OS Server Starting');
+  console.log('═══════════════════════════════════════════════════════════');
+  
+  const checks = [];
+  
+  // Check 1: Environment Variables
+  const requiredEnvVars = [
+    'ANTHROPIC_API_KEY',
+    'SUPABASE_URL',
+    'SUPABASE_KEY',
+    'DATABASE_URL',
+    'NODE_OPTIONS'
+  ];
+  
+  const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+  if (missingVars.length > 0) {
+    console.error('❌ Missing environment variables:', missingVars);
+    checks.push({ check: 'Environment Variables', status: 'FAIL', missing: missingVars });
+  } else {
+    console.log('✅ All environment variables present');
+    checks.push({ check: 'Environment Variables', status: 'PASS' });
+  }
+  
+  // Check 2: Memory Configuration
+  const heapLimit = require('v8').getHeapStatistics().heap_size_limit;
+  const heapLimitMB = (heapLimit / 1024 / 1024).toFixed(0);
+  console.log(`📊 Heap Limit: ${heapLimitMB} MB`);
+  console.log(`📊 NODE_OPTIONS: ${process.env.NODE_OPTIONS || 'NOT SET'}`);
+  
+  if (heapLimitMB < 2048) {
+    console.warn('⚠️ WARNING: Heap limit is low (< 2GB). May cause memory issues.');
+    checks.push({ check: 'Memory Configuration', status: 'WARN', heapLimitMB });
+  } else {
+    console.log('✅ Memory configuration looks good');
+    checks.push({ check: 'Memory Configuration', status: 'PASS', heapLimitMB });
+  }
+  
+  // Check 3: Database Connection
+  try {
+    await db.query('SELECT NOW()');
+    console.log('✅ Database connected');
+    checks.push({ check: 'Database Connection', status: 'PASS' });
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message);
+    checks.push({ check: 'Database Connection', status: 'FAIL', error: error.message });
+  }
+  
+  // Check 4: Required Tables
+  try {
+    const tables = ['users', 'messages', 'videos', 'curation_runs'];
+    for (const table of tables) {
+      await db.query(`SELECT 1 FROM ${table} LIMIT 1`);
+    }
+    console.log('✅ All required tables exist');
+    checks.push({ check: 'Database Tables', status: 'PASS' });
+  } catch (error) {
+    console.error('❌ Missing database tables:', error.message);
+    checks.push({ check: 'Database Tables', status: 'FAIL', error: error.message });
+  }
+  
+  console.log('═══════════════════════════════════════════════════════════');
+  
+  const failed = checks.filter(c => c.status === 'FAIL');
+  if (failed.length > 0) {
+    console.error('❌ Startup checks failed:', failed.length);
+    console.error('Server may not function correctly!');
+  } else {
+    console.log('✅ All startup checks passed');
+  }
+  
+  console.log('═══════════════════════════════════════════════════════════');
+  
+  return { checks, allPassed: failed.length === 0 };
+}
+
+// Call before starting server
+performStartupChecks().then(result => {
+  if (result.allPassed || process.env.IGNORE_STARTUP_CHECKS === 'true') {
+    app.listen(PORT, () => {
+      console.log(`✅ Server listening on port ${PORT}`);
+    });
+  } else {
+    console.error('❌ Server startup aborted due to failed checks');
+    process.exit(1);
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 8: CREATE MONITORING DASHBOARD
+═══════════════════════════════════════════════════════════════════════════════
+
+Create admin endpoint to view system status:
+
+```javascript
+app.get('/api/admin/system-status', requireAdmin, async (req, res) => {
+  try {
+    // Get health check data
+    const healthResponse = await fetch('http://localhost:' + PORT + '/api/health');
+    const health = await healthResponse.json();
+    
+    // Get recent errors
+    const errorLogPath = path.join(__dirname, 'logs/error.log');
+    let recentErrors = [];
+    if (fs.existsSync(errorLogPath)) {
+      const errorLog = fs.readFileSync(errorLogPath, 'utf-8');
+      const lines = errorLog.split('\n').filter(Boolean);
+      recentErrors = lines.slice(-10).map(line => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return { raw: line };
+        }
+      });
+    }
+    
+    // Get system stats
+    const stats = {
+      health,
+      recentErrors,
+      uptime: process.uptime(),
+      nodeVersion: process.version,
+      platform: process.platform,
+      pid: process.pid
+    };
+    
+    res.json(stats);
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+Implement in this order:
+
+□ 1. Add automatic restart (PM2 or nodemon)
+□ 2. Add health check endpoint (/api/health)
+□ 3. Add comprehensive error logging (utils/logger.js)
+□ 4. Add memory monitoring with auto-GC
+□ 5. Update chat endpoint with better error handling
+□ 6. Add reset memory test endpoint
+□ 7. Add startup checks
+□ 8. Add admin system status endpoint
+
+After implementation:
+
+□ Test automatic restart (kill process, verify restart)
+□ Test health endpoint (curl /api/health)
+□ Test reset memory feature
+□ Monitor logs for proper error tracking
+□ Verify memory monitoring works
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION STEPS
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing all parts:
+
+1. Restart server and verify startup checks pass
+1. Visit /api/health and confirm status “ok”
+1. Test reset memory feature (should work smoothly)
+1. Simulate crash (kill process) and verify automatic restart
+1. Check logs directory exists with error.log, warn.log
+1. Monitor memory usage for 10 minutes
+1. Test Professor OS under load
+
+Show me confirmation when each part is complete.
+
+```
+---
+
+## **WHAT THIS GIVES YOU:**
+
+✅ **Automatic restart** on crash (PM2/nodemon)
+✅ **Health monitoring** (/api/health endpoint)
+✅ **Comprehensive logging** (error, warn, info, critical)
+✅ **Memory monitoring** with auto garbage collection
+✅ **Graceful error recovery** (withRetry logic)
+✅ **Reset memory testing** (automated tests)
+✅ **Startup validation** (checks before server starts)
+✅ **Admin dashboard** (system status at a glance)
+
+---
+
+## **AFTER REPLIT IMPLEMENTS THIS:**
+
+You'll be able to:
+1. Monitor system health at `/api/health`
+2. View detailed status at `/api/admin/system-status`
+3. Review error logs in `/logs/error.log`
+4. Server auto-restarts if it crashes
+5. Memory issues trigger garbage collection
+6. All errors are logged for debugging
+
+---
+
+**Send this entire prompt to Replit Agent now. This creates a production-grade resilience system.** 🛡️​​​​​​​​​​​​​​​​
+```
