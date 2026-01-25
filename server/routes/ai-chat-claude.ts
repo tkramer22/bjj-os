@@ -16,6 +16,46 @@ import { professorOSCache } from '../services/professor-os-cache';
 import { detectTopicsFromMessage, synthesizeKnowledgeByTopic, formatSynthesizedKnowledge } from '../utils/knowledge-synthesizer';
 
 // ═══════════════════════════════════════════════════════════════
+// DATABASE RETRY HELPER - Resilient query execution
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Execute a database query with retry logic for connection timeouts
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 2,
+  delayMs: number = 500
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      const errorMsg = (error.message || '').toLowerCase();
+      
+      // Only retry on connection-related errors
+      const isRetryable = errorMsg.includes('timeout') || 
+                          errorMsg.includes('connect') ||
+                          errorMsg.includes('pool') ||
+                          errorMsg.includes('econnrefused') ||
+                          errorMsg.includes('connection');
+      
+      if (!isRetryable || attempt > maxRetries) {
+        throw error;
+      }
+      
+      console.log(`⚠️ [RETRY] Attempt ${attempt} failed with ${error.code || 'error'}, retrying in ${delayMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  
+  throw lastError;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // PROFESSOR OS DIAGNOSTICS - Intelligence System Logging
 // ═══════════════════════════════════════════════════════════════
 
@@ -405,8 +445,12 @@ export async function handleClaudeStream(req: any, res: any) {
       queryTypes.push('news');
     }
     
-    // Execute parallel queries
-    const results = await Promise.all(queries);
+    // Execute parallel queries with retry logic for connection resilience
+    const results = await withRetry(
+      () => Promise.all(queries),
+      2,  // max 2 retries
+      500 // 500ms delay between retries
+    );
     
     // Assign results based on what was queried
     let history: any[] = [];
@@ -1483,6 +1527,14 @@ export async function handleClaudeStream(req: any, res: any) {
         errorMsg.includes('safety') || errorMsg.includes('refused') ||
         errorMsg.includes('harmful') || errorMsg.includes('inappropriate')) {
       userFriendlyError = "I had trouble with that message. This can happen when certain words trigger safety filters, even in normal BJJ context like 'I got murdered from mount.' Could you try rephrasing?";
+    }
+    
+    // Check for database connection errors (timeouts, connection refused, etc.)
+    if (errorMsg.includes('connect_timeout') || errorMsg.includes('connection') || 
+        errorMsg.includes('timeout') || errorMsg.includes('econnrefused') ||
+        errorMsg.includes('pool') || errorMsg.includes('database')) {
+      console.error('❌ [CHAT] Database connection error detected');
+      userFriendlyError = "Temporary connection issue. Please try again in a moment.";
     }
     
     // Check if headers were already sent (streaming started)
