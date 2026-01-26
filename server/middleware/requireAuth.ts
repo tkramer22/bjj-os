@@ -1,8 +1,12 @@
 import jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
-import { authorizedDevices } from '../../shared/schema';
+import { authorizedDevices, bjjUsers } from '../../shared/schema';
 import { eq, and } from 'drizzle-orm';
+
+// Track activity updates - only update once per minute per user to reduce DB load
+const lastActivityUpdates = new Map<string, number>();
+const ACTIVITY_UPDATE_INTERVAL = 60000; // 1 minute
 
 const JWT_SECRET = process.env.SESSION_SECRET || 'your-secret-key';
 
@@ -60,6 +64,18 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     
     // Attach user info to request
     req.user = { userId: decoded.userId };
+    
+    // Track user activity - non-blocking, throttled to once per minute
+    const now = Date.now();
+    const lastUpdate = lastActivityUpdates.get(decoded.userId) || 0;
+    if (now - lastUpdate > ACTIVITY_UPDATE_INTERVAL) {
+      lastActivityUpdates.set(decoded.userId, now);
+      // Update lastLogin in background - don't await
+      db.update(bjjUsers)
+        .set({ lastLogin: new Date() })
+        .where(eq(bjjUsers.id, decoded.userId))
+        .catch((err: any) => console.error('[requireAuth] Activity tracking error:', err.message));
+    }
     
     console.log('[requireAuth] ✅ Authenticated user:', decoded.userId);
     next();

@@ -9,9 +9,39 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Search, UserPlus, Crown, Ban, Eye, TrendingUp, Users, Activity, DollarSign } from "lucide-react";
+import { Search, UserPlus, Crown, Ban, Eye, TrendingUp, Users, Activity, DollarSign, Smartphone, Globe, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import { SiApple } from "react-icons/si";
+
+// Helper to format time ago
+function formatTimeAgo(timestamp: string | Date | null): string {
+  if (!timestamp) return 'Never';
+  const now = new Date();
+  const past = new Date(timestamp);
+  const diffMs = now.getTime() - past.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+  
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 5) return `${diffMin} min ago`;
+  if (diffMin < 60) return `${diffMin} mins ago`;
+  if (diffHour < 24) return `${diffHour} hour${diffHour > 1 ? 's' : ''} ago`;
+  if (diffDay < 30) return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`;
+  if (diffDay < 365) return `${Math.floor(diffDay / 30)} month${Math.floor(diffDay / 30) > 1 ? 's' : ''} ago`;
+  return `${Math.floor(diffDay / 365)} year${Math.floor(diffDay / 365) > 1 ? 's' : ''} ago`;
+}
+
+// Helper to determine platform type
+function getPlatformInfo(platform: string | null): { icon: 'ios' | 'web' | 'unknown', label: string } {
+  if (!platform) return { icon: 'unknown', label: 'Unknown' };
+  if (platform.startsWith('ios')) return { icon: 'ios', label: 'iOS' };
+  if (platform === 'mobile_web') return { icon: 'web', label: 'Mobile Web' };
+  if (platform === 'desktop_web') return { icon: 'web', label: 'Desktop' };
+  return { icon: 'web', label: 'Web' };
+}
 
 export default function AdminUsersDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -118,12 +148,16 @@ export default function AdminUsersDashboard() {
     );
   }
 
+  // Extract users array and online count from response
+  const usersData = (users as any)?.users || users || [];
+  const onlineCount = (users as any)?.onlineCount || 0;
+  
   // Filter users based on search query
-  const filteredUsers = (users as any[])?.filter((user: any) => {
+  const filteredUsers = (usersData as any[])?.filter((user: any) => {
     const query = searchQuery.toLowerCase();
     return (
       user.email?.toLowerCase().includes(query) ||
-      user.username?.toLowerCase().includes(query)
+      user.name?.toLowerCase().includes(query)
     );
   }) || [];
 
@@ -233,16 +267,26 @@ export default function AdminUsersDashboard() {
                   </div>
                 </div>
 
+                {/* Online Count Indicator */}
+                {onlineCount > 0 && (
+                  <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg mb-4">
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                    <span className="text-green-500 font-medium" data-testid="text-online-count">
+                      {onlineCount} user{onlineCount > 1 ? 's' : ''} online now
+                    </span>
+                  </div>
+                )}
+
                 {/* Users Table */}
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Username</TableHead>
-                        <TableHead>Belt Rank</TableHead>
+                        <TableHead>User</TableHead>
                         <TableHead>Subscription</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>Platform</TableHead>
+                        <TableHead>Last Active</TableHead>
+                        <TableHead>Activity</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -256,31 +300,99 @@ export default function AdminUsersDashboard() {
                           <TableCell colSpan={6} className="text-center">No users found</TableCell>
                         </TableRow>
                       ) : (
-                        filteredUsers.map((user: any) => (
-                          <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
-                            <TableCell className="font-medium">{user.email}</TableCell>
-                            <TableCell>{user.username || '-'}</TableCell>
-                            <TableCell>{user.beltRank || '-'}</TableCell>
+                        filteredUsers.map((user: any) => {
+                          const platformInfo = getPlatformInfo(user.lastPlatform);
+                          return (
+                          <TableRow 
+                            key={user.id} 
+                            data-testid={`row-user-${user.id}`}
+                            className={user.isOnline ? 'bg-green-500/5' : ''}
+                          >
+                            {/* USER COLUMN - with online indicator */}
                             <TableCell>
-                              {user.hasLifetimeAccess ? (
-                                <Badge variant="default">
-                                  <Crown className="w-3 h-3 mr-1" />
-                                  Lifetime
-                                </Badge>
-                              ) : user.subscriptionStatus === 'active' ? (
-                                <Badge variant="default">Active</Badge>
-                              ) : user.subscriptionStatus === 'trialing' ? (
-                                <Badge variant="secondary">Trial</Badge>
+                              <div className="flex items-center gap-3">
+                                {user.isOnline && (
+                                  <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse flex-shrink-0" title="Online now" />
+                                )}
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-medium truncate">{user.name || user.email?.split('@')[0] || 'Unnamed'}</span>
+                                    {user.isNewUser && (
+                                      <Badge variant="secondary" className="text-xs px-1.5 py-0">NEW</Badge>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground truncate">{user.email}</div>
+                                  {user.beltLevel && (
+                                    <div className="text-xs text-muted-foreground capitalize">{user.beltLevel} belt</div>
+                                  )}
+                                </div>
+                              </div>
+                            </TableCell>
+                            
+                            {/* SUBSCRIPTION COLUMN */}
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {user.isLifetimeUser ? (
+                                  <Badge variant="default" className="w-fit">
+                                    <Crown className="w-3 h-3 mr-1" />
+                                    Lifetime
+                                  </Badge>
+                                ) : user.subscriptionStatus === 'active' ? (
+                                  <Badge variant="default" className="w-fit">Active</Badge>
+                                ) : user.subscriptionStatus === 'trialing' ? (
+                                  <Badge variant="secondary" className="w-fit">Trial</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="w-fit">
+                                    {user.subscriptionStatus || 'None'}
+                                  </Badge>
+                                )}
+                                {user.subscriptionType && user.subscriptionType !== 'free' && (
+                                  <span className="text-xs text-muted-foreground capitalize">{user.subscriptionType}</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            
+                            {/* PLATFORM COLUMN */}
+                            <TableCell>
+                              {platformInfo.icon === 'ios' ? (
+                                <div className="flex items-center gap-1.5 text-sm">
+                                  <SiApple className="w-4 h-4 text-slate-400" />
+                                  <span>{platformInfo.label}</span>
+                                </div>
+                              ) : platformInfo.icon === 'web' ? (
+                                <div className="flex items-center gap-1.5 text-sm">
+                                  <Globe className="w-4 h-4 text-blue-400" />
+                                  <span>{platformInfo.label}</span>
+                                </div>
                               ) : (
-                                <Badge variant="outline">None</Badge>
+                                <span className="text-muted-foreground text-sm">-</span>
                               )}
                             </TableCell>
+                            
+                            {/* LAST ACTIVE COLUMN */}
                             <TableCell>
-                              {user.isActive ? (
-                                <Badge variant="default">Active</Badge>
-                              ) : (
-                                <Badge variant="destructive">Inactive</Badge>
-                              )}
+                              <div className="flex flex-col">
+                                <span className={`text-sm ${user.isOnline ? 'text-green-500 font-medium' : ''}`}>
+                                  {user.isOnline ? 'Online now' : formatTimeAgo(user.lastLogin)}
+                                </span>
+                                {user.lastLogin && !user.isOnline && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(user.lastLogin).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            
+                            {/* ACTIVITY STATS COLUMN */}
+                            <TableCell>
+                              <div className="flex flex-col text-sm">
+                                <span className="text-muted-foreground">
+                                  Joined {user.daysSinceSignup || 0}d ago
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {user.totalLogins || 0} logins
+                                </span>
+                              </div>
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
@@ -376,7 +488,7 @@ export default function AdminUsersDashboard() {
                               </div>
                             </TableCell>
                           </TableRow>
-                        ))
+                        )})
                       )}
                     </TableBody>
                   </Table>

@@ -4826,75 +4826,101 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
     }
   });
 
-  // Get all BJJ users with filters (admin only)
+  // Get all BJJ users with filters (admin only) - Enhanced with online status, platform, and activity
   app.get('/api/admin/users', checkAdminAuth, async (req, res) => {
     try {
       const { timeFilter, planFilter, statusFilter, beltFilter } = req.query;
       
-      // Note: lastActiveAt column may not exist in production database - excluded from query
-      let query = db.select({
-        id: bjjUsers.id,
-        name: bjjUsers.name,
-        email: bjjUsers.email,
-        beltLevel: bjjUsers.beltLevel,
-        subscriptionType: bjjUsers.subscriptionType,
-        subscriptionStatus: bjjUsers.subscriptionStatus,
-        stripeSubscriptionId: bjjUsers.stripeSubscriptionId,
-        stripeCustomerId: bjjUsers.stripeCustomerId,
-        onboardingCompleted: bjjUsers.onboardingCompleted,
-        createdAt: bjjUsers.createdAt,
-        lastLogin: bjjUsers.lastLogin,
-        adminNotes: bjjUsers.adminNotes,
-        themeBelt: bjjUsers.themeBelt,
-        themeStripes: bjjUsers.themeStripes,
-        isLifetimeUser: bjjUsers.isLifetimeUser
-      }).from(bjjUsers);
-      const conditions: any[] = [];
+      // Use raw SQL for enhanced data with computed fields
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       
-      // Time filter
+      // Build conditions array for WHERE clause
+      const whereConditions: string[] = [];
+      
       if (timeFilter && timeFilter !== 'all') {
         const now = new Date();
         let cutoffDate = new Date();
-        
         switch (timeFilter) {
-          case '24h':
-            cutoffDate.setHours(now.getHours() - 24);
-            break;
-          case '7d':
-            cutoffDate.setDate(now.getDate() - 7);
-            break;
-          case '30d':
-            cutoffDate.setDate(now.getDate() - 30);
-            break;
-          case '90d':
-            cutoffDate.setDate(now.getDate() - 90);
-            break;
+          case '24h': cutoffDate.setHours(now.getHours() - 24); break;
+          case '7d': cutoffDate.setDate(now.getDate() - 7); break;
+          case '30d': cutoffDate.setDate(now.getDate() - 30); break;
+          case '90d': cutoffDate.setDate(now.getDate() - 90); break;
         }
-        
-        conditions.push(drizzleSql`${bjjUsers.createdAt} >= ${cutoffDate.toISOString()}`);
+        whereConditions.push(`u.created_at >= '${cutoffDate.toISOString()}'`);
       }
       
-      // Plan filter
       if (planFilter && planFilter !== 'all') {
-        conditions.push(eq(bjjUsers.subscriptionType, planFilter as string));
+        whereConditions.push(`u.subscription_type = '${planFilter}'`);
       }
       
-      // Status filter
       if (statusFilter && statusFilter !== 'all') {
-        conditions.push(eq(bjjUsers.subscriptionStatus, statusFilter as string));
+        whereConditions.push(`u.subscription_status = '${statusFilter}'`);
       }
       
-      // Belt filter
       if (beltFilter && beltFilter !== 'all') {
-        conditions.push(eq(bjjUsers.beltLevel, beltFilter as string));
+        whereConditions.push(`u.belt_level = '${beltFilter}'`);
       }
       
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions)) as any;
-      }
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
       
-      const users = await query.orderBy(desc(bjjUsers.createdAt));
-      res.json(users);
+      // Enhanced query with computed fields for online status, platform, and activity stats
+      const result = await db.execute(drizzleSql.raw(`
+        SELECT 
+          u.id,
+          u.name,
+          u.email,
+          u.belt_level as "beltLevel",
+          u.subscription_type as "subscriptionType",
+          u.subscription_status as "subscriptionStatus",
+          u.stripe_subscription_id as "stripeSubscriptionId",
+          u.stripe_customer_id as "stripeCustomerId",
+          u.onboarding_completed as "onboardingCompleted",
+          u.created_at as "createdAt",
+          u.last_login as "lastLogin",
+          u.admin_notes as "adminNotes",
+          u.theme_belt as "themeBelt",
+          u.theme_stripes as "themeStripes",
+          u.is_lifetime_user as "isLifetimeUser",
+          -- Computed: Is user currently online (active within 5 minutes)
+          CASE 
+            WHEN u.last_login > '${fiveMinutesAgo}' THEN true 
+            ELSE false 
+          END as "isOnline",
+          -- Computed: Is this a new user (signed up in last 7 days)
+          CASE 
+            WHEN u.created_at > '${sevenDaysAgo}' THEN true 
+            ELSE false 
+          END as "isNewUser",
+          -- Computed: Days since signup
+          EXTRACT(DAY FROM NOW() - u.created_at)::integer as "daysSinceSignup",
+          -- Computed: Total login count from authorized_devices
+          COALESCE(
+            (SELECT SUM(login_count) FROM authorized_devices WHERE user_id = u.id),
+            0
+          )::integer as "totalLogins",
+          -- Computed: Get last platform from login_history (most recent)
+          (SELECT platform FROM login_history WHERE user_id = u.id ORDER BY login_time DESC LIMIT 1) as "lastPlatform"
+        FROM bjj_users u
+        ${whereClause}
+        ORDER BY 
+          -- Online users first
+          (CASE WHEN u.last_login > '${fiveMinutesAgo}' THEN 0 ELSE 1 END),
+          u.last_login DESC NULLS LAST
+        LIMIT 200
+      `));
+      
+      const getRows = (r: any): any[] => Array.isArray(r) ? r : (r?.rows || []);
+      const users = getRows(result);
+      
+      // Count online users
+      const onlineCount = users.filter((u: any) => u.isOnline).length;
+      
+      res.json({
+        users,
+        onlineCount,
+        total: users.length
+      });
     } catch (error: any) {
       console.error('Fetch users error:', error);
       res.status(500).json({ error: error.message });
