@@ -4831,12 +4831,12 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
     try {
       const { timeFilter, planFilter, statusFilter, beltFilter } = req.query;
       
-      // Use raw SQL for enhanced data with computed fields
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      // Timestamps for computed fields
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       
-      // Build conditions array for WHERE clause
-      const whereConditions: string[] = [];
+      // Build conditions array using Drizzle SQL template for safety
+      const conditions: any[] = [];
       
       if (timeFilter && timeFilter !== 'all') {
         const now = new Date();
@@ -4847,74 +4847,118 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           case '30d': cutoffDate.setDate(now.getDate() - 30); break;
           case '90d': cutoffDate.setDate(now.getDate() - 90); break;
         }
-        whereConditions.push(`u.created_at >= '${cutoffDate.toISOString()}'`);
+        conditions.push(drizzleSql`${bjjUsers.createdAt} >= ${cutoffDate}`);
       }
       
-      if (planFilter && planFilter !== 'all') {
-        whereConditions.push(`u.subscription_type = '${planFilter}'`);
+      // Whitelist allowed filter values to prevent SQL injection
+      const allowedPlans = ['free', 'monthly', 'yearly', 'lifetime'];
+      const allowedStatuses = ['active', 'inactive', 'trialing', 'canceled', 'past_due'];
+      const allowedBelts = ['white', 'blue', 'purple', 'brown', 'black'];
+      
+      if (planFilter && planFilter !== 'all' && allowedPlans.includes(planFilter as string)) {
+        conditions.push(eq(bjjUsers.subscriptionType, planFilter as string));
       }
       
-      if (statusFilter && statusFilter !== 'all') {
-        whereConditions.push(`u.subscription_status = '${statusFilter}'`);
+      if (statusFilter && statusFilter !== 'all' && allowedStatuses.includes(statusFilter as string)) {
+        conditions.push(eq(bjjUsers.subscriptionStatus, statusFilter as string));
       }
       
-      if (beltFilter && beltFilter !== 'all') {
-        whereConditions.push(`u.belt_level = '${beltFilter}'`);
+      if (beltFilter && beltFilter !== 'all' && allowedBelts.includes(beltFilter as string)) {
+        conditions.push(eq(bjjUsers.beltLevel, beltFilter as string));
       }
       
-      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+      // Base query with filters using Drizzle ORM
+      let query = db.select({
+        id: bjjUsers.id,
+        name: bjjUsers.name,
+        email: bjjUsers.email,
+        beltLevel: bjjUsers.beltLevel,
+        subscriptionType: bjjUsers.subscriptionType,
+        subscriptionStatus: bjjUsers.subscriptionStatus,
+        stripeSubscriptionId: bjjUsers.stripeSubscriptionId,
+        stripeCustomerId: bjjUsers.stripeCustomerId,
+        onboardingCompleted: bjjUsers.onboardingCompleted,
+        createdAt: bjjUsers.createdAt,
+        lastLogin: bjjUsers.lastLogin,
+        adminNotes: bjjUsers.adminNotes,
+        themeBelt: bjjUsers.themeBelt,
+        themeStripes: bjjUsers.themeStripes,
+        isLifetimeUser: bjjUsers.isLifetimeUser
+      }).from(bjjUsers);
       
-      // Enhanced query with computed fields for online status, platform, and activity stats
-      const result = await db.execute(drizzleSql.raw(`
-        SELECT 
-          u.id,
-          u.name,
-          u.email,
-          u.belt_level as "beltLevel",
-          u.subscription_type as "subscriptionType",
-          u.subscription_status as "subscriptionStatus",
-          u.stripe_subscription_id as "stripeSubscriptionId",
-          u.stripe_customer_id as "stripeCustomerId",
-          u.onboarding_completed as "onboardingCompleted",
-          u.created_at as "createdAt",
-          u.last_login as "lastLogin",
-          u.admin_notes as "adminNotes",
-          u.theme_belt as "themeBelt",
-          u.theme_stripes as "themeStripes",
-          u.is_lifetime_user as "isLifetimeUser",
-          -- Computed: Is user currently online (active within 5 minutes)
-          CASE 
-            WHEN u.last_login > '${fiveMinutesAgo}' THEN true 
-            ELSE false 
-          END as "isOnline",
-          -- Computed: Is this a new user (signed up in last 7 days)
-          CASE 
-            WHEN u.created_at > '${sevenDaysAgo}' THEN true 
-            ELSE false 
-          END as "isNewUser",
-          -- Computed: Days since signup
-          EXTRACT(DAY FROM NOW() - u.created_at)::integer as "daysSinceSignup",
-          -- Computed: Total login count from authorized_devices
-          COALESCE(
-            (SELECT SUM(login_count) FROM authorized_devices WHERE user_id = u.id),
-            0
-          )::integer as "totalLogins",
-          -- Computed: Get last platform from login_history (most recent)
-          (SELECT platform FROM login_history WHERE user_id = u.id ORDER BY login_time DESC LIMIT 1) as "lastPlatform"
-        FROM bjj_users u
-        ${whereClause}
-        ORDER BY 
-          -- Online users first
-          (CASE WHEN u.last_login > '${fiveMinutesAgo}' THEN 0 ELSE 1 END),
-          u.last_login DESC NULLS LAST
-        LIMIT 200
-      `));
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions)) as any;
+      }
       
-      const getRows = (r: any): any[] => Array.isArray(r) ? r : (r?.rows || []);
-      const users = getRows(result);
+      // Execute base query with order by lastLogin descending, limit 200
+      const rawUsers = await query.orderBy(desc(bjjUsers.lastLogin)).limit(200);
+      
+      // Enrich with computed fields (post-processing for safety)
+      const users = rawUsers.map((user: any) => {
+        const lastLoginTime = user.lastLogin ? new Date(user.lastLogin).getTime() : 0;
+        const createdAtTime = user.createdAt ? new Date(user.createdAt).getTime() : Date.now();
+        const now = Date.now();
+        
+        return {
+          ...user,
+          isOnline: lastLoginTime > fiveMinutesAgo.getTime(),
+          isNewUser: createdAtTime > sevenDaysAgo.getTime(),
+          daysSinceSignup: Math.floor((now - createdAtTime) / (1000 * 60 * 60 * 24)),
+          totalLogins: 0, // Will be enriched below if needed
+          lastPlatform: null // Will be enriched below if needed
+        };
+      });
+      
+      // Sort: online users first, then by lastLogin
+      users.sort((a: any, b: any) => {
+        if (a.isOnline && !b.isOnline) return -1;
+        if (!a.isOnline && b.isOnline) return 1;
+        const aTime = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
+        const bTime = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+        return bTime - aTime;
+      });
       
       // Count online users
       const onlineCount = users.filter((u: any) => u.isOnline).length;
+      
+      // Enrich with login stats and platform in a single batch query
+      if (users.length > 0) {
+        const userIds = users.map((u: any) => u.id);
+        
+        // Get login counts from authorized_devices
+        const loginCountsResult = await db.select({
+          userId: authorizedDevices.userId,
+          totalLogins: drizzleSql<number>`COALESCE(SUM(${authorizedDevices.loginCount}), 0)::integer`
+        })
+          .from(authorizedDevices)
+          .where(drizzleSql`${authorizedDevices.userId} = ANY(${userIds})`)
+          .groupBy(authorizedDevices.userId);
+        
+        const loginCountMap = new Map(loginCountsResult.map((r: any) => [r.userId, r.totalLogins]));
+        
+        // Get last platform from loginEvents
+        const platformsResult = await db.select({
+          userId: loginEvents.userId,
+          platform: loginEvents.platform
+        })
+          .from(loginEvents)
+          .where(drizzleSql`${loginEvents.userId} = ANY(${userIds})`)
+          .orderBy(desc(loginEvents.loginTime));
+        
+        // Create map of userId -> first (most recent) platform
+        const platformMap = new Map<string, string>();
+        for (const r of platformsResult as any[]) {
+          if (!platformMap.has(r.userId)) {
+            platformMap.set(r.userId, r.platform);
+          }
+        }
+        
+        // Enrich users with stats
+        for (const user of users) {
+          user.totalLogins = loginCountMap.get(user.id) || 0;
+          user.lastPlatform = platformMap.get(user.id) || null;
+        }
+      }
       
       res.json({
         users,
