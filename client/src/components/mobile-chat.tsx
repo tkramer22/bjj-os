@@ -680,14 +680,26 @@ What are you working on right now?`,
       flexDirection: 'column',
       height: '100%',
     }}>
-      <div className="mobile-chat-header mobile-safe-area-top" style={{ flexShrink: 0 }}>
+      <div className="mobile-chat-header mobile-safe-area-top" style={{ 
+        flexShrink: 0,
+        background: 'var(--mobile-dark-gray)',
+        borderBottom: '1px solid rgba(124, 77, 255, 0.2)',
+        zIndex: 100
+      }}>
         <div>
-          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.25rem" }}>Prof. OS</h2>
+          <h2 style={{ 
+            fontSize: "1.25rem", 
+            marginBottom: "0.25rem",
+            fontWeight: 600,
+            color: 'white',
+            lineHeight: 1.4
+          }}>Prof. OS</h2>
           <p style={{ 
             fontSize: "0.875rem", 
             color: "var(--mobile-text-secondary)",
             whiteSpace: "nowrap",
-            overflow: "visible"
+            overflow: "visible",
+            lineHeight: 1.4
           }}>
             Your Training Partner
           </p>
