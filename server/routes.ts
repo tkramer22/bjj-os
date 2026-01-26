@@ -11695,12 +11695,13 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
-  // Get saved videos
+  // Get saved videos - ONLY returns Gemini-analyzed videos
   app.get('/api/ai/saved-videos/:userId', async (req, res) => {
     try {
       const { userId } = req.params;
       console.log(`📚 [SAVED-VIDEOS] Fetching saved videos for user: ${userId}`);
       
+      // Join with videoKnowledge to ensure only analyzed videos are returned
       const savedVideos = await db.select({
         id: userSavedVideos.id,
         videoId: userSavedVideos.videoId,
@@ -11709,31 +11710,54 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         title: aiVideoKnowledge.techniqueName,
         instructor: aiVideoKnowledge.instructorName,
         videoUrl: aiVideoKnowledge.videoUrl,
+        youtubeId: aiVideoKnowledge.youtubeId,
         thumbnailUrl: aiVideoKnowledge.thumbnailUrl,
         duration: aiVideoKnowledge.duration,
         rating: aiVideoKnowledge.avgUserRating,
-        category: aiVideoKnowledge.positionCategory
+        category: aiVideoKnowledge.positionCategory,
+        // Include Gemini analysis fields to verify video is analyzed
+        techniqueName: videoKnowledge.techniqueName,
+        keyConcepts: videoKnowledge.keyConcepts,
+        fullSummary: videoKnowledge.fullSummary
       })
       .from(userSavedVideos)
-      .leftJoin(aiVideoKnowledge, eq(userSavedVideos.videoId, aiVideoKnowledge.id))
-      .where(eq(userSavedVideos.userId, userId))
+      .innerJoin(aiVideoKnowledge, eq(userSavedVideos.videoId, aiVideoKnowledge.id))
+      .innerJoin(videoKnowledge, eq(aiVideoKnowledge.id, videoKnowledge.videoId))
+      .where(
+        and(
+          eq(userSavedVideos.userId, userId),
+          // Ensure video has complete Gemini analysis (same as search filtering)
+          isNotNull(videoKnowledge.techniqueName),
+          sql`${videoKnowledge.techniqueName} != ''`,
+          // Require at least one of keyConcepts or fullSummary for completeness
+          sql`(${videoKnowledge.keyConcepts} IS NOT NULL OR ${videoKnowledge.fullSummary} IS NOT NULL)`
+        )
+      )
       .orderBy(desc(userSavedVideos.savedDate));
       
-      console.log(`📚 [SAVED-VIDEOS] Found ${savedVideos.length} saved videos for user ${userId}`);
+      console.log(`📚 [SAVED-VIDEOS] Found ${savedVideos.length} analyzed saved videos for user ${userId}`);
       
       res.json({
-        videos: savedVideos.map(v => ({
-          id: String(v.videoId),
-          title: v.title || `Video #${v.videoId}`,
-          instructor: v.instructor || 'Unknown',
-          videoUrl: v.videoUrl || '',
-          thumbnailUrl: v.thumbnailUrl || '',
-          duration: formatDuration(v.duration) || '0:00',
-          rating: v.rating,
-          category: v.category || 'Other',
-          note: v.note,
-          savedDate: v.savedDate
-        }))
+        videos: savedVideos.map(v => {
+          // YouTube thumbnail fallback using youtubeId
+          const displayThumbnail = v.thumbnailUrl || 
+            (v.youtubeId ? `https://img.youtube.com/vi/${v.youtubeId}/maxresdefault.jpg` : '');
+          
+          return {
+            id: String(v.videoId),
+            title: v.title || v.techniqueName || `Video #${v.videoId}`,
+            instructor: v.instructor || 'Unknown',
+            videoUrl: v.videoUrl || '',
+            thumbnailUrl: displayThumbnail,
+            duration: formatDuration(v.duration) || '0:00',
+            rating: v.rating,
+            category: v.category || 'Other',
+            note: v.note,
+            savedDate: v.savedDate,
+            // Include analysis indicator
+            hasGeminiAnalysis: !!(v.techniqueName && (v.keyConcepts || v.fullSummary))
+          };
+        })
       });
       
     } catch (error: any) {

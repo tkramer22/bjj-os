@@ -764,50 +764,15 @@ What are you working on right now?`,
         })}
         
         {isTyping && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 16px',
-            background: 'var(--mobile-card-bg)',
-            borderRadius: '16px',
-            maxWidth: '80%',
-          }}>
-            <div style={{
-              display: 'flex',
-              gap: '4px',
-            }}>
-              <span style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: 'var(--mobile-primary)',
-                animation: 'pulse 1.4s ease-in-out infinite',
-              }} />
-              <span style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: 'var(--mobile-primary)',
-                animation: 'pulse 1.4s ease-in-out infinite 0.2s',
-              }} />
-              <span style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: 'var(--mobile-primary)',
-                animation: 'pulse 1.4s ease-in-out infinite 0.4s',
-              }} />
+          <div className="analyzing-message" data-testid="analyzing-indicator">
+            <div className="typing-indicator">
+              <span className="dot" />
+              <span className="dot" />
+              <span className="dot" />
             </div>
-            {thinkingStatus && (
-              <span style={{
-                fontSize: '14px',
-                color: 'var(--mobile-text-secondary)',
-                marginLeft: '8px',
-              }}>
-                {thinkingStatus}
-              </span>
-            )}
+            <span className="text">
+              {thinkingStatus || "Professor OS is analyzing..."}
+            </span>
           </div>
         )}
         

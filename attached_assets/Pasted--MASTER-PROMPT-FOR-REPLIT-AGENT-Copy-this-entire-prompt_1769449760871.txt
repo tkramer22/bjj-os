@@ -1,0 +1,777 @@
+# 🎯 **MASTER PROMPT FOR REPLIT AGENT**
+
+Copy this entire prompt and send to Replit Agent:
+
+-----
+
+```
+CRITICAL UPDATE: ENSURE VIDEO DATA ACCURACY & UI/UX IMPROVEMENTS
+
+This is a critical update to ensure we NEVER show incorrect video data to users while improving the UI/UX for Professor OS and video display. All changes must preserve existing functionality.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: DATABASE QUERY UPDATES - ONLY SHOW ANALYZED VIDEOS
+═══════════════════════════════════════════════════════════════════════════════
+
+OBJECTIVE: Update ALL video queries to only return videos that have been properly analyzed by Gemini.
+
+CRITICAL RULES:
+- Never show videos without gemini_analysis
+- Never show fake or placeholder analysis text
+- YouTube thumbnail fallback is SAFE (video_id is accurate)
+- Filter at database level, not frontend
+
+═══════════════════════════════════════════════════════════════════════════════
+1A. UPDATE MAIN VIDEO FETCHING ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Find the endpoint that fetches videos for the Videos tab (likely /api/videos or similar).
+
+UPDATE IT TO:
+
+```javascript
+app.get('/api/videos', requireAuth, async (req, res) => {
+  try {
+    const { 
+      professor, 
+      technique, 
+      search,
+      limit = 50,
+      offset = 0 
+    } = req.query;
+    
+    let query = `
+      SELECT 
+        v.*,
+        COALESCE(
+          v.thumbnail_url, 
+          'https://img.youtube.com/vi/' || v.video_id || '/maxresdefault.jpg'
+        ) as display_thumbnail
+      FROM videos v
+      WHERE v.deleted_at IS NULL
+        AND v.gemini_analysis IS NOT NULL
+        AND v.gemini_analysis->>'techniques_covered' IS NOT NULL
+        AND jsonb_array_length(v.gemini_analysis->'techniques_covered') > 0
+    `;
+    
+    const params = [];
+    let paramCount = 1;
+    
+    // Filter by professor
+    if (professor && professor !== 'All') {
+      query += ` AND v.professor_name = $${paramCount}`;
+      params.push(professor);
+      paramCount++;
+    }
+    
+    // Filter by technique
+    if (technique && technique !== 'All') {
+      query += ` AND v.gemini_analysis->'techniques_covered' @> $${paramCount}::jsonb`;
+      params.push(JSON.stringify([technique]));
+      paramCount++;
+    }
+    
+    // Search across multiple fields
+    if (search) {
+      query += ` AND (
+        v.title ILIKE $${paramCount}
+        OR v.professor_name ILIKE $${paramCount}
+        OR v.gemini_analysis::text ILIKE $${paramCount}
+      )`;
+      params.push(`%${search}%`);
+      paramCount++;
+    }
+    
+    query += `
+      ORDER BY v.created_at DESC
+      LIMIT $${paramCount} OFFSET $${paramCount + 1}
+    `;
+    params.push(limit, offset);
+    
+    const result = await db.query(query, params);
+    
+    res.json({
+      success: true,
+      videos: result.rows,
+      count: result.rows.length
+    });
+    
+  } catch (error) {
+    console.error('Error fetching videos:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch videos'
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+1B. UPDATE GET UNIQUE PROFESSORS ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Find endpoint that returns list of professors (for filter dropdown).
+
+UPDATE IT TO:
+
+```javascript
+app.get('/api/professors', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT DISTINCT professor_name
+      FROM videos
+      WHERE deleted_at IS NULL
+        AND gemini_analysis IS NOT NULL
+        AND professor_name IS NOT NULL
+        AND professor_name != ''
+      ORDER BY professor_name ASC
+    `);
+    
+    res.json({
+      success: true,
+      professors: result.rows.map(r => r.professor_name)
+    });
+    
+  } catch (error) {
+    console.error('Error fetching professors:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch professors'
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+1C. UPDATE GET UNIQUE TECHNIQUES ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Find endpoint that returns list of techniques (for filter dropdown).
+
+UPDATE IT TO:
+
+```javascript
+app.get('/api/techniques', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT DISTINCT jsonb_array_elements_text(gemini_analysis->'techniques_covered') as technique
+      FROM videos
+      WHERE deleted_at IS NULL
+        AND gemini_analysis IS NOT NULL
+        AND gemini_analysis->'techniques_covered' IS NOT NULL
+      ORDER BY technique ASC
+    `);
+    
+    res.json({
+      success: true,
+      techniques: result.rows.map(r => r.technique)
+    });
+    
+  } catch (error) {
+    console.error('Error fetching techniques:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch techniques'
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+1D. UPDATE SAVED VIDEOS ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Find endpoint that fetches user’s saved videos.
+
+UPDATE IT TO:
+
+```javascript
+app.get('/api/saved-videos', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const result = await db.query(`
+      SELECT 
+        v.*,
+        COALESCE(
+          v.thumbnail_url, 
+          'https://img.youtube.com/vi/' || v.video_id || '/maxresdefault.jpg'
+        ) as display_thumbnail,
+        sv.saved_at
+      FROM saved_videos sv
+      JOIN videos v ON sv.video_id = v.id
+      WHERE sv.user_id = $1
+        AND sv.deleted_at IS NULL
+        AND v.deleted_at IS NULL
+        AND v.gemini_analysis IS NOT NULL
+        AND v.gemini_analysis->>'techniques_covered' IS NOT NULL
+      ORDER BY sv.saved_at DESC
+    `, [userId]);
+    
+    res.json({
+      success: true,
+      videos: result.rows
+    });
+    
+  } catch (error) {
+    console.error('Error fetching saved videos:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch saved videos'
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: PROFESSOR OS - ONLY RECOMMEND ANALYZED VIDEOS
+═══════════════════════════════════════════════════════════════════════════════
+
+OBJECTIVE: Ensure Professor OS ONLY recommends videos that have been analyzed.
+
+Find your Professor OS video recommendation logic (likely in the chat endpoint or a helper function).
+
+═══════════════════════════════════════════════════════════════════════════════
+2A. UPDATE PROFESSOR OS VIDEO SEARCH FUNCTION
+═══════════════════════════════════════════════════════════════════════════════
+
+```javascript
+// Function to find relevant videos for Professor OS recommendations
+async function findRelevantVideosForProfessorOS(searchTerms, userId, limit = 5) {
+  try {
+    // Build search query from terms
+    const searchPattern = searchTerms.map(term => `%${term}%`).join('|');
+    
+    const result = await db.query(`
+      SELECT 
+        v.*,
+        COALESCE(
+          v.thumbnail_url, 
+          'https://img.youtube.com/vi/' || v.video_id || '/maxresdefault.jpg'
+        ) as display_thumbnail,
+        -- Relevance scoring
+        (
+          CASE WHEN v.title ILIKE ANY($1::text[]) THEN 3 ELSE 0 END +
+          CASE WHEN v.professor_name ILIKE ANY($1::text[]) THEN 2 ELSE 0 END +
+          CASE WHEN v.gemini_analysis::text ILIKE ANY($1::text[]) THEN 1 ELSE 0 END
+        ) as relevance_score
+      FROM videos v
+      WHERE v.deleted_at IS NULL
+        AND v.gemini_analysis IS NOT NULL
+        AND v.gemini_analysis->>'techniques_covered' IS NOT NULL
+        AND jsonb_array_length(v.gemini_analysis->'techniques_covered') > 0
+        AND (
+          v.title ILIKE ANY($1::text[])
+          OR v.professor_name ILIKE ANY($1::text[])
+          OR v.gemini_analysis::text ILIKE ANY($1::text[])
+        )
+      ORDER BY relevance_score DESC, v.created_at DESC
+      LIMIT $2
+    `, [searchTerms.map(t => `%${t}%`), limit]);
+    
+    return result.rows;
+    
+  } catch (error) {
+    console.error('Error finding relevant videos:', error);
+    return [];
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+2B. UPDATE PROFESSOR OS CHAT ENDPOINT
+═══════════════════════════════════════════════════════════════════════════════
+
+Find your /api/chat or /api/professor-os endpoint and ensure it uses the updated search function:
+
+```javascript
+app.post('/api/chat', requireAuth, async (req, res) => {
+  try {
+    const { message } = req.body;
+    const userId = req.user.id;
+    
+    console.log('💬 Chat request:', { userId, message: message.substring(0, 50) });
+    
+    // Get user's message history for context
+    const messageHistory = await db.query(`
+      SELECT role, content, created_at
+      FROM messages
+      WHERE user_id = $1
+        AND deleted_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT 20
+    `, [userId]);
+    
+    // Extract search terms from message
+    const searchTerms = extractSearchTerms(message); // Your existing logic
+    
+    // Find relevant analyzed videos ONLY
+    const relevantVideos = await findRelevantVideosForProfessorOS(
+      searchTerms,
+      userId,
+      5
+    );
+    
+    // Build context for Claude
+    const videoContext = relevantVideos.length > 0
+      ? `\n\nRelevant analyzed videos from our library:\n${relevantVideos.map(v => 
+          `- "${v.title}" by ${v.professor_name} (covers: ${v.gemini_analysis.techniques_covered.join(', ')})`
+        ).join('\n')}`
+      : '';
+    
+    // Call Claude API with context
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      system: `You are Professor OS, an expert BJJ coach with access to a curated library of 5,000+ analyzed instructional videos. You have perfect memory of every conversation with this user.
+      
+      ${videoContext}
+      
+      When recommending videos, ONLY recommend from the videos listed above. Never recommend videos not in our analyzed library.`,
+      messages: [
+        ...messageHistory.rows.reverse().map(m => ({
+          role: m.role,
+          content: m.content
+        })),
+        {
+          role: 'user',
+          content: message
+        }
+      ]
+    });
+    
+    const assistantMessage = response.content[0].text;
+    
+    // Save messages to database
+    await db.query(`
+      INSERT INTO messages (user_id, role, content, created_at)
+      VALUES 
+        ($1, 'user', $2, NOW()),
+        ($1, 'assistant', $3, NOW())
+    `, [userId, message, assistantMessage]);
+    
+    res.json({
+      success: true,
+      response: assistantMessage,
+      videos: relevantVideos.length > 0 ? relevantVideos : undefined
+    });
+    
+  } catch (error) {
+    console.error('❌ Chat error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Having trouble right now. Please try again.'
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: BACKGROUND ANALYSIS FOR UNANALYZED VIDEOS
+═══════════════════════════════════════════════════════════════════════════════
+
+OBJECTIVE: Automatically analyze any videos that don’t have gemini_analysis yet.
+
+═══════════════════════════════════════════════════════════════════════════════
+3A. CREATE ANALYSIS QUEUE FUNCTION
+═══════════════════════════════════════════════════════════════════════════════
+
+```javascript
+// Function to analyze videos that are missing analysis
+async function analyzeUnanalyzedVideos() {
+  try {
+    console.log('🔍 Checking for unanalyzed videos...');
+    
+    // Get videos without analysis
+    const result = await db.query(`
+      SELECT id, video_id, title, professor_name
+      FROM videos
+      WHERE deleted_at IS NULL
+        AND gemini_analysis IS NULL
+      ORDER BY created_at DESC
+      LIMIT 10
+    `);
+    
+    if (result.rows.length === 0) {
+      console.log('✅ All videos are analyzed!');
+      return;
+    }
+    
+    console.log(`📊 Found ${result.rows.length} unanalyzed videos`);
+    
+    // Analyze each video with rate limiting
+    for (const video of result.rows) {
+      try {
+        console.log(`🎥 Analyzing: "${video.title}" by ${video.professor_name}`);
+        
+        // Call your existing Gemini analysis function
+        await analyzeVideoWithGemini(video.video_id, video.id);
+        
+        console.log(`✅ Analyzed: ${video.title}`);
+        
+        // Rate limit: wait 5 seconds between API calls
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+      } catch (error) {
+        console.error(`❌ Failed to analyze video ${video.id}:`, error.message);
+        // Continue to next video even if one fails
+      }
+    }
+    
+    console.log('✅ Batch analysis complete');
+    
+  } catch (error) {
+    console.error('❌ Error in analyzeUnanalyzedVideos:', error);
+  }
+}
+
+// Schedule to run every 6 hours
+const ANALYSIS_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
+
+setInterval(analyzeUnanalyzedVideos, ANALYSIS_INTERVAL);
+
+// Also run on server startup (after 1 minute to let server stabilize)
+setTimeout(analyzeUnanalyzedVideos, 60000);
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+3B. ADD MANUAL ANALYSIS TRIGGER ENDPOINT (ADMIN ONLY)
+═══════════════════════════════════════════════════════════════════════════════
+
+```javascript
+// Admin endpoint to manually trigger analysis
+app.post('/api/admin/analyze-videos', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    console.log('🔧 Manual analysis triggered by admin');
+    
+    // Run in background, don't wait
+    analyzeUnanalyzedVideos().catch(err => {
+      console.error('Background analysis error:', err);
+    });
+    
+    res.json({
+      success: true,
+      message: 'Video analysis started in background'
+    });
+    
+  } catch (error) {
+    console.error('Error triggering analysis:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to trigger analysis'
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: UI/UX IMPROVEMENTS - LOADING STATES & VISUAL CLARITY
+═══════════════════════════════════════════════════════════════════════════════
+
+OBJECTIVE: Make loading states more visible, improve visual feedback.
+
+═══════════════════════════════════════════════════════════════════════════════
+4A. UPDATE ANALYZING INDICATOR STYLES (mobile.css)
+═══════════════════════════════════════════════════════════════════════════════
+
+Add to mobile.css or your main stylesheet:
+
+```css
+/* Professor OS analyzing/loading indicator */
+.analyzing-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  margin: 16px;
+  background: rgba(124, 77, 255, 0.15);
+  border: 2px solid rgba(124, 77, 255, 0.4);
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(124, 77, 255, 0.2);
+}
+
+.analyzing-message .text {
+  color: #7c4dff;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* Animated typing indicator dots */
+.typing-indicator {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(124, 77, 255, 0.2);
+  border-radius: 20px;
+}
+
+.typing-indicator .dot {
+  width: 8px;
+  height: 8px;
+  background: #7c4dff;
+  border-radius: 50%;
+  animation: typing-bounce 1.4s infinite ease-in-out;
+}
+
+.typing-indicator .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-indicator .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-12px);
+    opacity: 1;
+  }
+}
+
+/* Professor OS response message styling */
+.professor-message {
+  background: rgba(124, 77, 255, 0.1);
+  border-left: 3px solid #7c4dff;
+  padding: 16px;
+  margin: 12px;
+  border-radius: 12px;
+  color: white;
+  line-height: 1.6;
+}
+
+/* User message styling */
+.user-message {
+  background: rgba(255, 255, 255, 0.08);
+  border-left: 3px solid rgba(255, 255, 255, 0.3);
+  padding: 16px;
+  margin: 12px;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+}
+
+/* Video recommendation card in chat */
+.chat-video-recommendation {
+  background: rgba(124, 77, 255, 0.08);
+  border: 1px solid rgba(124, 77, 255, 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 8px 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chat-video-recommendation:hover {
+  background: rgba(124, 77, 255, 0.15);
+  border-color: rgba(124, 77, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+.chat-video-recommendation .video-title {
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.chat-video-recommendation .video-professor {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.chat-video-recommendation .video-techniques {
+  color: #7c4dff;
+  font-size: 12px;
+  font-weight: 500;
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+4B. UPDATE LOADING STATE COMPONENT (mobile-chat.tsx or similar)
+═══════════════════════════════════════════════════════════════════════════════
+
+Find where the loading/analyzing indicator is rendered and update it to:
+
+```tsx
+// When Professor OS is analyzing
+{isLoading && (
+  <div className="analyzing-message">
+    <div className="typing-indicator">
+      <span className="dot"></span>
+      <span className="dot"></span>
+      <span className="dot"></span>
+    </div>
+    <span className="text">
+      Professor OS is analyzing...
+    </span>
+  </div>
+)}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+4C. IMPROVE VIDEO CARD DISPLAY (ensure thumbnails always show)
+═══════════════════════════════════════════════════════════════════════════════
+
+Update video card component to use display_thumbnail from backend:
+
+```tsx
+// In VideoCard component or wherever videos are rendered
+<div className="video-card" onClick={() => handleVideoClick(video)}>
+  <div className="video-thumbnail">
+    <img 
+      src={video.display_thumbnail}
+      alt={video.title}
+      loading="lazy"
+      onError={(e) => {
+        // Ultimate fallback if even YouTube thumbnail fails
+        e.target.src = '/placeholder-video.png';
+      }}
+    />
+    <div className="video-duration">
+      {formatDuration(video.duration)}
+    </div>
+  </div>
+  
+  <div className="video-info">
+    <h3 className="video-title">{video.title}</h3>
+    <p className="video-professor">{video.professor_name}</p>
+    
+    {/* Always show analysis - it exists because we filtered at DB level */}
+    <div className="video-techniques">
+      {video.gemini_analysis.techniques_covered.slice(0, 3).join(' • ')}
+    </div>
+  </div>
+</div>
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: TESTING & VALIDATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing all changes, verify:
+
+BACKEND TESTING:
+□ Query /api/videos - should only return videos with gemini_analysis
+□ Query /api/professors - should only return professors with analyzed videos
+□ Query /api/techniques - should only return techniques from analyzed videos
+□ Query /api/saved-videos - should only return analyzed videos
+□ Professor OS chat should only recommend analyzed videos
+□ Background analysis function runs without errors
+□ All video thumbnails display (custom or YouTube fallback)
+
+FRONTEND TESTING:
+□ Videos tab shows only analyzed videos
+□ Professor dropdown only shows professors with analyzed videos
+□ Technique dropdown only shows techniques from analyzed videos
+□ Saved videos shows only analyzed videos
+□ Professor OS loading indicator is clearly visible
+□ Professor OS only recommends videos from analyzed library
+□ All video cards show thumbnails (no broken images)
+□ Chat messages are fully visible (not cut off)
+
+DATABASE VALIDATION:
+□ Run query to count analyzed vs unanalyzed videos
+□ Verify background analysis is adding gemini_analysis to videos
+□ Check that no frontend queries are bypassing the analysis filter
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL REQUIREMENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. NEVER show videos without gemini_analysis to users
+1. NEVER fake or generate placeholder analysis
+1. YouTube thumbnail fallback is safe and should be used
+1. Filter at database query level, not in frontend
+1. Professor OS must only recommend from analyzed videos
+1. Loading states must be clearly visible
+1. All existing functionality must continue working
+1. No breaking changes to API contracts
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+Implement in this order to minimize risk:
+
+1. Part 4 (UI/UX) - lowest risk, immediate visual improvement
+1. Part 1 (Database queries) - core filtering logic
+1. Part 2 (Professor OS) - depends on Part 1
+1. Part 3 (Background analysis) - independent, can run separately
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION QUERY
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, run this query to verify data integrity:
+
+```sql
+-- Check video analysis status
+SELECT 
+  COUNT(*) FILTER (WHERE gemini_analysis IS NOT NULL) as analyzed,
+  COUNT(*) FILTER (WHERE gemini_analysis IS NULL) as unanalyzed,
+  COUNT(*) as total,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE gemini_analysis IS NOT NULL) / COUNT(*), 1) as analyzed_percentage
+FROM videos
+WHERE deleted_at IS NULL;
+```
+
+Show me the results of this query after implementation.
+
+═══════════════════════════════════════════════════════════════════════════════
+CONFIRMATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing each part, confirm:
+
+1. What was changed
+1. Which files were modified
+1. Results of testing
+1. Any errors encountered
+
+Begin with Part 4 (UI/UX improvements) as it’s the lowest risk and gives immediate user benefit.
+
+```
+---
+
+## **AFTER AGENT COMPLETES:**
+
+Run these verification steps:
+
+```bash
+# 1. In Replit shell - push changes
+git add .
+git commit -m "Ensure video data accuracy - only show analyzed videos"
+git push
+
+# 2. On your Mac - pull and rebuild
+cd /path/to/ios/project
+git pull
+npm run build
+npx cap sync ios
+npx cap open ios
+
+# 3. Test in Xcode simulator:
+# □ Videos tab shows only analyzed videos
+# □ Professor OS "analyzing" is clearly visible
+# □ All thumbnails display correctly
+# □ Professor OS only recommends real videos
+# □ No broken images or missing data
+```
+
+-----
+
+**Send this entire master prompt to Replit Agent now!** 🚀
+
+This will ensure 100% data accuracy while improving the UI/UX, without breaking any existing functionality.​​​​​​​​​​​​​​​​
