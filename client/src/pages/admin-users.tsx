@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -44,23 +44,37 @@ function getPlatformInfo(platform: string | null): { icon: 'ios' | 'web' | 'unkn
 }
 
 export default function AdminUsersDashboard() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Restore auth state from sessionStorage on initial load
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    const stored = sessionStorage.getItem('adminAuthenticated');
+    console.log('🔐 [ADMIN] Initial auth state from sessionStorage:', stored);
+    return stored === 'true';
+  });
   const [password, setPassword] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const { toast } = useToast();
 
+  // Persist auth state to sessionStorage when it changes
+  useEffect(() => {
+    console.log('🔐 [ADMIN] Auth state changed:', isAuthenticated);
+    sessionStorage.setItem('adminAuthenticated', String(isAuthenticated));
+  }, [isAuthenticated]);
+
   // Login mutation
   const loginMutation = useMutation({
     mutationFn: async (password: string) => {
+      console.log('🔐 [ADMIN] Attempting login...');
       const res = await apiRequest("POST", "/api/admin/login", { password });
       return res.json();
     },
     onSuccess: () => {
+      console.log('✅ [ADMIN] Login successful, setting isAuthenticated=true');
       setIsAuthenticated(true);
       toast({ title: "Login successful" });
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('❌ [ADMIN] Login failed:', error);
       toast({ title: "Invalid password", variant: "destructive" });
     },
   });
@@ -71,11 +85,24 @@ export default function AdminUsersDashboard() {
     enabled: isAuthenticated,
   });
 
-  // Fetch users list
-  const { data: users, isLoading: usersLoading } = useQuery({
+  // Fetch users list with debugging
+  const { data: users, isLoading: usersLoading, error: usersError, isError: usersIsError, isFetching: usersFetching } = useQuery({
     queryKey: ["/api/admin/users"],
     enabled: isAuthenticated,
   });
+
+  // Debug logging for users query
+  useEffect(() => {
+    console.log('👥 [ADMIN USERS] Query state:', {
+      isAuthenticated,
+      usersLoading,
+      usersFetching,
+      usersIsError,
+      usersError,
+      usersData: users,
+      usersCount: (users as any)?.users?.length ?? (users as any)?.length ?? 'undefined'
+    });
+  }, [isAuthenticated, users, usersLoading, usersFetching, usersIsError, usersError]);
 
   // Fetch referral redemptions
   const { data: redemptions } = useQuery({
