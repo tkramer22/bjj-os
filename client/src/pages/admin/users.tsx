@@ -68,10 +68,14 @@ export default function AdminUsers() {
     setCurrentPage(1);
   };
 
-  const { data: users, isLoading, refetch } = useQuery({
+  const { data: usersResponse, isLoading, refetch } = useQuery({
     queryKey: ['/api/admin/users', { timeFilter, planFilter, statusFilter, beltFilter }],
     queryFn: () => adminApiRequest(`/api/admin/users?timeFilter=${timeFilter}&planFilter=${planFilter}&statusFilter=${statusFilter}&beltFilter=${beltFilter}`),
   });
+  
+  // Extract users array from response - API returns { users: [...], onlineCount, total }
+  const users = Array.isArray(usersResponse?.users) ? usersResponse.users : 
+                Array.isArray(usersResponse) ? usersResponse : [];
 
   // Create test user mutation
   const createTestUserMutation = useMutation({
