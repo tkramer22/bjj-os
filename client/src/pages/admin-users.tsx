@@ -44,11 +44,16 @@ function getPlatformInfo(platform: string | null): { icon: 'ios' | 'web' | 'unkn
 }
 
 export default function AdminUsersDashboard() {
-  // Restore auth state from sessionStorage on initial load
+  // Restore auth state from sessionStorage on initial load (with SSR safety check)
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    const stored = sessionStorage.getItem('adminAuthenticated');
-    console.log('🔐 [ADMIN] Initial auth state from sessionStorage:', stored);
-    return stored === 'true';
+    if (typeof window === 'undefined') return false;
+    try {
+      const stored = sessionStorage.getItem('adminAuthenticated');
+      console.log('🔐 [ADMIN] Initial auth state from sessionStorage:', stored);
+      return stored === 'true';
+    } catch {
+      return false;
+    }
   });
   const [password, setPassword] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -58,7 +63,11 @@ export default function AdminUsersDashboard() {
   // Persist auth state to sessionStorage when it changes
   useEffect(() => {
     console.log('🔐 [ADMIN] Auth state changed:', isAuthenticated);
-    sessionStorage.setItem('adminAuthenticated', String(isAuthenticated));
+    try {
+      sessionStorage.setItem('adminAuthenticated', String(isAuthenticated));
+    } catch {
+      // sessionStorage not available
+    }
   }, [isAuthenticated]);
 
   // Login mutation
