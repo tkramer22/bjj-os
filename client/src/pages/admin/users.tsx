@@ -220,13 +220,17 @@ export default function AdminUsers() {
     setCurrentPage(1);
   };
 
-  // Count users by time period
+  // Count users by time period (based on activity, not signup)
   const getUserCount = (period: TimeFilter) => {
-    if (!users) return 0;
+    if (!users || users.length === 0) return 0;
     const now = new Date();
     
     return users.filter((user: any) => {
-      const userDate = new Date(user.createdAt);
+      // Use lastActiveAt or lastLogin for activity-based filtering
+      const activityDate = user.lastActiveAt || user.lastLogin;
+      if (!activityDate && period !== 'all') return false;
+      
+      const userDate = new Date(activityDate || user.createdAt);
       switch (period) {
         case '24h':
           return (now.getTime() - userDate.getTime()) <= 24 * 60 * 60 * 1000;
@@ -243,6 +247,12 @@ export default function AdminUsers() {
       }
     }).length;
   };
+  
+  // Extract stats from response
+  const onlineCount = usersResponse?.onlineCount || users.filter((u: any) => u.isOnline).length;
+  const activeSubsCount = users.filter((u: any) => u.subscriptionStatus === 'active').length;
+  const lifetimeCount = users.filter((u: any) => u.subscriptionType === 'lifetime').length;
+  const iosCount = users.filter((u: any) => u.lastPlatform?.includes('ios') || u.platform?.includes('ios')).length;
 
   const isNewUser = (createdAt: string) => {
     const userDate = new Date(createdAt);
@@ -274,6 +284,37 @@ export default function AdminUsers() {
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
+        </div>
+
+        {/* Summary Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="p-4 border-green-500/30 bg-green-500/10">
+            <div className="text-2xl font-bold text-green-500" data-testid="stat-online">
+              {onlineCount}
+            </div>
+            <div className="text-xs text-muted-foreground">Online Now</div>
+          </Card>
+          
+          <Card className="p-4 border-purple-500/30 bg-purple-500/10">
+            <div className="text-2xl font-bold text-purple-500" data-testid="stat-active-subs">
+              {activeSubsCount}
+            </div>
+            <div className="text-xs text-muted-foreground">Active Subs</div>
+          </Card>
+          
+          <Card className="p-4 border-yellow-500/30 bg-yellow-500/10">
+            <div className="text-2xl font-bold text-yellow-500" data-testid="stat-lifetime">
+              {lifetimeCount}
+            </div>
+            <div className="text-xs text-muted-foreground">Lifetime</div>
+          </Card>
+          
+          <Card className="p-4 border-blue-500/30 bg-blue-500/10">
+            <div className="text-2xl font-bold text-blue-500" data-testid="stat-ios">
+              {iosCount}
+            </div>
+            <div className="text-xs text-muted-foreground">iOS Users</div>
+          </Card>
         </div>
 
         {/* Time Filter Tabs */}
@@ -416,11 +457,10 @@ export default function AdminUsers() {
               <TableHeader>
                 <TableRow>
                   <TableHead>User</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Platform</TableHead>
                   <TableHead>Plan</TableHead>
-                  <TableHead>Belt</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>LIFETIME Bypass</TableHead>
+                  <TableHead>Lifetime</TableHead>
                   <TableHead 
                     className="cursor-pointer hover:bg-muted/50 select-none"
                     onClick={() => handleSort('createdAt')}
@@ -441,13 +481,13 @@ export default function AdminUsers() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       Loading users...
                     </TableCell>
                   </TableRow>
                 ) : paginatedUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       No users found matching your filters
                     </TableCell>
                   </TableRow>
@@ -456,24 +496,39 @@ export default function AdminUsers() {
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
-                          {user.name || 'Unnamed'}
-                          {isNewUser(user.createdAt) && (
-                            <Badge variant="default" className="text-xs">NEW</Badge>
+                          {user.isOnline && (
+                            <span 
+                              className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]"
+                              title="Online now"
+                              data-testid={`online-indicator-${user.id}`}
+                            />
                           )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              {user.name || 'Unnamed'}
+                              {isNewUser(user.createdAt) && (
+                                <Badge variant="default" className="text-xs">NEW</Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{user.email || 'No email'}</div>
+                          </div>
                         </div>
                       </TableCell>
-                      <TableCell>{user.email || 'No email'}</TableCell>
+                      <TableCell>
+                        {(user.lastPlatform?.includes('ios') || user.platform?.includes('ios')) ? (
+                          <Badge variant="outline" className="text-blue-500 border-blue-500/30 bg-blue-500/10">
+                            iOS
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-purple-500 border-purple-500/30 bg-purple-500/10">
+                            Web
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={user.subscriptionType === 'lifetime' ? 'default' : 'secondary'}>
                           {user.subscriptionType || 'free'}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {user.beltLevel ? (
-                          <Badge variant="outline">{user.beltLevel}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
                       </TableCell>
                       <TableCell>
                         <Badge 
@@ -483,26 +538,18 @@ export default function AdminUsers() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={user.subscriptionType === 'lifetime'}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                grantLifetimeMutation.mutate({ email: user.email });
-                              } else {
-                                revokeLifetimeMutation.mutate({ userId: user.id });
-                              }
-                            }}
-                            disabled={grantLifetimeMutation.isPending || revokeLifetimeMutation.isPending}
-                            data-testid={`toggle-lifetime-bypass-${user.id}`}
-                          />
-                          {user.subscriptionType === 'lifetime' && (
-                            <Badge variant="default" className="text-xs">
-                              <Star className="w-3 h-3 mr-1 text-yellow-500" />
-                              LIFETIME
-                            </Badge>
-                          )}
-                        </div>
+                        <Switch
+                          checked={user.subscriptionType === 'lifetime'}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              grantLifetimeMutation.mutate({ email: user.email });
+                            } else {
+                              revokeLifetimeMutation.mutate({ userId: user.id });
+                            }
+                          }}
+                          disabled={grantLifetimeMutation.isPending || revokeLifetimeMutation.isPending}
+                          data-testid={`toggle-lifetime-bypass-${user.id}`}
+                        />
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(user.createdAt).toLocaleDateString()}

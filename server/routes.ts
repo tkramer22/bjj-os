@@ -6,7 +6,7 @@ import { logActivity, logSystemError } from "./activity-logger";
 import adminDashboardRouter from "./admin-dashboard-api";
 import analyticsRouter from "./analytics";
 import { getProfessorOSFeedbackResponse, getAppreciationMessage, shouldShowAppreciation } from './professor-os-feedback-responses';
-import { eq, desc, sql as drizzleSql, sql, and, or, ilike, asc, count, isNotNull, gte, lte, lt, gt } from "drizzle-orm";
+import { eq, desc, sql as drizzleSql, sql, and, or, ilike, asc, count, isNotNull, gte, lte, lt, gt, inArray } from "drizzle-orm";
 import { sendSMS } from "./twilio";
 import { sendVerificationCode, verifyCode } from "./twilio-verify";
 import { normalizePhoneNumber, validateAndNormalizePhone } from "./utils/phone-normalization";
