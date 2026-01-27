@@ -4829,7 +4829,9 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
   // Get all BJJ users with filters (admin only) - Enhanced with online status, platform, and activity
   app.get('/api/admin/users', checkAdminAuth, async (req, res) => {
     try {
+      console.log('📊 [ADMIN] Fetching users...');
       const { timeFilter, planFilter, statusFilter, beltFilter } = req.query;
+      console.log(`📊 [ADMIN] Filters: time=${timeFilter}, plan=${planFilter}, status=${statusFilter}, belt=${beltFilter}`);
       
       // Timestamps for computed fields
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
@@ -4851,7 +4853,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       }
       
       // Whitelist allowed filter values to prevent SQL injection
-      const allowedPlans = ['free', 'monthly', 'yearly', 'lifetime'];
+      const allowedPlans = ['free', 'monthly', 'yearly', 'lifetime', 'free_trial', 'free_admin_grant', 'annual'];
       const allowedStatuses = ['active', 'inactive', 'trialing', 'canceled', 'past_due'];
       const allowedBelts = ['white', 'blue', 'purple', 'brown', 'black'];
       
@@ -4867,31 +4869,40 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         conditions.push(eq(bjjUsers.beltLevel, beltFilter as string));
       }
       
+      console.log(`📊 [ADMIN] Conditions count: ${conditions.length}`);
+      
       // Base query with filters using Drizzle ORM
-      let query = db.select({
-        id: bjjUsers.id,
-        name: bjjUsers.name,
-        email: bjjUsers.email,
-        beltLevel: bjjUsers.beltLevel,
-        subscriptionType: bjjUsers.subscriptionType,
-        subscriptionStatus: bjjUsers.subscriptionStatus,
-        stripeSubscriptionId: bjjUsers.stripeSubscriptionId,
-        stripeCustomerId: bjjUsers.stripeCustomerId,
-        onboardingCompleted: bjjUsers.onboardingCompleted,
-        createdAt: bjjUsers.createdAt,
-        lastLogin: bjjUsers.lastLogin,
-        adminNotes: bjjUsers.adminNotes,
-        themeBelt: bjjUsers.themeBelt,
-        themeStripes: bjjUsers.themeStripes,
-        isLifetimeUser: bjjUsers.isLifetimeUser
-      }).from(bjjUsers);
-      
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions)) as any;
+      let rawUsers: any[] = [];
+      try {
+        let query = db.select({
+          id: bjjUsers.id,
+          name: bjjUsers.name,
+          email: bjjUsers.email,
+          beltLevel: bjjUsers.beltLevel,
+          subscriptionType: bjjUsers.subscriptionType,
+          subscriptionStatus: bjjUsers.subscriptionStatus,
+          stripeSubscriptionId: bjjUsers.stripeSubscriptionId,
+          stripeCustomerId: bjjUsers.stripeCustomerId,
+          onboardingCompleted: bjjUsers.onboardingCompleted,
+          createdAt: bjjUsers.createdAt,
+          lastLogin: bjjUsers.lastLogin,
+          adminNotes: bjjUsers.adminNotes,
+          themeBelt: bjjUsers.themeBelt,
+          themeStripes: bjjUsers.themeStripes,
+          isLifetimeUser: bjjUsers.isLifetimeUser
+        }).from(bjjUsers);
+        
+        if (conditions.length > 0) {
+          query = query.where(and(...conditions)) as any;
+        }
+        
+        // Execute base query with order by lastLogin descending, limit 200
+        rawUsers = await query.orderBy(desc(bjjUsers.lastLogin)).limit(200);
+        console.log(`📊 [ADMIN] Query returned ${rawUsers.length} users`);
+      } catch (queryErr: any) {
+        console.error('❌ [ADMIN] Query error:', queryErr.message);
+        throw queryErr;
       }
-      
-      // Execute base query with order by lastLogin descending, limit 200
-      const rawUsers = await query.orderBy(desc(bjjUsers.lastLogin)).limit(200);
       
       // Enrich with computed fields (post-processing for safety)
       const users = rawUsers.map((user: any) => {
@@ -4925,48 +4936,55 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       if (users.length > 0) {
         const userIds = users.map((u: any) => u.id);
         
-        // Get login counts from authorized_devices
-        const loginCountsResult = await db.select({
-          userId: authorizedDevices.userId,
-          totalLogins: drizzleSql<number>`COALESCE(SUM(${authorizedDevices.loginCount}), 0)::integer`
-        })
-          .from(authorizedDevices)
-          .where(drizzleSql`${authorizedDevices.userId} = ANY(${userIds})`)
-          .groupBy(authorizedDevices.userId);
-        
-        const loginCountMap = new Map(loginCountsResult.map((r: any) => [r.userId, r.totalLogins]));
-        
-        // Get last platform from loginEvents
-        const platformsResult = await db.select({
-          userId: loginEvents.userId,
-          platform: loginEvents.platform
-        })
-          .from(loginEvents)
-          .where(drizzleSql`${loginEvents.userId} = ANY(${userIds})`)
-          .orderBy(desc(loginEvents.loginTime));
-        
-        // Create map of userId -> first (most recent) platform
-        const platformMap = new Map<string, string>();
-        for (const r of platformsResult as any[]) {
-          if (!platformMap.has(r.userId)) {
-            platformMap.set(r.userId, r.platform);
+        try {
+          // Get login counts from authorized_devices
+          const loginCountsResult = await db.select({
+            userId: authorizedDevices.userId,
+            totalLogins: drizzleSql<number>`COALESCE(SUM(${authorizedDevices.loginCount}), 0)::integer`
+          })
+            .from(authorizedDevices)
+            .where(inArray(authorizedDevices.userId, userIds))
+            .groupBy(authorizedDevices.userId);
+          
+          const loginCountMap = new Map(loginCountsResult.map((r: any) => [r.userId, r.totalLogins]));
+          
+          // Get last platform from loginEvents
+          const platformsResult = await db.select({
+            userId: loginEvents.userId,
+            platform: loginEvents.platform
+          })
+            .from(loginEvents)
+            .where(inArray(loginEvents.userId, userIds))
+            .orderBy(desc(loginEvents.loginTime));
+          
+          // Create map of userId -> first (most recent) platform
+          const platformMap = new Map<string, string>();
+          for (const r of platformsResult as any[]) {
+            if (!platformMap.has(r.userId)) {
+              platformMap.set(r.userId, r.platform);
+            }
           }
-        }
-        
-        // Enrich users with stats
-        for (const user of users) {
-          user.totalLogins = loginCountMap.get(user.id) || 0;
-          user.lastPlatform = platformMap.get(user.id) || null;
+          
+          // Enrich users with stats
+          for (const user of users) {
+            user.totalLogins = loginCountMap.get(user.id) || 0;
+            user.lastPlatform = platformMap.get(user.id) || null;
+          }
+        } catch (enrichErr) {
+          console.error('📊 [ADMIN] Error enriching users with stats:', enrichErr);
+          // Continue without enrichment data
         }
       }
       
+      console.log(`📊 [ADMIN] Sending ${users.length} users, ${onlineCount} online`);
       res.json({
         users,
         onlineCount,
         total: users.length
       });
     } catch (error: any) {
-      console.error('Fetch users error:', error);
+      console.error('❌ [ADMIN] Fetch users error:', error.message);
+      console.error('❌ [ADMIN] Error stack:', error.stack);
       res.status(500).json({ error: error.message });
     }
   });
