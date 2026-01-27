@@ -234,6 +234,7 @@ export default function AdminUsers() {
   const activeSubsCount = users.filter((u: any) => u.subscriptionStatus === 'active').length;
   const lifetimeCount = users.filter((u: any) => u.subscriptionType === 'lifetime').length;
   const iosCount = users.filter((u: any) => u.lastPlatform?.includes('ios') || u.platform?.includes('ios')).length;
+  const neverLoggedInCount = users.filter((u: any) => !u.lastLogin).length;
 
   const isNewUser = (createdAt: string) => {
     const userDate = new Date(createdAt);
@@ -384,12 +385,17 @@ export default function AdminUsers() {
                 <UsersIcon className="w-8 h-8 text-muted-foreground" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold mb-2">No users found for this time period</h3>
-                <p className="text-muted-foreground mb-6">
-                  No users have been active in the {timeFilter === '24h' ? 'last 24 hours' : 
+                <h3 className="text-xl font-semibold mb-2">No users active in {timeFilter === '24h' ? 'last 24 hours' : 
                     timeFilter === '7d' ? 'last 7 days' : 
-                    timeFilter === '30d' ? 'last 30 days' : 'last 90 days'}.
+                    timeFilter === '30d' ? 'last 30 days' : 'last 90 days'}</h3>
+                <p className="text-muted-foreground mb-2">
+                  No users have logged in during this time period.
                 </p>
+                {neverLoggedInCount > 0 && (
+                  <p className="text-sm text-orange-500 mb-4">
+                    Note: {neverLoggedInCount} user{neverLoggedInCount !== 1 ? 's have' : ' has'} never logged in
+                  </p>
+                )}
               </div>
               <Button
                 onClick={() => setTimeFilter('all')}
