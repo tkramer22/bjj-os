@@ -4849,7 +4849,9 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           case '30d': cutoffDate.setDate(now.getDate() - 30); break;
           case '90d': cutoffDate.setDate(now.getDate() - 90); break;
         }
-        conditions.push(drizzleSql`${bjjUsers.createdAt} >= ${cutoffDate}`);
+        // Filter by lastLogin (activity date), not createdAt (signup date)
+        // Use COALESCE to fall back to createdAt for users who never logged in
+        conditions.push(drizzleSql`COALESCE(${bjjUsers.lastLogin}, ${bjjUsers.createdAt}) >= ${cutoffDate.toISOString()}`);
       }
       
       // Whitelist allowed filter values to prevent SQL injection
@@ -4976,11 +4978,38 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         }
       }
       
-      console.log(`📊 [ADMIN] Sending ${users.length} users, ${onlineCount} online`);
+      // Calculate time filter counts for badge display (from ALL users, not filtered)
+      const now = new Date();
+      const cutoffs = {
+        '24h': new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+        '7d': new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+        '30d': new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+        '90d': new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
+      };
+      
+      // Get counts for all time periods (single query for efficiency)
+      const timeFilterCounts = await db.select({
+        total: drizzleSql<number>`COUNT(*)::integer`,
+        last24h: drizzleSql<number>`COUNT(*) FILTER (WHERE COALESCE(${bjjUsers.lastLogin}, ${bjjUsers.createdAt}) >= ${cutoffs['24h']}::timestamp)::integer`,
+        last7d: drizzleSql<number>`COUNT(*) FILTER (WHERE COALESCE(${bjjUsers.lastLogin}, ${bjjUsers.createdAt}) >= ${cutoffs['7d']}::timestamp)::integer`,
+        last30d: drizzleSql<number>`COUNT(*) FILTER (WHERE COALESCE(${bjjUsers.lastLogin}, ${bjjUsers.createdAt}) >= ${cutoffs['30d']}::timestamp)::integer`,
+        last90d: drizzleSql<number>`COUNT(*) FILTER (WHERE COALESCE(${bjjUsers.lastLogin}, ${bjjUsers.createdAt}) >= ${cutoffs['90d']}::timestamp)::integer`
+      }).from(bjjUsers);
+      
+      const counts = timeFilterCounts[0] || { total: 0, last24h: 0, last7d: 0, last30d: 0, last90d: 0 };
+      
+      console.log(`📊 [ADMIN] Sending ${users.length} users, ${onlineCount} online, counts: 24h=${counts.last24h}, 7d=${counts.last7d}`);
       res.json({
         users,
         onlineCount,
-        total: users.length
+        total: users.length,
+        timeFilterCounts: {
+          '24h': counts.last24h,
+          '7d': counts.last7d,
+          '30d': counts.last30d,
+          '90d': counts.last90d,
+          'all': counts.total
+        }
       });
     } catch (error: any) {
       console.error('❌ [ADMIN] Fetch users error:', error.message);

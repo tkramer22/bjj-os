@@ -220,32 +220,13 @@ export default function AdminUsers() {
     setCurrentPage(1);
   };
 
-  // Count users by time period (based on activity, not signup)
+  // Use API-provided time filter counts (calculated from ALL users, not filtered subset)
+  const timeFilterCounts = usersResponse?.timeFilterCounts || {
+    '24h': 0, '7d': 0, '30d': 0, '90d': 0, 'all': 0
+  };
+  
   const getUserCount = (period: TimeFilter) => {
-    if (!users || users.length === 0) return 0;
-    const now = new Date();
-    
-    return users.filter((user: any) => {
-      // Use lastActiveAt or lastLogin for activity-based filtering
-      const activityDate = user.lastActiveAt || user.lastLogin;
-      if (!activityDate && period !== 'all') return false;
-      
-      const userDate = new Date(activityDate || user.createdAt);
-      switch (period) {
-        case '24h':
-          return (now.getTime() - userDate.getTime()) <= 24 * 60 * 60 * 1000;
-        case '7d':
-          return (now.getTime() - userDate.getTime()) <= 7 * 24 * 60 * 60 * 1000;
-        case '30d':
-          return (now.getTime() - userDate.getTime()) <= 30 * 24 * 60 * 60 * 1000;
-        case '90d':
-          return (now.getTime() - userDate.getTime()) <= 90 * 24 * 60 * 60 * 1000;
-        case 'all':
-          return true;
-        default:
-          return true;
-      }
-    }).length;
+    return timeFilterCounts[period] || 0;
   };
   
   // Extract stats from response
@@ -396,7 +377,29 @@ export default function AdminUsers() {
         </div>
 
         {/* Users Table or Empty State */}
-        {!isLoading && filteredUsers.length === 0 && !searchQuery ? (
+        {!isLoading && filteredUsers.length === 0 && timeFilter !== 'all' && !searchQuery ? (
+          <Card className="p-12 text-center">
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                <UsersIcon className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold mb-2">No users found for this time period</h3>
+                <p className="text-muted-foreground mb-6">
+                  No users have been active in the {timeFilter === '24h' ? 'last 24 hours' : 
+                    timeFilter === '7d' ? 'last 7 days' : 
+                    timeFilter === '30d' ? 'last 30 days' : 'last 90 days'}.
+                </p>
+              </div>
+              <Button
+                onClick={() => setTimeFilter('all')}
+                data-testid="button-show-all-users"
+              >
+                Show All Users ({timeFilterCounts['all']})
+              </Button>
+            </div>
+          </Card>
+        ) : !isLoading && filteredUsers.length === 0 && timeFilter === 'all' && !searchQuery ? (
           <Card className="p-12 text-center">
             <div className="flex flex-col items-center gap-4">
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
