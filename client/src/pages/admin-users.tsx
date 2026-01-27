@@ -184,45 +184,20 @@ export default function AdminUsersDashboard() {
     );
   }
 
-  // Extract users array and online count from response with robust safety checks
-  const extractUsersArray = () => {
-    // If users is undefined/null, return empty array
-    if (!users) {
-      console.log('👥 [ADMIN] users is null/undefined, returning []');
-      return [];
-    }
-    
-    // If users has a .users property that's an array, use that
-    const usersObj = users as any;
-    if (usersObj.users && Array.isArray(usersObj.users)) {
-      console.log('👥 [ADMIN] Found users.users array with', usersObj.users.length, 'items');
-      return usersObj.users;
-    }
-    
-    // If users itself is an array, use it directly
-    if (Array.isArray(users)) {
-      console.log('👥 [ADMIN] users is directly an array with', users.length, 'items');
-      return users;
-    }
-    
-    // Otherwise return empty array
-    console.warn('👥 [ADMIN] users is not an array:', typeof users, users);
-    return [];
-  };
+  // Extract users array safely - simple inline logic
+  const usersResponse = users as any;
+  const usersData: any[] = usersResponse?.users ?? (Array.isArray(usersResponse) ? usersResponse : []);
+  const onlineCount = usersResponse?.onlineCount ?? 0;
   
-  const usersData = extractUsersArray();
-  const onlineCount = (users as any)?.onlineCount || 0;
-  
-  // Filter users based on search query (with array safety check)
-  const filteredUsers = Array.isArray(usersData) 
-    ? usersData.filter((user: any) => {
-        const query = searchQuery.toLowerCase();
-        return (
-          user.email?.toLowerCase().includes(query) ||
-          user.name?.toLowerCase().includes(query)
-        );
-      })
-    : [];
+  // Filter users based on search query
+  const filteredUsers = usersData.filter((user: any) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      user.email?.toLowerCase().includes(query) ||
+      user.name?.toLowerCase().includes(query)
+    );
+  });
 
   return (
     <div className="min-h-screen bg-background p-8">
