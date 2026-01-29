@@ -13382,18 +13382,18 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
             (SELECT COALESCE(setting_value, 'true') FROM system_settings 
              WHERE setting_key = 'auto_curation_enabled' LIMIT 1) as auto_curation_enabled
         `),
-        // Curation run metrics
+        // Curation run metrics - Use LAST 24 HOURS instead of just "today" for rolling window
         db.execute(sql`
           SELECT 
             (SELECT run_date FROM curation_runs ORDER BY run_date DESC LIMIT 1) as last_run_date,
             (SELECT COUNT(*) FROM curation_runs 
-             WHERE DATE(run_date) = ${today} AND status = 'completed' AND completed_at IS NOT NULL) as completed_today,
+             WHERE run_date >= NOW() - INTERVAL '24 hours' AND status = 'completed' AND completed_at IS NOT NULL) as completed_24h,
             (SELECT COALESCE(SUM(videos_analyzed), 0) FROM curation_runs 
-             WHERE DATE(run_date) = ${today} AND status IN ('completed', 'running')) as analyzed,
+             WHERE run_date >= NOW() - INTERVAL '24 hours' AND status IN ('completed', 'running')) as analyzed,
             (SELECT COALESCE(SUM(videos_added), 0) FROM curation_runs 
-             WHERE DATE(run_date) = ${today} AND status IN ('completed', 'running')) as accepted,
+             WHERE run_date >= NOW() - INTERVAL '24 hours' AND status IN ('completed', 'running')) as accepted,
             (SELECT COALESCE(SUM(videos_rejected), 0) FROM curation_runs 
-             WHERE DATE(run_date) = ${today} AND status IN ('completed', 'running')) as rejected
+             WHERE run_date >= NOW() - INTERVAL '24 hours' AND status IN ('completed', 'running')) as rejected
         `)
       ]);
       
@@ -13426,7 +13426,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const videoCount = Number(core.total_videos || 0);
       const TARGET_VIDEO_COUNT = 10000;
       const targetReached = videoCount >= TARGET_VIDEO_COUNT;
-      const curationRanToday = Number(curation.completed_today || 0) > 0;
+      const curationRan24h = Number(curation.completed_24h || 0) > 0;
       const autoCurationEnabled = core.auto_curation_enabled !== 'false';
       
       const minutesSinceLastRun = curation.last_run_date
@@ -13434,12 +13434,12 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         : 999;
       
       let curationStatus = 'offline';
-      if (curationRanToday) curationStatus = 'active';
+      if (curationRan24h) curationStatus = 'active';
       else if (targetReached) curationStatus = 'paused_target_reached';
       else if (autoCurationEnabled) curationStatus = 'scheduled';
       
       res.json({
-        curationRunning: curationRanToday,
+        curationRunning: curationRan24h,
         curationStatus,
         targetReached,
         minutesSinceRun: minutesSinceLastRun,
@@ -13457,7 +13457,8 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           rejected,
           skipped: 0,
           acceptanceRate: parseFloat(acceptanceRate),
-          status: efficiencyStatus
+          status: efficiencyStatus,
+          lastCuration: curation.last_run_date || null
         }
       });
       

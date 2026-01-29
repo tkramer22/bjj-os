@@ -563,21 +563,34 @@ export default function AdminVideos() {
         </Card>
 
         {/* Analysis Gaps Section - Rerun Failed Gemini Analysis */}
-        {analysisGapsData && analysisGapsData.totalGaps > 0 && (
-          <Card className="bg-gradient-to-r from-orange-500/10 to-red-500/10 border-orange-500/20">
+        {analysisGapsData && (
+          <Card className={analysisGapsData.totalGaps > 0 
+            ? "bg-gradient-to-r from-orange-500/10 to-red-500/10 border-orange-500/20" 
+            : "bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-500/20"
+          }>
             <CardContent className="pt-6">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <AlertCircle className="h-8 w-8 text-orange-500" />
+                  {analysisGapsData.totalGaps > 0 ? (
+                    <AlertCircle className="h-8 w-8 text-orange-500" />
+                  ) : (
+                    <CheckCircle className="h-8 w-8 text-green-500" />
+                  )}
                   <div>
-                    <h3 className="font-semibold text-lg">Analysis Gaps Detected</h3>
+                    <h3 className="font-semibold text-lg">
+                      {analysisGapsData.totalGaps > 0 ? 'Analysis Gaps Detected' : 'Analysis Complete'}
+                    </h3>
                     <p className="text-sm text-muted-foreground">
-                      <span className="text-orange-500 font-medium">{analysisGapsData.totalGaps.toLocaleString()}</span> videos missing complete Gemini analysis
+                      {analysisGapsData.totalGaps > 0 ? (
+                        <><span className="text-orange-500 font-medium">{analysisGapsData.totalGaps.toLocaleString()}</span> videos missing complete Gemini analysis</>
+                      ) : (
+                        <><span className="text-green-500 font-medium">{analysisGapsData.totalVideos.toLocaleString()}</span> videos fully analyzed</>
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      <span className="text-red-400">{analysisGapsData.gapBreakdown.noAnalysis}</span> no analysis | {' '}
-                      <span className="text-yellow-400">{analysisGapsData.gapBreakdown.incomplete}</span> incomplete | {' '}
-                      Coverage: {analysisGapsData.coverageRate}%
+                      <span className={analysisGapsData.gapBreakdown.noAnalysis > 0 ? "text-red-400" : "text-muted-foreground"}>{analysisGapsData.gapBreakdown.noAnalysis}</span> no analysis | {' '}
+                      <span className={analysisGapsData.gapBreakdown.incomplete > 0 ? "text-yellow-400" : "text-muted-foreground"}>{analysisGapsData.gapBreakdown.incomplete}</span> incomplete | {' '}
+                      Coverage: <span className="text-green-400">{analysisGapsData.coverageRate}%</span>
                     </p>
                   </div>
                 </div>
@@ -590,7 +603,7 @@ export default function AdminVideos() {
                       </div>
                       <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
                     </div>
-                  ) : (
+                  ) : analysisGapsData.totalGaps > 0 ? (
                     <>
                       <Button 
                         variant="outline"
@@ -619,6 +632,15 @@ export default function AdminVideos() {
                         Reanalyze 50 Videos
                       </Button>
                     </>
+                  ) : (
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      onClick={() => refetchGaps()}
+                      data-testid="button-refresh-gaps"
+                    >
+                      Refresh Status
+                    </Button>
                   )}
                 </div>
               </div>

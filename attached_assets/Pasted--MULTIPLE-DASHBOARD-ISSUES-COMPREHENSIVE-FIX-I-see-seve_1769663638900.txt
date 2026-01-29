@@ -1,0 +1,532 @@
+# 📊 **MULTIPLE DASHBOARD ISSUES - COMPREHENSIVE FIX**
+
+I see several problems in your screenshots:
+
+1. ❌ **Rerun Failed Analysis feature not visible** - Agent said it added it but you can’t see it
+1. ❌ **Curation Efficiency shows zeros** - “Today” should show last 24 hours instead
+1. ❌ **Platform Usage (iOS vs Web) not showing**
+1. ❌ **“Gemini Analyzed 5099/5099 100% complete”** but many have failed analysis
+
+-----
+
+## **COPY THIS COMPREHENSIVE FIX TO REPLIT AGENT:**
+
+```
+CRITICAL ADMIN DASHBOARD FIXES
+
+The admin dashboard has multiple issues that need immediate fixing:
+
+1. Rerun Failed Analysis feature is not visible anywhere
+2. Curation Efficiency shows all zeros for "Today" - should show ROLLING LAST 24 HOURS
+3. Platform Usage (iOS vs Web) section is blank
+4. Need to add "Last Curation" timestamp below efficiency metrics
+5. Gemini analysis shows 100% but many videos have failed analysis
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 1: ADD VISIBLE "RERUN FAILED ANALYSIS" SECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+The feature was added but is not visible in the UI. Add it to the Videos admin page.
+
+Location: Go to /admin/videos page (where it says "Video Library - Manage curated BJJ technique videos")
+
+Add this section ABOVE the video list:
+
+```jsx
+// In client/src/pages/admin/videos.tsx or wherever Videos admin page is
+
+import { useState } from 'react';
+
+function VideosAdminPage() {
+  const [analysisGaps, setAnalysisGaps] = useState(null);
+  const [reanalyzing, setReanalyzing] = useState(false);
+  
+  // Fetch analysis gaps on page load
+  useEffect(() => {
+    fetchAnalysisGaps();
+  }, []);
+  
+  const fetchAnalysisGaps = async () => {
+    try {
+      const response = await fetch('/api/admin/videos/analysis-gaps', {
+        credentials: 'include'
+      });
+      const data = await response.json();
+      setAnalysisGaps(data.gaps);
+    } catch (error) {
+      console.error('Failed to fetch analysis gaps:', error);
+    }
+  };
+  
+  const handleReanalyze = async (count: number) => {
+    if (!confirm(`Reanalyze ${count} videos with failed analysis?`)) return;
+    
+    setReanalyzing(true);
+    try {
+      const response = await fetch('/api/admin/videos/reanalyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ limit: count })
+      });
+      
+      const data = await response.json();
+      alert(`Reanalysis started! Processing ${count} videos in background.`);
+      
+      // Refresh gaps after starting
+      setTimeout(fetchAnalysisGaps, 2000);
+    } catch (error) {
+      alert('Failed to start reanalysis');
+    } finally {
+      setReanalyzing(false);
+    }
+  };
+  
+  return (
+    <div>
+      {/* ADD THIS SECTION */}
+      {analysisGaps && analysisGaps.total_missing > 0 && (
+        <div style={{
+          background: 'rgba(255, 152, 0, 0.1)',
+          border: '2px solid rgba(255, 152, 0, 0.3)',
+          borderRadius: '12px',
+          padding: '20px',
+          marginBottom: '24px'
+        }}>
+          <h3 style={{ color: '#ff9800', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            ⚠️ Analysis Gaps Detected
+          </h3>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: 'white' }}>
+                {analysisGaps.total_missing}
+              </div>
+              <div style={{ fontSize: '12px', opacity: 0.7 }}>Videos Missing Analysis</div>
+            </div>
+            
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: 'white' }}>
+                {analysisGaps.no_analysis}
+              </div>
+              <div style={{ fontSize: '12px', opacity: 0.7 }}>No Analysis at All</div>
+            </div>
+            
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: 'white' }}>
+                {analysisGaps.incomplete}
+              </div>
+              <div style={{ fontSize: '12px', opacity: 0.7 }}>Incomplete Analysis</div>
+            </div>
+            
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: 'white' }}>
+                {Math.round(analysisGaps.coverage_rate)}%
+              </div>
+              <div style={{ fontSize: '12px', opacity: 0.7 }}>Coverage Rate</div>
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => handleReanalyze(10)}
+              disabled={reanalyzing}
+              style={{
+                background: 'linear-gradient(135deg, #7c4dff 0%, #536dfe 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '10px 20px',
+                fontWeight: 600,
+                cursor: reanalyzing ? 'not-allowed' : 'pointer',
+                opacity: reanalyzing ? 0.5 : 1
+              }}
+            >
+              {reanalyzing ? 'Processing...' : '🔄 Reanalyze 10'}
+            </button>
+            
+            <button
+              onClick={() => handleReanalyze(50)}
+              disabled={reanalyzing}
+              style={{
+                background: 'linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '10px 20px',
+                fontWeight: 600,
+                cursor: reanalyzing ? 'not-allowed' : 'pointer',
+                opacity: reanalyzing ? 0.5 : 1
+              }}
+            >
+              {reanalyzing ? 'Processing...' : '🔄 Reanalyze 50 Videos'}
+            </button>
+            
+            <button
+              onClick={fetchAnalysisGaps}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                color: 'white',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '8px',
+                padding: '10px 20px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              🔄 Refresh Stats
+            </button>
+          </div>
+          
+          {analysisGaps.sample_videos && analysisGaps.sample_videos.length > 0 && (
+            <details style={{ marginTop: '16px' }}>
+              <summary style={{ cursor: 'pointer', color: '#ff9800', fontWeight: 600 }}>
+                View Sample of Missing Videos ({analysisGaps.sample_videos.length})
+              </summary>
+              <ul style={{ marginTop: '12px', fontSize: '13px', opacity: 0.8 }}>
+                {analysisGaps.sample_videos.map(v => (
+                  <li key={v.id} style={{ marginBottom: '4px' }}>
+                    {v.title} - {v.professor_name}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+      
+      {/* Rest of your Videos page */}
+    </div>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 2: FIX CURATION EFFICIENCY - ROLLING LAST 24 HOURS
+═══════════════════════════════════════════════════════════════════════════════
+
+The “Today” section shows all zeros because it’s checking for videos discovered “today” (since midnight), not the last 24 hours.
+
+Update the curation efficiency endpoint:
+
+```javascript
+app.get('/api/admin/curation-efficiency', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    // LAST 24 HOURS (not "today")
+    const last24Hours = await db.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE discovered_at > NOW() - INTERVAL '24 hours') as discovered,
+        COUNT(*) FILTER (
+          WHERE discovered_at > NOW() - INTERVAL '24 hours'
+            AND gemini_analysis IS NOT NULL
+            AND gemini_analysis != '{}'::jsonb
+        ) as analyzed,
+        COUNT(*) FILTER (
+          WHERE discovered_at > NOW() - INTERVAL '24 hours'
+            AND gemini_analysis IS NOT NULL
+            AND accepted = true
+        ) as accepted,
+        COUNT(*) FILTER (
+          WHERE discovered_at > NOW() - INTERVAL '24 hours'
+            AND gemini_analysis IS NOT NULL
+            AND accepted = false
+        ) as rejected
+      FROM videos
+    `);
+    
+    const discovered = parseInt(last24Hours.rows[0].discovered);
+    const analyzed = parseInt(last24Hours.rows[0].analyzed);
+    const accepted = parseInt(last24Hours.rows[0].accepted);
+    const rejected = parseInt(last24Hours.rows[0].rejected);
+    const acceptanceRate = discovered > 0 ? ((accepted / discovered) * 100).toFixed(1) : 0;
+    
+    // LAST CURATION RUN timestamp
+    const lastCuration = await db.query(`
+      SELECT MAX(discovered_at) as last_run
+      FROM videos
+      WHERE discovered_at IS NOT NULL
+    `);
+    
+    res.json({
+      success: true,
+      efficiency: {
+        last_24_hours: {
+          discovered,
+          analyzed,
+          accepted,
+          rejected,
+          acceptance_rate: parseFloat(acceptanceRate)
+        },
+        last_curation: lastCuration.rows[0].last_run
+      }
+    });
+    
+  } catch (error) {
+    console.error('Curation efficiency error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+```
+
+Update the dashboard UI to show “Last 24 Hours” instead of “Today”:
+
+```jsx
+// In your dashboard component
+<h3>📊 Curation Efficiency (Last 24 Hours)</h3>
+
+<div className="efficiency-stats">
+  <div className="stat">
+    <div className="value">{efficiency.last_24_hours.discovered}</div>
+    <div className="label">Discovered</div>
+    <div className="sublabel">From YouTube</div>
+  </div>
+  
+  <div className="stat">
+    <div className="value">{efficiency.last_24_hours.analyzed}</div>
+    <div className="label">Analyzed</div>
+    <div className="sublabel">AI Processed</div>
+  </div>
+  
+  <div className="stat">
+    <div className="value">{efficiency.last_24_hours.accepted}</div>
+    <div className="label">Accepted</div>
+    <div className="sublabel">To Library</div>
+  </div>
+  
+  <div className="stat">
+    <div className="value">{efficiency.last_24_hours.rejected}</div>
+    <div className="label">Rejected</div>
+    <div className="sublabel">Quality Check</div>
+  </div>
+  
+  <div className="stat">
+    <div className="value">{efficiency.last_24_hours.acceptance_rate}%</div>
+    <div className="label">Acceptance Rate</div>
+  </div>
+</div>
+
+{/* ADD THIS - Last curation timestamp */}
+{efficiency.last_curation && (
+  <div style={{
+    marginTop: '12px',
+    padding: '8px 12px',
+    background: 'rgba(124, 77, 255, 0.1)',
+    borderRadius: '6px',
+    fontSize: '13px',
+    color: 'rgba(255,255,255,0.7)'
+  }}>
+    🕐 Last Curation: {new Date(efficiency.last_curation).toLocaleString()}
+  </div>
+)}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 3: FIX PLATFORM USAGE (iOS VS WEB)
+═══════════════════════════════════════════════════════════════════════════════
+
+The Platform Usage section is blank. Add the endpoint and UI:
+
+```javascript
+app.get('/api/admin/platform-stats', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const stats = await db.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE subscription_platform = 'ios') as ios_users,
+        COUNT(*) FILTER (WHERE subscription_platform = 'web' OR subscription_platform IS NULL) as web_users,
+        COUNT(*) FILTER (
+          WHERE subscription_platform = 'ios' 
+            AND subscription_status = 'active'
+        ) as ios_active,
+        COUNT(*) FILTER (
+          WHERE (subscription_platform = 'web' OR subscription_platform IS NULL)
+            AND subscription_status = 'active'
+        ) as web_active,
+        COUNT(*) as total_users
+      FROM users
+      WHERE deleted_at IS NULL
+    `);
+    
+    const iosUsers = parseInt(stats.rows[0].ios_users);
+    const webUsers = parseInt(stats.rows[0].web_users);
+    const iosActive = parseInt(stats.rows[0].ios_active);
+    const webActive = parseInt(stats.rows[0].web_active);
+    const total = parseInt(stats.rows[0].total_users);
+    
+    const iosPercentage = total > 0 ? ((iosUsers / total) * 100).toFixed(1) : 0;
+    const webPercentage = total > 0 ? ((webUsers / total) * 100).toFixed(1) : 0;
+    
+    res.json({
+      success: true,
+      platform: {
+        ios: { total: iosUsers, active: iosActive, percentage: parseFloat(iosPercentage) },
+        web: { total: webUsers, active: webActive, percentage: parseFloat(webPercentage) },
+        total_users: total
+      }
+    });
+    
+  } catch (error) {
+    console.error('Platform stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+```
+
+Update dashboard UI to show platform stats:
+
+```jsx
+// In your dashboard component
+<div className="platform-usage">
+  <h3>📱 Platform Usage (iOS vs Web)</h3>
+  
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+    <div style={{
+      background: 'rgba(0, 122, 255, 0.1)',
+      border: '1px solid rgba(0, 122, 255, 0.3)',
+      borderRadius: '12px',
+      padding: '20px'
+    }}>
+      <div style={{ fontSize: '32px', marginBottom: '8px' }}>🍎</div>
+      <div style={{ fontSize: '28px', fontWeight: 700, color: '#007AFF' }}>
+        {platformStats.ios.total}
+      </div>
+      <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '8px' }}>
+        iOS Users ({platformStats.ios.percentage}%)
+      </div>
+      <div style={{ fontSize: '12px', opacity: 0.6 }}>
+        {platformStats.ios.active} Active Subscriptions
+      </div>
+    </div>
+    
+    <div style={{
+      background: 'rgba(124, 77, 255, 0.1)',
+      border: '1px solid rgba(124, 77, 255, 0.3)',
+      borderRadius: '12px',
+      padding: '20px'
+    }}>
+      <div style={{ fontSize: '32px', marginBottom: '8px' }}>💳</div>
+      <div style={{ fontSize: '28px', fontWeight: 700, color: '#7c4dff' }}>
+        {platformStats.web.total}
+      </div>
+      <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '8px' }}>
+        Web Users ({platformStats.web.percentage}%)
+      </div>
+      <div style={{ fontSize: '12px', opacity: 0.6 }}>
+        {platformStats.web.active} Active Subscriptions
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE 4: FIX GEMINI ANALYSIS PERCENTAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+The card shows “5099 / 5099 100% complete” but many videos have failed analysis.
+
+Update to show ACCURATE percentage:
+
+```javascript
+app.get('/api/admin/gemini-analysis-stats', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const stats = await db.query(`
+      SELECT 
+        COUNT(*) as total_videos,
+        COUNT(*) FILTER (
+          WHERE gemini_analysis IS NOT NULL 
+            AND gemini_analysis != '{}'::jsonb
+            AND gemini_analysis->>'techniques_covered' IS NOT NULL
+            AND jsonb_array_length(gemini_analysis->'techniques_covered') > 0
+        ) as successfully_analyzed,
+        COUNT(*) FILTER (WHERE gemini_analysis IS NULL) as no_analysis,
+        COUNT(*) FILTER (
+          WHERE gemini_analysis IS NOT NULL 
+            AND (
+              gemini_analysis = '{}'::jsonb 
+              OR gemini_analysis->>'techniques_covered' IS NULL
+              OR jsonb_array_length(gemini_analysis->'techniques_covered') = 0
+            )
+        ) as failed_analysis
+      FROM videos
+      WHERE deleted_at IS NULL
+    `);
+    
+    const total = parseInt(stats.rows[0].total_videos);
+    const successful = parseInt(stats.rows[0].successfully_analyzed);
+    const noAnalysis = parseInt(stats.rows[0].no_analysis);
+    const failed = parseInt(stats.rows[0].failed_analysis);
+    const percentage = total > 0 ? Math.round((successful / total) * 100) : 0;
+    
+    res.json({
+      success: true,
+      gemini: {
+        total_videos: total,
+        successfully_analyzed: successful,
+        no_analysis: noAnalysis,
+        failed_analysis: failed,
+        percentage,
+        status: percentage === 100 ? 'complete' : 'incomplete'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Gemini stats error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+```
+
+Update the card to show ACCURATE stats:
+
+```jsx
+<div className="gemini-analysis-card">
+  <div className="icon">🧠</div>
+  <div className="title">Gemini Analyzed</div>
+  <div className="value">
+    {geminiStats.successfully_analyzed} / {geminiStats.total_videos}
+  </div>
+  <div className="percentage" style={{
+    color: geminiStats.percentage === 100 ? '#4CAF50' : '#ff9800'
+  }}>
+    {geminiStats.percentage}% Complete
+  </div>
+  
+  {geminiStats.percentage < 100 && (
+    <div style={{ fontSize: '11px', opacity: 0.7, marginTop: '8px' }}>
+      {geminiStats.failed_analysis + geminiStats.no_analysis} videos need analysis
+    </div>
+  )}
+</div>
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing ALL fixes:
+
+□ Analysis Gaps section appears on /admin/videos page
+□ Shows accurate count of videos missing analysis
+□ Reanalyze buttons work and start processing
+□ Curation Efficiency shows “Last 24 Hours” (not “Today”)
+□ Shows actual videos from last 24 hours (not zeros)
+□ “Last Curation” timestamp appears below metrics
+□ Platform Usage shows iOS vs Web breakdown
+□ Shows accurate user counts and percentages
+□ Gemini Analysis shows accurate percentage (not always 100%)
+
+═══════════════════════════════════════════════════════════════════════════════
+CONFIRMATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing:
+
+1. Show me screenshots of updated dashboard
+1. Confirm all 4 issues are fixed
+1. Show me the actual numbers from each section
+
+```
+---
+
+**This comprehensive fix addresses ALL 4 issues you pointed out. Send it to Replit Agent now!** 🎯​​​​​​​​​​​​​​​​
+```

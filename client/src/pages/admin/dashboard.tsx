@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Gift, Star, 
   FileText, LogOut, Menu, X, MessageSquare,
   ThumbsUp, Award, Video, Link2, Shield, Calculator, RefreshCw, BarChart, Zap,
-  ChevronDown, ChevronRight, Play, Smartphone, Globe
+  ChevronDown, ChevronRight, Play, Smartphone, Globe, Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -178,21 +178,22 @@ interface QuickMetrics {
     skipped: number;         // Filtered before analysis
     acceptanceRate: number;  // % of analyzed that were accepted
     status: 'unknown' | 'too_strict' | 'strict' | 'optimal' | 'loose' | 'too_loose';
+    lastCuration: string | null;  // Timestamp of last curation run
   };
 }
 
 // Helper to format curation status display
 function getCurationStatusDisplay(metrics: QuickMetrics): { text: string; color: string } {
   if (metrics.curationStatus === 'active' || metrics.curationRunning) {
-    return { text: '✅ Active', color: 'text-green-500' };
+    return { text: 'Active', color: 'text-green-500' };
   }
   if (metrics.curationStatus === 'scheduled') {
-    return { text: '🕐 Scheduled', color: 'text-yellow-500' };
+    return { text: 'Scheduled', color: 'text-yellow-500' };
   }
   if (metrics.curationStatus === 'paused_target_reached' || metrics.targetReached) {
-    return { text: '⏸️ Target Reached', color: 'text-blue-500' };
+    return { text: 'Target Reached', color: 'text-blue-500' };
   }
-  return { text: '🔴 Offline', color: 'text-red-500' };
+  return { text: 'Offline', color: 'text-red-500' };
 }
 
 // Floating Action Button Component
@@ -303,7 +304,7 @@ function GeminiAnalysisCard({ metrics, onRefresh }: GeminiAnalysisCardProps) {
   return (
     <div className="bg-card rounded-lg border p-5">
       <div className="flex items-center gap-3 mb-2">
-        <span className="text-3xl">🧠</span>
+        <Zap className="h-8 w-8 text-purple-500" />
         <div className="flex-1">
           <p className="text-sm font-medium text-muted-foreground">Gemini Analyzed</p>
           <p className="text-2xl font-bold" data-testid="value-gemini-analyzed">
@@ -453,7 +454,7 @@ export default function AdminDashboard() {
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           <Link href="/admin/videos" className="bg-card rounded-lg border p-5 hover-elevate cursor-pointer" data-testid="card-library">
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-3xl">📚</span>
+              <Video className="h-8 w-8 text-blue-500" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground">Library</p>
                 <p className="text-2xl font-bold" data-testid="value-total-videos">{metrics.totalVideos}</p>
@@ -466,7 +467,7 @@ export default function AdminDashboard() {
 
           <div className="bg-card rounded-lg border p-5">
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-3xl">🤖</span>
+              <RefreshCw className="h-8 w-8 text-green-500" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground">Curation</p>
                 <p className={`text-2xl font-bold ${getCurationStatusDisplay(metrics).color}`} data-testid="value-curation-status">
@@ -481,7 +482,7 @@ export default function AdminDashboard() {
 
           <Link href="/admin/users" className="bg-card rounded-lg border p-5 hover-elevate cursor-pointer" data-testid="card-users">
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-3xl">👥</span>
+              <Users className="h-8 w-8 text-primary" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground">Users</p>
                 <p className="text-2xl font-bold" data-testid="value-total-users">{metrics.totalUsers}</p>
@@ -493,16 +494,22 @@ export default function AdminDashboard() {
 
         {/* CURATION EFFICIENCY - Collapsible */}
         <CollapsibleSection 
-          title="Curation Efficiency (Today)" 
-          icon="📊" 
+          title="Curation Efficiency (Last 24 Hours)" 
+          icon={<BarChart className="w-5 h-5" />} 
           defaultExpanded={true}
           testId="section-curation-efficiency"
         >
           <div className="space-y-6">
-            <div className="mb-4">
+            <div className="mb-4 flex flex-wrap items-center gap-4">
               <p className="text-sm text-muted-foreground">
-                Today = {new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })} EST
+                Rolling 24-hour window
               </p>
+              {metrics.curationEfficiency.lastCuration && (
+                <p className="text-sm px-3 py-1 rounded-md bg-purple-500/10 border border-purple-500/20 flex items-center gap-2" data-testid="text-last-curation">
+                  <Clock className="h-3 w-3" />
+                  Last Curation: {new Date(metrics.curationEfficiency.lastCuration).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} EST
+                </p>
+              )}
             </div>
 
             <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
@@ -555,7 +562,7 @@ export default function AdminDashboard() {
         {/* System Overview - Collapsible */}
         <CollapsibleSection 
           title="System Overview" 
-          icon="⚙️" 
+          icon={<Shield className="w-5 h-5" />} 
           defaultExpanded={false}
           testId="section-system-overview"
         >
@@ -580,7 +587,7 @@ export default function AdminDashboard() {
         {/* Activity Dashboard - Collapsible (expanded by default for visibility) */}
         <CollapsibleSection 
           title="User Activity (24h)" 
-          icon="📈" 
+          icon={<BarChart className="w-5 h-5" />} 
           defaultExpanded={true}
           testId="section-activity"
         >
