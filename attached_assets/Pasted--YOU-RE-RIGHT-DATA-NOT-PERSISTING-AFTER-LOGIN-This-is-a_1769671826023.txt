@@ -1,0 +1,264 @@
+# 🎯 **YOU’RE RIGHT - DATA NOT PERSISTING AFTER LOGIN**
+
+This is a **session/authentication bug**, not a rollback issue. The app isn’t remembering you’re logged in or isn’t loading your profile data.
+
+-----
+
+## **DIAGNOSIS - COPY THIS TO REPLIT AGENT:**
+
+```
+CRITICAL BUG: USER DATA NOT PERSISTING AFTER LOGIN
+
+User logs in successfully, but app doesn't recognize them as existing user:
+- Shows onboarding questions (should skip for existing users)
+- Shows OLD onboarding questions (not current refined version)
+- Doesn't load existing profile data
+
+This worked yesterday. Something broke in authentication or session management.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: VERIFY USER DATA EXISTS IN DATABASE
+═══════════════════════════════════════════════════════════════════════════════
+
+Run this query to confirm user data is still there:
+
+SELECT 
+  id, 
+  email, 
+  username,
+  belt_rank, 
+  training_style,
+  training_frequency,
+  created_at,
+  updated_at
+FROM users 
+ORDER BY created_at DESC 
+LIMIT 5;
+
+Show me the results. If data exists, the problem is authentication/session.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: CHECK AUTHENTICATION FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND: The login endpoint (probably /api/auth/login or /api/auth/apple)
+
+CHECK: Does it properly set session/cookie after login?
+
+Example of CORRECT flow:
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, appleToken } = req.body;
+  
+  // Verify Apple Sign In
+  const appleUser = await verifyAppleToken(appleToken);
+  
+  // Find existing user
+  const existingUser = await db.query(
+    'SELECT * FROM users WHERE email = $1',
+    [email]
+  );
+  
+  if (existingUser.rows.length > 0) {
+    // USER EXISTS - Set session and return user data
+    const user = existingUser.rows[0];
+    
+    req.session.userId = user.id;
+    req.session.save();
+    
+    return res.json({
+      success: true,
+      user: user,
+      isNewUser: false  // ← CRITICAL FLAG
+    });
+  } else {
+    // New user - create account
+    const newUser = await db.query(
+      'INSERT INTO users (email, ...) VALUES ($1, ...) RETURNING *',
+      [email, ...]
+    );
+    
+    req.session.userId = newUser.rows[0].id;
+    req.session.save();
+    
+    return res.json({
+      success: true,
+      user: newUser.rows[0],
+      isNewUser: true  // ← Show onboarding
+    });
+  }
+});
+
+VERIFY: Does your login endpoint return isNewUser flag?
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: CHECK FRONTEND LOGIN HANDLER
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND: Where the frontend handles login response
+
+CORRECT LOGIC:
+
+const handleLogin = async (appleResponse) => {
+  const response = await fetch('/api/auth/login', {
+    method: 'POST',
+    credentials: 'include',  // ← IMPORTANT for cookies
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      email: appleResponse.email,
+      appleToken: appleResponse.identityToken 
+    })
+  });
+  
+  const data = await response.json();
+  
+  if (data.success) {
+    // Store user in localStorage/context
+    localStorage.setItem('user', JSON.stringify(data.user));
+    
+    if (data.isNewUser) {
+      // Redirect to onboarding
+      navigate('/onboarding');
+    } else {
+      // Redirect to chat (existing user)
+      navigate('/chat');
+    }
+  }
+};
+
+CHECK: Does frontend check isNewUser flag and skip onboarding for existing users?
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: CHECK SESSION/COOKIE CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND: Express session configuration (probably in server.js or routes.ts)
+
+CORRECT CONFIGURATION:
+
+import session from 'express-session';
+
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',  // HTTPS only in prod
+    httpOnly: true,
+    maxAge: 30 * 24 * 60 * 60 * 1000,  // 30 days
+    sameSite: 'lax'  // Important for Apple Sign In
+  }
+}));
+
+VERIFY: Is session middleware configured correctly?
+
+CHECK: Are cookies being set? (Look in browser DevTools → Application → Cookies)
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: CHECK ONBOARDING COMPONENT
+═══════════════════════════════════════════════════════════════════════════════
+
+The onboarding showing OLD questions means either:
+1. Wrong component is rendering
+2. Component wasn't updated in rollback
+3. Component is reading from wrong source
+
+FIND: The onboarding component file
+
+VERIFY: Are these the CURRENT questions?
+
+CURRENT (CORRECT) QUESTIONS:
+- Step 1: Belt level (White/Blue/Purple/Brown/Black)
+- Step 2: Training style (Gi/No-Gi/Both)
+- Step 3: Training frequency (1-2x/week, 3-4x/week, 5+/week)
+
+OLD (WRONG) QUESTIONS - If you see these, component needs update:
+- [Whatever the old questions were]
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 6: CHECK USER PROFILE LOADING
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND: Where the app loads user profile on startup
+
+SHOULD HAPPEN:
+
+useEffect(() => {
+  async function loadUserProfile() {
+    const response = await fetch('/api/user/profile', {
+      credentials: 'include'
+    });
+    
+    const data = await response.json();
+    
+    if (data.user) {
+      setUser(data.user);
+      // Don't show onboarding if profile is complete
+      if (data.user.belt_rank && data.user.training_style) {
+        navigate('/chat');
+      }
+    }
+  }
+  
+  loadUserProfile();
+}, []);
+
+VERIFY: Does app check for existing profile on load?
+
+═══════════════════════════════════════════════════════════════════════════════
+DEBUGGING STEPS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Run the SQL query above - confirm user data exists
+2. Open browser DevTools → Network tab
+3. Log in again
+4. Find the /api/auth/login request
+5. Show me:
+   - Request body
+   - Response body (especially isNewUser flag)
+   - Response cookies
+
+6. Open DevTools → Application → Cookies
+7. Show me what cookies are set after login
+
+8. Open DevTools → Console
+9. Run: localStorage.getItem('user')
+10. Show me the output
+
+Send me all this information so I can pinpoint the exact issue.
+
+═══════════════════════════════════════════════════════════════════════════════
+MOST LIKELY CAUSES
+═══════════════════════════════════════════════════════════════════════════════
+
+Based on "worked yesterday, broken today":
+
+1. ❌ Session middleware not configured (most likely)
+2. ❌ Login endpoint not returning isNewUser flag
+3. ❌ Frontend not checking isNewUser, always shows onboarding
+4. ❌ Cookies not being set/saved
+5. ❌ User profile not loading on app init
+
+All of these are fixable - I need the debugging output to know which one.
+```
+
+-----
+
+## **QUICK TEST YOU CAN DO NOW:**
+
+**Open browser DevTools (F12) → Console**
+
+Run this after logging in:
+
+```javascript
+console.log('User in localStorage:', localStorage.getItem('user'));
+console.log('Cookies:', document.cookie);
+```
+
+**Send me the output.**
+
+Also check **Network tab** during login - what does the response look like?
+
+-----
+
+**This is a session/auth bug, not a data loss issue. Let’s find where the login flow broke!** 🔍​​​​​​​​​​​​​​​​
