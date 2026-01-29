@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Mic, Send, Bookmark, BookmarkCheck } from "lucide-react";
+import { Mic, Send, Bookmark, BookmarkCheck, Brain, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import UserLayout from "@/components/layouts/UserLayout";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
 import { ThumbnailImage } from "@/components/ThumbnailImage";
+import { shareVideo } from "@/lib/share";
 import { triggerHaptic } from "@/lib/haptics";
 import { IOSSpinner } from "@/components/ios-spinner";
 import { PullToRefresh } from "@/components/pull-to-refresh";
@@ -216,6 +218,7 @@ export default function ChatPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [savedVideoIds, setSavedVideoIds] = useState<Set<number>>(new Set());
   const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string; startTimeSeconds?: number } | null>(null);
+  const [analysisVideoId, setAnalysisVideoId] = useState<number | null>(null);
   const [loadingMessage, setLoadingMessage] = useState("Analyzing your training");
   const { messages, setMessages, historyLoaded, setHistoryLoaded } = useChatContext();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -742,7 +745,7 @@ export default function ChatPage() {
                             <p className="text-[12px] text-[#2563EB]">
                               {segment.video.instructor}
                             </p>
-                            <div className="flex items-center gap-2 pt-2">
+                            <div className="flex items-center gap-2 pt-2 flex-wrap">
                               <Button
                                 size="sm"
                                 className="h-9 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-full"
@@ -757,6 +760,29 @@ export default function ChatPage() {
                                 {segment.video!.startTimeSeconds && segment.video!.startTimeSeconds > 0 
                                   ? `@ ${Math.floor(segment.video!.startTimeSeconds / 60)}:${String(segment.video!.startTimeSeconds % 60).padStart(2, '0')}` 
                                   : 'full'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-9 px-2 gap-1 text-[#8B5CF6] hover:bg-[#8B5CF6]/10"
+                                onClick={() => setAnalysisVideoId(segment.video!.id)}
+                                data-testid={`button-analysis-${segment.video.id}`}
+                              >
+                                <Brain className="h-4 w-4" />
+                                <span className="text-xs">Analysis</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-9 px-2 gap-1 text-[#10B981] hover:bg-[#10B981]/10"
+                                onClick={async () => {
+                                  triggerHaptic('light');
+                                  await shareVideo(segment.video!.title, segment.video!.instructor, segment.video!.videoId);
+                                }}
+                                data-testid={`button-share-${segment.video.id}`}
+                              >
+                                <Share2 className="h-4 w-4" />
+                                <span className="text-xs">Share</span>
                               </Button>
                               <Button
                                 size="sm"
@@ -870,6 +896,13 @@ export default function ChatPage() {
           instructor={currentVideo.instructor}
           startTime={currentVideo.startTimeSeconds || 0}
           onClose={() => setCurrentVideo(null)}
+        />
+      )}
+      
+      {analysisVideoId && (
+        <VideoAnalysisModal
+          videoId={analysisVideoId}
+          onClose={() => setAnalysisVideoId(null)}
         />
       )}
     </UserLayout>

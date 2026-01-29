@@ -41,6 +41,7 @@ export default function IOSLibraryPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string } | null>(null);
   const [analysisVideoId, setAnalysisVideoId] = useState<number | null>(null);
+  const [visibleCount, setVisibleCount] = useState(50);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -199,21 +200,36 @@ export default function IOSLibraryPage() {
     return [{ name: 'All', count: uniqueProfessorCount }, ...sorted.map(([name, count]) => ({ name, count }))];
   }, [videosFilteredByTechnique]);
 
-  const filteredVideos = videos?.filter((video) => {
-    const matchesSearch = !searchQuery || 
-      video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      video.instructor.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    // "Recently Added" is handled server-side, so skip client-side technique filtering
-    const matchesTechnique = selectedTechnique === "All" ||
-      selectedTechnique === "Recently Added" || // API already filtered these
-      (video.technique || 'Other') === selectedTechnique;
-    
-    const matchesProfessor = selectedProfessor === "All" ||
-      video.instructor === selectedProfessor;
-    
-    return matchesSearch && matchesTechnique && matchesProfessor;
-  });
+  const filteredVideos = useMemo(() => {
+    return videos?.filter((video) => {
+      const matchesSearch = !searchQuery || 
+        video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        video.instructor.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      // "Recently Added" is handled server-side, so skip client-side technique filtering
+      const matchesTechnique = selectedTechnique === "All" ||
+        selectedTechnique === "Recently Added" || // API already filtered these
+        (video.technique || 'Other') === selectedTechnique;
+      
+      const matchesProfessor = selectedProfessor === "All" ||
+        video.instructor === selectedProfessor;
+      
+      return matchesSearch && matchesTechnique && matchesProfessor;
+    }) || [];
+  }, [videos, searchQuery, selectedTechnique, selectedProfessor]);
+
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(50);
+  }, [searchQuery, selectedTechnique, selectedProfessor]);
+
+  // Paginated videos to render (for performance)
+  const displayedVideos = useMemo(() => {
+    return filteredVideos.slice(0, visibleCount);
+  }, [filteredVideos, visibleCount]);
+
+  const hasMoreVideos = filteredVideos.length > visibleCount;
+  const remainingCount = filteredVideos.length - visibleCount;
 
   const handleVideoPress = (video: Video) => {
     triggerHaptic('light');
@@ -448,7 +464,7 @@ export default function IOSLibraryPage() {
             flexDirection: 'column',
             gap: '12px',
           }}>
-            {filteredVideos?.map((video) => (
+            {displayedVideos.map((video) => (
               <button
                 key={video.id}
                 onClick={() => handleVideoPress(video)}
@@ -615,6 +631,31 @@ export default function IOSLibraryPage() {
                 </div>
               </button>
             ))}
+            
+            {/* Load More Button */}
+            {hasMoreVideos && (
+              <button
+                onClick={() => {
+                  triggerHaptic('light');
+                  setVisibleCount(prev => prev + 50);
+                }}
+                data-testid="button-load-more"
+                style={{
+                  background: 'rgba(139, 92, 246, 0.15)',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  color: '#8B5CF6',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  width: '100%',
+                  marginTop: '8px',
+                }}
+              >
+                Load More ({remainingCount} remaining)
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -17,6 +17,7 @@ interface SavedVideo {
   title: string;
   instructor: string;
   videoUrl: string;
+  youtubeId?: string;
   thumbnailUrl?: string;
   duration?: string;
   category?: string;
@@ -134,7 +135,7 @@ export default function IOSSavedPage() {
 
   const handleVideoPress = (video: SavedVideo) => {
     triggerHaptic('light');
-    const videoId = extractVideoId(video.videoUrl);
+    const videoId = video.youtubeId || extractVideoId(video.videoUrl);
     if (videoId) {
       setCurrentVideo({
         videoId,

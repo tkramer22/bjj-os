@@ -11865,13 +11865,13 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
             title: v.title || v.techniqueName || `Video #${v.videoId}`,
             instructor: v.instructor || 'Unknown',
             videoUrl: v.videoUrl || '',
+            youtubeId: v.youtubeId || '',
             thumbnailUrl: displayThumbnail,
             duration: formatDuration(v.duration) || '0:00',
             rating: v.rating,
             category: v.category || 'Other',
             note: v.note,
             savedDate: v.savedDate,
-            // Include analysis indicator
             hasGeminiAnalysis: !!(v.techniqueName && (v.keyConcepts || v.fullSummary))
           };
         })

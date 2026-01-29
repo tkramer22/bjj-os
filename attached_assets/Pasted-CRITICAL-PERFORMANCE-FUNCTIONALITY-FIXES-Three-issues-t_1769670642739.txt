@@ -1,0 +1,249 @@
+CRITICAL PERFORMANCE + FUNCTIONALITY FIXES
+
+Three issues to fix:
+1. Missing Share/Analysis buttons on Professor OS video cards
+2. Slow navigation between Chat ↔ Videos (1-2 second lag)
+3. Saved Videos not loading correctly
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 1: FIX PROFESSOR OS VIDEO CARDS (MISSING BUTTONS)
+═══════════════════════════════════════════════════════════════════════════════
+
+ROOT CAUSE: Video query doesn't return required fields.
+
+FIND: Where Professor OS fetches videos for recommendations (likely in routes.ts or ai-intelligence.ts)
+
+CURRENT QUERY (BROKEN):
+SELECT id, video_id, title, professor_name, techniques_covered
+FROM videos
+WHERE ...
+
+FIXED QUERY (ADD THESE FIELDS):
+SELECT 
+  id,
+  video_id,
+  title,
+  professor_name,
+  thumbnail_url,        -- REQUIRED for thumbnail
+  youtube_url,          -- REQUIRED for Share button
+  gemini_analysis,      -- REQUIRED for Analysis button
+  duration,
+  techniques_covered,
+  created_at
+FROM videos
+WHERE ...
+
+VERIFY FRONTEND COMPONENT receives all fields:
+- Check VideoCard component props
+- Ensure it renders Share/Analysis buttons when data exists
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 2: OPTIMIZE NAVIGATION SPEED (ELIMINATE 1-2 SEC LAG)
+═══════════════════════════════════════════════════════════════════════════════
+
+STRATEGY: Implement React state persistence + pagination + memoization
+
+STEP 1: ADD REACT CONTEXT FOR GLOBAL STATE
+
+Create: client/src/contexts/AppContext.tsx
+
+import { createContext, useContext, useState, ReactNode } from 'react';
+
+interface AppState {
+  cachedVideos: any[];
+  setCachedVideos: (videos: any[]) => void;
+  cachedSavedVideos: any[];
+  setCachedSavedVideos: (videos: any[]) => void;
+}
+
+const AppContext = createContext<AppState | undefined>(undefined);
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [cachedVideos, setCachedVideos] = useState<any[]>([]);
+  const [cachedSavedVideos, setCachedSavedVideos] = useState<any[]>([]);
+
+  return (
+    <AppContext.Provider value={{
+      cachedVideos,
+      setCachedVideos,
+      cachedSavedVideos,
+      setCachedSavedVideos
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+}
+
+export const useAppState = () => {
+  const context = useContext(AppContext);
+  if (!context) throw new Error('useAppState must be used within AppProvider');
+  return context;
+};
+
+STEP 2: WRAP APP IN PROVIDER
+
+In main.tsx or App.tsx:
+
+import { AppProvider } from './contexts/AppContext';
+
+<AppProvider>
+  <Router>
+    {/* Your routes */}
+  </Router>
+</AppProvider>
+
+STEP 3: MODIFY VIDEOS PAGE TO USE CACHED STATE
+
+In client/src/pages/videos.tsx (or wherever videos load):
+
+import { useAppState } from '../contexts/AppContext';
+import { useState, useEffect, useMemo } from 'react';
+
+function VideosPage() {
+  const { cachedVideos, setCachedVideos } = useAppState();
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const VIDEOS_PER_PAGE = 50;
+
+  // Only fetch if cache is empty
+  useEffect(() => {
+    if (cachedVideos.length === 0) {
+      fetchVideos();
+    }
+  }, []);
+
+  const fetchVideos = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/videos');
+      const data = await response.json();
+      setCachedVideos(data.videos);
+    } catch (error) {
+      console.error('Failed to fetch videos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Memoize displayed videos (prevents re-render)
+  const displayedVideos = useMemo(() => {
+    return cachedVideos.slice(0, page * VIDEOS_PER_PAGE);
+  }, [cachedVideos, page]);
+
+  return (
+    <div>
+      {loading && cachedVideos.length === 0 ? (
+        <div>Loading...</div>
+      ) : (
+        <>
+          {displayedVideos.map(video => (
+            <VideoCard key={video.id} video={video} />
+          ))}
+          
+          {displayedVideos.length < cachedVideos.length && (
+            <button onClick={() => setPage(p => p + 1)}>
+              Load More ({cachedVideos.length - displayedVideos.length} remaining)
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+STEP 4: MEMOIZE VIDEO CARDS (PREVENT UNNECESSARY RE-RENDERS)
+
+Wrap VideoCard component:
+
+import { memo } from 'react';
+
+const VideoCard = memo(({ video }) => {
+  return (
+    <div className="video-card">
+      {/* Your existing video card JSX */}
+    </div>
+  );
+});
+
+export default VideoCard;
+
+RESULT: Navigation will be INSTANT (no re-fetching, no re-rendering)
+
+═══════════════════════════════════════════════════════════════════════════════
+PRIORITY 3: FIX SAVED VIDEOS NOT LOADING
+═══════════════════════════════════════════════════════════════════════════════
+
+DIAGNOSE: Check the saved videos query
+
+FIND: API endpoint that returns saved videos (probably /api/videos/saved or similar)
+
+CURRENT ISSUE: Query might be:
+- Missing JOIN with videos table
+- Missing required fields (thumbnail_url, youtube_url, gemini_analysis)
+- Wrong user_id filter
+
+FIXED QUERY:
+
+SELECT 
+  v.id,
+  v.video_id,
+  v.title,
+  v.professor_name,
+  v.thumbnail_url,
+  v.youtube_url,
+  v.gemini_analysis,
+  v.duration,
+  v.techniques_covered,
+  s.created_at as saved_at
+FROM saved_videos s
+INNER JOIN videos v ON s.video_id = v.id
+WHERE s.user_id = $1
+  AND v.deleted_at IS NULL
+ORDER BY s.created_at DESC
+
+APPLY SAME CACHING STRATEGY:
+
+In SavedVideosPage:
+
+import { useAppState } from '../contexts/AppContext';
+
+function SavedVideosPage() {
+  const { cachedSavedVideos, setCachedSavedVideos } = useAppState();
+
+  useEffect(() => {
+    if (cachedSavedVideos.length === 0) {
+      fetchSavedVideos();
+    }
+  }, []);
+
+  // Same pagination + memoization pattern as Videos page
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing:
+
+□ Professor OS video cards show Share + Analysis buttons
+□ Navigating Chat → Videos is instant (<200ms)
+□ Navigating Videos → Chat is instant (<200ms)
+□ Saved Videos loads all saved videos correctly
+□ Pagination works (Load More shows more videos)
+□ App doesn't re-fetch data when switching tabs
+□ Memory usage is stable (check browser DevTools)
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Fix Professor OS video query (5 min) - IMMEDIATE USER IMPACT
+2. Create AppContext (10 min) - FOUNDATION
+3. Implement Videos page caching (15 min) - BIG PERFORMANCE WIN
+4. Fix Saved Videos query + caching (10 min) - FUNCTIONALITY FIX
+5. Memoize VideoCard component (5 min) - OPTIMIZATION
+6. Test everything (10 min)
+
+TOTAL TIME: ~55 minutes to implement all fixes
+
+Show me when complete so I can verify!
