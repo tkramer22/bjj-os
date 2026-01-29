@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Smartphone, Globe, RefreshCw, Tablet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getAdminToken } from "@/lib/adminApi";
 
 interface PlatformStatsData {
   overall: {
@@ -41,6 +42,20 @@ interface PlatformStatsData {
 export function PlatformStats() {
   const { data, isLoading, isError, refetch, error } = useQuery<{ success: boolean; data: PlatformStatsData }>({
     queryKey: ['/api/admin/platform-stats'],
+    queryFn: async () => {
+      const token = getAdminToken();
+      const res = await fetch('/api/admin/platform-stats', {
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch platform stats (${res.status})`);
+      }
+      return res.json();
+    },
     staleTime: 60000,
   });
 
