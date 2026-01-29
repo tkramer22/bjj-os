@@ -149,7 +149,7 @@ function parseVideoTokens(content: string): { text: string; video?: { id: number
   }
 }
 
-export function MobileMessageBubble({ message, sender, timestamp, isLastMessage = false }: MessageBubbleProps) {
+export function MobileMessageBubble({ message, sender, timestamp, videos = [], isLastMessage = false }: MessageBubbleProps) {
   const [savedVideoIds, setSavedVideoIds] = useState<Set<number>>(new Set());
   const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string; startTime?: string } | null>(null);
   const [loadingVideos, setLoadingVideos] = useState<Set<number>>(new Set());
@@ -293,6 +293,71 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
   };
 
   const segments = parseVideoTokens(message || '');
+  
+  // Create a lookup map from the videos prop to enrich parsed segments with richer data
+  // This ensures video data persists even when the component remounts after navigation
+  const videoLookup = new Map<number, any>();
+  if (videos && videos.length > 0) {
+    videos.forEach((v: any) => {
+      if (v.id) {
+        videoLookup.set(typeof v.id === 'string' ? parseInt(v.id, 10) : v.id, v);
+      }
+    });
+  }
+  
+  // Track which video IDs we've matched from tokens
+  const matchedVideoIds = new Set<number>();
+  
+  // Enrich parsed video segments with data from videos prop if available
+  const enrichedSegments = segments.map(segment => {
+    if (segment.video && videoLookup.has(segment.video.id)) {
+      matchedVideoIds.add(segment.video.id);
+      const richVideo = videoLookup.get(segment.video.id);
+      return {
+        ...segment,
+        video: {
+          ...segment.video,
+          // Override with richer data from videos prop (but keep parsed data as fallback)
+          title: richVideo.title || segment.video.title,
+          instructor: richVideo.instructor || richVideo.instructorName || segment.video.instructor,
+          videoId: richVideo.videoId || richVideo.youtubeId || segment.video.videoId,
+          duration: richVideo.duration || segment.video.duration,
+          thumbnailUrl: richVideo.thumbnailUrl || richVideo.thumbnail_url,
+        }
+      };
+    }
+    return segment;
+  });
+  
+  // Add any unmatched videos from the prop as additional segments
+  // This ensures videos are shown even if tokens are missing/corrupted
+  const unmatchedVideos: typeof enrichedSegments = [];
+  if (videos && videos.length > 0) {
+    videos.forEach((v: any) => {
+      const videoId = typeof v.id === 'string' ? parseInt(v.id, 10) : v.id;
+      if (videoId && !matchedVideoIds.has(videoId)) {
+        // Check if we have a valid YouTube video ID to show thumbnail
+        const ytId = v.videoId || v.youtubeId || '';
+        if (ytId) {
+          unmatchedVideos.push({
+            text: '',
+            video: {
+              id: videoId,
+              title: v.title || 'BJJ Video',
+              instructor: v.instructor || v.instructorName || 'BJJ Instructor',
+              videoId: ytId,
+              duration: v.duration || 'Watch',
+              thumbnailUrl: v.thumbnailUrl || v.thumbnail_url,
+              startTime: undefined
+            }
+          });
+        }
+      }
+    });
+  }
+  
+  // Combine enriched segments with unmatched videos
+  const allSegments = [...enrichedSegments, ...unmatchedVideos];
 
   return (
     <div 
@@ -326,7 +391,7 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
         </div>
       )}
       <div className={`mobile-message-bubble ${sender}`} data-testid={`message-${sender}`}>
-        {segments.map((segment, index) => (
+        {allSegments.map((segment, index) => (
         <div key={index}>
           {segment.text && <p style={{ marginBottom: "0.5rem", whiteSpace: "pre-line" }}>{segment.text}</p>}
           {segment.video && (
@@ -366,6 +431,7 @@ export function MobileMessageBubble({ message, sender, timestamp, isLastMessage 
                       <ThumbnailImage
                         videoId={segment.video.videoId}
                         title={segment.video.title}
+                        thumbnailUrl={(segment.video as any).thumbnailUrl}
                       />
                       <div style={{
                         position: "absolute",

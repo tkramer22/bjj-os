@@ -1,0 +1,378 @@
+# 📋 **COMPLETE FIX PROMPT FOR REPLIT AGENT**
+
+```
+FIX VIDEO THUMBNAILS TURNING INTO BLACK BOXES ON NAVIGATION
+
+ISSUE:
+When user navigates Chat → Videos → Chat, video thumbnails in Professor OS responses turn into black boxes with play buttons (YouTube iframes).
+
+Initial state: ✅ Thumbnails display correctly
+After navigation: ❌ Thumbnails become black iframe boxes
+
+ROOT CAUSE:
+VideoCard component is switching from <img> (thumbnail) to <iframe> (embed) on re-render because the player state isn't persisting across navigation.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: UPDATE AppContext TO STORE VIDEO PLAYER STATES
+═══════════════════════════════════════════════════════════════════════════════
+
+MODIFY: client/src/contexts/AppContext.tsx
+
+Add video player state tracking to context:
+
+import { createContext, useContext, useState, ReactNode } from 'react';
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  videos?: any[];
+  timestamp: Date;
+}
+
+interface AppState {
+  cachedVideos: any[];
+  setCachedVideos: (videos: any[]) => void;
+  cachedSavedVideos: any[];
+  setCachedSavedVideos: (videos: any[]) => void;
+  chatMessages: Message[];
+  setChatMessages: (messages: Message[]) => void;
+  addChatMessage: (message: Message) => void;
+  
+  // ADD THESE NEW PROPERTIES:
+  videoPlayerStates: Record<string, boolean>;
+  setVideoPlayerState: (videoId: string, isPlaying: boolean) => void;
+}
+
+const AppContext = createContext<AppState | undefined>(undefined);
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [cachedVideos, setCachedVideos] = useState<any[]>([]);
+  const [cachedSavedVideos, setCachedSavedVideos] = useState<any[]>([]);
+  const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  
+  // ADD THIS STATE:
+  const [videoPlayerStates, setVideoPlayerStates] = useState<Record<string, boolean>>({});
+
+  const addChatMessage = (message: Message) => {
+    setChatMessages(prev => [...prev, message]);
+  };
+
+  // ADD THIS FUNCTION:
+  const setVideoPlayerState = (videoId: string, isPlaying: boolean) => {
+    setVideoPlayerStates(prev => ({
+      ...prev,
+      [videoId]: isPlaying
+    }));
+  };
+
+  return (
+    <AppContext.Provider value={{
+      cachedVideos,
+      setCachedVideos,
+      cachedSavedVideos,
+      setCachedSavedVideos,
+      chatMessages,
+      setChatMessages,
+      addChatMessage,
+      videoPlayerStates,
+      setVideoPlayerState
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+}
+
+export const useAppState = () => {
+  const context = useContext(AppContext);
+  if (!context) throw new Error('useAppState must be used within AppProvider');
+  return context;
+};
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: UPDATE VideoCard COMPONENT TO USE PERSISTENT STATE
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND: The VideoCard component (likely in components/VideoCard.tsx or similar)
+
+REPLACE with this implementation:
+
+import { useAppState } from '../contexts/AppContext';
+import { useState } from 'react';
+
+interface VideoCardProps {
+  video: {
+    id: string;
+    video_id: string;
+    title: string;
+    professor_name: string;
+    thumbnail_url?: string;
+    youtube_url?: string;
+    gemini_analysis?: any;
+    duration?: string;
+    techniques_covered?: string[];
+  };
+}
+
+export function VideoCard({ video }: VideoCardProps) {
+  const { videoPlayerStates, setVideoPlayerState } = useAppState();
+  
+  // Get player state from context (defaults to false = show thumbnail)
+  const isPlaying = videoPlayerStates[video.id] || false;
+  
+  // Generate thumbnail URL with fallback
+  const thumbnailUrl = video.thumbnail_url || 
+    `https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`;
+  
+  const handlePlayClick = () => {
+    setVideoPlayerState(video.id, true);
+  };
+  
+  const handleThumbnailError = (e: any) => {
+    // Fallback to medium quality if high-res fails
+    e.target.src = `https://img.youtube.com/vi/${video.video_id}/mqdefault.jpg`;
+  };
+
+  return (
+    <div style={{
+      background: 'rgba(255, 255, 255, 0.05)',
+      borderRadius: '12px',
+      padding: '16px',
+      marginBottom: '16px'
+    }}>
+      {/* Video Player or Thumbnail */}
+      <div style={{ marginBottom: '12px' }}>
+        {isPlaying ? (
+          // Show YouTube iframe ONLY when user clicks play
+          <iframe
+            src={`https://www.youtube.com/embed/${video.video_id}?autoplay=1`}
+            width="100%"
+            height="315"
+            style={{
+              border: 'none',
+              borderRadius: '8px'
+            }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        ) : (
+          // Show thumbnail by default
+          <div 
+            onClick={handlePlayClick}
+            style={{
+              position: 'relative',
+              cursor: 'pointer',
+              borderRadius: '8px',
+              overflow: 'hidden'
+            }}
+          >
+            <img 
+              src={thumbnailUrl}
+              alt={video.title}
+              onError={handleThumbnailError}
+              style={{
+                width: '100%',
+                height: 'auto',
+                display: 'block'
+              }}
+            />
+            
+            {/* Play button overlay */}
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '64px',
+              height: '64px',
+              background: 'rgba(0, 0, 0, 0.8)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'transform 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)';
+            }}
+            >
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* Video Info */}
+      <div style={{ marginBottom: '12px' }}>
+        <h3 style={{
+          fontSize: '16px',
+          fontWeight: 600,
+          marginBottom: '4px',
+          color: 'white'
+        }}>
+          {video.title}
+        </h3>
+        <p style={{
+          fontSize: '14px',
+          color: 'rgba(255, 255, 255, 0.7)',
+          marginBottom: '0'
+        }}>
+          {video.professor_name}
+        </p>
+      </div>
+      
+      {/* Action Buttons */}
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        flexWrap: 'wrap'
+      }}>
+        {video.gemini_analysis && (
+          <button style={{
+            background: 'rgba(124, 77, 255, 0.2)',
+            border: '1px solid rgba(124, 77, 255, 0.4)',
+            color: '#a78bfa',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            fontSize: '14px',
+            cursor: 'pointer',
+            fontWeight: 600
+          }}>
+            📊 Analysis
+          </button>
+        )}
+        
+        <button style={{
+          background: 'rgba(34, 197, 94, 0.2)',
+          border: '1px solid rgba(34, 197, 94, 0.4)',
+          color: '#4ade80',
+          padding: '8px 16px',
+          borderRadius: '6px',
+          fontSize: '14px',
+          cursor: 'pointer',
+          fontWeight: 600
+        }}>
+          💾 Save
+        </button>
+        
+        {video.youtube_url && (
+          <button style={{
+            background: 'rgba(59, 130, 246, 0.2)',
+            border: '1px solid rgba(59, 130, 246, 0.4)',
+            color: '#60a5fa',
+            padding: '8px 16px',
+            borderRadius: '6px',
+            fontSize: '14px',
+            cursor: 'pointer',
+            fontWeight: 600
+          }}>
+            🔗 Share
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default VideoCard;
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: ENSURE VIDEO DATA INCLUDES thumbnail_url IN CHAT MESSAGES
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND: Where Professor OS adds AI responses to chat messages (in chat page)
+
+ENSURE videos have thumbnail_url when stored:
+
+const addChatMessage = (message: Message) => {
+  // If message has videos, ensure each has thumbnail_url
+  if (message.videos && message.videos.length > 0) {
+    message.videos = message.videos.map(video => ({
+      ...video,
+      // Add fallback thumbnail if missing
+      thumbnail_url: video.thumbnail_url || 
+        `https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`
+    }));
+  }
+  
+  setChatMessages(prev => [...prev, message]);
+};
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: VERIFY VIDEO QUERY INCLUDES thumbnail_url
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND: Where Professor OS fetches videos for recommendations
+
+ENSURE this field is in the SELECT statement:
+
+SELECT 
+  v.id,
+  v.video_id,
+  v.title,
+  v.professor_name,
+  v.thumbnail_url,        -- ✅ MUST BE INCLUDED
+  v.youtube_url,
+  v.gemini_analysis,
+  v.duration,
+  v.techniques_covered
+FROM videos v
+WHERE ...
+
+If thumbnail_url is NULL in database, the VideoCard will use the fallback YouTube URL.
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing:
+
+□ Ask Professor OS for technique recommendations
+□ Videos should show thumbnails (not black boxes) ✅
+□ Click thumbnail → Video plays in iframe ✅
+□ Navigate to Videos page ✅
+□ Navigate back to Chat ✅
+□ Thumbnails should still be visible (not black boxes) ✅
+□ Videos you didn't click should still show thumbnails ✅
+□ Videos you clicked should still show iframe player ✅
+
+═══════════════════════════════════════════════════════════════════════════════
+WHAT THIS FIXES
+═══════════════════════════════════════════════════════════════════════════════
+
+BEFORE (BROKEN):
+- VideoCard uses local useState for isPlaying
+- Navigate away → Component unmounts → State lost
+- Navigate back → Component re-mounts with default state
+- If default is true → Shows iframe (black box) ❌
+
+AFTER (FIXED):
+- VideoCard uses Context for isPlaying
+- Navigate away → State persists in Context ✅
+- Navigate back → Reads same state from Context
+- Default is always false → Shows thumbnail ✅
+- Only shows iframe if user explicitly clicked play
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Update AppContext.tsx (add videoPlayerStates)
+2. Update VideoCard component (use context instead of local state)
+3. Ensure thumbnail_url is in video data
+4. Verify video query includes thumbnail_url field
+5. Test navigation flow
+
+TOTAL TIME: 20-25 minutes
+
+Show me when complete so I can verify the fix worked!
+```
+
+-----
+
+**Copy that entire prompt and send it to Replit Agent now.** This will fix the thumbnail issue completely. 🎯​​​​​​​​​​​​​​​​
