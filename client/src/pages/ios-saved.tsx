@@ -63,6 +63,8 @@ export default function IOSSavedPage() {
   });
 
   const handleUnsave = (videoId: number) => {
+    // Prevent double-clicks while mutation is pending
+    if (unsaveVideoMutation.isPending) return;
     if (!user?.id) return;
     unsaveVideoMutation.mutate({ videoId });
   };
@@ -539,6 +541,7 @@ export default function IOSSavedPage() {
                           e.stopPropagation();
                           handleUnsave(video.id);
                         }}
+                        disabled={unsaveVideoMutation.isPending}
                         data-testid={`button-unsave-video-${video.id}`}
                         style={{
                           display: 'flex',
@@ -550,11 +553,16 @@ export default function IOSSavedPage() {
                           padding: '2px 8px',
                           borderRadius: '4px',
                           border: 'none',
-                          cursor: 'pointer',
+                          cursor: unsaveVideoMutation.isPending ? 'not-allowed' : 'pointer',
+                          opacity: unsaveVideoMutation.isPending ? 0.5 : 1,
                         }}
                       >
-                        <BookmarkCheck size={12} />
-                        Saved
+                        {unsaveVideoMutation.isPending ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <BookmarkCheck size={12} />
+                        )}
+                        {unsaveVideoMutation.isPending ? 'Removing...' : 'Saved'}
                       </button>
                       <button
                         onClick={async (e) => {

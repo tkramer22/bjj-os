@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, numeric, serial, jsonb, date, doublePrecision, index, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, numeric, serial, jsonb, date, doublePrecision, index, primaryKey, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -2388,7 +2388,7 @@ export const userSavedVideos = pgTable("user_saved_videos", {
   savedDate: timestamp("saved_date").defaultNow().notNull(),
 }, (table) => ({
   userIdx: index("idx_saved_videos_user").on(table.userId),
-  userVideoUnique: index("idx_user_video_unique").on(table.userId, table.videoId),
+  userVideoUnique: unique("uq_user_video").on(table.userId, table.videoId),
 }));
 
 export const insertUserSavedVideoSchema = createInsertSchema(userSavedVideos).omit({

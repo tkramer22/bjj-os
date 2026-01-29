@@ -129,6 +129,11 @@ export default function IOSLibraryPage() {
   });
 
   const handleToggleSave = (videoId: number) => {
+    // Prevent double-clicks while mutation is pending
+    if (saveVideoMutation.isPending || unsaveVideoMutation.isPending) {
+      return;
+    }
+    
     if (!user?.id) {
       toast({ title: "Sign in required", description: "Please sign in to save videos", variant: "destructive" });
       return;
@@ -583,6 +588,7 @@ export default function IOSLibraryPage() {
                         e.stopPropagation();
                         handleToggleSave(video.id);
                       }}
+                      disabled={saveVideoMutation.isPending || unsaveVideoMutation.isPending}
                       data-testid={`button-save-video-${video.id}`}
                       style={{
                         display: 'flex',
@@ -594,15 +600,18 @@ export default function IOSLibraryPage() {
                         padding: '2px 8px',
                         borderRadius: '4px',
                         border: 'none',
-                        cursor: 'pointer',
+                        cursor: (saveVideoMutation.isPending || unsaveVideoMutation.isPending) ? 'not-allowed' : 'pointer',
+                        opacity: (saveVideoMutation.isPending || unsaveVideoMutation.isPending) ? 0.5 : 1,
                       }}
                     >
-                      {isVideoSaved(video.id) ? (
+                      {(saveVideoMutation.isPending || unsaveVideoMutation.isPending) ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : isVideoSaved(video.id) ? (
                         <BookmarkCheck size={12} />
                       ) : (
                         <Bookmark size={12} />
                       )}
-                      {isVideoSaved(video.id) ? 'Saved' : 'Save'}
+                      {(saveVideoMutation.isPending || unsaveVideoMutation.isPending) ? 'Saving...' : isVideoSaved(video.id) ? 'Saved' : 'Save'}
                     </button>
                     <button
                       onClick={async (e) => {
