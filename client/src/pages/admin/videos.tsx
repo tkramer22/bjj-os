@@ -203,6 +203,93 @@ export default function AdminVideos() {
     },
   });
 
+  // Analysis gaps query - find videos missing Gemini analysis
+  const { data: analysisGapsData, isLoading: gapsLoading, refetch: refetchGaps } = useQuery<{
+    totalVideos: number;
+    withCompleteAnalysis: number;
+    totalGaps: number;
+    coverageRate: string;
+    gapBreakdown: { noAnalysis: number; incomplete: number };
+    missingVideos: Array<{
+      id: number;
+      youtubeId: string;
+      title: string;
+      instructor: string;
+      channel: string;
+      gapType: 'NO_ANALYSIS' | 'INCOMPLETE';
+    }>;
+  }>({
+    queryKey: ['/api/admin/videos/analysis-gaps'],
+    queryFn: () => fetchWithAuth('/api/admin/videos/analysis-gaps'),
+    staleTime: 30000,
+    retry: false,
+    enabled: !authError,
+  });
+
+  // Bulk reanalyze mutation
+  const [bulkReanalyzeStatus, setBulkReanalyzeStatus] = useState<{
+    isRunning: boolean;
+    jobId: string | null;
+    processed: number;
+    total: number;
+    successful: number;
+    failed: number;
+  } | null>(null);
+
+  const bulkReanalyzeMutation = useMutation({
+    mutationFn: (limit: number) => postWithAuth('/api/admin/videos/bulk-reanalyze', { limit }),
+    onSuccess: (data: any) => {
+      if (data.jobId) {
+        setBulkReanalyzeStatus({
+          isRunning: true,
+          jobId: data.jobId,
+          processed: 0,
+          total: data.totalToProcess || 0,
+          successful: 0,
+          failed: 0,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/videos/analysis-gaps'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/videos/knowledge-status'] });
+    },
+  });
+
+  // Poll for bulk reanalyze status
+  const { data: bulkReanalyzeJobStatus } = useQuery<{
+    status: 'running' | 'completed' | 'failed' | 'not_found';
+    processed: number;
+    total: number;
+    successful: number;
+    failed: number;
+  }>({
+    queryKey: ['/api/admin/videos/bulk-reanalyze/status', bulkReanalyzeStatus?.jobId],
+    queryFn: () => fetchWithAuth(`/api/admin/videos/bulk-reanalyze/status/${bulkReanalyzeStatus?.jobId}`),
+    enabled: !!bulkReanalyzeStatus?.jobId && bulkReanalyzeStatus?.isRunning,
+    refetchInterval: 5000,
+  });
+
+  // Update status when job completes
+  useEffect(() => {
+    if (bulkReanalyzeJobStatus) {
+      if (bulkReanalyzeJobStatus.status === 'completed' || bulkReanalyzeJobStatus.status === 'failed') {
+        setBulkReanalyzeStatus(prev => prev ? { ...prev, isRunning: false, ...bulkReanalyzeJobStatus } : null);
+        refetchGaps();
+      } else if (bulkReanalyzeJobStatus.status === 'running') {
+        setBulkReanalyzeStatus(prev => prev ? { ...prev, ...bulkReanalyzeJobStatus } : null);
+      }
+    }
+  }, [bulkReanalyzeJobStatus, refetchGaps]);
+
+  // Single video reanalyze mutation
+  const reanalyzeVideoMutation = useMutation({
+    mutationFn: (videoId: number) => postWithAuth(`/api/admin/videos/${videoId}/reanalyze`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/videos/list'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/videos/knowledge-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/videos/analysis-gaps'] });
+    },
+  });
+
   const { instructorToTechniques, techniqueToInstructors, allInstructors, allTechniques } = useMemo(() => {
     const allVideos = allVideosData?.videos || [];
     
@@ -474,6 +561,108 @@ export default function AdminVideos() {
             )}
           </CardContent>
         </Card>
+
+        {/* Analysis Gaps Section - Rerun Failed Gemini Analysis */}
+        {analysisGapsData && analysisGapsData.totalGaps > 0 && (
+          <Card className="bg-gradient-to-r from-orange-500/10 to-red-500/10 border-orange-500/20">
+            <CardContent className="pt-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <AlertCircle className="h-8 w-8 text-orange-500" />
+                  <div>
+                    <h3 className="font-semibold text-lg">Analysis Gaps Detected</h3>
+                    <p className="text-sm text-muted-foreground">
+                      <span className="text-orange-500 font-medium">{analysisGapsData.totalGaps.toLocaleString()}</span> videos missing complete Gemini analysis
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      <span className="text-red-400">{analysisGapsData.gapBreakdown.noAnalysis}</span> no analysis | {' '}
+                      <span className="text-yellow-400">{analysisGapsData.gapBreakdown.incomplete}</span> incomplete | {' '}
+                      Coverage: {analysisGapsData.coverageRate}%
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  {bulkReanalyzeStatus?.isRunning ? (
+                    <div className="flex items-center gap-3">
+                      <div className="text-sm text-muted-foreground">
+                        {bulkReanalyzeStatus.processed}/{bulkReanalyzeStatus.total} processed
+                      </div>
+                      <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
+                    </div>
+                  ) : (
+                    <>
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        onClick={() => bulkReanalyzeMutation.mutate(10)}
+                        disabled={bulkReanalyzeMutation.isPending}
+                        data-testid="button-reanalyze-10"
+                      >
+                        {bulkReanalyzeMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>Reanalyze 10</>
+                        )}
+                      </Button>
+                      <Button 
+                        onClick={() => bulkReanalyzeMutation.mutate(50)}
+                        disabled={bulkReanalyzeMutation.isPending}
+                        className="bg-orange-600 hover:bg-orange-700"
+                        data-testid="button-reanalyze-50"
+                      >
+                        {bulkReanalyzeMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Brain className="h-4 w-4 mr-2" />
+                        )}
+                        Reanalyze 50 Videos
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+              
+              {bulkReanalyzeStatus && (
+                <div className="mt-4 space-y-2">
+                  <Progress 
+                    value={bulkReanalyzeStatus.total > 0 ? (bulkReanalyzeStatus.processed / bulkReanalyzeStatus.total) * 100 : 0} 
+                    className="h-2"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{bulkReanalyzeStatus.processed} / {bulkReanalyzeStatus.total} processed</span>
+                    <span className="text-green-500">{bulkReanalyzeStatus.successful} succeeded</span>
+                    {bulkReanalyzeStatus.failed > 0 && <span className="text-red-500">{bulkReanalyzeStatus.failed} failed</span>}
+                    {!bulkReanalyzeStatus.isRunning && <span className="text-muted-foreground">Complete</span>}
+                  </div>
+                </div>
+              )}
+              
+              {/* Show sample missing videos */}
+              {analysisGapsData.missingVideos.length > 0 && !bulkReanalyzeStatus?.isRunning && (
+                <div className="mt-4">
+                  <p className="text-xs text-muted-foreground mb-2">Sample videos missing analysis:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {analysisGapsData.missingVideos.slice(0, 5).map((video) => (
+                      <Badge 
+                        key={video.id} 
+                        variant="outline" 
+                        className={video.gapType === 'NO_ANALYSIS' ? 'border-red-500/50 text-red-400' : 'border-yellow-500/50 text-yellow-400'}
+                      >
+                        {video.title?.substring(0, 30)}...
+                      </Badge>
+                    ))}
+                    {analysisGapsData.missingVideos.length > 5 && (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        +{analysisGapsData.missingVideos.length - 5} more
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>

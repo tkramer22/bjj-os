@@ -1,0 +1,431 @@
+# 🔄 **RERUN FAILED GEMINI ANALYSIS - FIX PROMPT**
+
+Yes! Let’s identify videos with failed analysis and rerun them.
+
+-----
+
+## **COPY THIS TO REPLIT AGENT:**
+
+```
+RERUN FAILED GEMINI VIDEO ANALYSIS
+
+The curation system shows 100% analyzed but many videos have failed analysis. We need to:
+1. Find all videos with failed/incomplete Gemini analysis
+2. Rerun analysis on those videos
+3. Update the curation statistics to reflect actual success rate
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: IDENTIFY VIDEOS WITH FAILED ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+Run this query to find videos with missing or failed analysis:
+
+```sql
+-- Find videos with NULL gemini_analysis
+SELECT COUNT(*) as null_analysis
+FROM videos
+WHERE deleted_at IS NULL
+  AND gemini_analysis IS NULL;
+
+-- Find videos with empty gemini_analysis object
+SELECT COUNT(*) as empty_analysis
+FROM videos
+WHERE deleted_at IS NULL
+  AND gemini_analysis = '{}'::jsonb;
+
+-- Find videos with incomplete analysis (missing key fields)
+SELECT COUNT(*) as incomplete_analysis
+FROM videos
+WHERE deleted_at IS NULL
+  AND gemini_analysis IS NOT NULL
+  AND (
+    gemini_analysis->>'techniques_covered' IS NULL
+    OR gemini_analysis->>'key_details' IS NULL
+    OR gemini_analysis->>'instructor_name' IS NULL
+  );
+
+-- Total failed videos
+SELECT COUNT(*) as total_failed
+FROM videos
+WHERE deleted_at IS NULL
+  AND (
+    gemini_analysis IS NULL
+    OR gemini_analysis = '{}'::jsonb
+    OR gemini_analysis->>'techniques_covered' IS NULL
+  );
+```
+
+Show me the results of these queries.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: CREATE REANALYSIS FUNCTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Create an admin endpoint to rerun failed analyses:
+
+```javascript
+// Add this endpoint to your server
+app.post('/api/admin/reanalyze-failed-videos', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    console.log('🔄 Starting reanalysis of failed videos...');
+    
+    // Get all videos with failed analysis
+    const failedVideos = await db.query(`
+      SELECT id, video_id, title, professor_name
+      FROM videos
+      WHERE deleted_at IS NULL
+        AND (
+          gemini_analysis IS NULL
+          OR gemini_analysis = '{}'::jsonb
+          OR gemini_analysis->>'techniques_covered' IS NULL
+        )
+      ORDER BY created_at DESC
+      LIMIT 50
+    `);
+    
+    console.log(`📊 Found ${failedVideos.rows.length} videos to reanalyze`);
+    
+    if (failedVideos.rows.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No failed videos found',
+        reanalyzed: 0
+      });
+    }
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Reanalyze each video with rate limiting
+    for (const video of failedVideos.rows) {
+      try {
+        console.log(`🎥 Analyzing: "${video.title}" by ${video.professor_name}`);
+        
+        // Call your existing Gemini analysis function
+        await analyzeVideoWithGemini(video.video_id, video.id);
+        
+        successCount++;
+        console.log(`✅ Success: ${video.title}`);
+        
+        // Rate limit: Wait 5 seconds between API calls to avoid quota issues
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+      } catch (error) {
+        failCount++;
+        console.error(`❌ Failed to analyze video ${video.id}:`, error.message);
+        
+        // Continue to next video even if one fails
+        continue;
+      }
+    }
+    
+    console.log(`✅ Reanalysis complete: ${successCount} success, ${failCount} failed`);
+    
+    res.json({
+      success: true,
+      message: `Reanalyzed ${successCount} videos successfully`,
+      reanalyzed: successCount,
+      failed: failCount,
+      total: failedVideos.rows.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in reanalysis:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reanalyze videos',
+      details: error.message
+    });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: ADD BATCH PROCESSING FOR LARGE NUMBERS
+═══════════════════════════════════════════════════════════════════════════════
+
+If there are hundreds of failed videos, process in batches:
+
+```javascript
+app.post('/api/admin/reanalyze-failed-videos-batch', requireAuth, requireAdmin, async (req, res) => {
+  const { batchSize = 10, offset = 0 } = req.body;
+  
+  try {
+    // Get batch of failed videos
+    const failedVideos = await db.query(`
+      SELECT id, video_id, title, professor_name
+      FROM videos
+      WHERE deleted_at IS NULL
+        AND (
+          gemini_analysis IS NULL
+          OR gemini_analysis = '{}'::jsonb
+          OR gemini_analysis->>'techniques_covered' IS NULL
+        )
+      ORDER BY created_at DESC
+      LIMIT $1 OFFSET $2
+    `, [batchSize, offset]);
+    
+    const results = [];
+    
+    for (const video of failedVideos.rows) {
+      try {
+        await analyzeVideoWithGemini(video.video_id, video.id);
+        results.push({ id: video.id, status: 'success' });
+        
+        // Wait 5 seconds between calls
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      } catch (error) {
+        results.push({ id: video.id, status: 'failed', error: error.message });
+      }
+    }
+    
+    // Check if there are more videos to process
+    const totalFailed = await db.query(`
+      SELECT COUNT(*) as count
+      FROM videos
+      WHERE deleted_at IS NULL
+        AND (
+          gemini_analysis IS NULL
+          OR gemini_analysis = '{}'::jsonb
+          OR gemini_analysis->>'techniques_covered' IS NULL
+        )
+    `);
+    
+    const hasMore = (offset + batchSize) < parseInt(totalFailed.rows[0].count);
+    
+    res.json({
+      success: true,
+      results,
+      processed: results.filter(r => r.status === 'success').length,
+      failed: results.filter(r => r.status === 'failed').length,
+      hasMore,
+      nextOffset: offset + batchSize,
+      totalRemaining: parseInt(totalFailed.rows[0].count) - (offset + batchSize)
+    });
+    
+  } catch (error) {
+    console.error('Batch reanalysis error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: ADD UI BUTTON IN ADMIN PANEL
+═══════════════════════════════════════════════════════════════════════════════
+
+Add a button in your admin dashboard to trigger reanalysis:
+
+```jsx
+// In your admin dashboard component
+const [reanalyzing, setReanalyzing] = useState(false);
+const [reanalysisResult, setReanalysisResult] = useState(null);
+
+const handleReanalyzeFailed = async () => {
+  if (!confirm('This will reanalyze all videos with failed Gemini analysis. Continue?')) {
+    return;
+  }
+  
+  setReanalyzing(true);
+  setReanalysisResult(null);
+  
+  try {
+    const response = await fetch('/api/admin/reanalyze-failed-videos', {
+      method: 'POST',
+      credentials: 'include'
+    });
+    
+    const data = await response.json();
+    setReanalysisResult(data);
+    
+    alert(`Reanalysis complete!\n${data.reanalyzed} videos successfully analyzed\n${data.failed} videos failed`);
+  } catch (error) {
+    console.error('Reanalysis error:', error);
+    alert('Failed to reanalyze videos');
+  } finally {
+    setReanalyzing(false);
+  }
+};
+
+// In your JSX
+<div className="admin-actions">
+  <button 
+    onClick={handleReanalyzeFailed}
+    disabled={reanalyzing}
+    style={{
+      padding: '12px 24px',
+      background: reanalyzing ? '#999' : '#7c4dff',
+      color: 'white',
+      border: 'none',
+      borderRadius: '8px',
+      cursor: reanalyzing ? 'not-allowed' : 'pointer',
+      fontWeight: 600
+    }}
+  >
+    {reanalyzing ? 'Reanalyzing...' : '🔄 Reanalyze Failed Videos'}
+  </button>
+  
+  {reanalysisResult && (
+    <div style={{ marginTop: '12px', color: 'white' }}>
+      ✅ Reanalyzed: {reanalysisResult.reanalyzed} videos
+      {reanalysisResult.failed > 0 && (
+        <div>❌ Failed: {reanalysisResult.failed} videos</div>
+      )}
+    </div>
+  )}
+</div>
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: FIX CURATION STATISTICS
+═══════════════════════════════════════════════════════════════════════════════
+
+Update the curation stats endpoint to show accurate percentages:
+
+```javascript
+app.get('/api/admin/curation-stats', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const stats = await db.query(`
+      SELECT 
+        COUNT(*) as total_videos,
+        COUNT(*) FILTER (
+          WHERE gemini_analysis IS NOT NULL 
+            AND gemini_analysis != '{}'::jsonb
+            AND gemini_analysis->>'techniques_covered' IS NOT NULL
+        ) as successfully_analyzed,
+        COUNT(*) FILTER (
+          WHERE gemini_analysis IS NULL 
+            OR gemini_analysis = '{}'::jsonb
+            OR gemini_analysis->>'techniques_covered' IS NULL
+        ) as failed_analysis
+      FROM videos
+      WHERE deleted_at IS NULL
+    `);
+    
+    const total = parseInt(stats.rows[0].total_videos);
+    const successful = parseInt(stats.rows[0].successfully_analyzed);
+    const failed = parseInt(stats.rows[0].failed_analysis);
+    const successRate = total > 0 ? Math.round((successful / total) * 100) : 0;
+    
+    res.json({
+      success: true,
+      stats: {
+        total_videos: total,
+        successfully_analyzed: successful,
+        failed_analysis: failed,
+        success_rate: successRate
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error getting curation stats:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 6: ADD LOGGING FOR FAILED ANALYSES
+═══════════════════════════════════════════════════════════════════════════════
+
+Update your Gemini analysis function to log failures:
+
+```javascript
+async function analyzeVideoWithGemini(videoId, dbVideoId) {
+  try {
+    // Your existing Gemini API call
+    const analysis = await callGeminiAPI(videoId);
+    
+    // Validate analysis has required fields
+    if (!analysis.techniques_covered || analysis.techniques_covered.length === 0) {
+      throw new Error('Analysis missing techniques_covered');
+    }
+    
+    // Save to database
+    await db.query(`
+      UPDATE videos
+      SET 
+        gemini_analysis = $1,
+        analysis_status = 'success',
+        analyzed_at = NOW()
+      WHERE id = $2
+    `, [analysis, dbVideoId]);
+    
+    console.log(`✅ Successfully analyzed video ${dbVideoId}`);
+    return analysis;
+    
+  } catch (error) {
+    console.error(`❌ Failed to analyze video ${dbVideoId}:`, error.message);
+    
+    // Log the failure in database
+    await db.query(`
+      UPDATE videos
+      SET 
+        analysis_status = 'failed',
+        analysis_error = $1,
+        analyzed_at = NOW()
+      WHERE id = $2
+    `, [error.message, dbVideoId]);
+    
+    throw error;
+  }
+}
+```
+
+Add columns to track analysis status:
+
+```sql
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS analysis_status VARCHAR(20);
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS analysis_error TEXT;
+ALTER TABLE videos ADD COLUMN IF NOT EXISTS analyzed_at TIMESTAMP;
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing:
+
+□ Run Step 1 queries to see how many failed videos exist
+□ Test reanalysis endpoint with 1-2 videos first
+□ Verify analysis is saved to database correctly
+□ Check that curation stats show accurate percentages
+□ Test batch processing if there are many failed videos
+□ Verify UI button works and shows results
+
+═══════════════════════════════════════════════════════════════════════════════
+CONFIRMATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing:
+
+1. Show me the query results from Step 1 (how many failed videos)
+1. Show me the reanalysis endpoint code
+1. Confirm the admin UI button works
+1. Show me the updated curation stats with accurate percentages
+
+Then run the reanalysis and tell me the results.
+
+```
+---
+
+## **QUICK VERSION - RUN THIS NOW:**
+
+If you just want to rerun failed analyses immediately, run this in your database:
+
+```sql
+-- See how many failed
+SELECT 
+  COUNT(*) FILTER (WHERE gemini_analysis IS NULL) as null_analysis,
+  COUNT(*) FILTER (WHERE gemini_analysis = '{}'::jsonb) as empty_analysis,
+  COUNT(*) FILTER (WHERE gemini_analysis->>'techniques_covered' IS NULL) as missing_techniques,
+  COUNT(*) as total
+FROM videos
+WHERE deleted_at IS NULL;
+```
+
+Then tell Replit Agent the number and it can create the reanalysis script.
+
+-----
+
+**Send the full prompt to Replit Agent to get this fixed properly!** 🔄✅​​​​​​​​​​​​​​​​
