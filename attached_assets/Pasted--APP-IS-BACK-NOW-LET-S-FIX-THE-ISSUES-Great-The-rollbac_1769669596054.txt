@@ -1,0 +1,185 @@
+# ✅ **APP IS BACK - NOW LET’S FIX THE ISSUES**
+
+Great! The rollback worked. Now let’s address the 3 issues you’re seeing:
+
+-----
+
+## **ISSUE 1: CHAT HISTORY RESET**
+
+**Why this happened:**
+The rollback restored code from 1 day ago, which might have had a different chat history storage method or cleared local storage.
+
+**Quick check:**
+
+- Are you logged in as the same user?
+- Try refreshing the page (Cmd+R)
+- Check if history appears after a few seconds
+
+**If history is truly gone:**
+The messages are likely still in the database, just not displaying. We can fix the query.
+
+-----
+
+## **ISSUE 2: VIDEOS MISSING THUMBNAIL/SHARE/ANALYSIS BUTTONS**
+
+**Root cause:**
+The database query isn’t returning all required fields for video cards.
+
+**Copy this to Replit Agent:**
+
+```
+FIX MISSING VIDEO CARD BUTTONS
+
+Professor OS is sending video recommendations but they're missing:
+- Thumbnail images
+- Share button
+- Analysis button
+
+ROOT CAUSE: The video query isn't returning all required fields.
+
+FIX THE VIDEO RETRIEVAL QUERY:
+
+Find where videos are fetched for Professor OS recommendations and ensure the query includes:
+
+SELECT 
+  id,
+  video_id,              -- REQUIRED for YouTube embed
+  title,
+  professor_name,
+  thumbnail_url,         -- REQUIRED for thumbnail
+  duration,
+  techniques_covered,
+  gemini_analysis,       -- REQUIRED for Analysis button
+  youtube_url,           -- REQUIRED for Share button
+  created_at
+FROM videos
+WHERE id IN (...)
+
+Specifically check:
+1. Does the query include thumbnail_url?
+2. Does the query include youtube_url? 
+3. Does the query include gemini_analysis?
+
+If any are missing, add them to the SELECT statement.
+
+FRONTEND CHECK:
+
+Also verify the VideoCard component is receiving these fields:
+- props.thumbnail_url (for thumbnail display)
+- props.youtube_url (for Share button)
+- props.gemini_analysis (for Analysis button)
+
+Show me the current query and I'll verify it's correct.
+```
+
+-----
+
+## **ISSUE 3: SLOW TOGGLE BETWEEN CHAT AND VIDEOS**
+
+**This is likely a React rendering issue.**
+
+**Copy this to Replit Agent:**
+
+```
+OPTIMIZE PAGE SWITCHING PERFORMANCE
+
+The app is slow when toggling between Chat and Videos pages.
+
+LIKELY CAUSES:
+1. Re-fetching data on every navigation
+2. No route caching
+3. Large component re-renders
+4. Loading all 5,099 videos at once
+
+IMPLEMENT THESE OPTIMIZATIONS:
+
+1. ADD REACT ROUTER CACHING:
+- Use React Router's built-in data caching
+- Don't re-fetch videos every time user switches tabs
+
+2. IMPLEMENT PAGINATION:
+- Load 50 videos at a time, not all 5,099
+- Add "Load More" button or infinite scroll
+
+3. MEMOIZE VIDEO CARDS:
+- Wrap VideoCard components in React.memo()
+- Prevent unnecessary re-renders
+
+4. ADD LOADING STATES:
+- Show skeleton loaders while switching
+- Don't block navigation waiting for data
+
+CODE EXAMPLES:
+
+// Memoize video cards
+const VideoCard = React.memo(({ video }) => {
+  // component code
+});
+
+// Cache videos in state
+const [cachedVideos, setCachedVideos] = useState([]);
+
+useEffect(() => {
+  if (cachedVideos.length === 0) {
+    fetchVideos(); // Only fetch once
+  }
+}, []);
+
+// Pagination
+const [page, setPage] = useState(1);
+const videosPerPage = 50;
+const displayedVideos = videos.slice(0, page * videosPerPage);
+
+Show me the current navigation code and video loading logic.
+```
+
+-----
+
+## **QUICK WINS YOU CAN DO NOW:**
+
+### **For Speed:**
+
+1. **Reduce initial video load** - Show 50 videos instead of 5,099
+1. **Add loading spinner** - Visual feedback during navigation
+1. **Preload data** - Fetch videos on app load, cache in memory
+
+### **For Missing Buttons:**
+
+1. **Check database** - Verify videos have `thumbnail_url` and `youtube_url`
+1. **Add fallback thumbnail** - Use YouTube’s default if missing
+1. **Gracefully handle missing data** - Don’t break entire card
+
+-----
+
+## **DIAGNOSTIC QUERIES TO RUN:**
+
+In Replit Shell, check the data:
+
+```bash
+psql $DATABASE_URL -c "
+SELECT 
+  id, 
+  title,
+  thumbnail_url IS NOT NULL as has_thumbnail,
+  youtube_url IS NOT NULL as has_url,
+  gemini_analysis IS NOT NULL as has_analysis
+FROM videos 
+LIMIT 10;
+"
+```
+
+This shows which fields are missing for videos.
+
+-----
+
+## **PRIORITY ORDER:**
+
+1. **Fix missing buttons** (Critical - user experience)
+1. **Speed up navigation** (Important - usability)
+1. **Check chat history** (Low priority if messages still in DB)
+
+-----
+
+**Send those two prompts to Replit Agent and let me know what it finds!**
+
+Also, can you send me a screenshot of the videos that are missing buttons? I want to see exactly what’s rendering.​​​​​​​​​​​​​​​​
