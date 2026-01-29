@@ -1,10 +1,11 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string; // ISO string for consistent serialization
+  videos?: any[]; // Video recommendations attached to messages
 }
 
 interface ChatContextType {
@@ -15,6 +16,8 @@ interface ChatContextType {
   clearMessages: () => void;
   historyLoaded: boolean;
   setHistoryLoaded: (loaded: boolean) => void;
+  backgroundProcessing: boolean;
+  setBackgroundProcessing: (processing: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -34,6 +37,27 @@ function deduplicateMessages(messages: Message[]): Message[] {
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessagesInternal] = useState<Message[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [backgroundProcessing, setBackgroundProcessingInternal] = useState(false);
+  const backgroundTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Wrap setBackgroundProcessing to auto-clear after timeout (failsafe)
+  const setBackgroundProcessing = useCallback((processing: boolean) => {
+    // Clear any existing timeout
+    if (backgroundTimeoutRef.current) {
+      clearTimeout(backgroundTimeoutRef.current);
+      backgroundTimeoutRef.current = null;
+    }
+    
+    setBackgroundProcessingInternal(processing);
+    
+    // Auto-clear after 60 seconds as failsafe
+    if (processing) {
+      backgroundTimeoutRef.current = setTimeout(() => {
+        console.log('[CHAT] Background processing timeout - auto-clearing');
+        setBackgroundProcessingInternal(false);
+      }, 60000);
+    }
+  }, []);
 
   // Wrap setMessages to always deduplicate
   const setMessages: React.Dispatch<React.SetStateAction<Message[]>> = useCallback((action) => {
@@ -73,6 +97,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       clearMessages,
       historyLoaded,
       setHistoryLoaded,
+      backgroundProcessing,
+      setBackgroundProcessing,
     }}>
       {children}
     </ChatContext.Provider>

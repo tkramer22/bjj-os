@@ -36,7 +36,7 @@ export function MobileChat() {
     sender: (m.role === 'user' ? 'user' : 'assistant') as "user" | "assistant",
     message: m.content,
     timestamp: new Date(m.timestamp),
-    videos: []
+    videos: m.videos || []
   }));
   
   const [inputValue, setInputValue] = useState("");
@@ -327,12 +327,13 @@ What are you working on right now?`,
       }
       
       if (data.messages && data.messages.length > 0) {
-        // Load history directly into context
+        // Load history directly into context (include videos if present)
         const contextMessages = data.messages.map((msg: any, idx: number) => ({
           id: msg.id || String(idx),
           role: (msg.role === 'user' || msg.sender === 'user') ? 'user' : 'assistant' as const,
           content: msg.content || msg.message || '',
-          timestamp: new Date(msg.createdAt || msg.timestamp).toISOString()
+          timestamp: new Date(msg.createdAt || msg.timestamp).toISOString(),
+          videos: msg.videos || []
         }));
         
         // Add RETURNING USER welcome message at the end (rotating for variety)
@@ -448,7 +449,8 @@ What are you working on right now?`,
           id: msg.id || `older-${idx}-${Date.now()}`,
           role: (msg.role === 'user' || msg.sender === 'user') ? 'user' : 'assistant' as const,
           content: msg.content || msg.message || '',
-          timestamp: new Date(msg.createdAt || msg.timestamp).toISOString()
+          timestamp: new Date(msg.createdAt || msg.timestamp).toISOString(),
+          videos: msg.videos || []
         }));
         
         if (olderMessages.length > 0) {
@@ -497,6 +499,8 @@ What are you working on right now?`,
     setInputValue("");
     setIsTyping(true);
     startThinkingAnimation();
+    // Mark background processing active for this request
+    chatContext.setBackgroundProcessing(true);
 
     // Create assistant placeholder and add to context
     const assistantMessageId = (Date.now() + 1).toString();
@@ -569,6 +573,7 @@ What are you working on right now?`,
                 isDone = true;
                 stopThinkingAnimation();
                 setIsTyping(false);
+                chatContext.setBackgroundProcessing(false);
                 triggerHaptic('light');
                 break;
               }
@@ -584,6 +589,7 @@ What are you working on right now?`,
                     content: "I had trouble with that message. Could you try rephrasing?"
                   });
                   setIsTyping(false);
+                  chatContext.setBackgroundProcessing(false);
                   isDone = true;
                   break;
                 }
@@ -621,6 +627,7 @@ What are you working on right now?`,
       console.error('[MOBILE-CHAT] Error stack:', error.stack);
       stopThinkingAnimation();
       setIsTyping(false);
+      chatContext.setBackgroundProcessing(false);
       
       // Provide more specific error message based on error type
       let errorMessage = "Sorry, I'm having trouble right now. Please try again!";
@@ -638,6 +645,8 @@ What are you working on right now?`,
       });
     } finally {
       stopThinkingAnimation();
+      // Note: backgroundProcessing is cleared in stream completion handlers ([DONE] or error)
+      // This finally block only handles cleanup that should always run
       console.log('=== HANDLE SEND COMPLETE ===');
     }
   };

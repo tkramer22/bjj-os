@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ChatProvider } from "@/contexts/ChatContext";
+import { BackgroundProcessingNotification } from "@/components/BackgroundProcessingNotification";
 import { checkVersion } from "@/lib/version";
 import { useEffect, useState } from "react";
 import { restoreAuthFromNative, isNativeApp } from "@/lib/capacitorAuth";
@@ -237,6 +238,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ChatProvider>
+        <BackgroundProcessingNotification />
         <TooltipProvider>
           <ThemeProvider defaultTheme="dark">
             <Switch>
