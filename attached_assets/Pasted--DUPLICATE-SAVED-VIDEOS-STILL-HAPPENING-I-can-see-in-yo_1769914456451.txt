@@ -1,0 +1,108 @@
+# 🐛 **DUPLICATE SAVED VIDEOS STILL HAPPENING**
+
+I can see in your screenshot: “Rolling Back Take from Quarter Guard” appears **twice** with the same thumbnail and info.
+
+This means the database fix didn’t work or wasn’t applied.
+
+-----
+
+## **QUICK FIX - RUN IN REPLIT SHELL:**
+
+```bash
+# Connect to database and remove duplicates + add constraint
+psql $DATABASE_URL << 'EOF'
+-- Remove existing duplicates
+DELETE FROM saved_videos a
+USING saved_videos b
+WHERE a.id < b.id
+  AND a.user_id = b.user_id
+  AND a.video_id = b.video_id;
+
+-- Add unique constraint to prevent future duplicates
+ALTER TABLE saved_videos
+DROP CONSTRAINT IF EXISTS saved_videos_unique_user_video;
+
+ALTER TABLE saved_videos
+ADD CONSTRAINT saved_videos_unique_user_video 
+UNIQUE (user_id, video_id);
+EOF
+```
+
+-----
+
+## **VERIFY THE FIX WORKED:**
+
+```bash
+# Check if constraint exists
+psql $DATABASE_URL -c "\d saved_videos"
+```
+
+You should see: `saved_videos_unique_user_video UNIQUE (user_id, video_id)`
+
+-----
+
+## **THEN UPDATE THE SAVE VIDEO API:**
+
+The backend endpoint needs to handle the constraint properly. Send this to Replit Agent:
+
+```
+UPDATE SAVE VIDEO ENDPOINT TO PREVENT DUPLICATES
+
+The database now has a UNIQUE constraint on (user_id, video_id) in saved_videos table.
+
+Update the /api/videos/save endpoint to use ON CONFLICT:
+
+app.post('/api/videos/save', requireAuth, async (req, res) => {
+  try {
+    const { videoId } = req.body;
+    const userId = req.user.id;
+
+    // Use ON CONFLICT to handle duplicates gracefully
+    const result = await db.query(`
+      INSERT INTO saved_videos (user_id, video_id, created_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (user_id, video_id) DO NOTHING
+      RETURNING *
+    `, [userId, videoId]);
+
+    if (result.rows.length === 0) {
+      // Video was already saved
+      return res.json({
+        success: true,
+        alreadySaved: true,
+        message: 'Video already in your library'
+      });
+    }
+
+    // Successfully saved
+    res.json({
+      success: true,
+      alreadySaved: false,
+      message: 'Video saved successfully'
+    });
+
+  } catch (error) {
+    console.error('Save video error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save video'
+    });
+  }
+});
+
+After updating, restart the server.
+```
+
+-----
+
+## **TEST:**
+
+1. Run the SQL commands above
+1. Update the API endpoint
+1. Restart Replit
+1. Try saving a video multiple times
+1. Should only appear once in Saved Videos
+
+-----
+
+**Run that SQL in Replit Shell now, then send the API update prompt to Agent!** 🔧​​​​​​​​​​​​​​​​
