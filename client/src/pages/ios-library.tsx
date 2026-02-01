@@ -9,6 +9,7 @@ import { shareVideo } from "@/lib/share";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { decodeHTML } from "@/lib/htmlDecode";
+import { reviewManager } from "@/services/reviewManager";
 
 console.log('✅ iOS LIBRARY loaded');
 
@@ -106,6 +107,8 @@ export default function IOSLibraryPage() {
       queryClient.invalidateQueries({ queryKey: [`/api/ai/saved-videos/${user?.id}`] });
       toast({ title: "Saved!", description: "Video added to your library" });
       triggerHaptic('success');
+      // Track video save for review prompt
+      reviewManager.trackVideoSaved().catch(console.error);
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to save video", variant: "destructive" });

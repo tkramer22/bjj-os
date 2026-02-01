@@ -7,6 +7,7 @@ import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { getApiUrl } from "@/lib/capacitorAuth";
 import AdaptiveLayout from "@/components/adaptive-layout";
+import { reviewManager } from "@/services/reviewManager";
 
 interface Message {
   id: string;
@@ -172,6 +173,9 @@ export default function ChatPage() {
 
       setIsTyping(false);
       queryClient.invalidateQueries({ queryKey: ['/api/ai/chat/history', userId] });
+      
+      // Track successful AI chat exchange for review prompt
+      reviewManager.trackChatMessage().catch(console.error);
 
     } catch (error: any) {
       setIsTyping(false);
