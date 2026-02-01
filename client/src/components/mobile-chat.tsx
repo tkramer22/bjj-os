@@ -148,26 +148,35 @@ export function MobileChat() {
 
   const userId = currentUser?.id?.toString() || localStorage.getItem('mobileUserId') || '1';
 
-  const thinkingMessages = [
-    "Analyzing your question...",
-    "Searching training database...",
-    "Finding relevant techniques...",
-    "Formulating response...",
+  // Enhanced loading sequence with proper timings and icons
+  const loadingMessages = [
+    { text: "Searching 5,000+ analyzed techniques", icon: "🔍", duration: 1800 },
+    { text: "AI analyzing timestamps, tips, and common mistakes", icon: "🧠", duration: 1800 },
+    { text: "Evaluating instructor credibility across 33 data fields", icon: "📊", duration: 1600 },
+    { text: "Finding exact moments that answer your question", icon: "🎯", duration: 1600 },
+    { text: "Preparing your personalized response", icon: "✍️", duration: 1200 }
   ];
 
   const startThinkingAnimation = () => {
     stopThinkingAnimation();
-    let index = 0;
-    setThinkingStatus(thinkingMessages[0]);
-    thinkingStatusRef.current = setInterval(() => {
-      index = (index + 1) % thinkingMessages.length;
-      setThinkingStatus(thinkingMessages[index]);
-    }, 2000);
+    let messageIndex = 0;
+    setThinkingStatus(JSON.stringify(loadingMessages[0]));
+    
+    const scheduleNextMessage = () => {
+      const currentMessage = loadingMessages[messageIndex];
+      thinkingStatusRef.current = setTimeout(() => {
+        messageIndex = (messageIndex + 1) % loadingMessages.length;
+        setThinkingStatus(JSON.stringify(loadingMessages[messageIndex]));
+        scheduleNextMessage();
+      }, currentMessage.duration);
+    };
+    
+    scheduleNextMessage();
   };
 
   const stopThinkingAnimation = () => {
     if (thinkingStatusRef.current) {
-      clearInterval(thinkingStatusRef.current);
+      clearTimeout(thinkingStatusRef.current);
       thinkingStatusRef.current = null;
     }
     setThinkingStatus(null);
@@ -176,10 +185,20 @@ export function MobileChat() {
   useEffect(() => {
     return () => {
       if (thinkingStatusRef.current) {
-        clearInterval(thinkingStatusRef.current);
+        clearTimeout(thinkingStatusRef.current);
       }
     };
   }, []);
+  
+  // Parse the current loading message from JSON
+  const getCurrentLoadingMessage = () => {
+    if (!thinkingStatus) return null;
+    try {
+      return JSON.parse(thinkingStatus) as { text: string; icon: string; duration: number };
+    } catch {
+      return null;
+    }
+  };
 
   // EMERGENCY TIMEOUT: Never spin for more than 10 seconds
   // Handles edge cases where history loading gets stuck
@@ -774,20 +793,35 @@ What are you working on right now?`,
         })}
         
         {isTyping && (
-          <div className="analyzing-message" data-testid="analyzing-indicator">
-            <div className="typing-indicator">
-              <span className="dot" />
-              <span className="dot" />
-              <span className="dot" />
-            </div>
-            <span className="text">
-              {thinkingStatus || "Professor OS is analyzing..."}
-            </span>
+          <div className="thinking-dots-bubble" data-testid="analyzing-indicator">
+            <span className="thinking-dot" />
+            <span className="thinking-dot" />
+            <span className="thinking-dot" />
           </div>
         )}
         
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Enhanced Loading Indicator - Fixed Position */}
+      {isTyping && (
+        <div 
+          className="enhanced-loading-indicator"
+          aria-live="polite"
+          aria-label={getCurrentLoadingMessage()?.text || "Loading..."}
+          data-testid="enhanced-loading-indicator"
+        >
+          <span className="loading-icon">{getCurrentLoadingMessage()?.icon || "🔍"}</span>
+          <span className="loading-text" key={getCurrentLoadingMessage()?.text}>
+            {getCurrentLoadingMessage()?.text || "Analyzing..."}
+          </span>
+          <span className="loading-dots">
+            <span className="dot">•</span>
+            <span className="dot">•</span>
+            <span className="dot">•</span>
+          </span>
+        </div>
+      )}
 
       <div 
         ref={inputContainerRef}

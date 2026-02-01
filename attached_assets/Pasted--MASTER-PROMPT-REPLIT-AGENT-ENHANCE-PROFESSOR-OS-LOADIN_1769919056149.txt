@@ -1,0 +1,370 @@
+# 📋 **MASTER PROMPT - REPLIT AGENT**
+
+```
+ENHANCE PROFESSOR OS LOADING STATES - COMPLETE VISUAL REFINEMENT
+
+We have two loading indicators when Professor OS is processing:
+1. TOP: Purple bubble showing user's question with "thinking" state
+2. BOTTOM: Typing indicator showing processing status
+
+GOAL: Make both visually polished and professional with subtle animations that are fully visible, clearly readable, but not distracting.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: TOP BUBBLE - SIMPLIFY
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT: Shows "🧠 Professor OS is thinking..."
+
+CHANGE TO: Just show animated dots "..."
+
+WHY: Cleaner, more minimal, lets bottom indicator communicate status.
+
+IMPLEMENTATION:
+- Remove "Professor OS is thinking" text
+- Show only three animated dots: "..."
+- Dots should bounce/pulse gently
+- Keep purple bubble styling
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: BOTTOM INDICATOR - ENHANCED WITH ANIMATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+CURRENT: Shows static text like "Searching training database..."
+
+UPGRADE TO: Dynamic animated indicator with:
+1. Spinning/pulsing icon
+2. Shimmering gradient text
+3. Bouncing dots at the end
+4. Smooth transitions between states
+
+LOADING SEQUENCE (Use these exact messages):
+
+const loadingMessages = [
+  { text: "🔍 Searching 5,000+ analyzed techniques...", duration: 1800 },
+  { text: "🧠 AI analyzing timestamps, tips, and common mistakes...", duration: 1800 },
+  { text: "📊 Evaluating instructor credibility across 33 data fields...", duration: 1600 },
+  { text: "🎯 Finding exact moments that answer your question...", duration: 1600 },
+  { text: "✍️ Preparing your personalized response...", duration: 1200 }
+];
+
+═══════════════════════════════════════════════════════════════════════════════
+VISUAL SPECIFICATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Component Structure:
+<div className="loading-indicator">
+  <span className="loading-icon">[emoji]</span>
+  <span className="loading-text">[message text]</span>
+  <span className="loading-dots">
+    <span className="dot">•</span>
+    <span className="dot">•</span>
+    <span className="dot">•</span>
+  </span>
+</div>
+
+CSS ANIMATIONS:
+
+1. SPINNING ICON:
+.loading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: spin 2s linear infinite;
+  margin-right: 10px;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+2. SHIMMERING TEXT GRADIENT:
+.loading-text {
+  background: linear-gradient(90deg, #A78BFA, #E0E7FF, #A78BFA);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 3s ease infinite;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  line-height: 1.4;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes shimmer {
+  0%, 100% { background-position: 0% center; }
+  50% { background-position: 100% center; }
+}
+
+/* Mobile text size */
+@media (max-width: 768px) {
+  .loading-text {
+    font-size: 14px;
+  }
+}
+
+3. BOUNCING DOTS (staggered):
+.loading-dots {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.dot {
+  animation: bounce 1.4s infinite;
+  font-size: 16px;
+  color: #A78BFA;
+  line-height: 1;
+}
+
+.dot:nth-child(1) { animation-delay: 0s; }
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce {
+  0%, 60%, 100% { 
+    transform: translateY(0); 
+    opacity: 1; 
+  }
+  30% { 
+    transform: translateY(-8px); 
+    opacity: 0.7; 
+  }
+}
+
+4. SMOOTH STATE TRANSITIONS:
+When loading text changes, add subtle fade-in animation:
+
+.loading-text {
+  animation: shimmer 3s ease infinite, fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  0% { 
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+SIZING & POSITIONING SPECIFICATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL: Loading indicator must be fully visible, not cut off, clearly readable,
+but not dominating the screen.
+
+CONTAINER STYLING:
+
+.loading-indicator {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 600px;
+  min-height: 48px;
+  padding: 14px 20px;
+  background: rgba(124, 77, 255, 0.08);
+  border: 1px solid rgba(124, 77, 255, 0.15);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .loading-indicator {
+    bottom: 70px;
+    width: calc(100% - 24px);
+    padding: 12px 16px;
+  }
+}
+
+VISIBILITY RULES:
+
+1. Never overlap with input field
+2. Always fully visible above keyboard (mobile)
+3. Clear 12px-16px margin from screen edges
+4. Text never truncated unless extremely long
+5. Entire component visible without scrolling
+6. Z-index: 100 (above chat messages, below modals)
+
+RESPONSIVE BREAKPOINTS:
+
+Desktop (>768px):
+- Max width: 600px
+- Font size: 15px
+- Bottom: 80px from screen bottom
+- Padding: 14px vertical, 20px horizontal
+
+Mobile (<768px):
+- Max width: calc(100% - 24px)
+- Font size: 14px
+- Bottom: 70px from screen bottom
+- Padding: 12px vertical, 16px horizontal
+
+CONTRAST & READABILITY:
+
+- Background: rgba(124, 77, 255, 0.08) - subtle but visible
+- Border: rgba(124, 77, 255, 0.15) - defines edges clearly
+- Text color: #A78BFA - light purple, high contrast on dark
+- Shadow: 0 4px 12px rgba(0,0,0,0.15) - lifts from background
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+1. FIND the component that renders "Professor OS is thinking"
+   → Change to just "..." with gentle pulse animation
+
+2. FIND the component that renders bottom typing indicator
+   → Replace with new animated indicator component
+
+3. IMPLEMENT the 5-stage loading sequence
+   → Each message shows for specified duration
+   → Transitions smoothly between states with fadeIn animation
+
+4. ADD all CSS animations (spin, shimmer, bounce, fadeIn)
+
+5. POSITION the loading indicator:
+   - Fixed position at bottom
+   - Above chat input field
+   - Centered horizontally
+   - Full width with max-width constraint
+
+6. TEST the complete flow
+
+═══════════════════════════════════════════════════════════════════════════════
+TECHNICAL NOTES
+═══════════════════════════════════════════════════════════════════════════════
+
+PERFORMANCE:
+- Use CSS animations (not JavaScript) for 60fps
+- Animations should be subtle, not distracting
+- Text must remain readable while shimmering
+- Icon rotation should be smooth (2s duration)
+- Dots should bounce gently, not aggressively
+- Transitions between states: 300ms ease-out
+
+ACCESSIBILITY:
+- Add aria-live="polite" to loading indicator
+- Add aria-label describing current loading state
+- Ensure loading text is readable by screen readers
+- Maintain sufficient color contrast (WCAG AA minimum)
+
+MOBILE CONSIDERATIONS:
+- Test on actual iOS device for smoothness
+- Ensure touch targets aren't blocked by indicator
+- Position above keyboard when it appears
+- Verify animations don't drain battery
+
+BROWSER COMPATIBILITY:
+- Use -webkit- prefixes for background-clip
+- Test in Safari (iOS and macOS)
+- Test in Chrome
+- Ensure fallback if animations fail
+
+═══════════════════════════════════════════════════════════════════════════════
+EXPECTED USER EXPERIENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+COMPLETE FLOW:
+
+1. User sends message: "How do I escape side control?"
+
+2. TOP BUBBLE appears:
+   - Shows user's message in purple bubble
+   - Below message text, shows "..." with gentle pulse
+
+3. BOTTOM INDICATOR appears (fixed at bottom):
+   Stage 1 (1.8s): [🔍 spinning] Searching 5,000+ analyzed techniques... [• • • bouncing]
+   Stage 2 (1.8s): [🧠 spinning] AI analyzing timestamps, tips, and mistakes... [• • • bouncing]
+   Stage 3 (1.6s): [📊 spinning] Evaluating instructor credibility across 33 fields... [• • • bouncing]
+   Stage 4 (1.6s): [🎯 spinning] Finding exact moments that answer your question... [• • • bouncing]
+   Stage 5 (1.2s): [✍️ spinning] Preparing your personalized response... [• • • bouncing]
+
+4. RESPONSE ARRIVES:
+   - Loading indicator fades out smoothly
+   - Professor OS response appears with video recommendations
+   - Videos have thumbnails (not black boxes)
+   - All buttons visible (Analysis, Save, Share)
+
+VISUAL IMPACT:
+✅ Professional and polished
+✅ Subtle but noticeable animations
+✅ Shows system is actively working through stages
+✅ Builds anticipation during 7-8 second wait
+✅ Premium feel that justifies $19.99/month subscription
+✅ Fully visible on all devices, never cut off
+✅ Not distracting or overwhelming
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementation, verify:
+
+FUNCTIONALITY:
+□ Top bubble shows only "..." with gentle animation
+□ Bottom indicator shows all 5 messages in sequence
+□ Each message displays for correct duration
+□ Transitions between states are smooth (300ms fade)
+□ Loading states disappear when response arrives
+□ Works correctly on repeat queries
+
+ANIMATIONS:
+□ Icon spins smoothly (no jank)
+□ Text shimmer is subtle and readable
+□ Dots bounce in staggered pattern (not synchronized)
+□ No stuttering or frame drops
+□ Animations maintain 60fps
+
+SIZING & POSITIONING:
+□ Fully visible on iPhone SE (smallest screen)
+□ Fully visible on iPhone Pro Max
+□ Fully visible on iPad
+□ Fully visible on desktop
+□ Never overlaps input field
+□ Never cut off at edges
+□ Proper margins maintained
+□ Centered horizontally
+□ Text never truncated
+
+MOBILE SPECIFIC:
+□ Works on mobile Safari (iOS)
+□ Positioned correctly above keyboard
+□ Readable in bright sunlight
+□ Touch targets not blocked
+□ Animations smooth on mobile
+
+ACCESSIBILITY:
+□ Screen reader announces loading state
+□ Color contrast meets WCAG AA
+□ Keyboard navigation not blocked
+□ Works without animations (if user prefers reduced motion)
+
+Show me when complete so I can review and test!
+```
+
+-----
+
+**Copy and paste this entire prompt into Replit Agent.** 🚀
+
+This is the complete, production-ready specification that will create a polished loading experience.​​​​​​​​​​​​​​​​
