@@ -39,12 +39,21 @@ export default function IOSSavedPage() {
     queryKey: ["/api/auth/me"],
   });
 
-  const { data: savedData, isLoading } = useQuery<{ videos: SavedVideo[] }>({
+  const { data: savedData, isLoading, refetch } = useQuery<{ videos: SavedVideo[] }>({
     queryKey: [`/api/ai/saved-videos/${user?.id}`],
     enabled: !!user?.id,
+    staleTime: 0, // Always fetch fresh data
+    gcTime: 0, // Don't cache (prevent stale duplicates)
   });
 
   const savedVideos = savedData?.videos || [];
+  
+  // Force refresh on mount to ensure no cached duplicates
+  useEffect(() => {
+    if (user?.id) {
+      queryClient.invalidateQueries({ queryKey: [`/api/ai/saved-videos/${user?.id}`] });
+    }
+  }, [user?.id, queryClient]);
 
   // Unsave video mutation
   const unsaveVideoMutation = useMutation({
