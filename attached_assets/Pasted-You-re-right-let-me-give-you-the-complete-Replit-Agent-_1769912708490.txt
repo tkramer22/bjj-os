@@ -1,0 +1,107 @@
+You're right - let me give you the **complete Replit Agent prompt** to implement the Apple review system in your existing BJJ OS app.
+
+---
+
+## **Copy This Entire Prompt to Replit Agent:**
+
+```
+I need to add Apple's native review prompt system to my BJJ OS iOS app. This is a Capacitor-based app with React frontend.
+
+CONTEXT:
+- My app is BJJ OS (bjjos.app)
+- Users chat with "Professor OS" AI coach
+- Users can save videos to their library
+- App is built with React + Capacitor for iOS
+- Main chat component is in client/src/pages/chat-mobile.tsx
+- Backend API endpoints are in server/routes.ts
+
+REQUIREMENTS:
+Install the capacitor-rate-app plugin and implement a review manager that triggers Apple's native SKStoreReviewController at strategic moments.
+
+TRIGGER CONDITIONS:
+1. After user saves their 5th video
+2. After user has 10 meaningful chat exchanges with Professor OS
+3. After user has been active for 7 days
+4. Respect 180-day minimum between prompts
+
+IMPLEMENTATION STEPS:
+
+1. Install dependency:
+   npm install capacitor-rate-app
+   npx cap sync ios
+
+2. Create new file: client/src/services/reviewManager.ts
+   - Implement ReviewManager class with localStorage tracking
+   - Track: videosSaved, chatMessagesCount, daysActive, lastPromptDate
+   - Method: trackVideoSaved() - increments counter, triggers if hits 5
+   - Method: trackChatMessage() - increments counter, triggers if hits 10
+   - Method: trackDayActive() - increments counter
+   - Method: requestReview() - calls RateApp.requestReview() only if:
+     * iOS native platform
+     * Meets trigger criteria
+     * 180+ days since last prompt
+   - Export singleton: export const reviewManager = new ReviewManager()
+
+3. Integrate into existing chat component (client/src/pages/chat-mobile.tsx):
+   - Import reviewManager
+   - Find where AI response is received and displayed
+   - Add: await reviewManager.trackChatMessage()
+   - This should happen AFTER the AI responds successfully
+
+4. Integrate into video save functionality:
+   - Find where videos are saved (likely in video player or library component)
+   - After successful save API call
+   - Add: await reviewManager.trackVideoSaved()
+
+5. Add daily active tracking to main app initialization:
+   - In App.tsx or main component
+   - useEffect on mount
+   - Check if today's date !== last_active_date in localStorage
+   - If different day: await reviewManager.trackDayActive()
+   - Store today's date
+
+CRITICAL RULES:
+- Only works on iOS native (check Capacitor.getPlatform() === 'ios')
+- Use Apple's native SKStoreReviewController (via RateApp.requestReview())
+- Never show more than once per 180 days
+- Trigger at positive moments (after success, not errors)
+- No custom UI - Apple handles the dialog
+- Don't block user flow - call async without await in UI
+
+FILES TO CREATE:
+- client/src/services/reviewManager.ts (new file)
+
+FILES TO MODIFY:
+- client/src/pages/chat-mobile.tsx (add trackChatMessage call)
+- client/src/App.tsx or equivalent (add daily active tracking)
+- Any component that handles video saves (add trackVideoSaved call)
+
+TESTING NOTE:
+This only works on real iOS devices, not simulators. Console.log when triggers happen for debugging.
+
+Please implement this complete review system following Apple's App Store guidelines.
+```
+
+---
+
+## **After Replit Agent Implements It:**
+
+Once Replit Agent creates the code, you'll need to:
+
+1. **Build and sync to iOS:**
+```bash
+npm run build
+npx cap sync ios
+npx cap open ios
+```
+
+2. **Test on real iPhone:**
+   - Save 5 videos (should trigger review prompt)
+   - Chat 10 times with Professor OS (should trigger)
+   - Use app on 7 different days (should trigger)
+
+3. **Verify in Xcode console:**
+   - Look for "Review prompt shown successfully" logs
+   - Make sure no errors
+
+This prompt gives Replit Agent everything it needs to implement the review system properly in your existing codebase without breaking anything.
