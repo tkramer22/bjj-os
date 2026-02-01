@@ -18,6 +18,9 @@ interface ChatContextType {
   setHistoryLoaded: (loaded: boolean) => void;
   backgroundProcessing: boolean;
   setBackgroundProcessing: (processing: boolean) => void;
+  // Typing/analyzing state - persists across navigation
+  isTyping: boolean;
+  setIsTyping: (typing: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -38,7 +41,27 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessagesInternal] = useState<Message[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [backgroundProcessing, setBackgroundProcessingInternal] = useState(false);
+  const [isTyping, setIsTypingInternal] = useState(false);
   const backgroundTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Wrap setIsTyping to auto-clear after timeout (failsafe)
+  const setIsTyping = useCallback((typing: boolean) => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    
+    setIsTypingInternal(typing);
+    
+    // Auto-clear after 90 seconds as failsafe
+    if (typing) {
+      typingTimeoutRef.current = setTimeout(() => {
+        console.log('[CHAT] Typing timeout - auto-clearing');
+        setIsTypingInternal(false);
+      }, 90000);
+    }
+  }, []);
 
   // Wrap setBackgroundProcessing to auto-clear after timeout (failsafe)
   const setBackgroundProcessing = useCallback((processing: boolean) => {
@@ -99,6 +122,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setHistoryLoaded,
       backgroundProcessing,
       setBackgroundProcessing,
+      isTyping,
+      setIsTyping,
     }}>
       {children}
     </ChatContext.Provider>

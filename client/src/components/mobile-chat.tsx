@@ -40,7 +40,8 @@ export function MobileChat() {
   }));
   
   const [inputValue, setInputValue] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  // Use context isTyping for navigation persistence
+  const { isTyping, setIsTyping } = chatContext;
   // Initialize isLoading based on whether history is already loaded (prevents spinner on tab return)
   const [isLoading, setIsLoading] = useState(() => !chatContext.historyLoaded);
   // Use sessionStorage to persist loadedUserId across tab switches (prevents re-loading welcome message)
