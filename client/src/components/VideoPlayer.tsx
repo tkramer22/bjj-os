@@ -1,8 +1,7 @@
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
-import { Browser } from "@capacitor/browser";
 
 interface VideoPlayerProps {
   videoId: string;
@@ -34,10 +33,6 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const startSeconds = parseTimeToSeconds(startTime);
   const isNative = Capacitor.isNativePlatform();
-  const [iframeError, setIframeError] = useState(false);
-  
-  // Validate YouTube ID (must be 11 alphanumeric chars)
-  const isValidYoutubeId = videoId && videoId.length === 11 && /^[a-zA-Z0-9_-]+$/.test(videoId);
   
   // On iOS/native, use the proxy page to handle referrer headers properly
   // On web, use direct YouTube embed
@@ -46,18 +41,6 @@ export function VideoPlayer({
   const embedUrl = isNative
     ? `/youtube-proxy.html?v=${videoId}${startSeconds > 0 ? `&start=${startSeconds}` : ''}`
     : `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&autoplay=1&playsinline=1${startParam}`;
-  
-  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}${startSeconds > 0 ? `&t=${startSeconds}s` : ''}`;
-  
-  const openInBrowser = async () => {
-    try {
-      await Browser.open({ url: youtubeUrl });
-      onClose();
-    } catch (error) {
-      console.error('Failed to open browser:', error);
-      window.open(youtubeUrl, '_blank');
-    }
-  };
   
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -79,7 +62,6 @@ export function VideoPlayer({
   const handleIframeError = () => {
     // Auto-close modal when embedding fails - don't show "Open in YouTube"
     console.log(`[VIDEO] Embedding failed for ${videoId} - closing modal`);
-    setIframeError(true);
     onClose(); // Close immediately - user never sees error state
   };
 
