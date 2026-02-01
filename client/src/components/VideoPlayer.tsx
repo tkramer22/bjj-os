@@ -1,4 +1,4 @@
-import { X, ExternalLink } from "lucide-react";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
@@ -77,7 +77,10 @@ export function VideoPlayer({
   };
   
   const handleIframeError = () => {
+    // Auto-close modal when embedding fails - don't show "Open in YouTube"
+    console.log(`[VIDEO] Embedding failed for ${videoId} - closing modal`);
     setIframeError(true);
+    onClose(); // Close immediately - user never sees error state
   };
 
   return (
@@ -94,17 +97,6 @@ export function VideoPlayer({
             <p className="text-muted-foreground text-sm truncate" data-testid="video-player-instructor">{instructor}</p>
           </div>
           <div className="flex items-center gap-1">
-            {isNative && (
-              <Button 
-                variant="ghost"
-                size="icon"
-                onClick={openInBrowser}
-                title="Open in YouTube"
-                data-testid="button-open-external"
-              >
-                <ExternalLink className="w-5 h-5" />
-              </Button>
-            )}
             <Button 
               variant="ghost"
               size="icon"
@@ -117,25 +109,15 @@ export function VideoPlayer({
         </div>
         
         <div className="relative bg-black" style={{ paddingBottom: '56.25%' }}>
-          {iframeError ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-4 text-center">
-              <p className="mb-4">Video playback unavailable in app.</p>
-              <Button onClick={openInBrowser} variant="outline">
-                <ExternalLink className="w-4 h-4 mr-2" />
-                Open in YouTube
-              </Button>
-            </div>
-          ) : (
-            <iframe
-              className="absolute top-0 left-0 w-full h-full"
-              src={embedUrl}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              referrerPolicy="strict-origin-when-cross-origin"
-              onError={handleIframeError}
-              data-testid="video-iframe"
-            />
-          )}
+          <iframe
+            className="absolute top-0 left-0 w-full h-full"
+            src={embedUrl}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            onError={handleIframeError}
+            data-testid="video-iframe"
+          />
         </div>
       </div>
     </div>
