@@ -9,6 +9,7 @@ import { BackgroundProcessingNotification } from "@/components/BackgroundProcess
 import { checkVersion } from "@/lib/version";
 import { useEffect, useState } from "react";
 import { restoreAuthFromNative, isNativeApp } from "@/lib/capacitorAuth";
+import { reviewManager } from "@/services/reviewManager";
 import "./analytics"; // Initialize analytics tracking
 import Landing from "@/pages/landing";
 import Pricing from "@/pages/pricing";
@@ -184,6 +185,9 @@ export default function App() {
         }
         
         setAuthRestored(true);
+        
+        // Track daily active usage for review prompt (only on native iOS)
+        reviewManager.trackDayActive().catch(console.error);
       }
     }
     initAuth();
