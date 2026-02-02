@@ -4,6 +4,7 @@ import { Send } from "lucide-react";
 import { MobileMessageBubble } from "./mobile-message-bubble";
 import { MobileTypingIndicator } from "./mobile-typing-indicator";
 import { MobileVoiceRecorder } from "./mobile-voice-recorder";
+import DynamicLoadingIndicator from "./DynamicLoadingIndicator";
 import { getChatHistory } from "@/services/api";
 import { formatDateDivider, shouldShowDateDivider } from "@/lib/timestamps";
 import { triggerHaptic } from "@/lib/haptics";
@@ -794,34 +795,17 @@ What are you working on right now?`,
         
         {isTyping && (
           <div className="thinking-dots-bubble" data-testid="analyzing-indicator">
-            <span className="thinking-dot" />
-            <span className="thinking-dot" />
-            <span className="thinking-dot" />
+            <span className="thinking-dot">.</span>
+            <span className="thinking-dot">.</span>
+            <span className="thinking-dot">.</span>
           </div>
         )}
         
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Enhanced Loading Indicator - Fixed Position */}
-      {isTyping && (
-        <div 
-          className="enhanced-loading-indicator"
-          aria-live="polite"
-          aria-label={getCurrentLoadingMessage()?.text || "Loading..."}
-          data-testid="enhanced-loading-indicator"
-        >
-          <span className="loading-icon">{getCurrentLoadingMessage()?.icon || "🔍"}</span>
-          <span className="loading-text" key={getCurrentLoadingMessage()?.text}>
-            {getCurrentLoadingMessage()?.text || "Analyzing..."}
-          </span>
-          <span className="loading-dots">
-            <span className="dot">•</span>
-            <span className="dot">•</span>
-            <span className="dot">•</span>
-          </span>
-        </div>
-      )}
+      {/* Dynamic Loading Indicator - Fixed Position */}
+      {isTyping && <DynamicLoadingIndicator />}
 
       <div 
         ref={inputContainerRef}

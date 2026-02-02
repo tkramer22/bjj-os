@@ -1,0 +1,91 @@
+.dynamic-loading-container {
+  position: fixed;
+  bottom: calc(85px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100vw - 32px);
+  max-width: 600px;
+  min-height: 56px;
+  padding: 16px 24px;
+  background: rgba(124, 77, 255, 0.1);
+  border: 1px solid rgba(124, 77, 255, 0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.loading-emoji {
+  font-size: 20px;
+  flex-shrink: 0;
+  animation: spin 2s linear infinite;
+}
+
+.loading-message {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background: linear-gradient(90deg, #A78BFA, #E0E7FF, #A78BFA);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 3s ease infinite;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.loading-dots-wrapper {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.loading-dot {
+  font-size: 18px;
+  color: #A78BFA;
+  animation: bounce 1.4s infinite ease-in-out;
+}
+
+.loading-dot:nth-child(1) { animation-delay: 0s; }
+.loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0%, 100% { background-position: 0% center; }
+  50% { background-position: 100% center; }
+}
+
+@keyframes bounce {
+  0%, 60%, 100% { 
+    transform: translateY(0); 
+    opacity: 1; 
+  }
+  30% { 
+    transform: translateY(-10px); 
+    opacity: 0.6; 
+  }
+}
+
+@media (max-width: 768px) {
+  .dynamic-loading-container {
+    bottom: calc(75px + env(safe-area-inset-bottom, 0px));
+    width: calc(100vw - 24px);
+    padding: 14px 20px;
+  }
+  
+  .loading-message {
+    font-size: 14px;
+  }
+}
