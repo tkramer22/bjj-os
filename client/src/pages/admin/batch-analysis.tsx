@@ -86,23 +86,41 @@ export default function BatchAnalysis() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [elapsedTime, setElapsedTime] = useState('');
+  const [justStarted, setJustStarted] = useState(false);
 
   const { data: progress, isLoading } = useQuery<BatchProgress>({
     queryKey: ['/api/admin/batch-analysis-progress'],
     queryFn: () => adminApiRequest('/api/admin/batch-analysis-progress'),
     refetchInterval: (query) => {
       const data = query.state.data as BatchProgress | undefined;
-      return data?.isRunning ? 3000 : 15000;
+      if (justStarted || data?.isRunning) return 2000;
+      return 15000;
     },
   });
+
+  useEffect(() => {
+    if (justStarted && progress?.isRunning) {
+      setJustStarted(false);
+    }
+  }, [justStarted, progress?.isRunning]);
+
+  useEffect(() => {
+    if (!justStarted) return;
+    const timeout = setTimeout(() => {
+      setJustStarted(false);
+    }, 15000);
+    return () => clearTimeout(timeout);
+  }, [justStarted]);
 
   const startMutation = useMutation({
     mutationFn: () => adminApiRequest('/api/admin/analyze-all-videos', 'POST'),
     onSuccess: () => {
-      toast({ title: "Analysis Started", description: "Processing all missing videos in the background." });
+      setJustStarted(true);
+      toast({ title: "Analysis Started", description: "Processing all missing videos in the background. Progress will update automatically." });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/batch-analysis-progress'] });
     },
     onError: (error: Error) => {
+      setJustStarted(false);
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
@@ -139,6 +157,7 @@ export default function BatchAnalysis() {
   const costHigh = (missingAnalysis * 0.05).toFixed(2);
   const estTimeMins = Math.ceil(missingAnalysis * 0.5 / 60);
   const estTimeHours = Math.ceil(missingAnalysis / 60);
+  const isRunningOrStarting = progress?.isRunning || justStarted || startMutation.isPending;
 
   return (
     <div style={{
@@ -252,7 +271,7 @@ export default function BatchAnalysis() {
               </Card>
             )}
 
-            {progress?.isRunning && (
+            {isRunningOrStarting && (
               <Card style={{ marginBottom: '1.5rem', borderColor: '#8B5CF650' }}>
                 <CardContent style={{ padding: '1.25rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -263,7 +282,7 @@ export default function BatchAnalysis() {
                       animation: 'pulse 2s ease-in-out infinite',
                     }} />
                     <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#22c55e' }} data-testid="text-running-status">
-                      Analysis Running
+                      {justStarted && !progress?.isRunning ? 'Starting Analysis...' : 'Analysis Running'}
                     </span>
                     {elapsedTime && (
                       <Badge variant="outline" style={{ marginLeft: 'auto' }}>
@@ -273,37 +292,53 @@ export default function BatchAnalysis() {
                     )}
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#22c55e' }}>{progress.totalSucceeded}</div>
-                      <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Succeeded</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#ef4444' }}>{progress.totalFailed}</div>
-                      <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Failed</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#a78bfa' }}>{progress.totalTechniques}</div>
-                      <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Techniques</div>
-                    </div>
-                  </div>
+                  {progress?.isRunning ? (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#22c55e' }}>{progress.totalSucceeded}</div>
+                          <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Succeeded</div>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#ef4444' }}>{progress.totalFailed}</div>
+                          <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Failed</div>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#a78bfa' }}>{progress.totalTechniques}</div>
+                          <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Techniques</div>
+                        </div>
+                      </div>
 
-                  <div style={{
-                    background: '#1e1b2e',
-                    borderRadius: 6,
-                    padding: '0.6rem 0.75rem',
-                    fontSize: '0.75rem',
-                    color: '#a78bfa',
-                    fontFamily: 'monospace',
-                  }} data-testid="text-last-message">
-                    <Activity style={{ width: 12, height: 12, display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
-                    Batch {progress.currentBatch} | {progress.lastMessage}
-                  </div>
+                      <div style={{
+                        background: '#1e1b2e',
+                        borderRadius: 6,
+                        padding: '0.6rem 0.75rem',
+                        fontSize: '0.75rem',
+                        color: '#a78bfa',
+                        fontFamily: 'monospace',
+                      }} data-testid="text-last-message">
+                        <Activity style={{ width: 12, height: 12, display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
+                        Batch {progress.currentBatch} | {progress.lastMessage}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{
+                      background: '#1e1b2e',
+                      borderRadius: 6,
+                      padding: '0.75rem',
+                      fontSize: '0.8rem',
+                      color: '#94a3b8',
+                      textAlign: 'center',
+                    }}>
+                      <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite', display: 'inline', verticalAlign: 'middle', marginRight: 6, color: '#8B5CF6' }} />
+                      Initializing batch processing... Progress will appear shortly.
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
 
-            {progress?.completedAt && !progress.isRunning && (
+            {progress?.completedAt && !isRunningOrStarting && (
               <Card style={{ marginBottom: '1.5rem', borderColor: '#22c55e40' }}>
                 <CardContent style={{ padding: '1.25rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
@@ -358,27 +393,30 @@ export default function BatchAnalysis() {
             <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
               <Button
                 onClick={() => {
+                  if (isRunningOrStarting) return;
                   if (confirm(`This will analyze ALL ${missingAnalysis} missing videos.\n\nEstimated cost: $${costLow} - $${costHigh}\nEstimated time: ${estTimeMins}-${estTimeHours} minutes\n\nContinue?`)) {
                     startMutation.mutate();
                   }
                 }}
-                disabled={progress?.isRunning || startMutation.isPending || missingAnalysis === 0}
+                disabled={isRunningOrStarting || missingAnalysis === 0}
                 style={{
                   flex: 1,
-                  background: progress?.isRunning ? '#374151' : '#8B5CF6',
+                  background: isRunningOrStarting ? '#374151' : missingAnalysis === 0 ? '#1e293b' : '#8B5CF6',
                   border: 'none',
+                  cursor: isRunningOrStarting ? 'not-allowed' : undefined,
+                  opacity: isRunningOrStarting ? 0.8 : 1,
                 }}
                 data-testid="button-start-analysis"
               >
                 {progress?.isRunning ? (
                   <>
                     <Loader2 style={{ width: 16, height: 16, marginRight: 6, animation: 'spin 1s linear infinite' }} />
-                    Analysis Running...
+                    Analysis Running... (check progress above)
                   </>
-                ) : startMutation.isPending ? (
+                ) : justStarted || startMutation.isPending ? (
                   <>
                     <Loader2 style={{ width: 16, height: 16, marginRight: 6, animation: 'spin 1s linear infinite' }} />
-                    Starting...
+                    Starting Analysis...
                   </>
                 ) : missingAnalysis === 0 ? (
                   <>
@@ -396,7 +434,7 @@ export default function BatchAnalysis() {
               <Button
                 variant="outline"
                 onClick={() => resetMutation.mutate()}
-                disabled={resetMutation.isPending || progress?.isRunning}
+                disabled={resetMutation.isPending || isRunningOrStarting}
                 data-testid="button-reset-failed"
               >
                 {resetMutation.isPending ? (
