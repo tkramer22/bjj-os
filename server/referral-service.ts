@@ -548,8 +548,9 @@ export async function createReferralCodeWithCoupon(params: {
   discountValue: number;
   assignedToUserId?: string;
   createdByAdmin?: string;
-}): Promise<{ success: boolean; referralCode?: any; message?: string }> {
-  const { code, codeType, influencerName, commissionRate, discountType, discountValue, assignedToUserId, createdByAdmin } = params;
+  trialDays?: number;
+}): Promise<{ success: boolean; referralCode?: any; shareableLink?: string; message?: string }> {
+  const { code, codeType, influencerName, commissionRate, discountType, discountValue, assignedToUserId, createdByAdmin, trialDays = 14 } = params;
 
   // Check if code already exists
   const existing = await db.select()
@@ -577,6 +578,8 @@ export async function createReferralCodeWithCoupon(params: {
   }
 
   // Create the referral code
+  const shareableLink = `https://bjjos.app?ref=${code.toUpperCase()}`;
+  
   try {
     const newCode = await db.insert(referralCodes)
       .values({
@@ -589,13 +592,15 @@ export async function createReferralCodeWithCoupon(params: {
         stripeCouponId,
         assignedToUserId,
         createdByAdmin,
+        trialDays,
+        shareableLink,
         isActive: true,
       })
       .returning();
 
-    console.log(`✅ Created referral code ${code.toUpperCase()} with ${discountType} discount`);
+    console.log(`✅ Created referral code ${code.toUpperCase()} with ${discountType} discount, ${trialDays}-day trial, link: ${shareableLink}`);
 
-    return { success: true, referralCode: newCode[0] };
+    return { success: true, referralCode: newCode[0], shareableLink };
   } catch (error: any) {
     // Cleanup coupon if code creation failed
     if (stripeCouponId) {

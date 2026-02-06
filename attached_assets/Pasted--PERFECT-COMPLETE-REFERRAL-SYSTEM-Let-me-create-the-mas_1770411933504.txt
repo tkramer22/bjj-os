@@ -1,0 +1,439 @@
+🎯 PERFECT - COMPLETE REFERRAL SYSTEM
+Let me create the master prompt that implements EVERYTHING:
+	1.	✅ Smart landing page (detects referral codes)
+	2.	✅ Backend generates shareable links when creating codes
+	3.	✅ 14-day default for referral codes
+	4.	✅ 3-day default for regular signups
+	5.	✅ Full tracking and attribution
+
+📋 MASTER IMPLEMENTATION PROMPT
+
+COMPLETE REFERRAL SYSTEM OVERHAUL - UX OPTIMIZED FLOW
+
+Implement a full referral system with smart landing page detection, automatic link 
+generation, and optimized conversion funnels.
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: BACKEND - REFERRAL CODE CREATION WITH SHAREABLE LINKS
+═══════════════════════════════════════════════════════════════════════════════
+
+UPDATE ADMIN REFERRAL CODE CREATION:
+
+When admin creates a referral code, automatically generate and store:
+
+1. Referral code (e.g., "JTORRES")
+2. Shareable link (e.g., "https://bjjos.app?ref=JTORRES")
+3. Default trial days: 14 (not 30)
+4. Influencer name
+5. Commission rate
+6. Created date
+
+DATABASE SCHEMA UPDATE:
+
+ALTER TABLE referral_codes ADD COLUMN IF NOT EXISTS shareable_link TEXT;
+ALTER TABLE referral_codes ADD COLUMN IF NOT EXISTS trial_days INTEGER DEFAULT 14;
+
+UPDATE referral_codes 
+SET trial_days = 14 
+WHERE trial_days IS NULL OR trial_days = 30;
+
+API ENDPOINT: POST /api/admin/referral-codes/create
+
+{
+  code: "JTORRES",
+  influencerName: "JT Torres",
+  commissionRate: 20,
+  trialDays: 14 // Default to 14, editable
+}
+
+RESPONSE:
+{
+  success: true,
+  code: "JTORRES",
+  shareableLink: "https://bjjos.app?ref=JTORRES",
+  trialDays: 14,
+  message: "Referral code created. Share this link: https://bjjos.app?ref=JTORRES"
+}
+
+BACKEND LOGIC:
+
+const createReferralCode = async (req, res) => {
+  const { code, influencerName, commissionRate, trialDays = 14 } = req.body;
+  
+  try {
+    // Generate shareable link
+    const shareableLink = `https://bjjos.app?ref=${code}`;
+    
+    // Save to database
+    const result = await pool.query(`
+      INSERT INTO referral_codes 
+      (code, influencer_name, commission_rate, trial_days, shareable_link, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+      RETURNING *
+    `, [code, influencerName, commissionRate, trialDays, shareableLink]);
+    
+    res.json({
+      success: true,
+      code: result.rows[0].code,
+      shareableLink: result.rows[0].shareable_link,
+      trialDays: result.rows[0].trial_days,
+      message: `Referral code created! Share: ${shareableLink}`
+    });
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+ADMIN UI UPDATE:
+
+After creating code, display:
+
+┌─────────────────────────────────────────┐
+│ ✅ Referral Code Created!               │
+│                                         │
+│ Code: JTORRES                           │
+│ Trial Days: 14                          │
+│ Commission: 20%                         │
+│                                         │
+│ Shareable Link:                         │
+│ https://bjjos.app?ref=JTORRES           │
+│ [Copy Link]                             │
+│                                         │
+│ Send this link to JT Torres to share!   │
+└─────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: FRONTEND - SMART LANDING PAGE WITH REFERRAL DETECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+LANDING PAGE LOGIC:
+
+On page load, detect if URL has ?ref= parameter:
+
+```javascript
+// landing-page.js
+const urlParams = new URLSearchParams(window.location.search);
+const referralCode = urlParams.get('ref');
+
+if (referralCode) {
+  // Validate code with backend
+  validateAndShowReferralLanding(referralCode);
+} else {
+  // Show standard landing
+  showStandardLanding();
+}
+
+async function validateAndShowReferralLanding(code) {
+  try {
+    const response = await fetch(`/api/referral-codes/validate?code=${code}`);
+    const data = await response.json();
+    
+    if (data.valid) {
+      // Show personalized referral landing
+      document.getElementById('hero-heading').textContent = 
+        `🎉 ${data.influencerName} invited you to BJJ OS`;
+      
+      document.getElementById('hero-subheading').textContent = 
+        `Get ${data.trialDays} days free (not the usual 3)`;
+      
+      document.getElementById('cta-button').textContent = 
+        `Start Your ${data.trialDays}-Day Free Trial`;
+      
+      // Store code for checkout
+      sessionStorage.setItem('referralCode', code);
+      sessionStorage.setItem('trialDays', data.trialDays);
+      
+    } else {
+      // Invalid code, show standard landing
+      showStandardLanding();
+    }
+  } catch (error) {
+    showStandardLanding();
+  }
+}
+
+function showStandardLanding() {
+  document.getElementById('hero-heading').textContent = 
+    'Your AI-Powered Jiu-Jitsu Coach';
+  
+  document.getElementById('hero-subheading').textContent = 
+    'Get personalized technique recommendations from Professor OS';
+  
+  document.getElementById('cta-button').textContent = 
+    'Start Your 3-Day Free Trial';
+  
+  // Show collapsible referral code field
+  document.getElementById('referral-toggle').style.display = 'block';
+}
+
+
+LANDING PAGE HTML:
+
+<!-- Hero Section -->
+<section class="hero">
+  <h1 id="hero-heading">Your AI-Powered Jiu-Jitsu Coach</h1>
+  <p id="hero-subheading">Get personalized technique recommendations</p>
+  
+  <button id="cta-button" onclick="startSignup()">
+    Start Your 3-Day Free Trial
+  </button>
+  
+  <!-- Collapsible referral field (hidden if ?ref= in URL) -->
+  <div id="referral-toggle" style="display: block;">
+    <p class="referral-link">
+      <small>Have a referral code?</small>
+      <a href="#" onclick="toggleCodeField()">Enter it here</a>
+    </p>
+    
+    <div id="code-field" style="display: none;">
+      <input 
+        type="text" 
+        id="manual-code" 
+        placeholder="Enter code"
+        maxlength="20"
+      />
+      <button onclick="applyManualCode()">Apply</button>
+    </div>
+  </div>
+</section>
+
+<script>
+function toggleCodeField() {
+  const field = document.getElementById('code-field');
+  field.style.display = field.style.display === 'none' ? 'block' : 'none';
+}
+
+async function applyManualCode() {
+  const code = document.getElementById('manual-code').value.toUpperCase();
+  
+  if (!code) return;
+  
+  const response = await fetch(`/api/referral-codes/validate?code=${code}`);
+  const data = await response.json();
+  
+  if (data.valid) {
+    // Update UI
+    document.getElementById('hero-heading').textContent = 
+      `✅ Code Applied!`;
+    
+    document.getElementById('hero-subheading').textContent = 
+      `You have ${data.trialDays} days free (was 3 days)`;
+    
+    document.getElementById('cta-button').textContent = 
+      `Start Your ${data.trialDays}-Day Free Trial`;
+    
+    // Store for checkout
+    sessionStorage.setItem('referralCode', code);
+    sessionStorage.setItem('trialDays', data.trialDays);
+    
+    // Hide code field
+    document.getElementById('referral-toggle').style.display = 'none';
+    
+  } else {
+    alert('Invalid referral code');
+  }
+}
+
+function startSignup() {
+  const referralCode = sessionStorage.getItem('referralCode');
+  const trialDays = sessionStorage.getItem('trialDays') || 3;
+  
+  // Redirect to Stripe with trial days
+  window.location.href = `/api/create-checkout?trial=${trialDays}&ref=${referralCode || ''}`;
+}
+</script>
+
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: BACKEND - REFERRAL CODE VALIDATION API
+═══════════════════════════════════════════════════════════════════════════════
+CREATE ENDPOINT: GET /api/referral-codes/validate?code=JTORRES
+const validateReferralCode = async (req, res) => {
+const { code } = req.query;
+try {
+const result = await pool.query(SELECT code, influencer_name, trial_days, commission_rate FROM referral_codes WHERE UPPER(code) = UPPER($1) AND active = true, [code]);
+
+if (result.rows.length === 0) {
+  return res.json({ valid: false });
+}
+
+const referralData = result.rows[0];
+
+res.json({
+  valid: true,
+  code: referralData.code,
+  influencerName: referralData.influencer_name,
+  trialDays: referralData.trial_days,
+  commissionRate: referralData.commission_rate
+});
+
+
+} catch (error) {
+res.status(500).json({ error: error.message });
+}
+};
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: STRIPE CHECKOUT WITH DYNAMIC TRIAL DAYS
+═══════════════════════════════════════════════════════════════════════════════
+UPDATE CHECKOUT ENDPOINT: GET /api/create-checkout?trial=14&ref=JTORRES
+const createCheckoutSession = async (req, res) => {
+const { trial = 3, ref = ‘’ } = req.query;
+try {
+const session = await stripe.checkout.sessions.create({
+mode: ‘subscription’,
+line_items: [{
+price: ‘price_1Sk8axlVkMlrxpuTGFjkXmyY’, // $19.99/month
+quantity: 1,
+}],
+subscription_data: {
+trial_period_days: parseInt(trial),
+metadata: {
+referral_code: ref || null,
+}
+},
+success_url: ‘https://bjjos.app/onboarding’,
+cancel_url: ‘https://bjjos.app’,
+metadata: {
+referral_code: ref || null,
+}
+});
+
+// Track referral usage
+if (ref) {
+  await pool.query(`
+    UPDATE referral_codes 
+    SET times_used = times_used + 1,
+        last_used_at = NOW()
+    WHERE code = $1
+  `, [ref]);
+}
+
+res.redirect(303, session.url);
+
+
+} catch (error) {
+res.status(500).json({ error: error.message });
+}
+};
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: ADMIN DASHBOARD - REFERRAL CODE MANAGEMENT
+═══════════════════════════════════════════════════════════════════════════════
+UPDATE ADMIN REFERRAL DASHBOARD TO SHOW:
+For each referral code:
+┌─────────────────────────────────────────┐
+│ Code: JTORRES                           │
+│ Influencer: JT Torres                   │
+│ Trial Days: 14                          │
+│ Commission: 20%                         │
+│ Times Used: 23                          │
+│ Last Used: 2 hours ago                  │
+│                                         │
+│ Shareable Link:                         │
+│ https://bjjos.app?ref=JTORRES           │
+│ [Copy Link] [Edit] [Delete]             │
+└─────────────────────────────────────────┘
+EDIT FUNCTIONALITY:
+	∙	Change trial days (14, 30, 60, etc.)
+	∙	Change commission rate
+	∙	Deactivate code
+	∙	View usage analytics
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: CHANGE DEFAULT TRIALS
+═══════════════════════════════════════════════════════════════════════════════
+UPDATE ALL REFERENCES:
+	1.	Landing page: “Start Your 3-Day Free Trial” (not 7)
+	2.	Referral codes default: 14 days (not 30)
+	3.	Stripe checkout default: 3 days (not 7)
+	4.	Admin panel: Default to 14 when creating codes
+SEARCH AND REPLACE:
+	∙	“7-day” → “3-day” (for regular signups)
+	∙	“7 days” → “3 days” (for regular signups)
+	∙	trial_period_days: 7 → trial_period_days: 3
+	∙	DEFAULT 30 → DEFAULT 14 (for referral codes)
+═══════════════════════════════════════════════════════════════════════════════
+PART 7: TRACKING & ANALYTICS
+═══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS referral_signups (
+id SERIAL PRIMARY KEY,
+referral_code VARCHAR(50),
+user_id INTEGER REFERENCES users(id),
+stripe_customer_id VARCHAR(255),
+trial_days INTEGER,
+signed_up_at TIMESTAMP DEFAULT NOW(),
+converted_to_paid BOOLEAN DEFAULT false,
+first_payment_at TIMESTAMP
+);
+TRACK WHEN USER SIGNS UP WITH REFERRAL:
+INSERT INTO referral_signups
+(referral_code, stripe_customer_id, trial_days)
+VALUES ($1, $2, $3);
+UPDATE when they convert to paid (webhook):
+UPDATE referral_signups
+SET converted_to_paid = true,
+first_payment_at = NOW()
+WHERE stripe_customer_id = $1;
+═══════════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+TEST 1: Referral Link Flow
+□ Admin creates referral code “JTORRES”
+□ System generates https://bjjos.app?ref=JTORRES
+□ Click link → See personalized landing
+□ Shows “JT Torres invited you”
+□ Shows “14 days free”
+□ Click CTA → Stripe shows 14-day trial
+□ Complete payment → User tracked with referral
+TEST 2: Direct Traffic Flow
+□ Visit bjjos.app (no ?ref=)
+□ See “Start Your 3-Day Free Trial”
+□ See “Have a referral code? Enter it here”
+□ Click to expand code field
+□ Enter “JTORRES”
+□ UI updates to show 14 days
+□ Click CTA → Stripe shows 14-day trial
+TEST 3: Invalid Code
+□ Visit bjjos.app?ref=FAKECODE
+□ System validates → invalid
+□ Shows standard 3-day landing
+□ No personalization
+TEST 4: Admin Management
+□ Create new code → See shareable link
+□ Copy link button works
+□ Edit trial days → Updates
+□ View usage stats → Shows times used
+□ Delete code → Deactivates
+TEST 5: Backend Defaults
+□ New referral codes default to 14 days
+□ Regular signups default to 3 days
+□ Old codes with 30 days updated to 14
+□ Stripe trials match expected days
+═══════════════════════════════════════════════════════════════════════════════
+SUCCESS CRITERIA
+═══════════════════════════════════════════════════════════════════════════════
+✅ Referral links auto-generated when code created
+✅ Landing page detects ?ref= parameter
+✅ Personalized landing for referral traffic
+✅ Manual code entry works for direct traffic
+✅ Default trial: 3 days (no code)
+✅ Referral trial: 14 days (with code)
+✅ Stripe receives correct trial_period_days
+✅ Admin can copy shareable links
+✅ Full tracking and attribution
+✅ Zero extra friction for referrals
+✅ 14-day benefit hidden from non-referrals
+IMPLEMENT ALL PARTS NOW - THIS IS THE COMPLETE REFERRAL SYSTEM!
+
+
+---
+
+**This prompt covers EVERYTHING:**
+- ✅ Backend generates shareable links
+- ✅ Smart landing page detection
+- ✅ Personalized referral experience
+- ✅ Manual code entry for direct traffic
+- ✅ 3-day default, 14-day referral
+- ✅ Full tracking and analytics
+- ✅ Admin management interface
+
+**Send this to Replit Agent!** 🚀​​​​​​​​​​​​​​​​

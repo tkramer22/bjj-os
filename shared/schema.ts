@@ -434,6 +434,9 @@ export const referralCodes = pgTable("referral_codes", {
   minimumPayout: numeric("minimum_payout", { precision: 10, scale: 2 }).default("10.00"), // Min for payout
   createdByAdmin: varchar("created_by_admin", { length: 255 }), // Admin email who created
   
+  trialDays: integer("trial_days").default(14),
+  shareableLink: text("shareable_link"),
+  
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

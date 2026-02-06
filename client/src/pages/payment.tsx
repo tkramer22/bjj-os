@@ -33,6 +33,31 @@ export default function PaymentPage() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get('ref');
+    const storedCode = sessionStorage.getItem('referralCode');
+    const codeToApply = refCode || storedCode;
+    
+    if (codeToApply && !referralApplied) {
+      setReferralCode(codeToApply);
+      (async () => {
+        try {
+          const response = await apiRequest("POST", "/api/validate-referral", {
+            code: codeToApply
+          });
+          const data = await response.json();
+          if (data.valid) {
+            setReferralApplied({
+              code: data.code,
+              discountDescription: data.discountDescription || "Valid referral code"
+            });
+          }
+        } catch (error) {
+          // Silent fail
+        }
+      })();
+    }
   }, []);
 
   // Redirect to chat if user is already subscribed or lifetime

@@ -30,7 +30,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, ToggleLeft, ToggleRight, Trash2, Download, Users, DollarSign, TrendingUp, Gift, RefreshCw } from "lucide-react";
+import { Plus, ToggleLeft, ToggleRight, Trash2, Download, Users, DollarSign, TrendingUp, Gift, RefreshCw, Copy, Link } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { adminApiRequest } from "@/lib/adminApi";
@@ -53,6 +53,8 @@ interface ReferralCode {
   activeSubscribers?: number;
   totalRevenueGenerated?: string;
   commissionOwed?: string;
+  trialDays?: number;
+  shareableLink?: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -107,6 +109,7 @@ export default function AdminReferrals() {
   const [codeType, setCodeType] = useState<"influencer" | "user">("influencer");
   const [discountType, setDiscountType] = useState<DiscountType>("free_month");
   const [discountValue, setDiscountValue] = useState("1");
+  const [trialDays, setTrialDays] = useState("14");
 
   // Queries
   const { data: codesData, isLoading: codesLoading, refetch: refetchCodes } = useQuery({
@@ -236,6 +239,7 @@ export default function AdminReferrals() {
       commissionRate,
       discountType,
       discountValue: finalDiscountValue,
+      trialDays: parseInt(trialDays) || 14,
     });
   };
 
@@ -376,6 +380,23 @@ export default function AdminReferrals() {
                   </div>
                 )}
 
+                <div className="space-y-2">
+                  <Label htmlFor="trialDays">Trial Period (days)</Label>
+                  <Input
+                    id="trialDays"
+                    type="number"
+                    min="1"
+                    max="90"
+                    placeholder="14"
+                    value={trialDays}
+                    onChange={(e) => setTrialDays(e.target.value)}
+                    data-testid="input-trial-days"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Default is 14 days for referral signups (regular signups get 3 days)
+                  </p>
+                </div>
+
                 <Button
                   className="w-full"
                   onClick={handleCreateCode}
@@ -427,6 +448,7 @@ export default function AdminReferrals() {
                     <TableHead>Code</TableHead>
                     <TableHead>Owner</TableHead>
                     <TableHead>Type</TableHead>
+                    <TableHead>Trial</TableHead>
                     <TableHead>Commission</TableHead>
                     <TableHead>User Benefit</TableHead>
                     <TableHead>Uses</TableHead>
@@ -438,25 +460,45 @@ export default function AdminReferrals() {
                 <TableBody>
                   {codesLoading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                         Loading referral codes...
                       </TableCell>
                     </TableRow>
                   ) : codes.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                         No referral codes yet. Create your first one above!
                       </TableCell>
                     </TableRow>
                   ) : (
                     codes.map((ref: ReferralCode) => (
                       <TableRow key={ref.id} data-testid={`row-code-${ref.id}`}>
-                        <TableCell className="font-mono font-medium">{ref.code}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-medium">{ref.code}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => {
+                                const link = ref.shareableLink || `https://bjjos.app?ref=${ref.code}`;
+                                navigator.clipboard.writeText(link);
+                                toast({ title: "Link Copied", description: link });
+                              }}
+                              data-testid={`button-copy-link-${ref.id}`}
+                            >
+                              <Link className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </TableCell>
                         <TableCell>{ref.influencerName || '-'}</TableCell>
                         <TableCell>
                           <Badge variant={ref.codeType === 'influencer' ? 'default' : 'secondary'}>
                             {ref.codeType}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">{ref.trialDays || 14}d</span>
                         </TableCell>
                         <TableCell>
                           {ref.commissionPercent ? `${ref.commissionPercent}%` : '-'}
@@ -477,6 +519,17 @@ export default function AdminReferrals() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                navigator.clipboard.writeText(ref.code);
+                                toast({ title: "Code Copied", description: ref.code });
+                              }}
+                              data-testid={`button-copy-code-${ref.id}`}
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"

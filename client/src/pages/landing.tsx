@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { SiInstagram } from "react-icons/si";
-import { ChevronDown, X, Star, Smartphone, Award } from "lucide-react";
+import { ChevronDown, X, Star, Smartphone, Award, Check } from "lucide-react";
 
 const APP_STORE_URL = "https://apps.apple.com/us/app/bjj-os/id6757207452";
 
@@ -10,18 +10,97 @@ const openAppStore = () => {
   window.location.href = APP_STORE_URL;
 };
 
+interface ReferralInfo {
+  code: string;
+  influencerName: string;
+  trialDays: number;
+}
+
 export default function Landing() {
   const [, setLocation] = useLocation();
   const [showMobileBanner, setShowMobileBanner] = useState(false);
+  const [referralInfo, setReferralInfo] = useState<ReferralInfo | null>(null);
+  const [showCodeField, setShowCodeField] = useState(false);
+  const [manualCode, setManualCode] = useState("");
+  const [codeValidating, setCodeValidating] = useState(false);
+  const [codeError, setCodeError] = useState("");
+  const [codeApplied, setCodeApplied] = useState(false);
 
   useEffect(() => {
-    // Check if mobile device and show banner
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     const wasDismissed = localStorage.getItem('appBannerDismissed');
     if (isMobile && !wasDismissed) {
       setShowMobileBanner(true);
     }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get('ref');
+    if (refCode) {
+      validateReferralCode(refCode);
+    }
   }, []);
+
+  const validateReferralCode = async (code: string) => {
+    try {
+      const response = await fetch(`/api/referral-codes/validate?code=${encodeURIComponent(code)}`);
+      const data = await response.json();
+      if (data.valid) {
+        setReferralInfo({
+          code: data.code,
+          influencerName: data.influencerName,
+          trialDays: data.trialDays,
+        });
+        sessionStorage.setItem('referralCode', data.code);
+        sessionStorage.setItem('trialDays', String(data.trialDays));
+      }
+    } catch (error) {
+      // Silent fail - show standard landing
+    }
+  };
+
+  const handleApplyManualCode = async () => {
+    const code = manualCode.trim().toUpperCase();
+    if (!code) return;
+
+    setCodeValidating(true);
+    setCodeError("");
+
+    try {
+      const response = await fetch(`/api/referral-codes/validate?code=${encodeURIComponent(code)}`);
+      const data = await response.json();
+
+      if (data.valid) {
+        setReferralInfo({
+          code: data.code,
+          influencerName: data.influencerName,
+          trialDays: data.trialDays,
+        });
+        setCodeApplied(true);
+        setShowCodeField(false);
+        sessionStorage.setItem('referralCode', data.code);
+        sessionStorage.setItem('trialDays', String(data.trialDays));
+      } else {
+        setCodeError("Invalid referral code");
+      }
+    } catch (error) {
+      setCodeError("Failed to validate code");
+    } finally {
+      setCodeValidating(false);
+    }
+  };
+
+  const handleStartTrial = () => {
+    const storedCode = sessionStorage.getItem('referralCode');
+    if (storedCode) {
+      setLocation(`/pricing?ref=${storedCode}`);
+    } else {
+      setLocation('/pricing');
+    }
+  };
+
+  const defaultTrialDays = 3;
+  const trialDays = referralInfo?.trialDays || defaultTrialDays;
+  const isReferral = !!referralInfo;
 
   const dismissBanner = () => {
     setShowMobileBanner(false);
@@ -120,27 +199,39 @@ export default function Landing() {
       {/* Hero Section - Screen 1 */}
       <section className="landing-hero hero-section">
         <div className="landing-hero-content">
-          <h1 className="landing-hero-headline">
-            The smartest Jiu-Jitsu training partner ever built.
-            <br />
-            5,000+ instructionals studied & analyzed.
-            <br />
-            Perfect memory.
-          </h1>
-          
-          <p className="landing-hero-subhead">
-            You train. It remembers.
-            <br />
-            You ask. It knows.
-          </p>
+          {isReferral ? (
+            <>
+              <h1 className="landing-hero-headline" data-testid="text-hero-heading">
+                {codeApplied ? 'Code Applied!' : `${referralInfo.influencerName} invited you to BJJ OS`}
+              </h1>
+              <p className="landing-hero-subhead" data-testid="text-hero-subhead">
+                Get {trialDays} days free (not the usual {defaultTrialDays})
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="landing-hero-headline" data-testid="text-hero-heading">
+                The smartest Jiu-Jitsu training partner ever built.
+                <br />
+                5,000+ instructionals studied & analyzed.
+                <br />
+                Perfect memory.
+              </h1>
+              <p className="landing-hero-subhead" data-testid="text-hero-subhead">
+                You train. It remembers.
+                <br />
+                You ask. It knows.
+              </p>
+            </>
+          )}
           
           <div className="hero-ctas">
             <button 
               className="landing-cta-button cta-button"
-              onClick={() => setLocation('/pricing')}
+              onClick={handleStartTrial}
               data-testid="button-start-trial"
             >
-              Start 7-Day Free Trial
+              Start Your {trialDays}-Day Free Trial
             </button>
             
             <div 
@@ -157,6 +248,47 @@ export default function Landing() {
               />
             </div>
           </div>
+          
+          {/* Manual referral code entry - only shown for non-referral visitors */}
+          {!isReferral && (
+            <div className="referral-code-section" data-testid="section-referral-code">
+              {!showCodeField ? (
+                <p className="referral-toggle-text">
+                  <span 
+                    className="referral-toggle-link"
+                    onClick={() => setShowCodeField(true)}
+                    data-testid="link-enter-referral"
+                  >
+                    Have a referral code? Enter it here
+                  </span>
+                </p>
+              ) : (
+                <div className="referral-code-field" data-testid="div-referral-field">
+                  <input
+                    type="text"
+                    value={manualCode}
+                    onChange={(e) => { setManualCode(e.target.value.toUpperCase()); setCodeError(""); }}
+                    placeholder="Enter code"
+                    maxLength={20}
+                    className="referral-code-input"
+                    data-testid="input-referral-code"
+                    onKeyDown={(e) => e.key === 'Enter' && handleApplyManualCode()}
+                  />
+                  <button
+                    onClick={handleApplyManualCode}
+                    disabled={codeValidating || !manualCode.trim()}
+                    className="referral-apply-button"
+                    data-testid="button-apply-referral"
+                  >
+                    {codeValidating ? '...' : 'Apply'}
+                  </button>
+                  {codeError && (
+                    <p className="referral-error" data-testid="text-referral-error">{codeError}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           
           <p className="landing-price-note">
             $19.99/month · Cancel anytime
@@ -233,10 +365,10 @@ export default function Landing() {
           
           <button 
             className="landing-cta-button cta-button"
-            onClick={() => setLocation('/pricing')}
+            onClick={handleStartTrial}
             data-testid="button-start-trial-footer"
           >
-            Start 7-Day Free Trial
+            Start Your {trialDays}-Day Free Trial
           </button>
         </div>
       </section>
@@ -589,6 +721,95 @@ export default function Landing() {
         .landing-cta-button:active {
           background: linear-gradient(135deg, var(--blue-hover-2) 0%, var(--purple-hover-2) 100%);
           transform: translateY(1px);
+        }
+
+        .referral-code-section {
+          text-align: center;
+          margin-top: 16px;
+        }
+
+        .referral-toggle-text {
+          font-family: var(--font-sans);
+          font-size: var(--text-small);
+          color: var(--gray-medium);
+          margin: 0;
+        }
+
+        .referral-toggle-link {
+          color: var(--gray-light);
+          cursor: pointer;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+          transition: color 0.2s;
+        }
+
+        .referral-toggle-link:hover {
+          color: var(--white);
+        }
+
+        .referral-code-field {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .referral-code-input {
+          font-family: var(--font-mono);
+          font-size: 14px;
+          padding: 8px 12px;
+          border: 1px solid var(--gray-dim);
+          border-radius: 6px;
+          background: var(--black-elevated);
+          color: var(--white);
+          width: 160px;
+          outline: none;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          transition: border-color 0.2s;
+        }
+
+        .referral-code-input:focus {
+          border-color: var(--purple);
+        }
+
+        .referral-code-input::placeholder {
+          color: var(--gray-dim);
+          text-transform: none;
+          letter-spacing: normal;
+        }
+
+        .referral-apply-button {
+          font-family: var(--font-sans);
+          font-size: 14px;
+          font-weight: 500;
+          padding: 8px 16px;
+          border: 1px solid var(--purple);
+          border-radius: 6px;
+          background: transparent;
+          color: var(--purple);
+          cursor: pointer;
+          transition: background 0.2s, color 0.2s;
+        }
+
+        .referral-apply-button:hover:not(:disabled) {
+          background: var(--purple);
+          color: var(--white);
+        }
+
+        .referral-apply-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .referral-error {
+          font-family: var(--font-sans);
+          font-size: 12px;
+          color: #ef4444;
+          margin: 4px 0 0 0;
+          width: 100%;
+          text-align: center;
         }
 
         .landing-price-note {

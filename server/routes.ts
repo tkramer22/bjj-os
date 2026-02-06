@@ -1899,13 +1899,9 @@ export function registerRoutes(app: Express): Server {
         .where(eq(referralCodes.code, upperCode));
       
       if (refCode && refCode.isActive) {
-        // Track this referral attempt (store in session or cookie for later)
-        res.cookie('referralCode', upperCode, { maxAge: 30 * 24 * 60 * 60 * 1000 }); // 30 days
-        
-        // Redirect to homepage/signup
-        res.redirect('/');
+        res.cookie('referralCode', upperCode, { maxAge: 30 * 24 * 60 * 60 * 1000 });
+        res.redirect(`/?ref=${upperCode}`);
       } else {
-        // Invalid or inactive code, redirect anyway
         res.redirect('/');
       }
     } catch (error) {
@@ -1916,6 +1912,40 @@ export function registerRoutes(app: Express): Server {
 
   // NOTE: Referral tracking has been moved to server/referral-tracker.ts
   // and is called internally from SMS handler only - no public endpoint for security
+
+  // Public referral code validation for landing page (GET - no auth required)
+  app.get('/api/referral-codes/validate', async (req, res) => {
+    try {
+      const { code } = req.query;
+      if (!code || typeof code !== 'string') {
+        return res.json({ valid: false });
+      }
+
+      const upperCode = code.toUpperCase().trim();
+      const [refCode] = await db.select({
+        code: referralCodes.code,
+        influencerName: referralCodes.influencerName,
+        trialDays: referralCodes.trialDays,
+        isActive: referralCodes.isActive,
+      }).from(referralCodes)
+        .where(eq(referralCodes.code, upperCode))
+        .limit(1);
+
+      if (!refCode || !refCode.isActive) {
+        return res.json({ valid: false });
+      }
+
+      res.json({
+        valid: true,
+        code: refCode.code,
+        influencerName: refCode.influencerName || refCode.code,
+        trialDays: refCode.trialDays || 14,
+      });
+    } catch (error: any) {
+      console.error('Referral code validation error:', error);
+      res.json({ valid: false });
+    }
+  });
 
   // Referral validation API - real-time code checking
   app.post('/api/referral/validate', async (req, res) => {
@@ -7762,8 +7792,8 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         metadata.referral_code_id = referralData.id;
       }
 
-      // Determine trial days - 30 for referrals, 7 for regular signups
-      const trialDays = referralData ? 30 : 7;
+      // Determine trial days - use referral code's configured trial days, or 3 for regular signups
+      const trialDays = referralData ? (referralData.trialDays || 14) : 3;
 
       // Build checkout session data
       const sessionData: any = {
@@ -8399,8 +8429,8 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       }
       
       // Create Stripe checkout session with trial
-      // 30 days free if referral code, 7 days otherwise
-      const trialDays = validReferralCode ? 30 : 7;
+      // Use referral code's configured trial days, or 3 days for regular signups
+      const trialDays = validReferralCode ? 14 : 3;
       
       const sessionData: any = {
         mode: 'subscription',

@@ -1170,7 +1170,8 @@ router.post('/referrals/codes', requireAdmin, async (req, res) => {
       influencerName,
       commissionRate,
       discountType = 'none',
-      discountValue = 0
+      discountValue = 0,
+      trialDays = 14
     } = req.body;
 
     if (!code || typeof code !== 'string' || code.trim().length < 2) {
@@ -1190,10 +1191,11 @@ router.post('/referrals/codes', requireAdmin, async (req, res) => {
       code: code.trim(),
       codeType: codeType as 'user' | 'influencer',
       influencerName,
-      commissionRate: commissionRate ? parseFloat(commissionRate) / 100 : undefined, // Convert % to decimal
+      commissionRate: commissionRate ? parseFloat(commissionRate) / 100 : undefined,
       discountType: discountType as DiscountType,
       discountValue: parseFloat(discountValue) || 0,
       createdByAdmin: adminEmail,
+      trialDays: parseInt(trialDays) || 14,
     });
 
     if (!result.success) {
@@ -1203,7 +1205,9 @@ router.post('/referrals/codes', requireAdmin, async (req, res) => {
     res.json({ 
       success: true, 
       code: result.referralCode,
-      message: `Created referral code ${code.toUpperCase()}`
+      shareableLink: result.shareableLink,
+      trialDays: result.referralCode?.trialDays || 14,
+      message: `Created referral code ${code.toUpperCase()}. Share: ${result.shareableLink}`
     });
   } catch (error: any) {
     console.error('[ADMIN] Create referral code error:', error);
