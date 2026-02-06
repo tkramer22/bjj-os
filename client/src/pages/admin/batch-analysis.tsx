@@ -15,6 +15,7 @@ interface KnowledgeStatus {
   totalVideos: number;
   processed: number;
   pending: number;
+  missingAnalysis: number;
   withTranscript: number;
   withoutTranscript: number;
   totalTechniques: number;
@@ -129,14 +130,15 @@ export default function BatchAnalysis() {
   }, [progress?.isRunning, progress?.startedAt]);
 
   const status = progress?.knowledgeStatus;
-  const pending = status ? status.pending : 0;
+  const missingAnalysis = status ? status.missingAnalysis : 0;
   const total = status ? status.totalVideos : 0;
   const processed = status ? status.processed : 0;
-  const percentComplete = total > 0 ? Math.round((processed / total) * 100) : 0;
-  const costLow = (pending * 0.025).toFixed(2);
-  const costHigh = (pending * 0.05).toFixed(2);
-  const estTimeMins = Math.ceil(pending * 0.5 / 60);
-  const estTimeHours = Math.ceil(pending / 60);
+  const analyzed = total - missingAnalysis;
+  const percentComplete = total > 0 ? Math.round((analyzed / total) * 100) : 0;
+  const costLow = (missingAnalysis * 0.025).toFixed(2);
+  const costHigh = (missingAnalysis * 0.05).toFixed(2);
+  const estTimeMins = Math.ceil(missingAnalysis * 0.5 / 60);
+  const estTimeHours = Math.ceil(missingAnalysis / 60);
 
   return (
     <div style={{
@@ -179,14 +181,14 @@ export default function BatchAnalysis() {
               <Card>
                 <CardContent style={{ padding: '1rem', textAlign: 'center' }}>
                   <CheckCircle style={{ width: 20, height: 20, margin: '0 auto 0.4rem', color: '#22c55e' }} />
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#22c55e' }} data-testid="text-processed-videos">{processed.toLocaleString()}</div>
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Processed</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#22c55e' }} data-testid="text-processed-videos">{analyzed.toLocaleString()}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>With Analysis</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent style={{ padding: '1rem', textAlign: 'center' }}>
                   <AlertTriangle style={{ width: 20, height: 20, margin: '0 auto 0.4rem', color: '#f59e0b' }} />
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#f59e0b' }} data-testid="text-pending-videos">{pending.toLocaleString()}</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#f59e0b' }} data-testid="text-pending-videos">{missingAnalysis.toLocaleString()}</div>
                   <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Missing Analysis</div>
                 </CardContent>
               </Card>
@@ -209,13 +211,13 @@ export default function BatchAnalysis() {
                 </div>
                 <Progress value={percentComplete} style={{ height: 8 }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', fontSize: '0.7rem', color: '#64748b' }}>
-                  <span>{processed.toLocaleString()} analyzed</span>
-                  <span>{pending.toLocaleString()} remaining</span>
+                  <span>{analyzed.toLocaleString()} analyzed</span>
+                  <span>{missingAnalysis.toLocaleString()} remaining</span>
                 </div>
               </CardContent>
             </Card>
 
-            {pending > 0 && (
+            {missingAnalysis > 0 && (
               <Card style={{ marginBottom: '1.5rem', borderColor: '#8B5CF620' }}>
                 <CardHeader style={{ padding: '1rem 1.25rem 0.5rem' }}>
                   <CardTitle style={{ fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -356,11 +358,11 @@ export default function BatchAnalysis() {
             <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
               <Button
                 onClick={() => {
-                  if (confirm(`This will analyze ALL ${pending} missing videos.\n\nEstimated cost: $${costLow} - $${costHigh}\nEstimated time: ${estTimeMins}-${estTimeHours} minutes\n\nContinue?`)) {
+                  if (confirm(`This will analyze ALL ${missingAnalysis} missing videos.\n\nEstimated cost: $${costLow} - $${costHigh}\nEstimated time: ${estTimeMins}-${estTimeHours} minutes\n\nContinue?`)) {
                     startMutation.mutate();
                   }
                 }}
-                disabled={progress?.isRunning || startMutation.isPending || pending === 0}
+                disabled={progress?.isRunning || startMutation.isPending || missingAnalysis === 0}
                 style={{
                   flex: 1,
                   background: progress?.isRunning ? '#374151' : '#8B5CF6',
@@ -378,7 +380,7 @@ export default function BatchAnalysis() {
                     <Loader2 style={{ width: 16, height: 16, marginRight: 6, animation: 'spin 1s linear infinite' }} />
                     Starting...
                   </>
-                ) : pending === 0 ? (
+                ) : missingAnalysis === 0 ? (
                   <>
                     <CheckCircle style={{ width: 16, height: 16, marginRight: 6 }} />
                     All Videos Analyzed
@@ -386,7 +388,7 @@ export default function BatchAnalysis() {
                 ) : (
                   <>
                     <Play style={{ width: 16, height: 16, marginRight: 6 }} />
-                    Start Full Analysis ({pending.toLocaleString()} videos)
+                    Start Full Analysis ({missingAnalysis.toLocaleString()} videos)
                   </>
                 )}
               </Button>

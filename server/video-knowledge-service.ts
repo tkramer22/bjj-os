@@ -724,6 +724,7 @@ export async function getKnowledgeStatus(): Promise<{
   totalVideos: number;
   processed: number;
   pending: number;
+  missingAnalysis: number;
   withTranscript: number;
   withoutTranscript: number;
   totalTechniques: number;
@@ -744,6 +745,15 @@ export async function getKnowledgeStatus(): Promise<{
   
   const [techniquesResult] = await db.select({ count: sql`COUNT(*)` }).from(videoKnowledge);
   const totalTechniques = Number(techniquesResult?.count) || 0;
+
+  const missingAnalysisResult = await db.execute(sql`
+    SELECT COUNT(*) as count FROM ai_video_knowledge v
+    WHERE NOT EXISTS (
+      SELECT 1 FROM video_knowledge vk WHERE vk.video_id = v.id
+    )
+  `);
+  const missingRows = Array.isArray(missingAnalysisResult) ? missingAnalysisResult : (missingAnalysisResult as any).rows || [];
+  const missingAnalysis = Number(missingRows[0]?.count) || 0;
   
   const recentProcessed = await db.select({
     videoId: videoWatchStatus.videoId,
@@ -773,6 +783,7 @@ export async function getKnowledgeStatus(): Promise<{
     totalVideos,
     processed,
     pending: totalVideos - processed,
+    missingAnalysis,
     withTranscript,
     withoutTranscript: processed - withTranscript,
     totalTechniques,

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Gift, Star, 
   FileText, LogOut, Menu, X, MessageSquare,
   ThumbsUp, Award, Video, Link2, Shield, Calculator, RefreshCw, BarChart, Zap,
-  ChevronDown, ChevronRight, Play, Smartphone, Globe
+  ChevronDown, ChevronRight, Play, Smartphone, Globe, Brain
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -83,6 +83,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <NavLink href="/admin/dashboard" icon={<LayoutDashboard />} label="Dashboard" onClick={closeMenu} />
             <NavLink href="/admin/command-center" icon={<Zap />} label="Command Center" onClick={closeMenu} />
             <NavLink href="/admin/videos" icon={<Video />} label="Videos" onClick={closeMenu} />
+            <NavLink href="/admin/batch-analysis" icon={<Brain />} label="Batch Analysis" onClick={closeMenu} />
             <NavLink href="/admin/users" icon={<Users />} label="Users" onClick={closeMenu} />
             <NavLink href="/admin/analytics" icon={<BarChart />} label="Analytics" onClick={closeMenu} />
             <NavLink href="/admin/lifetime-access" icon={<Star />} label="Lifetime Access" onClick={closeMenu} />
