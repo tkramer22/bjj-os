@@ -19365,6 +19365,89 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
+  // GET: Count of new videos needing analysis (by timeframe)
+  app.get('/api/admin/new-videos-count', checkAdminAuth, async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 7;
+      const { getNewVideosCount } = await import('./video-knowledge-service');
+      const result = await getNewVideosCount(days);
+      res.json(result);
+    } catch (error: any) {
+      console.error('[ADMIN] Error getting new videos count:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST: Analyze only recently added videos (non-blocking background job)
+  app.post('/api/admin/analyze-new-videos', checkAdminAuth, async (req, res) => {
+    try {
+      if (batchAnalysisProgress.isRunning) {
+        return res.status(409).json({
+          success: false,
+          message: 'A batch analysis is already running. Wait for it to complete.'
+        });
+      }
+
+      const { daysBack = 7 } = req.body;
+      console.log(`[ADMIN] Starting analysis of new videos from last ${daysBack} days...`);
+
+      const { analyzeNewVideosOnly } = await import('./video-knowledge-service');
+
+      batchAnalysisProgress.isRunning = true;
+      batchAnalysisProgress.startedAt = new Date().toISOString();
+      batchAnalysisProgress.totalProcessed = 0;
+      batchAnalysisProgress.totalSucceeded = 0;
+      batchAnalysisProgress.totalFailed = 0;
+      batchAnalysisProgress.totalTechniques = 0;
+      batchAnalysisProgress.currentBatch = 0;
+      batchAnalysisProgress.lastMessage = `Starting new videos analysis (last ${daysBack} days)...`;
+      batchAnalysisProgress.completedAt = null;
+      batchAnalysisProgress.errors = [];
+
+      setImmediate(async () => {
+        try {
+          const result = await analyzeNewVideosOnly(daysBack, (msg) => {
+            batchAnalysisProgress.lastMessage = msg;
+            const batchMatch = msg.match(/Batch (\d+)/);
+            if (batchMatch) batchAnalysisProgress.currentBatch = parseInt(batchMatch[1]);
+            const succMatch = msg.match(/(\d+)\/(\d+) succeeded/);
+            if (succMatch) {
+              batchAnalysisProgress.totalSucceeded = parseInt(succMatch[1]);
+              batchAnalysisProgress.totalProcessed = parseInt(succMatch[2]);
+            }
+            const failMatch = msg.match(/(\d+) failed/);
+            if (failMatch) batchAnalysisProgress.totalFailed = parseInt(failMatch[1]);
+            const techMatch = msg.match(/(\d+) (?:total )?techniques/);
+            if (techMatch) batchAnalysisProgress.totalTechniques = parseInt(techMatch[1]);
+            console.log(`[ADMIN] New videos progress: ${msg}`);
+          });
+          batchAnalysisProgress.totalProcessed = result.totalProcessed;
+          batchAnalysisProgress.totalSucceeded = result.totalSucceeded;
+          batchAnalysisProgress.totalFailed = result.totalFailed;
+          batchAnalysisProgress.totalTechniques = result.totalTechniques;
+          batchAnalysisProgress.errors = result.errors.slice(0, 20);
+          batchAnalysisProgress.completedAt = new Date().toISOString();
+          batchAnalysisProgress.lastMessage = `Complete: ${result.totalSucceeded}/${result.totalProcessed} new videos analyzed`;
+          console.log(`[ADMIN] New videos analysis complete:`, result);
+        } catch (error: any) {
+          console.error('[ADMIN] New videos analysis error:', error);
+          batchAnalysisProgress.lastMessage = `Error: ${error.message}`;
+          batchAnalysisProgress.errors.push(error.message);
+        } finally {
+          batchAnalysisProgress.isRunning = false;
+        }
+      });
+
+      res.json({
+        success: true,
+        message: `Analysis of new videos (last ${daysBack} days) started in background. Poll /api/admin/batch-analysis-progress for updates.`
+      });
+    } catch (error: any) {
+      console.error('[ADMIN] Error starting new videos analysis:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // ===== OVERNIGHT PROCESSING SYSTEM (Dec 16, 2025) =====
   
   // GET: Overnight processing status (morning dashboard)

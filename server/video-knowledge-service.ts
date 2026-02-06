@@ -838,6 +838,147 @@ export async function resetFailedVideosForRetry(): Promise<{ reset: number; prev
 }
 
 /**
+ * Get count of recently added videos and how many need analysis
+ */
+export async function getNewVideosCount(daysBack: number = 7): Promise<{
+  totalNew: number;
+  needingAnalysis: number;
+  days: number;
+}> {
+  const result = await db.execute(sql`
+    SELECT 
+      COUNT(*) as total_new,
+      COUNT(CASE WHEN NOT EXISTS (
+        SELECT 1 FROM video_knowledge vk WHERE vk.video_id = v.id
+      ) THEN 1 END) as needing_analysis
+    FROM ai_video_knowledge v
+    WHERE COALESCE(v.created_at, v.upload_date, v.analyzed_at) >= NOW() - INTERVAL '1 day' * ${daysBack}
+  `);
+  const rows = Array.isArray(result) ? result : (result as any).rows || [];
+  return {
+    totalNew: Number(rows[0]?.total_new) || 0,
+    needingAnalysis: Number(rows[0]?.needing_analysis) || 0,
+    days: daysBack,
+  };
+}
+
+/**
+ * Analyze only videos added in the last X days that are missing analysis
+ * Efficient for daily/weekly incremental processing
+ */
+export async function analyzeNewVideosOnly(
+  daysBack: number = 7,
+  onProgress?: (msg: string) => void
+): Promise<{
+  totalProcessed: number;
+  totalSucceeded: number;
+  totalFailed: number;
+  totalTechniques: number;
+  errors: string[];
+}> {
+  const log = (msg: string) => {
+    console.log(`[ANALYZE-NEW] ${msg}`);
+    onProgress?.(msg);
+  };
+
+  log(`Starting analysis of new videos from last ${daysBack} days...`);
+
+  const newVideosResult = await db.execute(sql`
+    SELECT v.id, v.title
+    FROM ai_video_knowledge v
+    WHERE COALESCE(v.created_at, v.upload_date, v.analyzed_at) >= NOW() - INTERVAL '1 day' * ${daysBack}
+      AND NOT EXISTS (
+        SELECT 1 FROM video_knowledge vk WHERE vk.video_id = v.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM video_watch_status vws 
+        WHERE vws.video_id = v.id 
+          AND vws.processed = true
+      )
+    ORDER BY COALESCE(v.created_at, v.upload_date, v.analyzed_at) DESC
+  `);
+  const videos = Array.isArray(newVideosResult) && !('rows' in newVideosResult)
+    ? newVideosResult
+    : (newVideosResult as any).rows || [];
+
+  log(`Found ${videos.length} new videos needing analysis`);
+
+  if (videos.length === 0) {
+    return { totalProcessed: 0, totalSucceeded: 0, totalFailed: 0, totalTechniques: 0, errors: [] };
+  }
+
+  let totalProcessed = 0;
+  let totalSucceeded = 0;
+  let totalFailed = 0;
+  let totalTechniques = 0;
+  const allErrors: string[] = [];
+
+  const BATCH_SIZE = 20;
+  const totalBatches = Math.ceil(videos.length / BATCH_SIZE);
+
+  for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
+    const batchVideos = videos.slice(batchNum * BATCH_SIZE, (batchNum + 1) * BATCH_SIZE);
+
+    await Promise.all(batchVideos.map((video: any) =>
+      db.insert(videoWatchStatus).values({
+        videoId: video.id,
+        hasTranscript: false,
+        processed: false,
+        errorMessage: 'Processing in progress'
+      }).onConflictDoUpdate({
+        target: videoWatchStatus.videoId,
+        set: {
+          hasTranscript: false,
+          processed: false,
+          errorMessage: 'Processing in progress'
+        }
+      })
+    ));
+
+    const hasDualKeys = !!gemini2;
+    const chunkSize = hasDualKeys ? 4 : 2;
+
+    for (let i = 0; i < batchVideos.length; i += chunkSize) {
+      const chunk = batchVideos.slice(i, i + chunkSize);
+      const results = await Promise.all(
+        chunk.map((video: any) => processVideoKnowledge(video.id))
+      );
+
+      for (const result of results) {
+        totalProcessed++;
+        if (result.success) {
+          totalSucceeded++;
+          totalTechniques += result.techniquesAdded || 0;
+        } else {
+          totalFailed++;
+          if (result.error) allErrors.push(result.error);
+        }
+      }
+
+      if (i + chunkSize < batchVideos.length) {
+        await sleep(500);
+      }
+    }
+
+    log(`Batch ${batchNum + 1}/${totalBatches}: ${totalSucceeded}/${totalProcessed} succeeded, ${totalFailed} failed, ${totalTechniques} total techniques`);
+
+    if (batchNum + 1 < totalBatches) {
+      await sleep(2000);
+    }
+  }
+
+  log(`Complete: ${totalSucceeded}/${totalProcessed} succeeded, ${totalTechniques} techniques extracted`);
+
+  return {
+    totalProcessed,
+    totalSucceeded,
+    totalFailed,
+    totalTechniques,
+    errors: allErrors.slice(0, 50),
+  };
+}
+
+/**
  * Force analyze ALL unanalyzed videos - runs larger batches continuously
  * Used for one-time catch-up processing
  */

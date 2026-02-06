@@ -1,0 +1,250 @@
+🎯 SMART - ANALYZE ONLY NEW VIDEOS
+Great idea! This way you can run daily/weekly analysis on newly added videos without re-processing the entire library.
+
+REPLIT AGENT PROMPT - ADD “ANALYZE NEW VIDEOS” FEATURE
+
+ADD "ANALYZE NEW VIDEOS ONLY" FEATURE TO BATCH ANALYSIS DASHBOARD
+
+GOAL: Create a separate button to analyze only videos added in the last X days, so we don't have to re-process the entire library every time.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 1: ADD NEW ENDPOINT FOR NEW VIDEOS ONLY
+═══════════════════════════════════════════════════════════════════════════════
+
+Create new endpoint: POST /api/admin/analyze-new-videos
+
+This endpoint will:
+1. Find videos added in the last 7 days (or configurable timeframe)
+2. Check if they're missing Gemini analysis
+3. Process them using the same batch logic
+
+IMPLEMENTATION:
+
+const analyzeNewVideos = async (req, res) => {
+  const { daysBack = 7 } = req.body; // Default to last 7 days
+  
+  try {
+    req.setTimeout(600000); // 10 minute timeout
+    
+    let totalProcessed = 0;
+    let totalFailed = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      // Get videos added in last X days WITHOUT analysis
+      const videos = await pool.query(`
+        SELECT id, video_id, title, professor_name, youtube_url, created_at
+        FROM videos 
+        WHERE created_at >= NOW() - INTERVAL '${daysBack} days'
+          AND (
+            gemini_analysis IS NULL 
+            OR gemini_analysis = '' 
+            OR gemini_analysis::text = '{}'
+            OR LENGTH(gemini_analysis::text) < 10
+          )
+        ORDER BY created_at DESC
+        LIMIT 20
+      `);
+      
+      if (videos.rows.length === 0) {
+        hasMore = false;
+        break;
+      }
+      
+      // Process batch (same logic as analyze-all-missing)
+      for (const video of videos.rows) {
+        try {
+          console.log(`Analyzing NEW video ${video.id}: ${video.title}`);
+          const analysis = await analyzeVideoWithGemini(video);
+          
+          await pool.query(
+            'UPDATE videos SET gemini_analysis = $1, updated_at = NOW() WHERE id = $2',
+            [JSON.stringify(analysis), video.id]
+          );
+          
+          totalProcessed++;
+        } catch (error) {
+          console.error(`Failed to analyze video ${video.id}:`, error.message);
+          totalFailed++;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    res.json({
+      success: true,
+      totalProcessed,
+      totalFailed,
+      daysBack,
+      message: `Analyzed ${totalProcessed} new videos from last ${daysBack} days`
+    });
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 2: ADD UI TO BATCH ANALYSIS DASHBOARD
+═══════════════════════════════════════════════════════════════════════════════
+
+Add a new section to the dashboard:
+
+<div className="new-videos-section">
+  <h3>🆕 Analyze Recently Added Videos</h3>
+  
+  <div className="timeframe-selector">
+    <label>Analyze videos added in last:</label>
+    <select value={daysBack} onChange={(e) => setDaysBack(e.target.value)}>
+      <option value="1">24 hours</option>
+      <option value="3">3 days</option>
+      <option value="7">7 days</option>
+      <option value="14">14 days</option>
+      <option value="30">30 days</option>
+    </select>
+  </div>
+  
+  <div className="new-videos-stats">
+    <p>New videos in last {daysBack} days: <strong>{newVideosCount}</strong></p>
+    <p>Without analysis: <strong>{newVideosNeedingAnalysis}</strong></p>
+    <p>Est. cost: ${(newVideosNeedingAnalysis * 0.025).toFixed(2)} - ${(newVideosNeedingAnalysis * 0.05).toFixed(2)}</p>
+    <p>Est. time: {Math.ceil(newVideosNeedingAnalysis * 0.5 / 60)} - {Math.ceil(newVideosNeedingAnalysis / 60)} minutes</p>
+  </div>
+  
+  <button 
+    onClick={handleAnalyzeNewVideos}
+    disabled={isAnalyzingNew || newVideosNeedingAnalysis === 0}
+    className="btn-secondary"
+  >
+    {isAnalyzingNew ? '⏳ Analyzing New Videos...' : `▶ Analyze New Videos (${newVideosNeedingAnalysis})`}
+  </button>
+</div>
+
+Position this ABOVE the "Start Full Analysis" button.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 3: ADD ENDPOINT TO GET NEW VIDEOS COUNT
+═══════════════════════════════════════════════════════════════════════════════
+
+Create endpoint: GET /api/admin/new-videos-count?days=7
+
+const getNewVideosCount = async (req, res) => {
+  const { days = 7 } = req.query;
+  
+  try {
+    const result = await pool.query(`
+      SELECT 
+        COUNT(*) as total_new,
+        COUNT(CASE WHEN gemini_analysis IS NULL OR gemini_analysis = '' OR gemini_analysis::text = '{}' OR LENGTH(gemini_analysis::text) < 10 THEN 1 END) as needing_analysis
+      FROM videos
+      WHERE created_at >= NOW() - INTERVAL '${days} days'
+    `);
+    
+    res.json({
+      totalNew: parseInt(result.rows[0].total_new),
+      needingAnalysis: parseInt(result.rows[0].needing_analysis),
+      days: parseInt(days)
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+Call this when dashboard loads to populate the stats.
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 4: ADD VISUAL SEPARATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Make it clear these are two different operations:
+
+┌─────────────────────────────────────────┐
+│  🆕 ANALYZE RECENTLY ADDED VIDEOS       │
+│                                         │
+│  [Dropdown: Last 7 days]                │
+│  New videos: 45                         │
+│  Need analysis: 23                      │
+│  Cost: $0.58 - $1.15                    │
+│                                         │
+│  [▶ Analyze New Videos (23)]            │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│  🔄 ANALYZE ALL MISSING VIDEOS          │
+│                                         │
+│  Total missing: 1,908                   │
+│  Est. cost: $47.70 - $95.40             │
+│  Est. time: 18-32 minutes               │
+│                                         │
+│  [▶ Start Full Analysis (1,908)]        │
+└─────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+STEP 5: ADD AUTOMATIC DAILY ANALYSIS (OPTIONAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+BONUS FEATURE - Auto-run new video analysis daily:
+
+Create a cron job or scheduled task:
+- Runs every day at 3am
+- Analyzes videos added in last 24 hours
+- Emails admin with results
+
+This way new videos are automatically analyzed without manual intervention.
+
+IMPLEMENTATION:
+- Use node-cron or similar
+- Schedule: analyzeNewVideos({ daysBack: 1 })
+- Run silently in background
+- Log results to database
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing:
+
+1. Go to batch analysis dashboard
+2. See new "Analyze Recently Added Videos" section at top
+3. Select "Last 7 days" from dropdown
+4. See count of new videos needing analysis
+5. Click "Analyze New Videos" button
+6. Verify it only processes videos from last 7 days
+7. Check logs to confirm
+
+TELL ME:
+- Did you add the new endpoint?
+- Did you add the UI section?
+- Did you add the count endpoint?
+- Does it work when you click the button?
+- How many new videos were found?
+
+Show me screenshot of the updated dashboard with both buttons!
+
+
+RESULT:
+After this, you’ll have TWO analysis options:
+	1.	🆕 Analyze New Videos (last 1/3/7/14/30 days)
+	∙	Fast (only new videos)
+	∙	Cheap (small batch)
+	∙	Run daily/weekly
+	2.	🔄 Analyze All Missing (entire library)
+	∙	Slow (all videos)
+	∙	Expensive (large batch)
+	∙	Run once or rarely
+
+USAGE:
+Daily workflow:
+	1.	Video curation adds 10-50 new videos
+	2.	Click “Analyze New Videos (Last 24 hours)”
+	3.	Takes 1-2 minutes
+	4.	Costs $0.25-$2.50
+	5.	Done!
+Occasional deep clean:
+	1.	Click “Analyze All Missing”
+	2.	Processes everything
+	3.	Run monthly or when needed
+
+Send that prompt to Replit Agent! 🚀
+This makes ongoing video analysis sustainable without re-processing thousands of videos every time.​​​​​​​​​​​​​​​​

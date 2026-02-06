@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   ArrowLeft, Play, RotateCcw, Loader2, CheckCircle, XCircle, 
-  Brain, Database, Clock, Zap, AlertTriangle, Activity
+  Brain, Database, Clock, Zap, AlertTriangle, Activity, CalendarPlus, ChevronDown
 } from "lucide-react";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface KnowledgeStatus {
   totalVideos: number;
@@ -87,6 +94,27 @@ export default function BatchAnalysis() {
   const queryClient = useQueryClient();
   const [elapsedTime, setElapsedTime] = useState('');
   const [justStarted, setJustStarted] = useState(false);
+  const [daysBack, setDaysBack] = useState('7');
+
+  const { data: newVideosData } = useQuery<{ totalNew: number; needingAnalysis: number; days: number }>({
+    queryKey: ['/api/admin/new-videos-count', daysBack],
+    queryFn: () => adminApiRequest(`/api/admin/new-videos-count?days=${daysBack}`),
+    refetchInterval: 30000,
+  });
+
+  const analyzeNewMutation = useMutation({
+    mutationFn: () => adminApiRequest('/api/admin/analyze-new-videos', 'POST', { daysBack: parseInt(daysBack) }),
+    onSuccess: () => {
+      setJustStarted(true);
+      toast({ title: "New Videos Analysis Started", description: `Processing new videos from last ${daysBack} days in the background.` });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/batch-analysis-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/new-videos-count', daysBack] });
+    },
+    onError: (error: Error) => {
+      setJustStarted(false);
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
 
   const { data: progress, isLoading } = useQuery<BatchProgress>({
     queryKey: ['/api/admin/batch-analysis-progress'],
@@ -233,6 +261,96 @@ export default function BatchAnalysis() {
                   <span>{analyzed.toLocaleString()} analyzed</span>
                   <span>{missingAnalysis.toLocaleString()} remaining</span>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card style={{ marginBottom: '1.5rem', borderColor: '#22c55e30' }}>
+              <CardHeader style={{ padding: '1rem 1.25rem 0.75rem' }}>
+                <CardTitle style={{ fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CalendarPlus style={{ width: 16, height: 16, color: '#22c55e' }} />
+                  Analyze Recently Added Videos
+                </CardTitle>
+              </CardHeader>
+              <CardContent style={{ padding: '0 1.25rem 1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Videos added in last:</span>
+                  <Select value={daysBack} onValueChange={setDaysBack}>
+                    <SelectTrigger style={{ width: 140 }} data-testid="select-days-back">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">24 hours</SelectItem>
+                      <SelectItem value="3">3 days</SelectItem>
+                      <SelectItem value="7">7 days</SelectItem>
+                      <SelectItem value="14">14 days</SelectItem>
+                      <SelectItem value="30">30 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>New Videos</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 600, color: '#f1f5f9' }} data-testid="text-new-total">
+                      {(newVideosData?.totalNew ?? 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>Need Analysis</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 600, color: (newVideosData?.needingAnalysis ?? 0) > 0 ? '#f59e0b' : '#22c55e' }} data-testid="text-new-needing">
+                      {(newVideosData?.needingAnalysis ?? 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>Est. Cost</div>
+                    <div style={{ fontSize: '0.9rem', color: '#cbd5e1' }}>
+                      ${((newVideosData?.needingAnalysis ?? 0) * 0.025).toFixed(2)} - ${((newVideosData?.needingAnalysis ?? 0) * 0.05).toFixed(2)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>Est. Time</div>
+                    <div style={{ fontSize: '0.9rem', color: '#cbd5e1' }}>
+                      {Math.max(1, Math.ceil((newVideosData?.needingAnalysis ?? 0) * 0.5 / 60))}-{Math.max(1, Math.ceil((newVideosData?.needingAnalysis ?? 0) / 60))} min
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={() => {
+                    const needing = newVideosData?.needingAnalysis ?? 0;
+                    if (isRunningOrStarting || needing === 0) return;
+                    const costLowNew = (needing * 0.025).toFixed(2);
+                    const costHighNew = (needing * 0.05).toFixed(2);
+                    if (confirm(`Analyze ${needing} new videos from the last ${daysBack} day(s)?\n\nEstimated cost: $${costLowNew} - $${costHighNew}\n\nContinue?`)) {
+                      analyzeNewMutation.mutate();
+                    }
+                  }}
+                  disabled={isRunningOrStarting || (newVideosData?.needingAnalysis ?? 0) === 0 || analyzeNewMutation.isPending}
+                  style={{
+                    width: '100%',
+                    background: isRunningOrStarting ? '#374151' : (newVideosData?.needingAnalysis ?? 0) === 0 ? '#1e293b' : '#22c55e',
+                    border: 'none',
+                    color: '#fff',
+                  }}
+                  data-testid="button-analyze-new"
+                >
+                  {analyzeNewMutation.isPending ? (
+                    <>
+                      <Loader2 style={{ width: 16, height: 16, marginRight: 6, animation: 'spin 1s linear infinite' }} />
+                      Starting...
+                    </>
+                  ) : (newVideosData?.needingAnalysis ?? 0) === 0 ? (
+                    <>
+                      <CheckCircle style={{ width: 16, height: 16, marginRight: 6 }} />
+                      All New Videos Analyzed
+                    </>
+                  ) : (
+                    <>
+                      <Play style={{ width: 16, height: 16, marginRight: 6 }} />
+                      Analyze New Videos ({(newVideosData?.needingAnalysis ?? 0).toLocaleString()})
+                    </>
+                  )}
+                </Button>
               </CardContent>
             </Card>
 
