@@ -19248,28 +19248,91 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
   
-  // POST: Analyze ALL unanalyzed videos (for catch-up processing)
+  const batchAnalysisProgress = {
+    isRunning: false,
+    startedAt: null as string | null,
+    totalProcessed: 0,
+    totalSucceeded: 0,
+    totalFailed: 0,
+    totalTechniques: 0,
+    currentBatch: 0,
+    lastMessage: '',
+    completedAt: null as string | null,
+    errors: [] as string[],
+  };
+
+  app.get('/api/admin/batch-analysis-progress', checkAdminAuth, async (_req, res) => {
+    try {
+      const { getKnowledgeStatus } = await import('./video-knowledge-service');
+      const status = await getKnowledgeStatus();
+      res.json({
+        ...batchAnalysisProgress,
+        knowledgeStatus: status,
+      });
+    } catch (error: any) {
+      res.json({ ...batchAnalysisProgress });
+    }
+  });
+
   app.post('/api/admin/analyze-all-videos', checkAdminAuth, async (req, res) => {
     try {
+      if (batchAnalysisProgress.isRunning) {
+        return res.status(409).json({
+          success: false,
+          message: 'Batch analysis is already running. Check progress endpoint for status.'
+        });
+      }
+
       console.log(`[ADMIN] Starting full Gemini analysis of all unanalyzed videos...`);
       
-      const { analyzeAllUnanalyzedVideos, resetFailedVideosForRetry } = await import('./video-knowledge-service');
+      const { analyzeAllUnanalyzedVideos } = await import('./video-knowledge-service');
       
-      // Run in background to not block response - this can take hours
+      batchAnalysisProgress.isRunning = true;
+      batchAnalysisProgress.startedAt = new Date().toISOString();
+      batchAnalysisProgress.totalProcessed = 0;
+      batchAnalysisProgress.totalSucceeded = 0;
+      batchAnalysisProgress.totalFailed = 0;
+      batchAnalysisProgress.totalTechniques = 0;
+      batchAnalysisProgress.currentBatch = 0;
+      batchAnalysisProgress.lastMessage = 'Starting...';
+      batchAnalysisProgress.completedAt = null;
+      batchAnalysisProgress.errors = [];
+
       setImmediate(async () => {
         try {
           const result = await analyzeAllUnanalyzedVideos((msg) => {
+            batchAnalysisProgress.lastMessage = msg;
+            const batchMatch = msg.match(/Batch (\d+)/);
+            if (batchMatch) batchAnalysisProgress.currentBatch = parseInt(batchMatch[1]);
+            const succMatch = msg.match(/(\d+)\/(\d+) succeeded/);
+            if (succMatch) {
+              batchAnalysisProgress.totalSucceeded = parseInt(succMatch[1]);
+              batchAnalysisProgress.totalProcessed = parseInt(succMatch[2]);
+            }
+            const techMatch = msg.match(/(\d+) (?:total )?techniques/);
+            if (techMatch) batchAnalysisProgress.totalTechniques = parseInt(techMatch[1]);
             console.log(`[ADMIN] Progress: ${msg}`);
           });
+          batchAnalysisProgress.totalProcessed = result.totalProcessed;
+          batchAnalysisProgress.totalSucceeded = result.totalSucceeded;
+          batchAnalysisProgress.totalFailed = result.totalFailed;
+          batchAnalysisProgress.totalTechniques = result.totalTechniques;
+          batchAnalysisProgress.errors = result.errors.slice(0, 20);
+          batchAnalysisProgress.completedAt = new Date().toISOString();
+          batchAnalysisProgress.lastMessage = `Complete: ${result.totalSucceeded}/${result.totalProcessed} succeeded`;
           console.log(`[ADMIN] Full analysis complete:`, result);
         } catch (error: any) {
           console.error('[ADMIN] Full analysis error:', error);
+          batchAnalysisProgress.lastMessage = `Error: ${error.message}`;
+          batchAnalysisProgress.errors.push(error.message);
+        } finally {
+          batchAnalysisProgress.isRunning = false;
         }
       });
       
       res.json({
         success: true,
-        message: 'Full Gemini analysis started. This will process ALL unanalyzed videos in the background. Check server logs for progress.'
+        message: 'Full Gemini analysis started in background. Poll /api/admin/batch-analysis-progress for live updates.'
       });
     } catch (error: any) {
       console.error('[ADMIN] Error starting full analysis:', error);
