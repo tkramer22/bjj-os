@@ -867,6 +867,22 @@ export async function analyzeAllUnanalyzedVideos(onProgress?: (msg: string) => v
   const resetResult = await resetFailedVideosForRetry();
   log(`Reset ${resetResult.reset} previously failed videos for retry`);
   
+  // CRITICAL: Reset videos marked as processed=true but with NO actual technique rows
+  // These are videos that were marked done but the Gemini analysis produced no data
+  // This catches videos where Gemini failed but they were still marked processed=true
+  const emptyAnalysisResult = await db.execute(sql`
+    UPDATE video_watch_status
+    SET processed = false, error_message = 'Reset: no technique data found'
+    WHERE processed = true
+      AND NOT EXISTS (
+        SELECT 1 FROM video_knowledge vk WHERE vk.video_id = video_watch_status.video_id
+      )
+    RETURNING video_id
+  `);
+  const emptyResetRows = Array.isArray(emptyAnalysisResult) ? emptyAnalysisResult : (emptyAnalysisResult as any).rows || [];
+  const emptyResetCount = emptyResetRows.length;
+  log(`Reset ${emptyResetCount} videos marked as processed but missing technique data`);
+  
   let totalProcessed = 0;
   let totalSucceeded = 0;
   let totalFailed = 0;
@@ -891,7 +907,7 @@ export async function analyzeAllUnanalyzedVideos(onProgress?: (msg: string) => v
     totalTechniques += result.techniquesAdded;
     allErrors.push(...result.errors);
     
-    log(`Batch ${batchNum + 1}: ${result.succeeded}/${result.processed} succeeded, ${totalTechniques} total techniques`);
+    log(`Batch ${batchNum + 1}: ${totalSucceeded}/${totalProcessed} succeeded, ${totalFailed} failed, ${totalTechniques} total techniques`);
     
     // Brief pause between batches to avoid rate limits
     await sleep(2000);

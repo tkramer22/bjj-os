@@ -19309,6 +19309,8 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
               batchAnalysisProgress.totalSucceeded = parseInt(succMatch[1]);
               batchAnalysisProgress.totalProcessed = parseInt(succMatch[2]);
             }
+            const failMatch = msg.match(/(\d+) failed/);
+            if (failMatch) batchAnalysisProgress.totalFailed = parseInt(failMatch[1]);
             const techMatch = msg.match(/(\d+) (?:total )?techniques/);
             if (techMatch) batchAnalysisProgress.totalTechniques = parseInt(techMatch[1]);
             console.log(`[ADMIN] Progress: ${msg}`);
