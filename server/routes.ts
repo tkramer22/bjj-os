@@ -8593,7 +8593,8 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           qualityScore: aiVideoKnowledge.qualityScore,
           viewCount: aiVideoKnowledge.viewCount,
           duration: aiVideoKnowledge.duration,
-          createdAt: aiVideoKnowledge.createdAt
+          createdAt: aiVideoKnowledge.createdAt,
+          hasAnalysis: sql<boolean>`EXISTS (SELECT 1 FROM video_knowledge WHERE video_knowledge.video_id = ${aiVideoKnowledge.id})`,
         })
         .from(aiVideoKnowledge)
         .where(
@@ -8622,7 +8623,8 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           viewCount: Number(video.viewCount ?? 0),
           duration: formatDuration(video.duration),
           createdAt: video.createdAt,
-          isRecentlyAdded: true, // Mark as recently added
+          isRecentlyAdded: true,
+          hasAnalysis: !!video.hasAnalysis,
         }));
         
         return res.json({
@@ -8660,7 +8662,8 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         qualityScore: aiVideoKnowledge.qualityScore,
         viewCount: aiVideoKnowledge.viewCount,
         duration: aiVideoKnowledge.duration,
-        createdAt: aiVideoKnowledge.createdAt
+        createdAt: aiVideoKnowledge.createdAt,
+        hasAnalysis: sql<boolean>`EXISTS (SELECT 1 FROM video_knowledge WHERE video_knowledge.video_id = ${aiVideoKnowledge.id})`,
       })
       .from(aiVideoKnowledge)
       .where(and(...conditions))
@@ -8684,6 +8687,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         viewCount: Number(video.viewCount ?? 0),
         duration: formatDuration(video.duration),
         createdAt: video.createdAt,
+        hasAnalysis: !!video.hasAnalysis,
       }));
       
       res.json({

@@ -22,6 +22,7 @@ interface SavedVideo {
   duration?: string;
   category?: string;
   techniqueType?: string;
+  hasGeminiAnalysis?: boolean;
 }
 
 export default function IOSSavedPage() {
@@ -522,6 +523,7 @@ export default function IOSSavedPage() {
                       gap: '8px',
                       marginTop: '4px',
                     }}>
+                      {video.hasGeminiAnalysis !== false && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -545,6 +547,7 @@ export default function IOSSavedPage() {
                         <Brain size={12} />
                         Analysis
                       </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

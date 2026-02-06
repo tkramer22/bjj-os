@@ -1,0 +1,132 @@
+✅ YES - HIDE ANALYSIS BUTTON FOR VIDEOS WITHOUT ANALYSIS
+Exactly right. Videos without Gemini analysis should NOT show an “Analysis” button.
+
+CURRENT PROBLEM:
+Right now, ALL videos probably show the Analysis button, even ones without analysis data.
+User Experience:
+	∙	User sees video
+	∙	Clicks “📊 Analysis” button
+	∙	Modal opens but shows empty/no data
+	∙	Bad UX ❌
+
+THE FIX:
+Only show the Analysis button if gemini_analysis exists and has data.
+
+REPLIT AGENT PROMPT:
+
+HIDE ANALYSIS BUTTON FOR VIDEOS WITHOUT GEMINI ANALYSIS
+
+PROBLEM: All videos show an "Analysis" button, even videos that don't have Gemini analysis. When users click it, they see empty/no data. This is confusing.
+
+SOLUTION: Only show the Analysis button for videos that have valid Gemini analysis data.
+
+═══════════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION
+═══════════════════════════════════════════════════════════════════════════════
+
+FIND: Where video cards are rendered (in Videos page, Chat recommendations, Saved Videos)
+
+CHANGE FROM:
+<button onClick={() => openAnalysisModal(video)}>
+  📊 Analysis
+</button>
+
+CHANGE TO:
+{video.gemini_analysis && (
+  <button onClick={() => openAnalysisModal(video)}>
+    📊 Analysis
+  </button>
+)}
+
+This conditionally renders the Analysis button ONLY if gemini_analysis exists.
+
+═══════════════════════════════════════════════════════════════════════════════
+ADDITIONAL CHECK - VALIDATE ANALYSIS HAS DATA
+═══════════════════════════════════════════════════════════════════════════════
+
+Don't just check if field exists - check if it has actual data:
+
+const hasValidAnalysis = (video) => {
+  if (!video.gemini_analysis) return false;
+  
+  const analysis = typeof video.gemini_analysis === 'string' 
+    ? JSON.parse(video.gemini_analysis) 
+    : video.gemini_analysis;
+  
+  // Check if analysis has meaningful content
+  if (!analysis || Object.keys(analysis).length === 0) return false;
+  
+  // Check for key fields that should exist
+  if (!analysis.key_concepts && !analysis.techniques && !analysis.instructor_tips) {
+    return false;
+  }
+  
+  return true;
+};
+
+Then use it:
+{hasValidAnalysis(video) && (
+  <button onClick={() => openAnalysisModal(video)}>
+    📊 Analysis
+  </button>
+)}
+
+═══════════════════════════════════════════════════════════════════════════════
+UPDATE IN THESE LOCATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Videos page (main video list)
+2. Professor OS chat (video recommendations)
+3. Saved Videos page
+4. Any other place video cards are shown
+
+Make sure ALL locations only show Analysis button when valid data exists.
+
+═══════════════════════════════════════════════════════════════════════════════
+OPTIONAL - ADD INDICATOR FOR VIDEOS WITH ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+Instead of hiding the button completely, you could show a badge/indicator:
+
+{hasValidAnalysis(video) ? (
+  <button onClick={() => openAnalysisModal(video)}>
+    📊 AI Analysis
+  </button>
+) : (
+  <span className="no-analysis-badge">
+    ⚠️ No transcript available
+  </span>
+)}
+
+This way users know WHY some videos don't have analysis.
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+After implementing:
+
+1. Go to Videos page
+2. Find a video that has NO Gemini analysis (one of the ~1,900 without)
+3. Confirm NO Analysis button appears
+4. Find a video that HAS analysis
+5. Confirm Analysis button DOES appear
+6. Click it and verify modal shows data
+
+TELL ME:
+- Did you update all video card locations?
+- Does the Analysis button only show for videos with analysis?
+- Does the modal work correctly when button is clicked?
+
+Show me a screenshot of a video card WITHOUT analysis (no button) and one WITH analysis (has button).
+
+
+RESULT:
+After this fix:
+	∙	✅ Videos with analysis: Show “📊 Analysis” button
+	∙	✅ Videos without analysis: No button (clean UI)
+	∙	✅ No more empty modals
+	∙	✅ Better user experience
+
+Send that prompt to Replit Agent now while the batch analysis finishes running! 🚀
+This way when the analysis completes, the UI will already be fixed to only show Analysis buttons where appropriate.​​​​​​​​​​​​​​​​

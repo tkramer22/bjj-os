@@ -22,6 +22,7 @@ interface VideoApiResponse {
   techniqueType?: string;
   positionCategory?: string;
   duration?: string;
+  hasAnalysis?: boolean;
 }
 
 interface Video {
@@ -33,6 +34,7 @@ interface Video {
   duration?: string;
   technique?: string;
   position?: string;
+  hasAnalysis?: boolean;
 }
 
 export default function IOSLibraryPage() {
@@ -89,6 +91,7 @@ export default function IOSLibraryPage() {
     duration: v.duration,
     technique: v.techniqueType,
     position: v.positionCategory,
+    hasAnalysis: v.hasAnalysis,
   }));
 
   const { data: savedVideosData } = useQuery<{ videos: { id: string | number }[] }>({
@@ -563,6 +566,7 @@ export default function IOSLibraryPage() {
                     gap: '8px',
                     marginTop: '8px',
                   }}>
+                    {video.hasAnalysis && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -586,6 +590,7 @@ export default function IOSLibraryPage() {
                       <Brain size={12} />
                       Analysis
                     </button>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
