@@ -1,0 +1,167 @@
+ADD REFERRAL CODE SYSTEM — TWO PATHS
+
+⚠️ DO NOT break the existing signup flow that is currently working.
+⚠️ DO NOT change the landing page layout or the 4-step signup flow.
+⚠️ Only ADD referral code functionality on top of what exists.
+
+══════════════════════════════════════════════════════════════════════════
+PATH 1: WARM TRAFFIC — REFERRAL URL (bjjos.app?ref=JTTORRES)
+══════════════════════════════════════════════════════════════════════════
+
+When a user visits bjjos.app with a ?ref= parameter in the URL:
+
+1. On page load, detect the ?ref= URL parameter
+1. Validate the referral code against the database (check referral_codes table)
+1. If VALID:
+- Store the referral code in sessionStorage (key: “referralCode”)
+- Show a subtle banner at the top of the landing page:
+  “Referred by [CODE] — Extended trial activated”
+  Style: small, clean, green text or subtle highlight — not obnoxious
+- Change the main CTA button text to: “Start Your 14-Day Free Trial”
+- Change the sub-text to: “14-day free trial. Credit card required. Cancel anytime.”
+1. If INVALID:
+- Ignore silently — show normal landing page with 3-day trial
+- Do not show any error to the user
+1. When user clicks CTA and goes to the signup flow (email entry screen):
+- Show small green text: “✓ Referral code applied — 14-day trial”
+- Do NOT show a referral code input field (it’s already applied)
+1. The referral code carries through the entire flow via sessionStorage
+1. When creating Stripe checkout session, use trial_period_days: 14
+1. When user account is created, store the referral code used in the database
+
+══════════════════════════════════════════════════════════════════════════
+PATH 2: MANUAL ENTRY — ON THE EMAIL SCREEN (STEP 1 OF SIGNUP)
+══════════════════════════════════════════════════════════════════════════
+
+For users who received a referral code verbally or via text (not a link):
+
+1. On the email entry screen (Step 1 of the signup flow), add BELOW the email
+   field and Continue button:
+- Small subtle text link: “Have a referral code?”
+- Default state: just the text link, no input field visible
+1. When user taps “Have a referral code?”:
+- Expand to reveal: input field + “Apply” button
+- Smooth expand animation
+1. When user enters a code and clicks Apply:
+- Validate against database
+- If VALID:
+  Show green confirmation: “✓ Code [CODE] applied — 14-day trial!”
+  Collapse the input field, just show the green confirmation
+  Store code in sessionStorage (key: “referralCode”)
+- If INVALID:
+  Show red error: “Invalid referral code”
+  Keep input field open so they can try again
+1. The referral code carries through the rest of the signup flow
+1. When creating Stripe checkout session:
+- If referral code in sessionStorage → trial_period_days = 14
+- If no referral code → trial_period_days = 3
+
+══════════════════════════════════════════════════════════════════════════
+BACKEND: REFERRAL CODE VALIDATION ENDPOINT
+══════════════════════════════════════════════════════════════════════════
+
+Create (or update) this endpoint:
+
+GET /api/referral/validate?code=JTTORRES
+
+- Check referral_codes table for matching code
+- Return: { valid: true, code: “JTTORRES”, trialDays: 14 } or { valid: false }
+- This endpoint does NOT require authentication (used before signup)
+
+══════════════════════════════════════════════════════════════════════════
+STRIPE INTEGRATION
+══════════════════════════════════════════════════════════════════════════
+
+When creating the Stripe checkout session, check for referral code:
+
+- Read referralCode from the request (passed from frontend via sessionStorage)
+- If referralCode exists and is valid:
+  trial_period_days = the code’s trial_days value (default 14)
+  metadata: { referral_code: referralCode, signup_source: “web” }
+- If no referralCode:
+  trial_period_days = 3
+  metadata: { signup_source: “web” }
+
+══════════════════════════════════════════════════════════════════════════
+REFERRAL CODE DEFAULTS
+══════════════════════════════════════════════════════════════════════════
+
+- Default trial_days for all referral codes: 14 (NOT 30)
+- Update any existing referral codes in database: SET trial_days = 14 WHERE trial_days = 30
+- New codes created in admin should default to 14 days
+
+══════════════════════════════════════════════════════════════════════════
+ADMIN DASHBOARD: SHAREABLE LINKS
+══════════════════════════════════════════════════════════════════════════
+
+In the admin dashboard where referral codes are managed:
+
+1. For each referral code, auto-generate the full URL: https://bjjos.app?ref=[CODE]
+1. Add a “Copy Link” button next to each code
+1. Clicking copies the full URL to clipboard with confirmation toast
+1. Show usage stats: times used, list of users who used it
+
+══════════════════════════════════════════════════════════════════════════
+⚠️ TESTING — YOU MUST TEST ALL OF THESE BEFORE REPORTING DONE ⚠️
+══════════════════════════════════════════════════════════════════════════
+
+TEST 1: WARM TRAFFIC WITH VALID CODE
+□ Visit bjjos.app?ref=JTTORRES (use an existing referral code)
+□ Landing page shows banner: “Referred by JTTORRES — Extended trial activated”
+□ CTA button says: “Start Your 14-Day Free Trial”
+□ Sub-text says: “14-day free trial. Credit card required. Cancel anytime.”
+□ Click CTA → go to email entry screen
+□ Email screen shows: “✓ Referral code applied — 14-day trial”
+□ No referral code input field shown (already applied)
+□ Enter test email → continue through flow
+□ Stripe checkout shows 14-day trial period
+□ Complete signup → check database: referral_code_used = “JTTORRES”
+
+TEST 2: WARM TRAFFIC WITH INVALID CODE
+□ Visit bjjos.app?ref=FAKECODE123
+□ Landing page shows NORMAL — no banner, no error
+□ CTA says: “Start Your Free Trial” (standard 3-day)
+□ Everything works as normal, no indication of invalid code
+
+TEST 3: MANUAL CODE ENTRY — VALID CODE
+□ Visit bjjos.app (no ?ref= parameter)
+□ Landing page is standard 3-day trial
+□ Click CTA → go to email entry screen
+□ Below email field, see: “Have a referral code?”
+□ Tap it → input field expands
+□ Enter “JTTORRES” → click Apply
+□ Green confirmation: “✓ Code JTTORRES applied — 14-day trial!”
+□ Input field collapses, green confirmation stays
+□ Enter email → continue through flow
+□ Stripe shows 14-day trial
+
+TEST 4: MANUAL CODE ENTRY — INVALID CODE
+□ On email entry screen, tap “Have a referral code?”
+□ Enter “FAKECODE” → click Apply
+□ Red error: “Invalid referral code”
+□ Input stays open for retry
+□ User can dismiss and continue with 3-day trial
+
+TEST 5: NO REFERRAL CODE AT ALL
+□ Visit bjjos.app (no ?ref=)
+□ Standard landing page, 3-day trial
+□ Click CTA → email screen
+□ “Have a referral code?” link visible but collapsed
+□ Ignore it → enter email → continue
+□ Stripe shows 3-day trial
+□ Signup completes normally with 3-day trial
+
+TEST 6: EXISTING USER LOGIN NOT AFFECTED
+□ Go to /login
+□ Enter existing user email + password
+□ Login works normally
+□ No referral code prompts anywhere in login flow
+
+TEST 7: ADMIN DASHBOARD
+□ Go to admin referral code management
+□ Each code shows shareable link: https://bjjos.app?ref=[CODE]
+□ Copy Link button works
+□ Default trial days is 14 for new codes
+
+REPORT: After testing, tell me which tests passed and which failed.
+Show screenshots or console output for any failures.

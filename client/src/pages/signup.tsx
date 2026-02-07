@@ -14,7 +14,7 @@ export default function SignupPage() {
   const params = new URLSearchParams(window.location.search);
   const urlStep = params.get("step") as SignupStep | null;
   const urlEmail = params.get("email") || "";
-  const referralCode = params.get("ref") || sessionStorage.getItem("referralCode") || "";
+  const initialReferralCode = params.get("ref") || sessionStorage.getItem("referralCode") || "";
   const inviteToken = params.get("invite") || "";
   const signupToken = params.get("token") || "";
 
@@ -22,6 +22,13 @@ export default function SignupPage() {
   const [email, setEmail] = useState(urlEmail || "");
   const [emailError, setEmailError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  const [referralCode, setReferralCode] = useState(initialReferralCode);
+  const [showReferralField, setShowReferralField] = useState(false);
+  const [manualReferralCode, setManualReferralCode] = useState("");
+  const [referralValidating, setReferralValidating] = useState(false);
+  const [referralError, setReferralError] = useState("");
+  const [referralTrialDays, setReferralTrialDays] = useState(0);
 
   const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""]);
   const [codeError, setCodeError] = useState("");
@@ -70,7 +77,44 @@ export default function SignupPage() {
     if (inviteToken && !inviteChecked) {
       validateInviteToken();
     }
+    if (initialReferralCode) {
+      fetchReferralTrialDays(initialReferralCode);
+    }
   }, []);
+
+  const fetchReferralTrialDays = async (code: string) => {
+    try {
+      const response = await fetch(`/api/referral-codes/validate?code=${encodeURIComponent(code)}`);
+      const data = await response.json();
+      if (data.valid) {
+        setReferralTrialDays(data.trialDays || 14);
+      }
+    } catch {}
+  };
+
+  const handleApplyReferralCode = async () => {
+    const code = manualReferralCode.trim().toUpperCase();
+    if (!code) return;
+    setReferralValidating(true);
+    setReferralError("");
+    try {
+      const response = await fetch(`/api/referral-codes/validate?code=${encodeURIComponent(code)}`);
+      const data = await response.json();
+      if (data.valid) {
+        setReferralCode(data.code);
+        setReferralTrialDays(data.trialDays || 14);
+        setShowReferralField(false);
+        sessionStorage.setItem("referralCode", data.code);
+        sessionStorage.setItem("trialDays", String(data.trialDays || 14));
+      } else {
+        setReferralError("Invalid referral code");
+      }
+    } catch {
+      setReferralError("Failed to validate code");
+    } finally {
+      setReferralValidating(false);
+    }
+  };
 
   useEffect(() => {
     if (resendTimer > 0) {
@@ -360,12 +404,13 @@ export default function SignupPage() {
             <h1 className="signup-headline">Start Your Free Trial</h1>
             <p className="signup-subtext">
               {referralCode
-                ? "Enter your email to get started with your extended trial"
+                ? `${referralTrialDays || 14}-day free trial. Credit card required. Cancel anytime.`
                 : "3-day free trial. Credit card required. Cancel anytime."}
             </p>
             {referralCode && (
-              <div className="signup-referral-badge" data-testid="text-referral-applied">
-                Referral code {referralCode} applied
+              <div className="signup-referral-applied" data-testid="text-referral-applied">
+                <Check className="w-4 h-4" />
+                <span>Referral code applied — {referralTrialDays || 14}-day trial</span>
               </div>
             )}
             <div className="form-group">
@@ -387,6 +432,50 @@ export default function SignupPage() {
             <button className="signup-button" onClick={handleEmailSubmit} disabled={isLoading || !email.trim()} data-testid="button-continue">
               {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sending...</> : "Continue"}
             </button>
+
+            {!referralCode && (
+              <div className="signup-referral-section" data-testid="section-referral-code">
+                {!showReferralField ? (
+                  <p className="referral-toggle-text">
+                    <span 
+                      className="referral-toggle-link"
+                      onClick={() => setShowReferralField(true)}
+                      data-testid="link-enter-referral"
+                    >
+                      Have a referral code?
+                    </span>
+                  </p>
+                ) : (
+                  <div className="signup-referral-field" data-testid="div-referral-field">
+                    <div className="signup-referral-input-row">
+                      <input
+                        type="text"
+                        value={manualReferralCode}
+                        onChange={(e) => { setManualReferralCode(e.target.value.toUpperCase()); setReferralError(""); }}
+                        placeholder="Enter code"
+                        maxLength={20}
+                        className="signup-referral-input"
+                        data-testid="input-referral-code"
+                        onKeyDown={(e) => e.key === "Enter" && handleApplyReferralCode()}
+                        autoFocus
+                      />
+                      <button
+                        onClick={handleApplyReferralCode}
+                        disabled={referralValidating || !manualReferralCode.trim()}
+                        className="signup-referral-apply"
+                        data-testid="button-apply-referral"
+                      >
+                        {referralValidating ? "..." : "Apply"}
+                      </button>
+                    </div>
+                    {referralError && (
+                      <p className="signup-referral-error" data-testid="text-referral-error">{referralError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="login-link">
               Already have an account?{" "}
               <button type="button" onClick={() => setLocation("/login")} className="login-link-button" data-testid="link-login">
@@ -826,15 +915,78 @@ export default function SignupPage() {
         }
         .signup-subtext strong { color: var(--white); }
 
-        .signup-referral-badge {
-          display: inline-block;
-          background: rgba(124, 58, 237, 0.15);
-          border: 1px solid rgba(124, 58, 237, 0.3);
-          border-radius: 8px;
-          padding: 8px 16px;
-          font-size: 13px;
-          color: #c4b5fd;
+        .signup-referral-applied {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #4ade80;
+          font-size: 14px;
+          font-weight: 500;
           margin-bottom: 24px;
+        }
+
+        .signup-referral-section {
+          margin-top: 16px;
+          margin-bottom: 8px;
+          text-align: center;
+        }
+        .signup-referral-section .referral-toggle-text {
+          margin: 0;
+        }
+        .signup-referral-section .referral-toggle-link {
+          color: var(--gray-light);
+          font-size: 13px;
+          cursor: pointer;
+          text-decoration: underline;
+          text-decoration-color: rgba(255,255,255,0.2);
+          transition: color 0.2s;
+        }
+        .signup-referral-section .referral-toggle-link:hover {
+          color: var(--white);
+        }
+
+        .signup-referral-field {
+          margin-top: 8px;
+        }
+        .signup-referral-input-row {
+          display: flex;
+          gap: 8px;
+        }
+        .signup-referral-input {
+          flex: 1;
+          padding: 10px 14px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 8px;
+          color: var(--white);
+          font-family: var(--font-mono);
+          font-size: 14px;
+          outline: none;
+          text-transform: uppercase;
+        }
+        .signup-referral-input:focus {
+          border-color: var(--purple);
+        }
+        .signup-referral-apply {
+          padding: 10px 20px;
+          background: var(--purple);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .signup-referral-apply:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .signup-referral-error {
+          color: #ef4444;
+          font-size: 13px;
+          margin-top: 8px;
+          text-align: left;
         }
 
         .form-group { margin-bottom: 20px; }

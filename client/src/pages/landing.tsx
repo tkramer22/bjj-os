@@ -293,7 +293,7 @@ export default function Landing() {
           
           <p className="landing-price-note">
             {isReferral 
-              ? `$19.99/month after ${trialDays}-day trial. Cancel anytime.`
+              ? `${trialDays}-day free trial. Credit card required. Cancel anytime.`
               : '3-day free trial. Credit card required. Cancel anytime.'}
           </p>
         </div>

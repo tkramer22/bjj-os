@@ -1947,6 +1947,36 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.get('/api/referral/validate', async (req, res) => {
+    try {
+      const { code } = req.query;
+      if (!code || typeof code !== 'string') {
+        return res.json({ valid: false });
+      }
+      const upperCode = code.toUpperCase().trim();
+      const [refCode] = await db.select({
+        code: referralCodes.code,
+        influencerName: referralCodes.influencerName,
+        trialDays: referralCodes.trialDays,
+        isActive: referralCodes.isActive,
+      }).from(referralCodes)
+        .where(eq(referralCodes.code, upperCode))
+        .limit(1);
+      if (!refCode || !refCode.isActive) {
+        return res.json({ valid: false });
+      }
+      res.json({
+        valid: true,
+        code: refCode.code,
+        influencerName: refCode.influencerName || refCode.code,
+        trialDays: refCode.trialDays || 14,
+      });
+    } catch (error: any) {
+      console.error('Referral code validation error:', error);
+      res.json({ valid: false });
+    }
+  });
+
   // Referral validation API - real-time code checking
   app.post('/api/referral/validate', async (req, res) => {
     try {
