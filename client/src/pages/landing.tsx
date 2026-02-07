@@ -411,7 +411,7 @@ export default function Landing() {
           <div className="trust-indicators">
             <div className="trust-indicator">
               <Star className="trust-icon-svg" />
-              <span>4.9/5 Rating</span>
+              <span>5.0/5 Rating</span>
             </div>
             <div className="trust-indicator">
               <Smartphone className="trust-icon-svg" />

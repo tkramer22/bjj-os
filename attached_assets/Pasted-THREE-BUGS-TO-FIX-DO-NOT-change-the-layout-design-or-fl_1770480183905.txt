@@ -1,0 +1,93 @@
+THREE BUGS TO FIX
+
+⚠️ DO NOT change the layout, design, or flow structure. Only fix these specific issues.
+
+══════════════════════════════════════════════════════════════════════════
+BUG 1: EMAIL VERIFICATION CODE IS NOT ACTUALLY SENDING
+══════════════════════════════════════════════════════════════════════════
+
+PROBLEM: In the signup flow, Step 1 asks for email and Step 2 says “We sent
+you a code” — but NO code is actually being sent. The user is either skipping
+past the verification screen or no email is being delivered.
+
+FIX:
+
+1. Check if an email sending service is configured in this project. Look for:
+- SendGrid / @sendgrid/mail
+- Resend
+- Nodemailer
+- Twilio SendGrid
+- Any SMTP configuration
+- Any email-related API keys in environment/secrets
+1. If NO email service exists, set one up. Use Resend (https://resend.com)
+   as it’s the simplest:
+- Install: npm install resend
+- Create a free Resend account and add the API key to secrets as RESEND_API_KEY
+- Send from: onboarding@bjjos.app or noreply@bjjos.app
+- If domain verification is needed for bjjos.app, use Resend’s default
+  sending domain temporarily: onboarding@resend.dev
+1. The email verification flow MUST work like this:
+- User enters email on Step 1 → clicks Continue
+- Backend generates random 6-digit code
+- Backend stores code in email_verification_codes table with 10-minute expiration
+- Backend SENDS the code via email to the address entered
+- Frontend shows Step 2: “We sent a code to [email]” with 6-digit input
+- User checks their email, gets the code, enters it
+- Backend validates: code matches AND not expired
+- If valid → proceed to Stripe checkout (Step 3)
+- If invalid → show error “Invalid or expired code. Try again.”
+- Include a “Resend code” button that generates and sends a new code
+1. The email should look clean and simple:
+   Subject: “Your BJJ OS verification code”
+   Body: “Your verification code is: [CODE]. This code expires in 10 minutes.”
+   No fancy HTML needed — plain and clean.
+1. DO NOT let the user skip past verification. They MUST enter the correct
+   code before proceeding to Stripe. If the code is wrong or not entered,
+   they cannot continue.
+
+TEST:
+□ Enter a REAL email address in Step 1
+□ Check that email inbox — verification code email received
+□ Enter the code on Step 2 — proceeds to Stripe
+□ Enter a WRONG code — shows error, does NOT proceed
+□ Wait 10 minutes, try old code — shows expired error
+□ Click “Resend code” — new code arrives via email
+
+══════════════════════════════════════════════════════════════════════════
+BUG 2: APP STORE RATING SHOWS 4.9 — SHOULD BE 5.0
+══════════════════════════════════════════════════════════════════════════
+
+On the landing page, the rating badge shows “4.9/5 Rating”
+
+Change it to: “5.0/5 Rating”
+
+This is a simple text change. Find it in the landing page component and update.
+
+══════════════════════════════════════════════════════════════════════════
+BUG 3: VERIFY THE SIGNUP FLOW IS NOT SKIPPING STEPS
+══════════════════════════════════════════════════════════════════════════
+
+The signup flow MUST enforce this order with NO skipping:
+
+Step 1: Enter email → Click Continue
+Step 2: Enter verification code (sent to email) → Validates → Proceed
+Step 3: Stripe checkout (3-day or 14-day trial based on referral code)
+Step 4: Create password (after Stripe payment succeeds)
+
+Make sure:
+
+- User CANNOT go from Step 1 directly to Step 3 (skipping verification)
+- User CANNOT reach Step 4 without completing Stripe payment
+- Each step validates completion of the previous step
+- Browser back/forward does not break the flow
+- Refreshing a step does not skip ahead
+
+TEST THE FULL FLOW END TO END:
+□ Step 1: Enter real email → Continue
+□ Step 2: Code arrives in email → Enter code → Verified
+□ Step 3: Stripe checkout loads with correct trial days → Pay with test card 4242 4242 4242 4242
+□ Step 4: Password creation screen appears → Create password
+□ Onboarding screens appear (same as iOS)
+□ Dashboard loads with Professor OS greeting
+
+Report which steps pass and which fail. Show any errors.

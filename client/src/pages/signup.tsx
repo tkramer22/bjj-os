@@ -18,7 +18,7 @@ export default function SignupPage() {
   const inviteToken = params.get("invite") || "";
   const signupToken = params.get("token") || "";
 
-  const [step, setStep] = useState<SignupStep>(urlStep === "password" && urlEmail ? "password" : "email");
+  const [step, setStep] = useState<SignupStep>(urlStep === "password" && urlEmail && signupToken ? "password" : "email");
   const [email, setEmail] = useState(urlEmail || "");
   const [emailError, setEmailError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -220,7 +220,14 @@ export default function SignupPage() {
         codeRefs.current[0]?.focus();
       }
     } catch (error: any) {
-      setCodeError(error.message || "Verification failed");
+      let errorMsg = "Verification failed";
+      try {
+        const parsed = JSON.parse(error.message?.replace(/^\d+:\s*/, "") || "{}");
+        if (parsed.error) errorMsg = parsed.error;
+      } catch {
+        if (error.message) errorMsg = error.message;
+      }
+      setCodeError(errorMsg);
       setVerificationCode(["", "", "", "", "", ""]);
       codeRefs.current[0]?.focus();
     } finally {
