@@ -1,0 +1,407 @@
+OVERHAUL WEB SIGNUP FLOW + REFERRAL CODE SYSTEM
+
+══════════════════════════════════════════════════════════════════════════
+⚠️ CRITICAL SAFETY RULES - READ FIRST ⚠️
+══════════════════════════════════════════════════════════════════════════
+
+- DO NOT delete, modify, or drop any existing database tables
+- DO NOT remove any existing columns from any table
+- DO NOT break login for existing users — their email + password login MUST still work
+- DO NOT touch the iOS app components or iOS-specific files
+- DO NOT modify Professor OS, the chat system, video library, or saved videos
+- DO NOT change any API endpoints that existing users depend on
+- All existing users, subscriptions, and data must remain intact
+- ADD new columns/tables only — never remove existing ones
+- Test with a NEW test account, never modify existing user data
+
+══════════════════════════════════════════════════════════════════════════
+WHAT WE ARE CHANGING
+══════════════════════════════════════════════════════════════════════════
+
+We are overhauling the WEB signup flow only. The iOS app is not affected.
+Currently the web signup is broken — it shows 7-day trial (should be 3-day),
+referral codes give 30 days (should be 14), and the signup form asks for
+email + password + confirm password + username all on one screen before payment.
+
+The new flow reduces friction, moves payment earlier, and matches the iOS
+onboarding experience.
+
+══════════════════════════════════════════════════════════════════════════
+PART 1: LANDING PAGE FIXES (bjjos.app)
+══════════════════════════════════════════════════════════════════════════
+
+Find and replace ALL instances of “7-day” and “7 day” across the entire
+landing page and signup flow:
+
+CHANGE:
+
+- “7-DAY FREE TRIAL” → “3-DAY FREE TRIAL”
+- “Start 7-Day Free Trial” → “Start Your Free Trial”
+- “Start your 7-day free trial today” → “Start your 3-day free trial today”
+- “Auto-charges after 7 days” → “Auto-charges after 3 days. Cancel anytime.”
+- Any other instance of “7” referring to trial days → “3”
+
+The main CTA button should read: “Start Your Free Trial”
+Sub-text below button: “3-day free trial. Credit card required. Cancel anytime.”
+
+══════════════════════════════════════════════════════════════════════════
+PART 2: REFERRAL CODE SECTION ON LANDING PAGE
+══════════════════════════════════════════════════════════════════════════
+
+Currently the referral code input field is fully visible to everyone on the
+landing page. This is wrong — it makes users without a code feel like they
+are missing out, which REDUCES conversion.
+
+CHANGE THE REFERRAL SECTION:
+
+1. Remove the visible referral code input field from the landing page
+1. Replace with a subtle text link BELOW the main CTA button:
+   “Have a referral code?” — styled as small, understated text link
+1. When tapped/clicked, it EXPANDS to reveal the input field + Apply button
+1. Default state: collapsed/hidden
+
+When a referral code is applied:
+
+- The confirmation message should say “Code [CODE] applied - Extended 14-day trial!”
+- NOT “Extra 30 days free trial!” (this is the current bug)
+- The main CTA button text should update to: “Start Your 14-Day Free Trial”
+
+══════════════════════════════════════════════════════════════════════════
+PART 3: REFERRAL URL DETECTION
+══════════════════════════════════════════════════════════════════════════
+
+When a user arrives via a referral URL like bjjos.app?ref=JTORRES:
+
+1. Detect the ?ref= URL parameter on page load
+1. Store the referral code in sessionStorage so it persists through the flow
+1. Auto-apply the referral code (user should NOT have to type it)
+1. Show a subtle banner at top of landing page:
+   “Referred by [CODE] — Extended trial activated”
+1. Update the CTA button to: “Start Your 14-Day Free Trial”
+1. Hide the “Have a referral code?” section since it is already applied
+1. The referral code carries through to Stripe checkout automatically
+
+══════════════════════════════════════════════════════════════════════════
+PART 4: NEW SIGNUP FLOW (THIS IS THE CORE CHANGE)
+══════════════════════════════════════════════════════════════════════════
+
+DELETE the current signup page that shows email + password + confirm password
+
+- username all on one screen.
+
+REPLACE with this step-by-step flow:
+
+— STEP 1: EMAIL ENTRY —
+
+- Single screen with ONE field: “Enter your email”
+- One button: “Continue”
+- Clean, minimal, no other fields
+- If referral code was applied, show small green text:
+  “✓ Referral code applied — 14-day trial”
+
+— STEP 2: EMAIL VERIFICATION —
+
+- Send a 6-digit verification code to the email entered
+- Display: “We sent a code to [email@example.com]”
+- 6-digit input field (auto-advance between digits if possible)
+- Auto-submit when all 6 digits entered
+- “Resend code” link below
+- This step validates the email is real (prevents fake signups/chargebacks)
+
+— STEP 3: STRIPE CHECKOUT —
+
+- IMMEDIATELY after email verification, redirect to Stripe checkout
+- If NO referral code: Create Stripe checkout session with trial_period_days: 3
+- If referral code applied: Create Stripe checkout session with trial_period_days: 14
+- Stripe page shows: “$19.99/month” with the correct trial period
+- Pass the referral code in Stripe metadata for tracking
+- Pass the verified email to Stripe so user doesn’t re-enter it
+- After successful payment → redirect to Step 4
+
+— STEP 4: CREATE PASSWORD —
+
+- Screen title: “Create your password”
+- Two fields: Password + Confirm Password
+- Minimum 8 characters
+- One button: “Continue”
+- This password is used for ALL future logins (web + iOS app)
+- Save password (hashed) to the user record created during email verification
+
+— STEP 5: ONBOARDING (MUST MATCH iOS APP EXACTLY) —
+
+- Look at the existing iOS onboarding flow in the codebase
+- Find the iOS onboarding screens/components (likely in ios-onboarding or similar)
+- Replicate the EXACT same questions in the EXACT same order for web
+- Each question should be its own screen with a progress indicator
+- The web onboarding must collect the same data fields as iOS onboarding
+- Store all answers in the same database columns the iOS app uses
+
+Currently the iOS onboarding asks these questions (verify in codebase and match exactly):
+Q1: “What should we call you?” → stores as name/displayName
+Q2: Belt level (White/Blue/Purple/Brown/Black) → stores as belt_level
+Q3: Training style (Gi/No-Gi/Both) → stores as training_style
+Q4: Training frequency → stores as training_frequency
+
+IMPORTANT: Check the actual iOS onboarding code to confirm these questions.
+If the iOS app has MORE or DIFFERENT questions, match whatever iOS has.
+The web and iOS onboarding MUST be identical in questions and data collected.
+
+If iOS currently only has 3 onboarding questions, ADD a 4th question for
+training frequency on BOTH web and iOS:
+“How often do you train?”
+Options: 1-2x/week, 3-4x/week, 5-6x/week, 7+/week
+
+— STEP 6: DASHBOARD —
+
+- After onboarding completes, redirect to dashboard
+- Professor OS greets user by name using their onboarding data
+- User is fully set up and can use the app
+
+══════════════════════════════════════════════════════════════════════════
+PART 5: RETURNING USER LOGIN (DO NOT BREAK THIS)
+══════════════════════════════════════════════════════════════════════════
+
+The LOGIN flow (for returning users) must remain: Email + Password → Dashboard
+
+- Do NOT add email verification to the login flow
+- Do NOT require verification codes for returning users
+- Email verification ONLY happens once during initial signup
+- The “Login” button in the nav bar goes to the existing login page
+- Existing users with passwords can still log in exactly as before
+
+══════════════════════════════════════════════════════════════════════════
+PART 6: REFERRAL CODE BACKEND FIXES
+══════════════════════════════════════════════════════════════════════════
+
+1. Find the referral code system in the backend
+1. Change the DEFAULT trial days for referral codes from 30 → 14
+1. Update any existing referral codes in the database: set trial_days = 14
+   where trial_days = 30 (unless specifically set to a custom value by admin)
+1. When creating a new referral code in admin, default to 14 days
+1. When a referral code is used during signup:
+- Record which code was used
+- Record the user who used it
+- Record the date
+- Pass the correct trial_period_days to Stripe
+
+══════════════════════════════════════════════════════════════════════════
+PART 7: ADMIN DASHBOARD — SHAREABLE REFERRAL LINKS
+══════════════════════════════════════════════════════════════════════════
+
+In the admin dashboard where referral codes are managed:
+
+1. When a referral code is created, auto-generate the full URL:
+   https://bjjos.app?ref=[CODE]
+1. Show a “Copy Link” button next to each referral code
+1. Clicking “Copy Link” copies the full URL to clipboard
+1. Show usage stats for each code: times used, users who used it
+
+══════════════════════════════════════════════════════════════════════════
+PART 8: EMAIL VERIFICATION SYSTEM
+══════════════════════════════════════════════════════════════════════════
+
+Build the email verification system for signup:
+
+1. POST /api/auth/send-verification-code
+- Accepts: { email: string }
+- Generates a random 6-digit code
+- Stores code in database with expiration (10 minutes)
+- Sends code via email (use existing email service or add one)
+- Rate limit: max 3 codes per email per hour
+- Returns: { success: true }
+1. POST /api/auth/verify-code
+- Accepts: { email: string, code: string }
+- Validates code matches and is not expired
+- Creates a temporary session/token for the signup flow
+- Returns: { success: true, token: string }
+1. For sending emails, use one of these (in order of preference):
+- Existing email service if one exists in the project
+- Twilio SendGrid (we already have Twilio)
+- Nodemailer with a transactional email service
+- As a last resort, use Twilio SMS to send the code via text
+
+══════════════════════════════════════════════════════════════════════════
+PART 9: STRIPE CHECKOUT SESSION CREATION
+══════════════════════════════════════════════════════════════════════════
+
+Update or create the Stripe checkout session endpoint:
+
+POST /api/stripe/create-checkout-session
+
+- Accepts: { email: string, referralCode?: string }
+- If referralCode provided and valid:
+  trial_period_days = referral code’s trial_days value (default 14)
+- If no referralCode:
+  trial_period_days = 3
+- Include in Stripe metadata:
+  referral_code: referralCode || null
+  signup_source: “web”
+- Set customer_email to the verified email
+- success_url: /signup/create-password?session_id={CHECKOUT_SESSION_ID}
+- cancel_url: /signup?canceled=true
+
+══════════════════════════════════════════════════════════════════════════
+PART 10: DATABASE CHANGES
+══════════════════════════════════════════════════════════════════════════
+
+ADD these columns/tables (DO NOT remove any existing columns or tables):
+
+1. If not already exists, add to users table:
+- email_verified (boolean, default false)
+- signup_source (varchar, ‘web’ or ‘ios’)
+- referral_code_used (varchar, nullable)
+1. Create table: email_verification_codes (if not exists)
+- id (serial primary key)
+- email (varchar, not null)
+- code (varchar(6), not null)
+- expires_at (timestamp, not null)
+- used (boolean, default false)
+- created_at (timestamp, default now)
+1. If referral_codes table exists, ensure it has:
+- trial_days (integer, default 14) — change default from 30 to 14
+- times_used (integer, default 0)
+- Update existing codes: SET trial_days = 14 WHERE trial_days = 30
+
+══════════════════════════════════════════════════════════════════════════
+⚠️ TESTING CHECKLIST — YOU MUST VERIFY ALL OF THESE ⚠️
+══════════════════════════════════════════════════════════════════════════
+
+After implementing everything above, test EACH of these scenarios:
+
+— TEST 1: NEW USER SIGNUP (NO REFERRAL CODE) —
+□ Go to bjjos.app
+□ Landing page shows “3-DAY FREE TRIAL” (not 7)
+□ Sub-text says “Auto-charges after 3 days”
+□ “Have a referral code?” is a subtle collapsed link (not a visible input)
+□ Click “Start Your Free Trial”
+□ See email entry screen with ONE field
+□ Enter a test email
+□ Receive verification code at that email
+□ Enter code → verification succeeds
+□ Redirected to Stripe checkout
+□ Stripe shows 3-day trial, $19.99/month after
+□ Complete payment with test card 4242 4242 4242 4242
+□ Redirected to password creation screen
+□ Create password → Continue
+□ See onboarding Q1: “What should we call you?”
+□ See onboarding Q2: Belt level
+□ See onboarding Q3: Training style (Gi/No-Gi/Both)
+□ See onboarding Q4: Training frequency
+□ Complete onboarding → Redirected to dashboard
+□ Professor OS greets user by name
+□ Check database: user record has all fields populated
+
+— TEST 2: NEW USER WITH REFERRAL CODE (MANUAL ENTRY) —
+□ Go to bjjos.app (no ?ref= in URL)
+□ Click “Have a referral code?”
+□ Input field expands
+□ Enter “JTTORRES” (or existing test code)
+□ Click Apply
+□ See: “Code JTTORRES applied - Extended 14-day trial!” (NOT 30 days)
+□ CTA updates to “Start Your 14-Day Free Trial”
+□ Complete full signup flow
+□ Stripe shows 14-day trial (NOT 3 or 7 or 30)
+□ Onboarding same as Test 1
+□ Check database: referral_code_used = “JTTORRES”
+
+— TEST 3: NEW USER WITH REFERRAL URL —
+□ Go to bjjos.app?ref=JTTORRES
+□ Banner shows: “Referred by JTTORRES — Extended trial activated”
+□ CTA shows: “Start Your 14-Day Free Trial”
+□ “Have a referral code?” section is hidden (already applied)
+□ Complete full signup flow
+□ User NEVER had to type the referral code
+□ Stripe shows 14-day trial
+□ Check database: referral_code_used = “JTTORRES”
+
+— TEST 4: INVALID REFERRAL CODE —
+□ Go to bjjos.app?ref=FAKECODE
+□ System validates code → invalid
+□ Falls back to standard 3-day trial landing
+□ No error shown to user, just standard experience
+□ OR: Enter “FAKECODE” in manual referral input
+□ Shows error: “Invalid referral code”
+□ User can still proceed with 3-day trial
+
+— TEST 5: EXISTING USER LOGIN (MUST STILL WORK) —
+□ Click “Login” in nav bar
+□ See email + password fields (NO verification code)
+□ Enter existing user credentials
+□ Login succeeds → goes to dashboard
+□ All existing data intact (chat history, saved videos, etc.)
+□ Professor OS remembers previous conversations
+
+— TEST 6: ADMIN REFERRAL MANAGEMENT —
+□ Go to admin dashboard
+□ Create a new referral code
+□ Default trial days shows 14 (not 30)
+□ Shareable link auto-generated: https://bjjos.app?ref=[CODE]
+□ Copy Link button works
+□ Usage stats visible
+
+— TEST 7: iOS APP NOT AFFECTED —
+□ Open iOS app
+□ Login with existing credentials → works
+□ Onboarding flow unchanged
+□ Professor OS works normally
+□ Video library works normally
+□ Saved videos works normally
+□ No regressions anywhere in iOS
+
+══════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION ORDER
+══════════════════════════════════════════════════════════════════════════
+
+Build in this order to minimize risk:
+
+1. Database changes (add columns/tables only, never remove)
+1. Email verification API endpoints
+1. Referral code backend fixes (30 → 14 days)
+1. Stripe checkout session updates
+1. Landing page text fixes (7-day → 3-day)
+1. Landing page referral code UI (collapse the input)
+1. Referral URL detection (?ref= parameter)
+1. New signup flow screens (email → verify → Stripe → password → onboarding)
+1. Web onboarding screens (match iOS exactly)
+1. Admin dashboard referral link generation
+1. Run ALL tests from the checklist above
+
+══════════════════════════════════════════════════════════════════════════
+SUMMARY OF ALL CHANGES
+══════════════════════════════════════════════════════════════════════════
+
+LANDING PAGE:
+
+- “7-day” → “3-day” everywhere
+- CTA: “Start Your Free Trial”
+- Referral code input: hidden by default, expandable
+- Referral URL detection: auto-apply from ?ref= parameter
+
+SIGNUP FLOW:
+
+- Step 1: Email only
+- Step 2: Verification code
+- Step 3: Stripe checkout (3-day or 14-day trial)
+- Step 4: Create password
+- Step 5: Onboarding (match iOS exactly)
+- Step 6: Dashboard
+
+REFERRAL CODES:
+
+- Default 14 days (not 30)
+- Auto-generated shareable URLs
+- URL parameter detection
+- Tracking and attribution
+
+PROTECTED (DO NOT TOUCH):
+
+- Existing user login (email + password)
+- iOS app functionality
+- Professor OS
+- Video library
+- Saved videos
+- Chat history
+- All existing user data
+- Admin dashboard (except adding referral link features)
+
+IMPLEMENT ALL PARTS NOW. TEST EVERY SCENARIO IN THE CHECKLIST.

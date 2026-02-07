@@ -152,7 +152,7 @@ export default function PaymentPage() {
       if (data.devBypass) {
         toast({
           title: "Trial Started!",
-          description: "Your 7-day trial is now active (dev mode)",
+          description: "Your 3-day trial is now active (dev mode)",
         });
         setLocation(data.url);
       } else {
@@ -202,7 +202,7 @@ export default function PaymentPage() {
           <p className="payment-subheadline">
             {isIOS 
               ? 'Get unlimited access to Professor OS and 5,000+ technique videos'
-              : 'Choose your plan and start your 7-day free trial'
+              : 'Choose your plan and start your 3-day free trial'
             }
           </p>
         </div>
@@ -264,7 +264,7 @@ export default function PaymentPage() {
 
         {/* Trial Info - Different messaging for iOS */}
         <div className="trial-info">
-          <div className="trial-info-badge">{isIOS ? 'BJJ OS' : '7-Day Free Trial'}</div>
+          <div className="trial-info-badge">{isIOS ? 'BJJ OS' : '3-Day Free Trial'}</div>
           <p className="trial-info-text">
             {isIOS 
               ? 'Unlimited access to Professor OS and 5,000+ technique videos'
@@ -391,7 +391,7 @@ export default function PaymentPage() {
           ) : (
             <>
               <CreditCard className="w-5 h-5 mr-2" />
-              {isIOS ? `Subscribe - ${monthlyPrice}/month` : 'Start 7-Day Free Trial'}
+              {isIOS ? `Subscribe - ${monthlyPrice}/month` : 'Start Your Free Trial'}
             </>
           )}
         </Button>

@@ -37,7 +37,7 @@ export default function PricingPage() {
     }
 
     // For demo: all valid-format codes are accepted
-    setReferralMessage(`Code ${referralCode} applied - Extra 30 days free trial!`);
+    setReferralMessage(`Code ${referralCode} applied - Extended 14-day trial!`);
     setReferralValid(true);
   };
 
@@ -95,8 +95,8 @@ export default function PricingPage() {
             <div className="plan-period">/month</div>
           </div>
           
-          <div className="trial-badge">7-day free trial</div>
-          <p className="trial-note">Credit card required. Auto-charges after 7 days. Cancel anytime.</p>
+          <div className="trial-badge">3-day free trial</div>
+          <p className="trial-note">Credit card required. Auto-charges after 3 days. Cancel anytime.</p>
 
           <div className="features-list">
             <div className="feature-item" data-testid="feature-coaching">
@@ -126,7 +126,7 @@ export default function PricingPage() {
             onClick={handleStartTrial}
             data-testid="button-start-trial"
           >
-            Start 7-Day Free Trial
+            Start Your Free Trial
           </button>
         </div>
 

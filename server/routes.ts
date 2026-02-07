@@ -7560,7 +7560,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           stripeSubscriptionId: `dev_sub_${Date.now()}`,
           subscriptionType: 'monthly',
           subscriptionStatus: 'trialing',
-          trialEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          trialEndDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
           active: true,
         }).returning();
         
@@ -7573,10 +7573,17 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           { expiresIn: '30d' }
         );
         
+        const signupToken = jwt.sign(
+          { email: normalizedEmail, purpose: 'signup-set-password' },
+          process.env.JWT_SECRET || 'dev-secret-key',
+          { expiresIn: '1h' }
+        );
+
         return res.json({ 
           devBypass: true,
           userId: newUser.id,
           token: token,
+          signupToken: signupToken,
           user: {
             id: newUser.id,
             email: newUser.email,
@@ -7596,7 +7603,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       // Validate referral code if provided
       let validReferralCode = null;
       let discountCoupon = null;
-      let trialDays = 7;
+      let trialDays = 3;
       
       if (referralCode) {
         const upperCode = referralCode.toUpperCase().trim();
@@ -7605,14 +7612,15 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           code: referralCodes.code,
           codeType: referralCodes.codeType,
           isActive: referralCodes.isActive,
-          commissionRate: referralCodes.commissionRate
+          commissionRate: referralCodes.commissionRate,
+          trialDays: referralCodes.trialDays,
         })
           .from(referralCodes)
           .where(eq(referralCodes.code, upperCode));
         
         if (refCode && refCode.isActive) {
           validReferralCode = refCode;
-          trialDays = 30; // Extended trial for referral signups
+          trialDays = refCode.trialDays || 14;
           
           // Create Stripe coupon for influencer codes
           if (refCode.codeType === 'influencer' && refCode.commissionRate) {
@@ -7650,8 +7658,8 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           referral_code: validReferralCode?.code || 'none',
           signup_source: 'email_verification'
         },
-        success_url: `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000'}/payment/success?email=${encodeURIComponent(normalizedEmail)}`,
-        cancel_url: `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000'}/pricing`,
+        success_url: `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000'}/signup?step=password&email=${encodeURIComponent(normalizedEmail)}&ref=${encodeURIComponent(validReferralCode?.code || '')}&token=${jwt.sign({ email: normalizedEmail, purpose: 'signup-set-password' }, process.env.JWT_SECRET || 'dev-secret-key', { expiresIn: '1h' })}`,
+        cancel_url: `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000'}/signup`,
       };
       
       // Apply discount coupon if available
@@ -7678,7 +7686,90 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
     }
   });
 
-  // Stripe: Create checkout session with 7-day trial (Email-based)
+  // Set password for new signup (secured by signed token from Stripe success URL)
+  // Called after Stripe checkout success, before onboarding
+  app.post('/api/signup/set-password', async (req: any, res) => {
+    try {
+      const { email, password, token } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+      }
+      if (!password || password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters' });
+      }
+      if (!token) {
+        return res.status(400).json({ error: 'Invalid signup session' });
+      }
+
+      // Verify the signed token from checkout success URL
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret-key') as any;
+        if (decoded.purpose !== 'signup-set-password' || decoded.email !== email.toLowerCase().trim()) {
+          return res.status(403).json({ error: 'Invalid or expired signup session' });
+        }
+      } catch (tokenError) {
+        return res.status(403).json({ error: 'Signup session expired. Please start over.' });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+
+      const [user] = await db.select({
+        id: bjjUsers.id,
+        email: bjjUsers.email,
+        passwordHash: bjjUsers.passwordHash,
+        onboardingCompleted: bjjUsers.onboardingCompleted,
+      })
+        .from(bjjUsers)
+        .where(eq(bjjUsers.email, normalizedEmail))
+        .limit(1);
+
+      if (!user) {
+        return res.status(404).json({ error: 'Account not found. Please complete payment first.' });
+      }
+
+      if (user.passwordHash) {
+        return res.status(400).json({ error: 'Password already set. Please log in instead.' });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      await db.update(bjjUsers)
+        .set({ passwordHash: hashedPassword })
+        .where(eq(bjjUsers.id, user.id));
+
+      console.log(`[SIGNUP] Password set for user ${user.id} (${normalizedEmail})`);
+
+      const sessionToken = jwt.sign(
+        { userId: user.id, email: normalizedEmail },
+        process.env.JWT_SECRET || 'dev-secret-key',
+        { expiresIn: '30d' }
+      );
+
+      res.cookie('auth_token', sessionToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        path: '/',
+      });
+
+      res.json({
+        success: true,
+        token: sessionToken,
+        user: {
+          id: user.id,
+          email: normalizedEmail,
+          onboardingCompleted: user.onboardingCompleted,
+        }
+      });
+    } catch (error: any) {
+      console.error('[SIGNUP SET-PASSWORD] Error:', error);
+      res.status(500).json({ error: 'Failed to set password' });
+    }
+  });
+
+  // Stripe: Create checkout session with 3-day trial (Email-based)
   app.post('/api/create-checkout-session', checkUserAuth, async (req: any, res) => {
     try {
       if (!req.user || !req.user.userId) {
@@ -7736,7 +7827,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
             stripeSubscriptionId: `dev_sub_${Date.now()}`,
             subscriptionType: priceId === 'annual' ? 'annual' : 'monthly',
             subscriptionStatus: 'trialing',
-            trialEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+            trialEndDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
           })
           .where(eq(bjjUsers.id, user.id));
         
@@ -7887,7 +7978,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
                 stripeSubscriptionId: session.subscription as string,
                 subscriptionType: 'monthly',
                 subscriptionStatus: 'trialing',
-                trialEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now (will be updated by subscription webhook)
+                trialEndDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now (will be updated by subscription webhook)
                 active: true,
                 referralCode: referralCode && referralCode !== 'none' ? referralCode : null,
               }).returning();

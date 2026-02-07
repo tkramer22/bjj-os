@@ -92,9 +92,9 @@ export default function Landing() {
   const handleStartTrial = () => {
     const storedCode = sessionStorage.getItem('referralCode');
     if (storedCode) {
-      setLocation(`/pricing?ref=${storedCode}`);
+      setLocation(`/signup?ref=${storedCode}`);
     } else {
-      setLocation('/pricing');
+      setLocation('/signup');
     }
   };
 
@@ -196,34 +196,28 @@ export default function Landing() {
         </div>
       </nav>
 
+      {/* Referral banner at top */}
+      {isReferral && (
+        <div className="referral-banner" data-testid="banner-referral">
+          <span>Referred by {referralInfo.code} — Extended trial activated</span>
+        </div>
+      )}
+
       {/* Hero Section - Screen 1 */}
       <section className="landing-hero hero-section">
         <div className="landing-hero-content">
-          {isReferral ? (
-            <>
-              <h1 className="landing-hero-headline" data-testid="text-hero-heading">
-                {codeApplied ? 'Code Applied!' : `${referralInfo.influencerName} invited you to BJJ OS`}
-              </h1>
-              <p className="landing-hero-subhead" data-testid="text-hero-subhead">
-                Get {trialDays} days free (not the usual {defaultTrialDays})
-              </p>
-            </>
-          ) : (
-            <>
-              <h1 className="landing-hero-headline" data-testid="text-hero-heading">
-                The smartest Jiu-Jitsu training partner ever built.
-                <br />
-                5,000+ instructionals studied & analyzed.
-                <br />
-                Perfect memory.
-              </h1>
-              <p className="landing-hero-subhead" data-testid="text-hero-subhead">
-                You train. It remembers.
-                <br />
-                You ask. It knows.
-              </p>
-            </>
-          )}
+          <h1 className="landing-hero-headline" data-testid="text-hero-heading">
+            The smartest Jiu-Jitsu training partner ever built.
+            <br />
+            5,000+ instructionals studied & analyzed.
+            <br />
+            Perfect memory.
+          </h1>
+          <p className="landing-hero-subhead" data-testid="text-hero-subhead">
+            You train. It remembers.
+            <br />
+            You ask. It knows.
+          </p>
           
           <div className="hero-ctas">
             <button 
@@ -231,7 +225,7 @@ export default function Landing() {
               onClick={handleStartTrial}
               data-testid="button-start-trial"
             >
-              Start Your {trialDays}-Day Free Trial
+              {isReferral ? `Start Your ${trialDays}-Day Free Trial` : 'Start Your Free Trial'}
             </button>
             
             <div 
@@ -249,6 +243,13 @@ export default function Landing() {
             </div>
           </div>
           
+          {/* Referral code applied confirmation */}
+          {isReferral && (
+            <p className="referral-applied-text" data-testid="text-referral-applied">
+              Code {referralInfo.code} applied - Extended {trialDays}-day trial!
+            </p>
+          )}
+
           {/* Manual referral code entry - only shown for non-referral visitors */}
           {!isReferral && (
             <div className="referral-code-section" data-testid="section-referral-code">
@@ -259,7 +260,7 @@ export default function Landing() {
                     onClick={() => setShowCodeField(true)}
                     data-testid="link-enter-referral"
                   >
-                    Have a referral code? Enter it here
+                    Have a referral code?
                   </span>
                 </p>
               ) : (
@@ -291,7 +292,9 @@ export default function Landing() {
           )}
           
           <p className="landing-price-note">
-            $19.99/month · Cancel anytime
+            {isReferral 
+              ? `$19.99/month after ${trialDays}-day trial. Cancel anytime.`
+              : '3-day free trial. Credit card required. Cancel anytime.'}
           </p>
         </div>
         
@@ -721,6 +724,31 @@ export default function Landing() {
         .landing-cta-button:active {
           background: linear-gradient(135deg, var(--blue-hover-2) 0%, var(--purple-hover-2) 100%);
           transform: translateY(1px);
+        }
+
+        .referral-banner {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 1000;
+          background: linear-gradient(90deg, #7c3aed, #6d28d9);
+          padding: 10px 16px;
+          text-align: center;
+          font-family: var(--font-sans);
+          font-size: 14px;
+          font-weight: 500;
+          color: white;
+          letter-spacing: 0.3px;
+        }
+
+        .referral-applied-text {
+          font-family: var(--font-sans);
+          font-size: var(--text-small);
+          font-weight: 500;
+          color: #22c55e;
+          margin: 12px 0 0 0;
+          text-align: center;
         }
 
         .referral-code-section {
