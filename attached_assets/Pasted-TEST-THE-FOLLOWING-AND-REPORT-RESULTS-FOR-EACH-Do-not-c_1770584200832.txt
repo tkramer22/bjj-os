@@ -1,0 +1,104 @@
+TEST THE FOLLOWING AND REPORT RESULTS FOR EACH
+
+Do not change any code. Only test and report what happens.
+
+══════════════════════════════════════════════════════════════════════════
+TEST 1: REFERRAL URL — MCCLEARY
+══════════════════════════════════════════════════════════════════════════
+
+Visit: https://bjjos.app?ref=MCCLEARY
+
+□ Does the ?ref=MCCLEARY parameter persist or get stripped on page load?
+□ Does a referral banner appear on the landing page?
+□ Does the CTA button say “Start Your 14-Day Free Trial”?
+□ Is “MCCLEARY” a valid code in the referral_codes table? Run this query:
+SELECT * FROM referral_codes WHERE code = ‘MCCLEARY’;
+□ If it doesn’t exist, what referral codes DO exist? Run:
+SELECT code, trial_days, times_used, created_at FROM referral_codes LIMIT 20;
+
+══════════════════════════════════════════════════════════════════════════
+TEST 2: REFERRAL URL — JTTORRES
+══════════════════════════════════════════════════════════════════════════
+
+Visit: https://bjjos.app?ref=JTTORRES
+
+□ Does the referral banner appear?
+□ Does the CTA change to 14-day trial?
+□ Click through to email entry — does it show referral confirmation?
+
+══════════════════════════════════════════════════════════════════════════
+TEST 3: FULL SIGNUP FLOW (NO REFERRAL)
+══════════════════════════════════════════════════════════════════════════
+
+Visit: https://bjjos.app (no ?ref= parameter)
+
+□ Landing page loads with standard 3-day trial messaging
+□ Click CTA → email entry screen appears
+□ “Have a referral code?” link is visible below email field
+□ Enter a test email → click Continue
+□ Does verification code screen appear?
+□ Is a verification code actually sent to the email? Check server logs.
+□ If code is sent, enter it — does it validate?
+□ If code is NOT sent — what error appears in server logs?
+□ After verification, does Stripe checkout load with 3-day trial?
+
+══════════════════════════════════════════════════════════════════════════
+TEST 4: FULL SIGNUP FLOW (WITH REFERRAL)
+══════════════════════════════════════════════════════════════════════════
+
+Visit: https://bjjos.app?ref=JTTORRES (or whichever code exists)
+
+□ Complete full flow: email → verification → Stripe
+□ Does Stripe show 14-day trial (not 3-day)?
+□ After payment with test card 4242 4242 4242 4242:
+□ Password creation screen appears?
+□ Onboarding screens appear?
+□ How many onboarding questions are shown?
+□ What are the questions? List each one.
+□ Dashboard loads after onboarding?
+□ Professor OS greets user by name?
+
+══════════════════════════════════════════════════════════════════════════
+TEST 5: EXISTING USER LOGIN
+══════════════════════════════════════════════════════════════════════════
+
+□ Go to /login
+□ Enter an existing user’s email + password
+□ Does login succeed?
+□ Does dashboard load with all existing data intact?
+□ Chat history preserved?
+□ Saved videos preserved?
+
+══════════════════════════════════════════════════════════════════════════
+TEST 6: iOS APP
+══════════════════════════════════════════════════════════════════════════
+
+□ Check that no iOS-specific files were modified in recent commits:
+git log –oneline -10
+git diff HEAD~5 –name-only | grep -i ios
+□ Confirm iOS routes and components are untouched
+□ Confirm the onboarding flow on web matches the iOS onboarding questions exactly
+
+══════════════════════════════════════════════════════════════════════════
+TEST 7: DATABASE CHECK
+══════════════════════════════════════════════════════════════════════════
+
+Run these queries and show results:
+
+– All referral codes and their trial days
+SELECT code, trial_days, times_used, created_at FROM referral_codes;
+
+– Check if any user records were created from test signups that didn’t complete
+SELECT id, email, created_at, subscription_status FROM users ORDER BY created_at DESC LIMIT 10;
+
+– Check email verification codes table exists and structure
+SELECT column_name, data_type FROM information_schema.columns WHERE table_name = ‘email_verification_codes’;
+
+══════════════════════════════════════════════════════════════════════════
+
+REPORT FORMAT:
+For each test, report:
+✅ PASS — what happened
+❌ FAIL — what happened and what error/log output you see
+
+Do not fix anything. Just report results.
