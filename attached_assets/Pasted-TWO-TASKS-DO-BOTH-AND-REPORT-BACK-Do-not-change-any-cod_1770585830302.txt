@@ -1,0 +1,114 @@
+TWO TASKS — DO BOTH AND REPORT BACK
+
+⚠️ Do not change any code. Only test and document.
+
+══════════════════════════════════════════════════════════════════════════
+TASK 1: DOCUMENT THE iOS SIGN-IN FLOW
+══════════════════════════════════════════════════════════════════════════
+
+Walk me through exactly what happens when a NEW user downloads the BJJ OS
+app from the App Store and opens it for the first time.
+
+Answer these questions by reading the iOS-related code:
+
+1. What is the FIRST screen they see when they open the app?
+1. Do they see a login screen, a signup screen, or a landing/welcome screen?
+1. Are they asked to create an account immediately? If so, what fields?
+1. When does payment happen?
+- Before they can use anything?
+- After a free preview?
+- During onboarding?
+1. Is there an in-app purchase / Apple subscription, or does it use Stripe?
+1. Is there a free trial on iOS? How many days?
+1. What is the onboarding flow on iOS? List every screen and question in order.
+1. After onboarding, where do they land?
+1. Can they use the app at all without paying?
+
+Show me the specific files and code that handle:
+
+- iOS first launch / welcome screen
+- iOS signup/login screen
+- iOS payment/subscription screen
+- iOS onboarding screens (list each question)
+
+══════════════════════════════════════════════════════════════════════════
+TASK 2: TEST FULL WEB SIGNUP FLOW END TO END
+══════════════════════════════════════════════════════════════════════════
+
+Test the complete web signup flow from start to finish. Use a real test
+email that can receive emails (or check server logs for the verification
+code if email sending is not yet working).
+
+STEP BY STEP — report what happens at each step:
+
+□ Step 1: Visit bjjos.app
+
+- Does landing page load?
+- What does the CTA button say?
+- What price is shown?
+- What trial length is mentioned?
+
+□ Step 2: Click the CTA button
+
+- What screen appears?
+- Is it the email entry screen with the 4-step progress indicator?
+
+□ Step 3: Enter a test email and click Continue
+
+- What happens?
+- Does it move to the verification code screen?
+- Is a verification code actually sent? Check:
+  a) The test email inbox
+  b) Server logs for the email send attempt
+  c) The email_verification_codes table in the database
+- If code was NOT sent, what error appears in server logs?
+
+□ Step 4: Enter the verification code
+
+- Does it validate?
+- What screen appears next?
+
+□ Step 5: Stripe checkout
+
+- Does Stripe checkout load?
+- What price does it show?
+- What trial period does it show? (Should be 3 days)
+- Complete payment with test card: 4242 4242 4242 4242, any future expiry, any CVC
+
+□ Step 6: After payment
+
+- What screen appears? (Should be password creation)
+- Create a password — does it save?
+
+□ Step 7: Onboarding
+
+- How many onboarding screens appear?
+- List each question and the options shown
+- Complete all screens
+
+□ Step 8: Dashboard
+
+- Does dashboard load?
+- Does Professor OS greet the user by name?
+- Is all onboarding data saved? Check database:
+  SELECT name, email, belt_level, training_style, training_frequency,
+  subscription_status, referral_code_used
+  FROM users WHERE email = ‘[test email]’;
+
+□ Step 9: Logout and login
+
+- Log out
+- Go to /login
+- Enter the test email + password created in Step 6
+- Does login work?
+- Does dashboard load with all data intact?
+
+══════════════════════════════════════════════════════════════════════════
+
+REPORT FORMAT:
+For each step, tell me:
+✅ PASS — what you saw
+❌ FAIL — what went wrong, include error messages and server logs
+
+For Task 1, show me the actual code files and the exact screens/questions
+in the iOS onboarding so we can confirm web matches iOS.
