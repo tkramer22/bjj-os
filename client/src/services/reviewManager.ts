@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { InAppReview } from '@capacitor-community/in-app-review';
 
 const STORAGE_KEYS = {
   VIDEOS_SAVED: 'review_videos_saved',
@@ -72,19 +73,10 @@ class ReviewManager {
     }
 
     try {
-      console.log('[ReviewManager] Requesting app store review...');
+      console.log('[ReviewManager] Requesting native app store review via SKStoreReviewController...');
       
-      const { App } = await import('@capacitor/app');
-      
-      if ('requestReview' in App) {
-        await (App as any).requestReview();
-        console.log('[ReviewManager] Review prompt shown successfully');
-      } else {
-        const appInfo = await App.getInfo();
-        const appStoreUrl = `itms-apps://apps.apple.com/app/id${appInfo.id}?action=write-review`;
-        window.open(appStoreUrl, '_system');
-        console.log('[ReviewManager] Opened App Store review page');
-      }
+      await InAppReview.requestReview();
+      console.log('[ReviewManager] Review prompt shown successfully');
       
       this.setStorageValue(STORAGE_KEYS.LAST_PROMPT_DATE, new Date().toISOString());
       this.setStorageValue(STORAGE_KEYS.HAS_PROMPTED, 1);
