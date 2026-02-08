@@ -402,115 +402,61 @@ export function MobileMessageBubble({ message, sender, timestamp, videos = [], i
                 overflow: "hidden",
                 border: "1px solid var(--mobile-border)"
               }}>
-                {/* Show thumbnail for enriched videos, search prompt for unenriched */}
-                {segment.video.videoId ? (
-                  <div style={{ position: "relative" }}>
-                    <button
-                      onClick={() => {
+                {/* Show thumbnail with ThumbnailImage for all videos */}
+                <div style={{ position: "relative" }}>
+                  <button
+                    onClick={() => {
+                      if (segment.video!.videoId) {
                         setCurrentVideo({ 
                           videoId: segment.video!.videoId, 
                           title: segment.video!.title, 
                           instructor: segment.video!.instructor,
                           startTime: segment.video!.startTime 
                         });
-                        // 📊 Track video click for dashboard metrics
                         trackVideoClick(segment.video!.id, segment.video!.startTime);
-                      }}
-                      style={{
-                        width: "100%",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                        background: "#000",
-                        overflow: "hidden",
-                        position: "relative"
-                      }}
-                      data-testid={`button-play-video-${segment.video.id}`}
-                      title="Play video"
-                    >
-                      <ThumbnailImage
-                        videoId={segment.video.videoId}
-                        title={segment.video.title}
-                        thumbnailUrl={(segment.video as any).thumbnailUrl}
-                      />
-                      <div style={{
-                        position: "absolute",
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%, -50%)",
-                        width: "3.5rem",
-                        height: "3.5rem",
-                        background: "rgba(102, 126, 234, 0.95)",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
-                        zIndex: 10
-                      }}>
-                        <svg width="24" height="24" viewBox="0 0 16 16" fill="white">
-                          <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
-                        </svg>
-                      </div>
-                    </button>
-                  </div>
-                ) : (
-                  /* Unenriched video - search database first, then fall back to browser */
-                  <button
-                    onClick={() => handleUnenrichedVideoClick(segment.video!)}
-                    disabled={loadingVideos.has(segment.video.id)}
+                      } else {
+                        handleUnenrichedVideoClick(segment.video!);
+                      }
+                    }}
+                    disabled={!segment.video!.videoId && loadingVideos.has(segment.video.id)}
                     style={{
                       width: "100%",
                       border: "none",
-                      cursor: loadingVideos.has(segment.video.id) ? "wait" : "pointer",
-                      padding: "1.5rem 1rem",
-                      background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+                      cursor: (!segment.video!.videoId && loadingVideos.has(segment.video.id)) ? "wait" : "pointer",
+                      padding: 0,
+                      background: "#000",
+                      overflow: "hidden",
+                      position: "relative"
+                    }}
+                    data-testid={`button-play-video-${segment.video.id}`}
+                    title="Play video"
+                  >
+                    <ThumbnailImage
+                      videoId={segment.video.videoId || undefined}
+                      title={segment.video.title}
+                      thumbnailUrl={(segment.video as any).thumbnailUrl}
+                    />
+                    <div style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      width: "3.5rem",
+                      height: "3.5rem",
+                      background: "rgba(102, 126, 234, 0.95)",
+                      borderRadius: "50%",
                       display: "flex",
-                      flexDirection: "column",
                       alignItems: "center",
                       justifyContent: "center",
-                      gap: "0.5rem",
-                      opacity: loadingVideos.has(segment.video.id) ? 0.7 : 1
-                    }}
-                    data-testid={`button-search-video-${segment.video.id}`}
-                    title="Find and play video"
-                  >
-                    {loadingVideos.has(segment.video.id) ? (
-                      <>
-                        <div style={{
-                          width: "32px",
-                          height: "32px",
-                          border: "3px solid rgba(167, 139, 250, 0.3)",
-                          borderTopColor: "#A78BFA",
-                          borderRadius: "50%",
-                          animation: "spin 1s linear infinite"
-                        }} />
-                        <span style={{ fontSize: "0.75rem", color: "#A78BFA" }}>
-                          Finding video...
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{
-                          width: "3rem",
-                          height: "3rem",
-                          background: "rgba(102, 126, 234, 0.8)",
-                          borderRadius: "50%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center"
-                        }}>
-                          <svg width="20" height="20" viewBox="0 0 16 16" fill="white">
-                            <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
-                          </svg>
-                        </div>
-                        <span style={{ fontSize: "0.75rem", color: "#A78BFA" }}>
-                          Tap to play
-                        </span>
-                      </>
-                    )}
+                      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
+                      zIndex: 10
+                    }}>
+                      <svg width="24" height="24" viewBox="0 0 16 16" fill="white">
+                        <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/>
+                      </svg>
+                    </div>
                   </button>
-                )}
+                </div>
                 <div style={{ padding: "0.75rem" }}>
                   {/* Title and instructor - full width */}
                   <div 
@@ -526,7 +472,7 @@ export function MobileMessageBubble({ message, sender, timestamp, videos = [], i
                         handleUnenrichedVideoClick(segment.video!);
                       }
                     }}
-                    style={{ cursor: "pointer", marginBottom: segment.video.videoId ? "0.5rem" : 0 }}
+                    style={{ cursor: "pointer", marginBottom: "0.5rem" }}
                   >
                     <p style={{ 
                       fontWeight: "600", 
@@ -586,8 +532,8 @@ export function MobileMessageBubble({ message, sender, timestamp, videos = [], i
                   </div>
                   {/* Buttons row - always show for all videos */}
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                    {/* Analysis button - only for enriched videos with database ID */}
-                    {segment.video.videoId && (
+                    {/* Analysis button - show for any video with a valid database ID */}
+                    {segment.video.id > 0 && (
                       <button
                         onClick={() => setAnalysisVideoId(segment.video!.id)}
                         style={{
@@ -610,8 +556,8 @@ export function MobileMessageBubble({ message, sender, timestamp, videos = [], i
                         Analysis
                       </button>
                     )}
-                    {/* Save button - only for enriched videos */}
-                    {segment.video.videoId && (
+                    {/* Save button - show for any video with a valid database ID */}
+                    {segment.video.id > 0 && (
                       <button
                         onClick={() => toggleSaveVideo(segment.video!.id)}
                         style={{

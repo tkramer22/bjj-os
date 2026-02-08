@@ -1,0 +1,115 @@
+FIX TWO BUGS — BOTH ARE CRITICAL
+
+⚠️ DO NOT touch the signup flow, referral codes, landing page, or review system.
+Only fix these two specific issues.
+
+══════════════════════════════════════════════════════════════════════════
+BUG 1: CHAT VIDEO CARDS MISSING THUMBNAILS AND ANALYSIS BUTTON
+══════════════════════════════════════════════════════════════════════════
+
+PROBLEM: When Professor OS recommends videos in the chat, the video cards
+show a blue placeholder box with a play icon instead of the actual YouTube
+thumbnail. They also do not show an Analysis button. The Share button
+appears inconsistently.
+
+HOWEVER: The Saved Videos page shows video cards CORRECTLY — with
+thumbnails, Analysis button, Saved button, and Share button all working.
+
+This means the Saved Videos component renders video cards correctly, but
+the Chat component uses a DIFFERENT video card rendering that is broken.
+
+FIX:
+
+1. Find the chat component that renders video recommendations in
+   Professor OS responses. This is likely in:
+- client/src/pages/chat-mobile.tsx
+- client/src/pages/ios-chat.tsx
+- Or a shared chat message component
+1. Find the Saved Videos component that renders video cards correctly.
+   This is likely in:
+- client/src/pages/ios-saved.tsx
+- client/src/pages/ios-library.tsx
+- Or a shared video card component
+1. Compare how videos are rendered in chat vs saved videos. The chat
+   video cards need to match the saved videos cards:
+- YouTube thumbnail image (using youtubeId to build thumbnail URL)
+  URL format: https://img.youtube.com/vi/[youtubeId]/mqdefault.jpg
+- Video title
+- Instructor name
+- Analysis button (purple, opens analysis modal)
+- Save button (green)
+- Share button (green)
+1. The issue is likely one of these:
+   a) Chat is not passing youtubeId to the video card component
+   b) Chat uses inline rendering instead of the shared video card component
+   c) The API response for chat video recommendations doesn’t include youtubeId
+1. Check the API endpoint that Professor OS uses to recommend videos.
+   Make sure the response includes: youtubeId, title, instructor, and
+   all fields needed for thumbnails and analysis.
+1. Make the chat video cards use the SAME component or same rendering
+   logic as the Saved Videos page.
+
+TEST:
+□ Ask Professor OS about a technique (e.g. “show me triangle choke videos”)
+□ Video cards in chat show YouTube thumbnails (not blue placeholders)
+□ Video cards in chat show Analysis button
+□ Video cards in chat show Save and Share buttons
+□ Clicking Analysis opens the analysis modal with full details
+□ Clicking thumbnail plays the video
+□ Compare side-by-side with Saved Videos page — should look identical
+
+══════════════════════════════════════════════════════════════════════════
+BUG 2: DUPLICATE SAVED VIDEOS
+══════════════════════════════════════════════════════════════════════════
+
+PROBLEM: The Saved Videos page shows the same video saved multiple times.
+For example, Roger Gracie “Side control maintenance and attacks” appears
+4+ times in a row. Users should not be able to save the same video twice.
+
+FIX — TWO PARTS:
+
+PART A: PREVENT FUTURE DUPLICATES
+
+1. Find the API endpoint that saves videos (likely POST /api/videos/save
+   or similar)
+1. Before saving, check if this video already exists in the user’s saved
+   videos. Check by youtube_id or video_id.
+1. If already saved, return a response like:
+   { success: false, message: “Video already saved” }
+   Do NOT create a duplicate entry.
+1. Add a UNIQUE constraint to the database if one doesn’t exist:
+   ALTER TABLE saved_videos ADD CONSTRAINT unique_user_video
+   UNIQUE (user_id, video_id);
+   (Run this only if the constraint doesn’t already exist)
+1. On the frontend, if a video is already saved, the Save button should
+   show “Saved” (disabled/greyed out) instead of allowing another save.
+
+PART B: CLEAN UP EXISTING DUPLICATES
+
+1. Find and remove duplicate saved videos from the database.
+   Keep the OLDEST entry (first save), delete the rest.
+   
+   SQL to find duplicates:
+   SELECT user_id, video_id, COUNT(*) as count
+   FROM saved_videos
+   GROUP BY user_id, video_id
+   HAVING COUNT(*) > 1;
+1. SQL to delete duplicates (keep oldest):
+   DELETE FROM saved_videos
+   WHERE id NOT IN (
+   SELECT MIN(id) FROM saved_videos
+   GROUP BY user_id, video_id
+   );
+1. Show me how many duplicates were found and deleted.
+
+TEST:
+□ Open Saved Videos — no duplicates visible
+□ Save a video from the library
+□ Try to save the same video again — should not create duplicate
+□ Save button shows “Saved” for already-saved videos
+□ Check database: SELECT user_id, video_id, COUNT(*) FROM saved_videos
+GROUP BY user_id, video_id HAVING COUNT(*) > 1; — should return 0 rows
+
+══════════════════════════════════════════════════════════════════════════
+AFTER BOTH FIXES: Run npm run build and confirm no errors.
+══════════════════════════════════════════════════════════════════════════
