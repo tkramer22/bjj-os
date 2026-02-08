@@ -151,11 +151,17 @@ function parseVideoTokens(content: string): { text: string; video?: { id: number
 
 export function MobileMessageBubble({ message, sender, timestamp, videos = [], isLastMessage = false }: MessageBubbleProps) {
   const [savedVideoIds, setSavedVideoIds] = useState<Set<number>>(new Set());
+  const [analyzedVideoIds, setAnalyzedVideoIds] = useState<Set<number>>(new Set());
   const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string; startTime?: string } | null>(null);
   const [loadingVideos, setLoadingVideos] = useState<Set<number>>(new Set());
   const [analysisVideoId, setAnalysisVideoId] = useState<number | null>(null);
   const { toast } = useToast();
   const userId = localStorage.getItem('mobileUserId') || '';
+
+  // Parse video tokens from message to extract video IDs for analysis check
+  const videoIdsInMessage = sender === "assistant"
+    ? parseVideoTokens(message).filter(s => s.video && s.video.id > 0).map(s => s.video!.id)
+    : [];
 
   // Fetch user's saved videos on mount to populate the saved state
   useEffect(() => {
@@ -166,7 +172,6 @@ export function MobileMessageBubble({ message, sender, timestamp, videos = [], i
         const response = await fetch(`/api/ai/saved-videos/${userId}`);
         if (response.ok) {
           const data = await response.json();
-          // API returns { videos: [...] } with id as string
           const savedVideos = data.videos || [];
           const ids = new Set<number>(savedVideos.map((v: { id: string }) => parseInt(v.id, 10)));
           setSavedVideoIds(ids);
@@ -178,6 +183,36 @@ export function MobileMessageBubble({ message, sender, timestamp, videos = [], i
     
     fetchSavedVideos();
   }, [userId]);
+
+  // Check which videos have analysis data
+  useEffect(() => {
+    if (videoIdsInMessage.length === 0) {
+      setAnalyzedVideoIds(new Set());
+      return;
+    }
+    
+    const checkAnalysis = async () => {
+      try {
+        const response = await fetch('/api/ai/videos/has-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoIds: videoIdsInMessage }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const ids = new Set<number>();
+          for (const [id, hasIt] of Object.entries(data.analyzed)) {
+            if (hasIt) ids.add(parseInt(id));
+          }
+          setAnalyzedVideoIds(ids);
+        }
+      } catch (error) {
+        console.error('Failed to check analysis status:', error);
+      }
+    };
+    
+    checkAnalysis();
+  }, [message]);
 
   // Search database for video and play in-app if found, otherwise open browser
   const handleUnenrichedVideoClick = async (video: { id: number; title: string; instructor: string; startTime?: string }) => {
@@ -532,8 +567,8 @@ export function MobileMessageBubble({ message, sender, timestamp, videos = [], i
                   </div>
                   {/* Buttons row - always show for all videos */}
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                    {/* Analysis button - show for any video with a valid database ID */}
-                    {segment.video.id > 0 && (
+                    {/* Analysis button - only show for videos with actual analysis data */}
+                    {analyzedVideoIds.has(segment.video.id) && (
                       <button
                         onClick={() => setAnalysisVideoId(segment.video!.id)}
                         style={{

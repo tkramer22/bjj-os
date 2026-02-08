@@ -9056,6 +9056,45 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
     }
   });
 
+  // Batch check which video IDs have analysis data
+  app.post('/api/ai/videos/has-analysis', async (req, res) => {
+    try {
+      const { videoIds } = req.body;
+      if (!Array.isArray(videoIds) || videoIds.length === 0) {
+        return res.json({ analyzed: {} });
+      }
+      
+      const parsedIds = videoIds.map((id: any) => parseInt(id)).filter((id: number) => !isNaN(id));
+      if (parsedIds.length === 0) {
+        return res.json({ analyzed: {} });
+      }
+      
+      const results = await db.select({
+        videoId: videoKnowledge.videoId,
+      })
+      .from(videoKnowledge)
+      .where(
+        and(
+          sql`${videoKnowledge.videoId} = ANY(${parsedIds}::int[])`,
+          isNotNull(videoKnowledge.techniqueName),
+          sql`${videoKnowledge.techniqueName} != ''`,
+          sql`(${videoKnowledge.keyConcepts} IS NOT NULL OR ${videoKnowledge.fullSummary} IS NOT NULL)`
+        )
+      );
+      
+      const analyzedSet = new Set(results.map(r => r.videoId));
+      const analyzed: Record<number, boolean> = {};
+      for (const id of parsedIds) {
+        analyzed[id] = analyzedSet.has(id);
+      }
+      
+      res.json({ analyzed });
+    } catch (error: any) {
+      console.error('Error checking analysis status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Get unique techniques for dropdown filter - WITH COUNTS
   // "Recently Added" is always first, showing the 100 most recent videos
   app.get('/api/ai/techniques', async (req, res) => {

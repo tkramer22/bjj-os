@@ -1,0 +1,70 @@
+HIDE ANALYSIS BUTTON ON VIDEOS WITHOUT ANALYSIS DATA
+
+⚠️ DO NOT touch the signup flow, referral codes, review system, or chat video card fix.
+
+══════════════════════════════════════════════════════════════════════════
+PROBLEM
+══════════════════════════════════════════════════════════════════════════
+
+Some videos in the library and saved videos show an “Analysis” button, but
+when tapped, the modal says “Detailed AI analysis is being processed for
+this video. Check back soon!” This is because these videos do not have
+transcripts and will NEVER have analysis — they permanently failed Gemini
+analysis. Showing this message is misleading.
+
+══════════════════════════════════════════════════════════════════════════
+FIX
+══════════════════════════════════════════════════════════════════════════
+
+1. Find the video card component(s) used in:
+- Technique Library (ios-library.tsx or similar)
+- Saved Videos (ios-saved.tsx or similar)
+- Chat video recommendations (the component you just fixed)
+1. For each video card, check if the video has actual analysis data
+   before showing the Analysis button. The check should be:
+- Does this video have a non-empty gemini_analysis, ai_analysis,
+  or detailed_analysis field in the database?
+- If YES → show the Analysis button (purple)
+- If NO → do NOT show the Analysis button at all. Hide it completely.
+1. Check the API endpoints that return video data for library, saved,
+   and chat. Make sure they include a field indicating whether analysis
+   exists. Something like:
+- hasAnalysis: true/false
+- Or just check if the analysis field is non-null and non-empty
+1. Update the video card component to conditionally render the Analysis
+   button based on this field.
+1. The “check back soon” placeholder message in the analysis modal can
+   stay as a fallback, but users should rarely see it because the button
+   won’t appear for unanalyzed videos.
+
+══════════════════════════════════════════════════════════════════════════
+ALSO: CHECK HOW MANY VIDEOS HAVE VS DON’T HAVE ANALYSIS
+══════════════════════════════════════════════════════════════════════════
+
+Run these queries and show me the results:
+
+– Total videos
+SELECT COUNT(*) as total_videos FROM curated_videos;
+
+– Videos WITH analysis
+SELECT COUNT(*) as analyzed FROM curated_videos
+WHERE gemini_analysis IS NOT NULL AND gemini_analysis != ‘’;
+
+– Videos WITHOUT analysis  
+SELECT COUNT(*) as not_analyzed FROM curated_videos
+WHERE gemini_analysis IS NULL OR gemini_analysis = ‘’;
+
+(Adjust column name if the analysis field is named differently)
+
+══════════════════════════════════════════════════════════════════════════
+TEST
+══════════════════════════════════════════════════════════════════════════
+
+□ Open Technique Library → browse videos
+□ Videos WITH analysis show the Analysis button
+□ Videos WITHOUT analysis do NOT show the Analysis button
+□ Click Analysis on a video that has it → full analysis modal appears
+□ No video anywhere shows “check back soon” message
+□ Saved Videos page — same behavior
+□ Chat video recommendations — same behavior
+□ Run npm run build — no errors

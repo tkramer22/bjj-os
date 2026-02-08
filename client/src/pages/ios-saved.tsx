@@ -523,7 +523,7 @@ export default function IOSSavedPage() {
                       gap: '8px',
                       marginTop: '4px',
                     }}>
-                      {video.hasGeminiAnalysis !== false && (
+                      {video.hasGeminiAnalysis === true && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
