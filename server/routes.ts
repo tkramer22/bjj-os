@@ -12056,10 +12056,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         ))
         .limit(1);
       
-      if (existing.length > 0) {
-        console.log(`📌 Video ${parsedVideoId} already saved by user ${userId}`);
-        return res.json({ success: true, alreadySaved: true });
-      }
+      const alreadySaved = existing.length > 0;
       
       await db.insert(userSavedVideos).values({
         userId: userId,
@@ -12070,7 +12067,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         set: { note: note || '' }
       });
       
-      console.log(`✅ DB INSERT SUCCESS for video ${parsedVideoId}, user ${userId}`);
+      console.log(`✅ DB ${alreadySaved ? 'UPDATE' : 'INSERT'} SUCCESS for video ${parsedVideoId}, user ${userId}`);
       
       await db.insert(userActivity).values({
         userId: userId,
@@ -12084,7 +12081,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       await aiIntelligence.processUserFeedback(userId, videoId, 'save', '1');
       
       console.log(`✅ SAVED VIDEO COMPLETE - user ${userId}, video ${parsedVideoId}`);
-      res.json({ success: true });
+      res.json({ success: true, alreadySaved });
       
     } catch (error: any) {
       console.error('❌ SAVE VIDEO ERROR:', error);
