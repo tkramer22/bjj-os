@@ -29,7 +29,7 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({
           Processing...
         </>
       ) : (
-        isIOS ? `Subscribe - ${price}/month` : 'Start 7-Day Free Trial'
+        isIOS ? `Subscribe - ${price}/month` : 'Start Your Free Trial'
       )}
     </Button>
   );

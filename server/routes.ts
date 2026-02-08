@@ -8523,7 +8523,8 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           code: referralCodes.code,
           codeType: referralCodes.codeType,
           isActive: referralCodes.isActive,
-          commissionRate: referralCodes.commissionRate
+          commissionRate: referralCodes.commissionRate,
+          trialDays: referralCodes.trialDays,
         })
           .from(referralCodes)
           .where(eq(referralCodes.code, upperCode));
@@ -8551,7 +8552,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       
       // Create Stripe checkout session with trial
       // Use referral code's configured trial days, or 3 days for regular signups
-      const trialDays = validReferralCode ? 14 : 3;
+      const trialDays = validReferralCode ? (validReferralCode.trialDays || 14) : 3;
       
       const sessionData: any = {
         mode: 'subscription',

@@ -114,7 +114,7 @@
 - Voice input/output ✅
 
 ### Subscriptions
-- Stripe integration ($14.99/mo, $149/yr) ✅
+- Stripe integration ($19.99/mo, $149/yr) ✅
 - Referral code system ✅
 - 3-device limit ✅
 - Account sharing prevention ✅

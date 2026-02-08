@@ -14,8 +14,8 @@ All Stripe integration code and configuration has been **verified and is product
 - ✅ All Stripe API keys configured
 - ✅ Webhook endpoint implemented with signature verification
 - ✅ 6 webhook event handlers coded and ready
-- ✅ Checkout endpoint configured for $14.99/month subscriptions
-- ✅ 7-day trial period configured (30 days with referral)
+- ✅ Checkout endpoint configured for $19.99/month subscriptions
+- ✅ 3-day trial period configured (30 days with referral)
 - ✅ Database schema supports full subscription lifecycle
 - ✅ Referral commission tracking integrated
 - ✅ Failed payment SMS notifications configured
@@ -36,7 +36,7 @@ All Stripe integration code and configuration has been **verified and is product
 | `STRIPE_SECRET_KEY` | ✅ Exists | Backend API authentication |
 | `STRIPE_WEBHOOK_SECRET` | ✅ Exists | Webhook signature verification |
 | `VITE_STRIPE_PUBLISHABLE_KEY` | ✅ Exists | Frontend checkout |
-| `STRIPE_PRICE_ID_MONTHLY` | ✅ Exists | $14.99/month subscription |
+| `STRIPE_PRICE_ID_MONTHLY` | ✅ Exists | $19.99/month subscription |
 | `STRIPE_PRICE_ID_ANNUAL` | ✅ Exists | $149/year subscription |
 | `STRIPE_PRICE_ID_SMS_ONLY` | ❌ Missing | $4.99/month (optional - not critical for beta) |
 
@@ -67,7 +67,7 @@ All Stripe integration code and configuration has been **verified and is product
 
 **Plans Supported:**
 - `sms-only`: $4.99/month
-- `monthly`: $14.99/month ✅ **PRIMARY PLAN FOR BETA**
+- `monthly`: $19.99/month ✅ **PRIMARY PLAN FOR BETA**
 - `annual`: $149/year
 
 **Trial Configuration:**
@@ -85,7 +85,7 @@ All Stripe integration code and configuration has been **verified and is product
 
 **Commission Flow:**
 1. User signs up with referral code
-2. Trial expires → first payment ($14.99)
+2. Trial expires → first payment ($19.99)
 3. Webhook handler calculates commission (10-20%)
 4. Commission logged to `referral_payouts` table
 5. **Lifetime recurring commissions** - every monthly payment generates new commission
@@ -106,9 +106,9 @@ INSERT INTO referral_payouts (
 ) VALUES (
   '[REFERRAL_CODE]',
   '[CUSTOMER_EMAIL]',
-  14.99,
+  19.99,
   15, -- Example: 15% commission
-  2.25, -- $14.99 * 0.15
+  3.00, -- $19.99 * 0.15
   '[PAYMENT_INTENT_ID]',
   '[CHARGE_ID]',
   '[SUBSCRIPTION_ID]',
@@ -142,14 +142,14 @@ INSERT INTO referral_payouts (
 **Beta Launch Target:**
 - First 24 hours: 500-1,000 signups (influencer partnership)
 - Conversion rate (trial → paid): 30-50%
-- Week 1 MRR estimate: $2,248 - $7,495 (150-500 active subs @ $14.99)
+- Week 1 MRR estimate: $2,248 - $7,495 (150-500 active subs @ $19.99)
 
 **MRR Calculation Query:**
 ```sql
 SELECT 
   COUNT(*) FILTER (WHERE subscription_status = 'active' AND subscription_type = 'monthly') as monthly_subs,
   COUNT(*) FILTER (WHERE subscription_status = 'active' AND subscription_type = 'annual') as annual_subs,
-  (COUNT(*) FILTER (WHERE subscription_status = 'active' AND subscription_type = 'monthly') * 14.99) as monthly_mrr,
+  (COUNT(*) FILTER (WHERE subscription_status = 'active' AND subscription_type = 'monthly') * 19.99) as monthly_mrr,
   (COUNT(*) FILTER (WHERE subscription_status = 'active' AND subscription_type = 'annual') * 149 / 12) as annual_mrr
 FROM bjj_users;
 ```
@@ -204,7 +204,7 @@ FROM bjj_users;
 **Phase 2: Create Test Subscription**
 - Create test customer in Stripe
 - Add payment method: `4242 4242 4242 4242`
-- Create $14.99/month subscription with 7-day trial
+- Create $19.99/month subscription with 3-day trial
 - Copy subscription ID and customer ID
 
 **Phase 3: Verify Subscription Created Webhook**
@@ -226,9 +226,9 @@ FROM bjj_users;
 **Phase 6: Test Trial → Paid Conversion** ⚠️ **CRITICAL**
 - Simulate trial expiration (set trial_end to now)
 - Monitor webhooks: `invoice.finalized`, `invoice.payment_succeeded`, `customer.subscription.updated`
-- Verify payment: $14.99 charged successfully
+- Verify payment: $19.99 charged successfully
 - Confirm database: `subscription_status='active'`
-- Calculate MRR: should be $14.99
+- Calculate MRR: should be $19.99
 
 **Phase 7: Test Failed Payment**
 - Replace card with failing test card: `4000 0000 0000 0341`
@@ -250,9 +250,9 @@ FROM bjj_users;
 - Verify commission logged correctly (amount, percent, status)
 
 **Phase 10: Test Annual Plan** ⚠️ **NEW - CRITICAL**
-- Create annual subscription ($149/year with 7-day trial)
+- Create annual subscription ($149/year with 3-day trial)
 - Simulate trial expiration
-- Verify $149 charge (not $14.99!)
+- Verify $149 charge (not $19.99!)
 - Confirm `subscription_type='annual'` in database
 - Calculate annual MRR contribution ($12.42/month)
 
@@ -279,7 +279,7 @@ FROM bjj_users;
 You achieve **100/100 production certification** when:
 
 1. ✅ All 12 testing phases pass (monthly + annual + billing portal)
-2. ✅ Trial → paid conversion works for both monthly ($14.99) and annual ($149)
+2. ✅ Trial → paid conversion works for both monthly ($19.99) and annual ($149)
 3. ✅ All webhook events show 200 OK
 4. ✅ Database accurately reflects all subscription states
 5. ✅ Failed payment handling verified
@@ -331,9 +331,9 @@ Add test evidence to BLOCKER 3 section:
 **Subscription ID:** sub_xxxxx
 
 **Tests Passed:**
-- ✅ Subscription created with 7-day trial
+- ✅ Subscription created with 3-day trial
 - ✅ Webhook delivery verified (all 200 OK)
-- ✅ Trial expiration → $14.99 charge succeeded
+- ✅ Trial expiration → $19.99 charge succeeded
 - ✅ Payment failed → past_due status
 - ✅ Payment recovered → active status
 - ✅ Cancellation/reactivation working
@@ -387,7 +387,7 @@ Before announcing beta launch:
 - First 24 hours: 500-1,000 signups
 - Trial period: 7 days (30 days with referral)
 - Conversion rate: 30-50% (trial → paid)
-- Monthly price: $14.99
+- Monthly price: $19.99
 
 **Revenue Projections (Week 1):**
 - Conservative (30% conversion, 500 signups): **$2,248 MRR**

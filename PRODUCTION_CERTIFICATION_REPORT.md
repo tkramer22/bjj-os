@@ -107,7 +107,7 @@ ADD COLUMN created_at TIMESTAMP DEFAULT NOW()
 - ❌ Stripe API calls (create/cancel/update subscription)
 - ❌ Stripe webhook handling (customer.subscription.deleted, customer.subscription.updated, invoice.payment_failed, etc.)
 - ❌ End-to-end subscription flows through Stripe
-- ❌ Trial expiration → automatic charge ($14.99)
+- ❌ Trial expiration → automatic charge ($19.99)
 - ❌ Payment failure → past_due webhook
 - ❌ Payment recovery webhook handling
 
@@ -115,11 +115,11 @@ ADD COLUMN created_at TIMESTAMP DEFAULT NOW()
 
 Manual testing guide includes 10 phases:
 1. ✅ **Webhook Configuration Verification** - Endpoint setup, signature verification
-2. ✅ **Create Test Subscription** - $14.99/month with 7-day trial
+2. ✅ **Create Test Subscription** - $19.99/month with 3-day trial
 3. ✅ **Verify Webhook - Subscription Created** - Database updates, webhook logs
 4. ✅ **Test Subscription Cancellation** - Cancel flow verification
 5. ✅ **Test Subscription Reactivation** - Resume subscription flow
-6. ✅ **Test Trial Expiration → Paid Conversion** - CRITICAL: Automatic $14.99 charge
+6. ✅ **Test Trial Expiration → Paid Conversion** - CRITICAL: Automatic $19.99 charge
 7. ✅ **Test Failed Payment** - Past due handling, SMS notifications
 8. ✅ **Test Payment Recovery** - Reactivation after failed payment
 9. ✅ **Test Referral Commission Tracking** - Commission logging verification
@@ -137,7 +137,7 @@ See `STRIPE_TESTING_MANUAL_VERIFICATION_GUIDE.md` for complete step-by-step inst
 - ✅ `STRIPE_SECRET_KEY` (backend authentication)
 - ✅ `STRIPE_WEBHOOK_SECRET` (webhook signature verification)
 - ✅ `VITE_STRIPE_PUBLISHABLE_KEY` (frontend checkout)
-- ✅ `STRIPE_PRICE_ID_MONTHLY` ($14.99/month subscription)
+- ✅ `STRIPE_PRICE_ID_MONTHLY` ($19.99/month subscription)
 - ✅ `STRIPE_PRICE_ID_ANNUAL` ($149/year subscription)
 
 **Webhook Endpoint Infrastructure:**
@@ -154,7 +154,7 @@ See `STRIPE_TESTING_MANUAL_VERIFICATION_GUIDE.md` for complete step-by-step inst
 **Checkout Endpoint:**
 - ✅ URL: `POST /api/create-checkout-session`
 - ✅ Authentication: Required (email-based)
-- ✅ Plans Supported: SMS-only ($4.99), Monthly ($14.99), Annual ($149)
+- ✅ Plans Supported: SMS-only ($4.99), Monthly ($19.99), Annual ($149)
 - ✅ Trial Period: 7 days (30 days with referral code)
 - ✅ Metadata: Includes email, userId, referralCode for tracking
 - ✅ Development Bypass: Mock subscription in dev mode
@@ -171,9 +171,9 @@ See `STRIPE_TESTING_MANUAL_VERIFICATION_GUIDE.md` for complete step-by-step inst
 - Lifetime Users: 21 (one-time payment, not recurring)
 - Active Recurring Subscriptions: 0 (monthly/annual)
 - MRR: $0.00 (all paid users are lifetime)
-- Subscription Price: $14.99/month (CONFIGURED, ready for launch)
+- Subscription Price: $19.99/month (CONFIGURED, ready for launch)
 
-**Note:** Current paid users are early testers granted lifetime access. Beta launch will target recurring $14.99/month subscriptions with 7-day trial.
+**Note:** Current paid users are early testers granted lifetime access. Beta launch will target recurring $19.99/month subscriptions with 3-day trial.
 
 ---
 
@@ -298,11 +298,11 @@ Active Trials: 17
 Lifetime Users: 21 (early testers)
 Active Recurring (monthly/annual): 0
 MRR: $0.00 (lifetime users = one-time payment)
-Subscription Price: $14.99/month (configured for beta launch)
+Subscription Price: $19.99/month (configured for beta launch)
 Trial Period: 7 days (no charge)
 ```
 
-**Launch Readiness:** System configured for $14.99/month recurring subscriptions. Current paid users are early testers with lifetime access.
+**Launch Readiness:** System configured for $19.99/month recurring subscriptions. Current paid users are early testers with lifetime access.
 
 ### Scheduler Status (All Running)
 ```
@@ -366,8 +366,8 @@ Trial Period: 7 days (no charge)
 - [x] Email system initialized (Resend API)
 
 ### ⚠️ Revenue System Partially Ready (Stripe Verification Pending)
-- [x] $14.99/month subscription pricing configured
-- [x] 7-day trial (no charge for 7 days) - **configured, not tested**
+- [x] $19.99/month subscription pricing configured
+- [x] 3-day trial (no charge for 7 days) - **configured, not tested**
 - [ ] **Stripe integration UNTESTED** (database layer only - 6 SQL mutations passed)
 - [x] Current State: 21 lifetime users (early testers), 0 recurring monthly/annual
 - [x] MRR: $0.00 (lifetime = one-time payment, ready for recurring launch)
@@ -402,7 +402,7 @@ Trial Period: 7 days (no charge)
 5. ✅ Admin dashboard write operations are FUNCTIONAL
 6. ✅ Rate limiting configuration is CORRECT (deprecated options removed)
 7. ✅ All 17 schedulers are RUNNING successfully
-8. ✅ Revenue system is CONFIGURED correctly ($14.99/month, 7-day trial)
+8. ✅ Revenue system is CONFIGURED correctly ($19.99/month, 3-day trial)
 
 **CRITICAL LIMITATION:**
 - ⚠️ Stripe API/webhook integration NOT verified (no test mode access)
@@ -418,14 +418,14 @@ Trial Period: 7 days (no charge)
 - [ ] **Test 1:** Create test subscription via Stripe test mode
 - [ ] **Test 2:** Cancel subscription via Stripe → verify webhook updates database to 'canceled'
 - [ ] **Test 3:** Reactivate subscription via Stripe → verify webhook updates to 'active'
-- [ ] **Test 4:** Simulate trial expiration → verify automatic $14.99 charge
+- [ ] **Test 4:** Simulate trial expiration → verify automatic $19.99 charge
 - [ ] **Test 5:** Simulate failed payment → verify webhook sets status to 'past_due'
 - [ ] **Test 6:** Recover failed payment → verify webhook sets status to 'active'
 - [ ] **Test 7:** Grant lifetime access → verify Stripe subscription canceled, user marked lifetime
 - [ ] **Test 8:** Verify Stripe webhook authentication/signature validation
 
 ### Additional Manual Tests (Recommended)
-- [ ] **Test 9:** Sign up new user → verify 7-day trial (no charge)
+- [ ] **Test 9:** Sign up new user → verify 3-day trial (no charge)
 - [ ] **Test 10:** Wait 7 days → verify automatic charge on day 8
 - [ ] **Test 11:** Test cancellation flow from user perspective
 - [ ] **Test 12:** Verify MRR calculation updates correctly after first paying user

@@ -24,7 +24,7 @@
 - Checkout session creation (Line 2135 in routes.ts)
 - Webhook handling with signature verification (Line 2213)
 - Subscription management
-- Two pricing tiers: $14.99/month, $149/year
+- Two pricing tiers: $19.99/month, $149/year
 
 **API Usage:**
 - `stripe` imported from "stripe" package

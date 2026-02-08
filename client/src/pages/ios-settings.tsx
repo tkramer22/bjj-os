@@ -357,7 +357,7 @@ export default function IOSSettingsPage() {
             </>
           )}
 
-          {/* TYPE 2: 7-DAY TRIAL */}
+          {/* TYPE 2: TRIAL */}
           {!isLoadingSubscription && subscription?.type === 'trial' && !subscription?.cancelAtPeriodEnd && (
             <>
               <div style={{
@@ -383,7 +383,7 @@ export default function IOSSettingsPage() {
                 borderBottom: '1px solid #2A2A2E',
               }}>
                 <span style={{ fontSize: '15px', color: '#71717A' }}>Status</span>
-                <span style={{ fontSize: '15px', color: '#8B5CF6' }}>7-day free trial</span>
+                <span style={{ fontSize: '15px', color: '#8B5CF6' }}>Free trial</span>
               </div>
               <div style={{
                 padding: '16px 20px',

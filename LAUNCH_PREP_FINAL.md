@@ -138,7 +138,7 @@ Quick guide for testing BJJ OS:
 7. ✅ Embedded video playback (no YouTube redirect)
 8. ✅ Save/unsave videos
 9. ✅ Belt theme selector
-10. ✅ Stripe subscriptions ($14.99/mo, $149/yr)
+10. ✅ Stripe subscriptions ($19.99/mo, $149/yr)
 
 ---
 

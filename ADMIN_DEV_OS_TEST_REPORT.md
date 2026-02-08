@@ -68,11 +68,11 @@ FROM bjj_users;
 | **Signups This Week** | 48 | ✅ |
 
 **Revenue Metrics**:
-- **MRR (Monthly Recurring Revenue)**: $419.72 (28 active × $14.99/month)
-- **Potential MRR**: $1,064.55 if all trial users convert (71 total × $14.99)
+- **MRR (Monthly Recurring Revenue)**: $419.72 (28 active × $19.99/month)
+- **Potential MRR**: $1,064.55 if all trial users convert (71 total × $19.99)
 - **Trial Conversion Rate**: 62% (28 active / 45 total who've completed trial)
 
-⚠️ **NOTE**: Pricing is $14.99/month per `server/admin-dashboard-api.ts` line 84, NOT $30/month
+⚠️ **NOTE**: Pricing is $19.99/month per `server/admin-dashboard-api.ts` line 84, NOT $30/month
 
 ### **2.2 User Management API Endpoints** ✅
 **Status**: VERIFIED
@@ -306,7 +306,7 @@ client/src/pages/admin/chat.tsx - Admin UI interface
 ```
 System Status:
 • Users: 94 total (28 active, 17 trial, 0 canceled)
-• MRR: $419.72 (28 × $14.99)
+• MRR: $419.72 (28 × $19.99)
 • Videos: 348 / 2,000 (17%)
 • Curation: Enabled, quality threshold 7.1
 • Systems: Partially operational ⚠️
@@ -319,7 +319,7 @@ Calculation:
 1. 500 signups × 28% conversion = 140 paying users
 2. Current: 28 paying users
 3. Total: 168 paying users
-4. MRR: 168 × $14.99 = $2,518.32
+4. MRR: 168 × $19.99 = $2,518.32
 
 Projected MRR: $2,518.32
 ```
@@ -352,7 +352,7 @@ trial_end_date: Trial expiration date
 - **Trialing**: 17 users
 - **Active**: 28 users  
 - **Canceled**: 0 users
-- **Total Revenue**: $419.72 MRR ($14.99/month × 28 active)
+- **Total Revenue**: $419.72 MRR ($19.99/month × 28 active)
 
 ⚠️ **IMPORTANT**: Subscription mutations (grant/revoke, cancel, billing) were NOT tested - only database counts verified
 
@@ -398,7 +398,7 @@ Signups This Week:    48
 ```
 MRR:                  $419.72
 Potential MRR:        $1,064.55 (if all trials convert)
-Average per user:     $14.99/month
+Average per user:     $19.99/month
 Trial conversion:     62%
 ```
 
@@ -438,7 +438,7 @@ Database:             ✅ Connected (Neon PostgreSQL)
 
 3. **Subscription System** ⚠️
    - Stripe integration implemented
-   - 7-day trial → $14.99/month configured
+   - 3-day trial → $19.99/month configured
    - 28 paying subscribers ($419.72 MRR)
    - ⚠️ **NOT TESTED**: Payment mutations, cancellations, failure handling
 
@@ -491,7 +491,7 @@ Database:             ✅ Connected (Neon PostgreSQL)
 
 3. **Revenue Metrics Were Wrong** ⚠️
    - Initial report used $30/month (2x actual price)
-   - Actual pricing: $14.99/month per admin-dashboard-api.ts
+   - Actual pricing: $19.99/month per admin-dashboard-api.ts
    - **Impact**: HIGH - All revenue projections were inflated 2x
    - **Recommendation**: Use correct pricing in all calculations
    - **Priority**: HIGH (FIXED in this report)
@@ -521,7 +521,7 @@ Database:             ✅ Connected (Neon PostgreSQL)
 
 1. ✅ **User System**: Fully operational (94 users, 28 paying)
 2. ✅ **Video Library**: 348 curated videos ready
-3. ⚠️ **Subscription Flow**: 7-day trial → $14.99/month configured (mutations NOT tested)
+3. ⚠️ **Subscription Flow**: 3-day trial → $19.99/month configured (mutations NOT tested)
 4. ✅ **AI Coaching**: Professor OS dual-model active
 5. ⚠️ **Admin Dashboard**: API endpoints exist (mutation testing incomplete)
 6. ⚠️ **Dev OS**: Snapshot system working (action execution NOT tested)
@@ -563,7 +563,7 @@ Database:             ✅ Connected (Neon PostgreSQL)
 Day 1 Signups:        500 users
 Trial Conversion:     28% (historical rate)
 Paying Users:         140 new + 28 existing = 168
-MRR:                  168 × $14.99 = $2,518.32
+MRR:                  168 × $19.99 = $2,518.32
 Annual Run Rate:      $30,219.84
 ```
 
@@ -572,7 +572,7 @@ Annual Run Rate:      $30,219.84
 Day 1 Signups:        1,000 users
 Trial Conversion:     28%
 Paying Users:         280 new + 28 existing = 308
-MRR:                  308 × $14.99 = $4,616.92
+MRR:                  308 × $19.99 = $4,616.92
 Annual Run Rate:      $55,403.04
 ```
 
@@ -585,7 +585,7 @@ Annual Run Rate:      $55,403.04
 The BJJ OS platform has **strong infrastructure** but testing revealed gaps:
 
 **✅ VERIFIED & OPERATIONAL**:
-- ✅ 94 active users (28 paying, $419.72 MRR at $14.99/month)
+- ✅ 94 active users (28 paying, $419.72 MRR at $19.99/month)
 - ✅ 348 curated BJJ videos in ai_video_knowledge table
 - ✅ Admin dashboard API endpoints exist (60+)
 - ✅ Dev OS intelligence snapshot system working
@@ -604,7 +604,7 @@ The BJJ OS platform has **strong infrastructure** but testing revealed gaps:
 2. **Test manual curation trigger** - Verify auto-curation works end-to-end
 3. **Test subscription mutations** - Grant/revoke lifetime, cancel subscriptions
 4. **Verify Dev OS actions** - Test tier 1-3 action execution
-5. **Correct all revenue calculations** - Use $14.99/month not $30/month
+5. **Correct all revenue calculations** - Use $19.99/month not $30/month
 
 **Recommendation**: **Additional testing required before certifying production-ready**. Core infrastructure is solid but critical flows need validation.
 

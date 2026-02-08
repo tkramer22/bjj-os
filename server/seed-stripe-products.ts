@@ -39,19 +39,19 @@ async function seedProducts() {
   
   const monthlyPrice = await stripe.prices.create({
     product: product.id,
-    unit_amount: 1499,
+    unit_amount: 1999,
     currency: 'usd',
     recurring: {
       interval: 'month',
-      trial_period_days: 7,
+      trial_period_days: 3,
     },
     metadata: {
       plan_type: 'monthly',
-      trial_days: '7',
+      trial_days: '3',
     }
   });
   
-  console.log('✅ Monthly price created:', monthlyPrice.id, '($14.99/month with 7-day trial)');
+  console.log('✅ Monthly price created:', monthlyPrice.id, '($19.99/month with 3-day trial)');
   
   console.log('\n🎉 Stripe products setup complete!');
   console.log('Product ID:', product.id);

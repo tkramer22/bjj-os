@@ -288,7 +288,7 @@
 - **What:** Complete subscription signup flow
 - **How:**
   1. Click "Upgrade" button
-  2. Select monthly ($14.99) or annual ($149)
+  2. Select monthly ($19.99) or annual ($149)
   3. Use Stripe test card: 4242 4242 4242 4242
   4. Complete checkout
 - **Expected:** 
@@ -573,7 +573,7 @@
      - How helpful was Prof. OS?
      - What bugs did you find?
      - What features do you want?
-     - Would you pay $14.99/month for this?
+     - Would you pay $19.99/month for this?
 - **Expected:** Easy feedback collection
 - **Priority:** P1 (CRITICAL - product insights)
 

@@ -713,7 +713,7 @@ eas build --platform ios --profile production
 2. Upload .ipa using Transporter or Xcode
 3. Fill out app information
 4. Add screenshots
-5. Set pricing: $14.99/month subscription
+5. Set pricing: $19.99/month subscription
 6. Submit for review
 
 ---

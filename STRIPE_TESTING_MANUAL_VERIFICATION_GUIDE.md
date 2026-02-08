@@ -21,7 +21,7 @@ This guide provides step-by-step instructions for manually testing the Stripe in
 - `STRIPE_SECRET_KEY` ✅
 - `STRIPE_WEBHOOK_SECRET` ✅
 - `VITE_STRIPE_PUBLISHABLE_KEY` ✅
-- `STRIPE_PRICE_ID_MONTHLY` ✅ ($14.99/month)
+- `STRIPE_PRICE_ID_MONTHLY` ✅ ($19.99/month)
 - `STRIPE_PRICE_ID_ANNUAL` ✅ ($149/year)
 
 **Stripe Integration Code (Confirmed Working):**
@@ -42,7 +42,7 @@ This guide provides step-by-step instructions for manually testing the Stripe in
 ## 🧪 Manual Testing Protocol (12 Phases)
 
 **Complete all 12 phases to achieve 100% certification:**
-- Phases 1-9: Core monthly subscription lifecycle ($14.99/month)
+- Phases 1-9: Core monthly subscription lifecycle ($19.99/month)
 - Phase 10: Annual plan testing ($149/year)
 - Phase 11: Billing portal & payment method updates
 - Phase 12: Final verification checklist
@@ -112,14 +112,14 @@ curl -X POST https://bjjos.app/api/webhooks/stripe \
 1. Go to: https://dashboard.stripe.com/test/products
 2. Find your BJJ OS monthly subscription product
 3. Verify:
-   - Price: $14.99/month
+   - Price: $19.99/month
    - Recurring billing
 4. **Copy Price ID** (format: `price_xxxxx`)
 5. Verify this matches your `STRIPE_PRICE_ID_MONTHLY` environment variable
 
-**Step 2.3: Create Subscription with 7-Day Trial**
+**Step 2.3: Create Subscription with 3-Day Trial**
 1. On the customer page (stripe-test-1@bjjos.test), click "Actions" → "Add subscription"
-2. Select your BJJ OS product ($14.99/month)
+2. Select your BJJ OS product ($19.99/month)
 3. **Important:** Set trial period to **7 days**
 4. Click "Start subscription"
 5. **Copy Subscription ID** (format: `sub_xxxxx`)
@@ -128,7 +128,7 @@ curl -X POST https://bjjos.app/api/webhooks/stripe \
 - Subscription status: **"Trialing"**
 - Trial ends: 7 days from now
 - First invoice: Scheduled for trial end date
-- Amount: $14.99
+- Amount: $19.99
 
 ---
 
@@ -248,7 +248,7 @@ WHERE email = 'stripe-test-1@bjjos.test';
 
 ### PHASE 6: Test Trial Expiration → Paid Conversion
 
-**CRITICAL TEST:** This verifies automatic charging after 7-day trial
+**CRITICAL TEST:** This verifies automatic charging after 3-day trial
 
 **Step 6.1: Simulate Trial End**
 
@@ -269,7 +269,7 @@ stripe subscriptions update sub_xxxxx --trial-end=now
 
 Expected webhook events (in order):
 
-1. **`invoice.finalized`** - Invoice created for $14.99
+1. **`invoice.finalized`** - Invoice created for $19.99
 2. **`invoice.payment_succeeded`** - Payment processed successfully
 3. **`customer.subscription.updated`** - Status changed from `trialing` to `active`
 
@@ -277,7 +277,7 @@ Expected webhook events (in order):
 1. Go to customer's subscription page
 2. Verify:
    - ✅ Status: **"Active"** (no longer trialing)
-   - ✅ Latest invoice: $14.99 **Paid**
+   - ✅ Latest invoice: $19.99 **Paid**
    - ✅ Payment method charged
    - ✅ Next billing date: 30 days from trial end
 
@@ -305,13 +305,13 @@ WHERE email = 'stripe-test-1@bjjos.test';
 ```sql
 SELECT 
   COUNT(*) FILTER (WHERE subscription_status = 'active' AND subscription_type = 'monthly') as monthly_subs,
-  (COUNT(*) FILTER (WHERE subscription_status = 'active' AND subscription_type = 'monthly') * 14.99) as monthly_mrr
+  (COUNT(*) FILTER (WHERE subscription_status = 'active' AND subscription_type = 'monthly') * 19.99) as monthly_mrr
 FROM bjj_users;
 ```
 
 **Expected Result:**
 - ✅ `monthly_subs`: 1 (your test user)
-- ✅ `monthly_mrr`: $14.99
+- ✅ `monthly_mrr`: $19.99
 
 ---
 
@@ -442,7 +442,7 @@ WHERE customer_email = 'stripe-test-2@bjjos.test';
 
 **Expected Result:**
 - ✅ Commission recorded
-- ✅ `payment_amount`: 14.99
+- ✅ `payment_amount`: 19.99
 - ✅ `commission_percent`: (10-20% depending on code)
 - ✅ `commission_amount`: Calculated correctly
 - ✅ `status`: `'pending'` (Net 60 payout)
@@ -462,7 +462,7 @@ WHERE customer_email = 'stripe-test-2@bjjos.test';
 4. Add payment method: `4242 4242 4242 4242`
 5. Click "Save customer"
 
-**Step 10.2: Create Annual Subscription with 7-Day Trial**
+**Step 10.2: Create Annual Subscription with 3-Day Trial**
 1. On customer page, click "Actions" → "Add subscription"
 2. Find your BJJ OS **Annual** product ($149/year)
 3. Verify price matches `STRIPE_PRICE_ID_ANNUAL` environment variable
@@ -494,7 +494,7 @@ WHERE email = 'stripe-test-annual@bjjos.test';
 **Step 10.5: Simulate Trial End for Annual Plan**
 1. Update subscription trial end to "now" in Stripe Dashboard
 2. Monitor webhooks: `invoice.payment_succeeded`
-3. Verify payment amount: **$149.00** (not $14.99!)
+3. Verify payment amount: **$149.00** (not $19.99!)
 
 **Step 10.6: Verify Annual Conversion**
 
@@ -604,14 +604,14 @@ Questions: todd@bjjos.app
 - [ ] ✅ Subscription created → database updated with trial status
 - [ ] ✅ Subscription canceled → database reflects cancellation
 - [ ] ✅ Subscription reactivated → database shows active trial
-- [ ] ✅ Trial expired → automatic $14.99 charge succeeded
+- [ ] ✅ Trial expired → automatic $19.99 charge succeeded
 - [ ] ✅ Payment succeeded → subscription status = 'active'
 - [ ] ✅ Payment failed → subscription status = 'past_due' + SMS sent
 - [ ] ✅ Payment recovered → subscription status = 'active'
 - [ ] ✅ Referral commission logged correctly
 
 **Annual Plan Verification (Phase 10):**
-- [ ] ✅ Annual subscription created ($149/year with 7-day trial)
+- [ ] ✅ Annual subscription created ($149/year with 3-day trial)
 - [ ] ✅ Trial → paid conversion works for annual plan ($149 charged)
 - [ ] ✅ Database shows `subscription_type='annual'` (not monthly)
 - [ ] ✅ Annual MRR contribution calculated correctly ($12.42/month)
@@ -624,7 +624,7 @@ Questions: todd@bjjos.app
 - [ ] ✅ Payment retry works after portal payment method update
 
 **All Price IDs Tested:**
-- [ ] ✅ `STRIPE_PRICE_ID_MONTHLY` ($14.99/month) - Phases 2-9
+- [ ] ✅ `STRIPE_PRICE_ID_MONTHLY` ($19.99/month) - Phases 2-9
 - [ ] ✅ `STRIPE_PRICE_ID_ANNUAL` ($149/year) - Phase 10
 - [ ] ⚠️ `STRIPE_PRICE_ID_SMS_ONLY` ($4.99/month) - OPTIONAL (if configured)
 
@@ -712,7 +712,7 @@ After completing all manual tests, update `PRODUCTION_CERTIFICATION_REPORT.md`:
    **Manual Testing Completed:**
    - ✅ Subscription creation via Stripe Dashboard
    - ✅ Webhook delivery verified (200 OK)
-   - ✅ Trial → paid conversion tested ($14.99 charge)
+   - ✅ Trial → paid conversion tested ($19.99 charge)
    - ✅ Payment failure handling verified
    - ✅ Payment recovery tested
    - ✅ Cancellation/reactivation flows working
@@ -722,8 +722,8 @@ After completing all manual tests, update `PRODUCTION_CERTIFICATION_REPORT.md`:
 4. **Update Revenue System:**
    ```
    ### ✅ Revenue System Fully Ready
-   - [x] $14.99/month subscription pricing verified in Stripe
-   - [x] 7-day trial tested end-to-end
+   - [x] $19.99/month subscription pricing verified in Stripe
+   - [x] 3-day trial tested end-to-end
    - [x] Stripe integration VERIFIED (6 webhook events + test subscription)
    - [x] Trial expiration → automatic charge WORKING
    - [x] Payment webhooks VERIFIED (failed/recovered payments)
@@ -740,11 +740,11 @@ After completing all manual tests, update `PRODUCTION_CERTIFICATION_REPORT.md`:
    **Subscription ID:** sub_xxxxx
    
    **Tests Passed:**
-   - ✅ Subscription created with 7-day trial
+   - ✅ Subscription created with 3-day trial
    - ✅ Webhook `customer.subscription.created` → 200 OK
    - ✅ Database updated: subscription_status='trialing'
    - ✅ Trial expiration simulated
-   - ✅ Automatic charge: $14.99 succeeded
+   - ✅ Automatic charge: $19.99 succeeded
    - ✅ Webhook `invoice.payment_succeeded` → 200 OK
    - ✅ Database updated: subscription_status='active'
    - ✅ Payment failure tested (past_due status)
@@ -766,7 +766,7 @@ After completing all manual tests, update `PRODUCTION_CERTIFICATION_REPORT.md`:
    5. ✅ Admin dashboard write operations are FUNCTIONAL
    6. ✅ Rate limiting configuration is CORRECT (deprecated options removed)
    7. ✅ All 17 schedulers are RUNNING successfully
-   8. ✅ Revenue system is PRODUCTION READY ($14.99/month, 7-day trial)
+   8. ✅ Revenue system is PRODUCTION READY ($19.99/month, 3-day trial)
    9. ✅ Stripe webhooks VERIFIED (trial→paid, failed payments, recovery)
    10. ✅ Trial expiration → automatic charge TESTED and WORKING
    
@@ -782,8 +782,8 @@ After completing all manual tests, update `PRODUCTION_CERTIFICATION_REPORT.md`:
 You have achieved 100% production certification when:
 
 1. ✅ All 12 manual test phases completed successfully
-2. ✅ Monthly plan tested end-to-end ($14.99/month, 7-day trial)
-3. ✅ Annual plan tested end-to-end ($149/year, 7-day trial)
+2. ✅ Monthly plan tested end-to-end ($19.99/month, 3-day trial)
+3. ✅ Annual plan tested end-to-end ($149/year, 3-day trial)
 4. ✅ Billing portal tested (payment method update flow)
 5. ✅ All webhook events show 200 OK in Stripe Dashboard
 6. ✅ Test subscriptions converted from trial → paid (both monthly & annual)

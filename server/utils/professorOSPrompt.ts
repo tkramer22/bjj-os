@@ -221,7 +221,7 @@ OPTIONAL:
 - videoRecommendation: Full object or omit entirely
 - returnLoop: Create anticipation for next session (use 30% of responses, NOT every time)
 - followUpQuestion: Keep conversation going (use sparingly)
-- trialUrgency: If they have < 7 days left
+- trialUrgency: If they have < 3 days left
 - patternObservation: If you notice recurring themes
 
 All the rules below guide HOW to fill these JSON fields.`;
@@ -1138,9 +1138,9 @@ REMEMBER:
 }
 
 export function buildTrialUrgencySection(ctx: PromptContext): string {
-  const daysLeft = 7 - ctx.daysSinceJoined; // Assuming 7-day trial
+  const daysLeft = 3 - ctx.daysSinceJoined; // Assuming 3-day trial (default, referral codes may extend)
   
-  if (daysLeft <= 0 || daysLeft > 7) {
+  if (daysLeft <= 0 || daysLeft > 14) {
     return ''; // No trial urgency for paid users or if calculation is off
   }
   

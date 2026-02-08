@@ -13,7 +13,7 @@ BJJ OS is a fully-functional AI-powered BJJ training platform with:
 - **Guaranteed video recommendations** (2 per query)
 - **Mobile-first PWA** with embedded playback
 - **Phone authentication** via Twilio
-- **Stripe subscriptions** ($14.99/mo, $149/yr)
+- **Stripe subscriptions** ($19.99/mo, $149/yr)
 - **Comprehensive admin dashboard**
 
 ---
@@ -158,7 +158,7 @@ Status: Ready for verification
 ## 💳 SUBSCRIPTION SYSTEM
 
 ### Stripe Integration
-- **Monthly:** $14.99 (STRIPE_PRICE_ID_MONTHLY)
+- **Monthly:** $19.99 (STRIPE_PRICE_ID_MONTHLY)
 - **Annual:** $149.00 (STRIPE_PRICE_ID_ANNUAL)
 - **Webhook:** Configured (STRIPE_WEBHOOK_SECRET)
 

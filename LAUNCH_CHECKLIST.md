@@ -46,7 +46,7 @@
 
 ### Subscription & Payments
 - [x] Stripe integration
-- [x] Monthly: $14.99
+- [x] Monthly: $19.99
 - [x] Annual: $149.00
 - [x] Referral code system
 - [x] 3-device limit (account sharing prevention)

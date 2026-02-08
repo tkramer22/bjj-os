@@ -949,7 +949,7 @@ eas build --platform ios --profile production
 1. Create app in App Store Connect
 2. Fill out app information
 3. Add screenshots (6.5" and 5.5" required)
-4. Set pricing ($14.99/month subscription)
+4. Set pricing ($19.99/month subscription)
 5. Add privacy policy URL: `https://bjjos.app/privacy`
 6. Submit for review
 
