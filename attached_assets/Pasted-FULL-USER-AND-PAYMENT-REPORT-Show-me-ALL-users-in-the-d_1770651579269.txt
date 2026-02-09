@@ -1,0 +1,60 @@
+FULL USER AND PAYMENT REPORT
+
+Show me ALL users in the database with their payment status.
+
+══════════════════════════════════════════════════════════════════════════
+QUERY 1: ALL USERS WITH FULL PAYMENT DETAILS
+══════════════════════════════════════════════════════════════════════════
+
+SELECT id, email, name, created_at, subscription_status, signup_source,
+stripe_customer_id, stripe_subscription_id,
+CASE
+WHEN stripe_customer_id IS NOT NULL AND stripe_customer_id != ‘’ THEN ‘STRIPE’
+WHEN signup_source = ‘ios’ THEN ‘APPLE’
+ELSE ‘UNKNOWN’
+END as payment_method,
+is_admin, referral_code_used
+FROM users
+ORDER BY created_at DESC;
+
+══════════════════════════════════════════════════════════════════════════
+QUERY 2: CHECK FOR APPLE RECEIPT DATA
+══════════════════════════════════════════════════════════════════════════
+
+Is there a table or column that stores Apple receipt data or Apple
+transaction IDs? Search for:
+
+- apple_receipt
+- apple_transaction
+- iap_receipt
+- original_transaction_id
+- Any column in the users table related to Apple purchases
+
+Show the schema:
+SELECT column_name, data_type FROM information_schema.columns
+WHERE table_name = ‘users’ ORDER BY ordinal_position;
+
+══════════════════════════════════════════════════════════════════════════
+QUERY 3: COUNT BY PAYMENT METHOD
+══════════════════════════════════════════════════════════════════════════
+
+SELECT
+COUNT(*) as total_users,
+COUNT(CASE WHEN stripe_customer_id IS NOT NULL AND stripe_customer_id != ‘’ THEN 1 END) as stripe_users,
+COUNT(CASE WHEN signup_source = ‘ios’ THEN 1 END) as ios_users,
+COUNT(CASE WHEN is_admin = true THEN 1 END) as admin_users
+FROM users;
+
+══════════════════════════════════════════════════════════════════════════
+QUERY 4: SUBSCRIPTION STATUS BREAKDOWN
+══════════════════════════════════════════════════════════════════════════
+
+SELECT subscription_status, COUNT(*) as count
+FROM users
+GROUP BY subscription_status
+ORDER BY count DESC;
+
+══════════════════════════════════════════════════════════════════════════
+
+Report all results. I need to understand exactly who my users are,
+how they signed up, and how they are paying.
