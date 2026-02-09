@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Bookmark, BookmarkCheck, Brain, Share2, Star } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import ReactMarkdown from "react-markdown";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
 import { ThumbnailImage } from "@/components/ThumbnailImage";
@@ -428,7 +429,29 @@ export function MobileMessageBubble({ message, sender, timestamp, videos = [], i
       <div className={`mobile-message-bubble ${sender}`} data-testid={`message-${sender}`}>
         {allSegments.map((segment, index) => (
         <div key={index}>
-          {segment.text && <p style={{ marginBottom: "0.5rem", whiteSpace: "pre-line" }}>{segment.text}</p>}
+          {segment.text && (
+            sender === 'assistant' ? (
+              <div style={{ marginBottom: "0.5rem", whiteSpace: "pre-line" }} className="chat-markdown">
+                <ReactMarkdown
+                  components={{
+                    p: ({ children }) => <p style={{ marginBottom: "0.25rem" }}>{children}</p>,
+                    strong: ({ children }) => <strong style={{ fontWeight: 700, color: "white" }}>{children}</strong>,
+                    em: ({ children }) => <em style={{ fontStyle: "italic" }}>{children}</em>,
+                    ul: ({ children }) => <ul style={{ listStyleType: "disc", paddingLeft: "1rem", marginBottom: "0.25rem" }}>{children}</ul>,
+                    ol: ({ children }) => <ol style={{ listStyleType: "decimal", paddingLeft: "1rem", marginBottom: "0.25rem" }}>{children}</ol>,
+                    li: ({ children }) => <li>{children}</li>,
+                    h1: ({ children }) => <p style={{ fontWeight: 700, color: "white", fontSize: "16px", marginBottom: "0.25rem" }}>{children}</p>,
+                    h2: ({ children }) => <p style={{ fontWeight: 700, color: "white", fontSize: "15px", marginBottom: "0.25rem" }}>{children}</p>,
+                    h3: ({ children }) => <p style={{ fontWeight: 700, color: "white", fontSize: "14px", marginBottom: "0.25rem" }}>{children}</p>,
+                  }}
+                >
+                  {segment.text}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <p style={{ marginBottom: "0.5rem", whiteSpace: "pre-line" }}>{segment.text}</p>
+            )
+          )}
           {segment.video && (
             <div style={{ marginTop: "0.75rem", marginBottom: "0.75rem" }}>
               <div style={{ 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import ReactMarkdown from "react-markdown";
 import UserLayout from "@/components/layouts/UserLayout";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
@@ -766,7 +767,29 @@ export default function ChatPage() {
                   {/* Parse and render message content with video recommendations */}
                   {parseVideoTokens(message.content).map((segment, idx) => (
                     <div key={idx}>
-                      {segment.text && <p className="whitespace-pre-wrap">{segment.text}</p>}
+                      {segment.text && (
+                        message.role === 'assistant' ? (
+                          <div className="chat-markdown whitespace-pre-wrap">
+                            <ReactMarkdown
+                              components={{
+                                p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                                strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
+                                em: ({ children }) => <em className="italic">{children}</em>,
+                                ul: ({ children }) => <ul className="list-disc pl-4 mb-1 space-y-0.5">{children}</ul>,
+                                ol: ({ children }) => <ol className="list-decimal pl-4 mb-1 space-y-0.5">{children}</ol>,
+                                li: ({ children }) => <li>{children}</li>,
+                                h1: ({ children }) => <p className="font-bold text-white text-[16px] mb-1">{children}</p>,
+                                h2: ({ children }) => <p className="font-bold text-white text-[15px] mb-1">{children}</p>,
+                                h3: ({ children }) => <p className="font-bold text-white text-[14px] mb-1">{children}</p>,
+                              }}
+                            >
+                              {segment.text}
+                            </ReactMarkdown>
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap">{segment.text}</p>
+                        )
+                      )}
                       {segment.video && (
                         <div 
                           className="mt-3 bg-[#0A0A0B] border border-[#1A1A1C] rounded-lg overflow-hidden"

@@ -1,0 +1,108 @@
+FIX CHAT VIDEO CARDS — THUMBNAILS AND ANALYSIS BUTTON
+
+I can see a clear pattern in the chat video cards:
+
+- Videos WITH gemini_analysis → show real YouTube thumbnail + Analysis button
+- Videos WITHOUT gemini_analysis → show BJJ OS placeholder logo + no Analysis button
+
+This tells me the thumbnail URL is being derived from the analysis data
+instead of from the base video record. This is WRONG.
+
+══════════════════════════════════════════════════════════════════════════
+ROOT CAUSE INVESTIGATION
+══════════════════════════════════════════════════════════════════════════
+
+1. Run this query and show me the results:
+
+SELECT id, title, youtube_id,
+(gemini_analysis IS NOT NULL AND gemini_analysis != ‘’) as has_analysis
+FROM curated_videos
+WHERE title ILIKE ‘%darce%’ OR title ILIKE ‘%craig jones%’ OR title ILIKE ‘%ruotolo%’
+LIMIT 10;
+
+1. Check: Do ALL videos in curated_videos have a youtube_id field
+   populated? Run:
+
+SELECT COUNT(*) as total,
+COUNT(youtube_id) as has_youtube_id,
+COUNT(*) - COUNT(youtube_id) as missing_youtube_id
+FROM curated_videos;
+
+1. Find the code that builds video card data for chat responses.
+   Show me the exact function/query that creates the video object
+   passed to the chat video card component.
+1. Show me how the thumbnail URL is constructed in the chat card.
+   Is it using youtube_id from the base video record, or is it
+   extracting it from gemini_analysis?
+
+══════════════════════════════════════════════════════════════════════════
+THE FIX
+══════════════════════════════════════════════════════════════════════════
+
+Every video card in chat MUST show the YouTube thumbnail regardless of
+whether analysis exists. The thumbnail comes from the base video record:
+
+thumbnail URL = https://img.youtube.com/vi/${youtube_id}/mqdefault.jpg
+
+This field exists on EVERY video in curated_videos. It has nothing to do
+with gemini_analysis.
+
+Fix the chat video card data pipeline:
+
+1. The API/query that returns videos for chat recommendations must ALWAYS
+   include youtube_id from the curated_videos table
+1. The frontend chat card must ALWAYS build the thumbnail from youtube_id
+1. Do NOT conditionally show thumbnails based on analysis status
+1. The thumbnail and the analysis button are TWO SEPARATE concerns:
+- Thumbnail: ALWAYS show (every video has youtube_id)
+- Analysis button: ONLY show when gemini_analysis exists and is not empty
+
+══════════════════════════════════════════════════════════════════════════
+ANALYSIS BUTTON LOGIC
+══════════════════════════════════════════════════════════════════════════
+
+The Analysis button visibility must be based on ONE simple check:
+
+if (video.gemini_analysis && video.gemini_analysis.trim() !== ‘’) {
+// Show Analysis button
+} else {
+// HIDE Analysis button completely — do not render it at all
+}
+
+This applies to:
+
+- Chat video cards
+- Technique Library video cards
+- Saved Videos video cards
+
+══════════════════════════════════════════════════════════════════════════
+ALSO FIX: MARKDOWN RENDERING IN CHAT
+══════════════════════════════════════════════════════════════════════════
+
+Professor OS responses show raw markdown like **BOLD TEXT** with visible
+asterisks instead of rendering as bold text. The chat message component
+needs to render markdown properly. At minimum:
+
+- **text** should render as bold
+- *text* should render as italic
+- Headings and lists should render if present
+
+Check if a markdown renderer (like react-markdown) is installed. If not,
+at minimum do a simple regex replace for bold:
+text.replace(/**(.*?)**/g, ‘<strong>$1</strong>’)
+
+══════════════════════════════════════════════════════════════════════════
+TEST
+══════════════════════════════════════════════════════════════════════════
+
+□ Ask Professor OS “show me darce choke techniques”
+□ ALL video cards show real YouTube thumbnails — no placeholders
+□ Videos WITH analysis show Analysis button
+□ Videos WITHOUT analysis do NOT show Analysis button
+□ Videos WITHOUT analysis still show thumbnail, title, instructor, Save, Share
+□ Bold text in Professor OS messages renders as bold (no ** visible)
+□ Technique Library cards — same behavior
+□ Saved Videos cards — same behavior
+□ Build passes with no errors
+
+Show me the exact code changes you made.
