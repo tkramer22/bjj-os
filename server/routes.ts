@@ -14604,21 +14604,49 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const result = await db.execute(sql`
         SELECT
           (SELECT COUNT(*) FROM ai_video_knowledge WHERE status = 'active') as total_active,
+          (SELECT COUNT(*) FROM ai_video_knowledge v
+           WHERE v.status = 'active' 
+           AND NOT EXISTS (SELECT 1 FROM video_watch_status vws WHERE vws.video_id = v.id AND vws.processed = true)
+          ) as no_analysis,
+          (SELECT COUNT(DISTINCT video_id) FROM video_knowledge) as has_knowledge,
           (SELECT COUNT(*) FROM video_watch_status WHERE processed = true) as total_processed,
-          (SELECT COUNT(*) FROM video_watch_status WHERE processed = false AND error_message IS NOT NULL) as failed_with_errors,
-          (SELECT COUNT(DISTINCT video_id) FROM video_knowledge) as has_knowledge
+          (SELECT COUNT(*) FROM ai_video_knowledge v
+           WHERE v.status = 'active'
+           AND EXISTS (SELECT 1 FROM video_watch_status vws WHERE vws.video_id = v.id AND vws.processed = true AND vws.error_message IS NOT NULL AND vws.error_message != '' AND vws.error_message != 'Processing in progress')
+          ) as failed_with_errors
       `);
+      
+      let oldV1 = 0;
+      let newV25 = 0;
+      try {
+        const versionResult = await db.execute(sql`
+          SELECT
+            COUNT(DISTINCT CASE WHEN vk.analysis_version = '2.5' THEN vk.video_id END) as v25_count,
+            COUNT(DISTINCT CASE WHEN vk.analysis_version != '2.5' OR vk.analysis_version IS NULL THEN vk.video_id END) as v1_count
+          FROM video_knowledge vk
+          JOIN ai_video_knowledge v ON v.id = vk.video_id AND v.status = 'active'
+        `);
+        const vRow = getRows(versionResult)[0] || {};
+        newV25 = parseInt(vRow.v25_count || '0');
+        oldV1 = parseInt(vRow.v1_count || '0');
+      } catch (versionErr: any) {
+        console.log('[ANALYSIS COUNTS] analysis_version column not available:', versionErr.message);
+      }
       
       const row = getRows(result)[0] || {};
       const totalActive = parseInt(row.total_active || '0');
-      const totalProcessed = parseInt(row.total_processed || '0');
+      const noAnalysis = parseInt(row.no_analysis || '0');
+      const hasKnowledge = parseInt(row.has_knowledge || '0');
       
       res.json({
         total_active: totalActive,
-        total_processed: totalProcessed,
-        no_analysis: totalActive - totalProcessed,
-        has_knowledge: parseInt(row.has_knowledge || '0'),
-        failed_with_errors: parseInt(row.failed_with_errors || '0')
+        no_analysis: noAnalysis,
+        old_analysis_v1: oldV1,
+        new_analysis_v25: newV25,
+        has_knowledge: hasKnowledge,
+        total_processed: parseInt(row.total_processed || '0'),
+        failed_with_errors: parseInt(row.failed_with_errors || '0'),
+        coverage_pct: totalActive > 0 ? ((hasKnowledge / totalActive) * 100).toFixed(1) : '0'
       });
     } catch (error: any) {
       console.error('[ADMIN ANALYSIS COUNTS] Error:', error);

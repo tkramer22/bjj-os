@@ -354,16 +354,54 @@ async function attemptVideoAnalysis(
         mode: useDirectVideo ? 'video' : 'metadata_fallback'
       });
       
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.error(`[GEMINI] No JSON found in response:`, responseText.substring(0, 500));
-        return { success: false, error: 'No JSON found in Gemini response' };
+      let cleanedText = responseText.trim();
+      if (cleanedText.startsWith('```')) {
+        cleanedText = cleanedText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
       }
-
-      const parsed = JSON.parse(jsonMatch[0]);
+      
+      let parsed: any;
+      try {
+        parsed = JSON.parse(cleanedText);
+      } catch {
+        const jsonMatch = cleanedText.match(/\{"techniques"\s*:\s*\[[\s\S]*?\]\s*\}/);
+        if (!jsonMatch) {
+          const fallbackMatch = cleanedText.match(/\{[\s\S]*\}/);
+          if (!fallbackMatch) {
+            console.error(`[GEMINI] No JSON found in response:`, responseText.substring(0, 500));
+            return { success: false, error: 'No JSON found in Gemini response' };
+          }
+          try {
+            parsed = JSON.parse(fallbackMatch[0]);
+          } catch (e2: any) {
+            const truncated = fallbackMatch[0].substring(0, fallbackMatch[0].lastIndexOf('}') + 1);
+            try {
+              parsed = JSON.parse(truncated);
+            } catch {
+              console.error(`[GEMINI] JSON parse failed:`, e2.message, responseText.substring(0, 500));
+              return { success: false, error: `JSON parse error: ${e2.message}` };
+            }
+          }
+        } else {
+          parsed = JSON.parse(jsonMatch[0]);
+        }
+      }
       
       if (!parsed.techniques || !Array.isArray(parsed.techniques)) {
-        return { success: false, error: 'Invalid response structure - missing techniques array' };
+        const altKeys = ['video_techniques', 'analysis', 'results', 'video_analysis', 'technique_list'];
+        for (const key of altKeys) {
+          if (parsed[key] && Array.isArray(parsed[key])) {
+            parsed.techniques = parsed[key];
+            break;
+          }
+        }
+        if (!parsed.techniques || !Array.isArray(parsed.techniques)) {
+          if (parsed.technique_name || parsed.techniqueName) {
+            parsed.techniques = [parsed];
+          } else {
+            console.error(`[GEMINI] Response keys: ${Object.keys(parsed).join(', ')}`);
+            return { success: false, error: 'Invalid response structure - missing techniques array' };
+          }
+        }
       }
 
       console.log(`[GEMINI] Extracted ${parsed.techniques.length} techniques from ${videoMetadata.title}`);
@@ -496,65 +534,80 @@ export async function processVideoKnowledge(videoId: number): Promise<{ success:
     // Delete existing knowledge entries for this video (idempotent reprocessing)
     await db.delete(videoKnowledge).where(eq(videoKnowledge.videoId, video.id));
     
-    // Store extracted techniques with comprehensive data (including new 2.5 fields)
+    // Store extracted techniques - try with v2.5 fields, fall back to core fields only
     for (const technique of extractionResult.techniques!) {
-      await db.insert(videoKnowledge).values({
-        videoId: video.id,
-        
-        // Primary technique info
-        techniqueName: technique.techniqueName,
-        positionContext: technique.positionContext,
-        techniqueType: technique.techniqueType,
-        giOrNogi: technique.giOrNogi,
-        skillLevel: technique.skillLevel,
-        competitionLegal: technique.competitionLegal,
-        
-        // Detail categorization
-        detailType: technique.detailType,
-        detailDescription: technique.detailDescription,
-        
-        // Teaching content
-        instructorQuote: technique.instructorQuote,
-        keyConcepts: technique.keyConcepts || [],
-        instructorTips: technique.instructorTips || [],
-        commonMistakes: technique.commonMistakes || [],
-        whyItMatters: technique.whyItMatters,
-        problemSolved: technique.problemSolved,
-        
-        // Timestamps
-        timestampStart: technique.timestampStart,
-        timestampEnd: technique.timestampEnd,
-        
-        // Relationships
-        setupsFrom: technique.setupsFrom || [],
-        chainsTo: technique.chainsTo || [],
-        counters: technique.counters || [],
-        counterTo: technique.counterTo || [],
-        
-        // Physical considerations
-        bodyTypeNotes: technique.bodyTypeNotes,
-        strengthRequired: technique.strengthRequired,
-        flexibilityRequired: technique.flexibilityRequired,
-        athleticDemand: technique.athleticDemand,
-        
-        // Denormalized video metadata for fast queries
-        instructorName: video.instructorName,
-        instructorCredentials: null,
-        prerequisites: technique.prerequisites || [],
-        nextToLearn: technique.nextToLearn || [],
-        bestFor: technique.bestFor,
-        
-        // Summary
-        fullSummary: technique.fullSummary,
-        
-        // Quality scores (Gemini 2.5 Pro visual analysis)
-        instructionQuality: technique.instructionQuality || null,
-        visualQuality: technique.visualQuality || null,
-        audioQuality: technique.audioQuality || null,
-        uniqueValue: technique.uniqueValue || null,
-        coachingNotes: technique.coachingNotes || null,
-        analysisVersion: extractionResult.analysisVersion || ANALYSIS_VERSION
-      });
+      try {
+        await db.insert(videoKnowledge).values({
+          videoId: video.id,
+          techniqueName: technique.techniqueName,
+          positionContext: technique.positionContext,
+          techniqueType: technique.techniqueType,
+          giOrNogi: technique.giOrNogi,
+          skillLevel: technique.skillLevel,
+          competitionLegal: technique.competitionLegal,
+          detailType: technique.detailType,
+          detailDescription: technique.detailDescription,
+          instructorQuote: technique.instructorQuote,
+          keyConcepts: technique.keyConcepts || [],
+          instructorTips: technique.instructorTips || [],
+          commonMistakes: technique.commonMistakes || [],
+          whyItMatters: technique.whyItMatters,
+          problemSolved: technique.problemSolved,
+          timestampStart: technique.timestampStart,
+          timestampEnd: technique.timestampEnd,
+          setupsFrom: technique.setupsFrom || [],
+          chainsTo: technique.chainsTo || [],
+          counters: technique.counters || [],
+          counterTo: technique.counterTo || [],
+          bodyTypeNotes: technique.bodyTypeNotes,
+          strengthRequired: technique.strengthRequired,
+          flexibilityRequired: technique.flexibilityRequired,
+          athleticDemand: technique.athleticDemand,
+          instructorName: video.instructorName,
+          instructorCredentials: null,
+          prerequisites: technique.prerequisites || [],
+          nextToLearn: technique.nextToLearn || [],
+          bestFor: technique.bestFor,
+          fullSummary: technique.fullSummary,
+          instructionQuality: technique.instructionQuality || null,
+          visualQuality: technique.visualQuality || null,
+          audioQuality: technique.audioQuality || null,
+          uniqueValue: technique.uniqueValue || null,
+          coachingNotes: technique.coachingNotes || null,
+          analysisVersion: extractionResult.analysisVersion || ANALYSIS_VERSION
+        });
+      } catch (insertErr: any) {
+        if (insertErr.message?.includes('column') && insertErr.message?.includes('does not exist')) {
+          console.log(`[PROCESS] v2.5 columns missing on DB, inserting with raw SQL (core fields only)`);
+          const pgArr = (a: any): string => {
+            if (!Array.isArray(a) || a.length === 0) return '{}';
+            return '{' + a.map((s: any) => '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"').join(',') + '}';
+          };
+          await db.execute(sql`
+            INSERT INTO video_knowledge (
+              video_id, technique_name, position_context, technique_type, gi_or_nogi,
+              skill_level, competition_legal, detail_type, detail_description,
+              instructor_quote, key_concepts, instructor_tips, common_mistakes,
+              why_it_matters, problem_solved, timestamp_start, timestamp_end,
+              setups_from, chains_to, counters, counter_to,
+              body_type_notes, strength_required, flexibility_required, athletic_demand,
+              instructor_name, instructor_credentials,
+              prerequisites, next_to_learn, best_for, full_summary
+            ) VALUES (
+              ${video.id}, ${technique.techniqueName || null}, ${technique.positionContext || null}, ${technique.techniqueType || null}, ${technique.giOrNogi || null},
+              ${technique.skillLevel || null}, ${technique.competitionLegal ?? null}, ${technique.detailType || null}, ${technique.detailDescription || null},
+              ${technique.instructorQuote || null}, ${pgArr(technique.keyConcepts)}::text[], ${pgArr(technique.instructorTips)}::text[], ${pgArr(technique.commonMistakes)}::text[],
+              ${technique.whyItMatters || null}, ${technique.problemSolved || null}, ${technique.timestampStart || null}, ${technique.timestampEnd || null},
+              ${pgArr(technique.setupsFrom)}::text[], ${pgArr(technique.chainsTo)}::text[], ${pgArr(technique.counters)}::text[], ${pgArr(technique.counterTo)}::text[],
+              ${technique.bodyTypeNotes || null}, ${technique.strengthRequired || null}, ${technique.flexibilityRequired || null}, ${technique.athleticDemand || null},
+              ${video.instructorName || null}, ${null},
+              ${pgArr(technique.prerequisites)}::text[], ${pgArr(technique.nextToLearn)}::text[], ${technique.bestFor || null}, ${technique.fullSummary || null}
+            )
+          `);
+        } else {
+          throw insertErr;
+        }
+      }
     }
     
     // Mark as processed with Gemini 2.5 Pro source
