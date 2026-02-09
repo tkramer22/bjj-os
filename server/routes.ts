@@ -4286,6 +4286,9 @@ export function registerRoutes(app: Express): Server {
         injuries: bjjUsers.injuries,
         unitPreference: bjjUsers.unitPreference,
         passwordHash: bjjUsers.passwordHash,
+        paymentProvider: bjjUsers.paymentProvider,
+        appleReceipt: bjjUsers.appleReceipt,
+        appleExpiresAt: bjjUsers.appleExpiresAt,
       })
         .from(bjjUsers)
         .where(eq(bjjUsers.id, decoded.userId))
@@ -4294,17 +4297,129 @@ export function registerRoutes(app: Express): Server {
       if (!user) {
         return res.status(401).json({ error: 'User not found' });
       }
+
+      let currentSubscriptionStatus = user.subscriptionStatus;
+      let currentSubscriptionType = user.subscriptionType;
+
+      if (user.paymentProvider === 'apple') {
+        if (!user.appleReceipt) {
+          if (user.subscriptionStatus === 'active') {
+            currentSubscriptionStatus = 'expired';
+            currentSubscriptionType = 'none';
+            await db.update(bjjUsers)
+              .set({ subscriptionStatus: 'expired', subscriptionType: 'none' })
+              .where(eq(bjjUsers.id, user.id));
+            console.log(`🍎 [/api/auth/me] Apple user ${user.email} has no stored receipt → expired`);
+          }
+        } else if (process.env.APPLE_SHARED_SECRET) {
+          const APPLE_REVALIDATION_INTERVAL_MS = 4 * 60 * 60 * 1000;
+          const now = new Date();
+          const lastVerified = user.appleExpiresAt;
+          const timeSinceLastCheck = lastVerified ? now.getTime() - lastVerified.getTime() : Infinity;
+          const needsRevalidation =
+            user.subscriptionStatus === 'expired' ||
+            !lastVerified ||
+            (lastVerified && lastVerified < new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) && timeSinceLastCheck > APPLE_REVALIDATION_INTERVAL_MS);
+
+          if (!needsRevalidation && user.appleExpiresAt && user.appleExpiresAt > now) {
+            console.log(`🍎 [/api/auth/me] Apple user ${user.email}: skipping re-validation (verified recently, expires ${user.appleExpiresAt.toISOString()})`);
+          } else {
+            try {
+              const APPLE_VERIFY_PROD = 'https://buy.itunes.apple.com/verifyReceipt';
+              const APPLE_VERIFY_SAND = 'https://sandbox.itunes.apple.com/verifyReceipt';
+              const payload = {
+                'receipt-data': user.appleReceipt,
+                'password': process.env.APPLE_SHARED_SECRET,
+                'exclude-old-transactions': true,
+              };
+              const fetchTimeout = 10000;
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), fetchTimeout);
+
+              let appleRes = await fetch(APPLE_VERIFY_PROD, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: controller.signal,
+              });
+              let appleResult = await appleRes.json() as any;
+
+              if (appleResult.status === 21007) {
+                const controller2 = new AbortController();
+                const timeoutId2 = setTimeout(() => controller2.abort(), fetchTimeout);
+                appleRes = await fetch(APPLE_VERIFY_SAND, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload),
+                  signal: controller2.signal,
+                });
+                appleResult = await appleRes.json() as any;
+                clearTimeout(timeoutId2);
+              }
+              clearTimeout(timeoutId);
+
+              if (appleResult.status === 0) {
+                const receiptInfos = appleResult.latest_receipt_info as any[];
+                if (receiptInfos && receiptInfos.length > 0) {
+                  const sortedReceipts = [...receiptInfos].sort(
+                    (a: any, b: any) => parseInt(b.expires_date_ms) - parseInt(a.expires_date_ms)
+                  );
+                  const latest = sortedReceipts[0];
+                  const expiresAt = new Date(parseInt(latest.expires_date_ms));
+                  const isActive = expiresAt > now;
+
+                  currentSubscriptionStatus = isActive ? 'active' : 'expired';
+                  currentSubscriptionType = isActive ? 'monthly' : 'none';
+
+                  await db.update(bjjUsers)
+                    .set({
+                      subscriptionStatus: currentSubscriptionStatus,
+                      subscriptionType: currentSubscriptionType,
+                      appleExpiresAt: expiresAt,
+                      appleOriginalTransactionId: latest.original_transaction_id,
+                      appleProductId: latest.product_id,
+                      subscriptionEndDate: expiresAt,
+                    })
+                    .where(eq(bjjUsers.id, user.id));
+
+                  console.log(`🍎 [/api/auth/me] Apple re-validation for ${user.email}: ${currentSubscriptionStatus} (expires ${expiresAt.toISOString()})`);
+                } else {
+                  currentSubscriptionStatus = 'expired';
+                  currentSubscriptionType = 'none';
+                  await db.update(bjjUsers)
+                    .set({ subscriptionStatus: 'expired', subscriptionType: 'none' })
+                    .where(eq(bjjUsers.id, user.id));
+                  console.log(`🍎 [/api/auth/me] Apple re-validation for ${user.email}: no subscription in receipt → expired`);
+                }
+              } else {
+                currentSubscriptionStatus = 'expired';
+                currentSubscriptionType = 'none';
+                await db.update(bjjUsers)
+                  .set({ subscriptionStatus: 'expired', subscriptionType: 'none' })
+                  .where(eq(bjjUsers.id, user.id));
+                console.log(`🍎 [/api/auth/me] Apple re-validation for ${user.email}: invalid receipt (status ${appleResult.status}) → expired`);
+              }
+            } catch (appleErr: any) {
+              if (appleErr.name === 'AbortError') {
+                console.error(`🍎 [/api/auth/me] Apple re-validation TIMEOUT for ${user.email} — keeping current status: ${currentSubscriptionStatus}`);
+              } else {
+                console.error(`🍎 [/api/auth/me] Apple re-validation error for ${user.email}: ${appleErr.message} — keeping current status: ${currentSubscriptionStatus}`);
+              }
+            }
+          }
+        } else {
+          console.error(`🍎 [/api/auth/me] APPLE_SHARED_SECRET not configured — cannot re-validate Apple user ${user.email}`);
+        }
+      }
       
       console.log('[/api/auth/me] Returning user data:', {
         id: user.id,
         onboardingCompleted: user.onboardingCompleted,
-        subscriptionType: user.subscriptionType,
-        subscriptionStatus: user.subscriptionStatus,
+        subscriptionType: currentSubscriptionType,
+        subscriptionStatus: currentSubscriptionStatus,
         trialEndDate: user.trialEndDate
       });
       
-      // Return user object directly (NOT nested in {user: ...})
-      // NOTE: Never return passwordHash to the client - only return hasPassword boolean
       res.json({
         id: user.id,
         phoneNumber: user.phoneNumber,
@@ -4317,8 +4432,8 @@ export function registerRoutes(app: Express): Server {
         style: user.style,
         trainingFrequency: user.trainingFrequency,
         onboardingCompleted: user.onboardingCompleted,
-        subscriptionType: user.subscriptionType,
-        subscriptionStatus: user.subscriptionStatus,
+        subscriptionType: currentSubscriptionType,
+        subscriptionStatus: currentSubscriptionStatus,
         trialEndDate: user.trialEndDate,
         themeBelt: user.themeBelt,
         themeStripes: user.themeStripes,
