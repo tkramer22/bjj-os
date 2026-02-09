@@ -1,0 +1,85 @@
+CRITICAL: USERS EXIST WITH NO PAYMENTS
+
+There are new users showing as “monthly” subscribers in the admin dashboard
+but NO corresponding payments in Stripe or Apple.
+
+⚠️ DO NOT change anything yet. Only investigate and report.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 1: SHOW ME ALL RECENT USERS
+══════════════════════════════════════════════════════════════════════════
+
+Run this query:
+
+SELECT id, email, name, created_at, subscription_status,
+stripe_customer_id, stripe_subscription_id, signup_source,
+referral_code_used, email_verified
+FROM users
+ORDER BY created_at DESC
+LIMIT 20;
+
+══════════════════════════════════════════════════════════════════════════
+STEP 2: CHECK WHICH USERS HAVE STRIPE DATA
+══════════════════════════════════════════════════════════════════════════
+
+SELECT id, email, created_at, subscription_status,
+CASE WHEN stripe_customer_id IS NOT NULL THEN ‘YES’ ELSE ‘NO’ END as has_stripe,
+CASE WHEN stripe_subscription_id IS NOT NULL THEN ‘YES’ ELSE ‘NO’ END as has_subscription,
+stripe_customer_id, stripe_subscription_id
+FROM users
+ORDER BY created_at DESC
+LIMIT 20;
+
+══════════════════════════════════════════════════════════════════════════
+STEP 3: FIND USERS WITH NO PAYMENT METHOD
+══════════════════════════════════════════════════════════════════════════
+
+Show me all users who have subscription_status = ‘monthly’ or ‘active’
+or ‘trialing’ but do NOT have a stripe_customer_id or
+stripe_subscription_id:
+
+SELECT id, email, created_at, subscription_status
+FROM users
+WHERE subscription_status IS NOT NULL
+AND subscription_status != ‘’
+AND subscription_status != ‘inactive’
+AND (stripe_customer_id IS NULL OR stripe_customer_id = ‘’)
+AND (stripe_subscription_id IS NULL OR stripe_subscription_id = ‘’);
+
+══════════════════════════════════════════════════════════════════════════
+STEP 4: TRACE THE SIGNUP FLOW
+══════════════════════════════════════════════════════════════════════════
+
+Show me the EXACT code path that creates a user record. I need to see:
+
+1. What endpoint creates the user in the database?
+1. Does it REQUIRE a Stripe payment before creating the user?
+1. Is there ANY code path that creates a user WITHOUT payment?
+1. Check: /api/auth/register, /api/auth/signup, /api/stripe/webhook,
+   or whatever endpoint handles user creation
+1. Show me the Stripe webhook handler — is it creating users on
+   checkout.session.completed?
+
+══════════════════════════════════════════════════════════════════════════
+STEP 5: CHECK IF THESE WERE TEST ACCOUNTS
+══════════════════════════════════════════════════════════════════════════
+
+Were these users created by Replit Agent during testing? Check:
+
+- Are the email addresses test/fake emails?
+- Were they created during the time I was running test prompts?
+- Is there a test endpoint that creates users without payment?
+
+══════════════════════════════════════════════════════════════════════════
+REPORT
+══════════════════════════════════════════════════════════════════════════
+
+Tell me:
+
+1. How many users exist with no Stripe payment data?
+1. What are their emails and when were they created?
+1. How did they get created — which code path?
+1. Is there currently a way to create an account WITHOUT paying?
+1. If yes — this is a CRITICAL bug that needs immediate fix
+
+DO NOT fix anything yet. Just report findings.
