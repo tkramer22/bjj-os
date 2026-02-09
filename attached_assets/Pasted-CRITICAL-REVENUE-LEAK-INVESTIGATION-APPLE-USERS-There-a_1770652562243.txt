@@ -1,0 +1,98 @@
+CRITICAL REVENUE LEAK INVESTIGATION — APPLE USERS
+
+There are 22 users in the Supabase database with payment_provider = ‘apple’
+and subscription_type = ‘monthly’. But App Store Connect only shows 2
+paying subscribers. There is NO free trial on Apple. This means 20 users
+have full access without paying.
+
+⚠️ DO NOT change anything yet. Only investigate and report.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 1: LIST ALL 22 APPLE USERS WITH FULL DETAILS
+══════════════════════════════════════════════════════════════════════════
+
+Query the SUPABASE database (not Neon) — use the app’s db connection:
+
+SELECT id, email, name, created_at, subscription_status,
+subscription_type, payment_provider, apple_user_id,
+apple_original_transaction_id, apple_product_id, apple_receipt,
+is_admin
+FROM users
+WHERE payment_provider = ‘apple’
+ORDER BY created_at DESC;
+
+Show me ALL 22 rows with every column.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 2: CHECK WHICH HAVE VALID APPLE RECEIPTS
+══════════════════════════════════════════════════════════════════════════
+
+For each Apple user, check:
+
+- Does apple_receipt have data? (not null, not empty)
+- Does apple_original_transaction_id have data?
+- Does apple_product_id have data?
+
+Users WITHOUT any of these fields are likely getting free access — they
+were never validated by Apple.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 3: TRACE THE iOS SIGNUP CODE PATH
+══════════════════════════════════════════════════════════════════════════
+
+Show me the EXACT code that creates a user during iOS signup:
+
+1. Find the iOS account creation endpoint (likely /api/auth/ios/complete
+   or /api/auth/ios/prepare or similar)
+1. Show me the FULL code of this endpoint
+1. At what point does it create the user in the database?
+1. Does it REQUIRE a valid Apple receipt BEFORE creating the user?
+1. Does it validate the receipt with Apple’s servers before granting access?
+1. Or does it create the user FIRST and validate payment AFTER?
+
+If the user is created BEFORE Apple payment is confirmed, that explains
+the 20 free users.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 4: CHECK THE APPLE RECEIPT VALIDATION CODE
+══════════════════════════════════════════════════════════════════════════
+
+Show me the Apple receipt validation logic:
+
+1. Where does the app validate Apple receipts?
+1. Does it call Apple’s verifyReceipt endpoint?
+1. What happens if validation fails — does it still create the user?
+1. Is there error handling that defaults to “give access anyway”?
+
+Search the codebase for:
+
+- verifyReceipt
+- apple_receipt
+- apple.*validation
+- StoreKit
+- in-app purchase
+- IAP
+- originalTransactionId
+
+══════════════════════════════════════════════════════════════════════════
+STEP 5: CHECK IF TESTFLIGHT USERS ARE MIXED IN
+══════════════════════════════════════════════════════════════════════════
+
+Are any of the 22 Apple users TestFlight/sandbox testers?
+
+- Check if emails match any known test accounts
+- Check if created_at dates align with development/testing periods
+- Check if there are any sandbox indicators in the receipt data
+
+══════════════════════════════════════════════════════════════════════════
+REPORT — I NEED CLEAR ANSWERS
+══════════════════════════════════════════════════════════════════════════
+
+1. List all 22 Apple users with emails, dates, and which have receipts
+1. How many have VALID Apple receipt data vs empty fields?
+1. Show me the exact code that creates iOS users
+1. Is the user created BEFORE or AFTER payment is confirmed?
+1. Is there a code path that grants access without payment?
+1. What is the fix to ensure only paying Apple users get access?
+
+DO NOT FIX ANYTHING YET. Report only.
