@@ -590,8 +590,10 @@ export async function handleClaudeStream(req: any, res: any) {
       keyTimestamps: v.keyTimestamps || []
     }));
     
-    // 🚀 CACHE: Top quality videos for token enrichment (1 hour TTL)
-    const VIDEO_CACHE_KEY = 'top_quality_videos_100';
+    // 🚀 CACHE: ALL videos for token enrichment (1 hour TTL)
+    // No limit — Professor OS must match ANY video in the database with correct thumbnails
+    // Only lightweight fields are selected (no gemini_analysis/fullSummary/keyConcepts)
+    const VIDEO_CACHE_KEY = 'all_videos_for_enrichment';
     let allVideos = professorOSCache.getVideos(VIDEO_CACHE_KEY);
     
     if (!allVideos) {
@@ -609,15 +611,14 @@ export async function handleClaudeStream(req: any, res: any) {
       })
         .from(aiVideoKnowledge)
         .where(and(
-          sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
           sql`${aiVideoKnowledge.youtubeId} IS NOT NULL AND ${aiVideoKnowledge.youtubeId} != ''`,
           sql`${aiVideoKnowledge.videoUrl} IS NOT NULL AND ${aiVideoKnowledge.videoUrl} != ''`,
           sql`${aiVideoKnowledge.title} IS NOT NULL AND ${aiVideoKnowledge.title} != ''`,
           sql`${aiVideoKnowledge.instructorName} IS NOT NULL AND ${aiVideoKnowledge.instructorName} != ''`
         ))
-        .orderBy(desc(aiVideoKnowledge.qualityScore))
-        .limit(500);
+        .orderBy(desc(aiVideoKnowledge.qualityScore));
       
+      console.log(`[VIDEO CACHE] 📊 Loaded ${allVideos.length} videos for token enrichment (ALL videos, no limit)`);
       professorOSCache.setVideos(VIDEO_CACHE_KEY, allVideos);
     }
     
