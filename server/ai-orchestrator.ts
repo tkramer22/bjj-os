@@ -246,7 +246,7 @@ export class AIOrchestrator {
   private abTestCache: Map<string, { controlModel: string; treatmentModel: string; split: number }> = new Map();
 
   constructor() {
-    this.loadActiveABTests();
+    this.loadActiveABTests().catch(() => {});
   }
 
   private async loadActiveABTests() {
