@@ -150,17 +150,47 @@ interface ExtractedTechnique {
   
   // Summary
   fullSummary: string;
+  
+  // Quality scores (Gemini 2.5 Pro visual analysis)
+  instructionQuality?: number;
+  visualQuality?: number;
+  audioQuality?: number;
+  uniqueValue?: string;
+  coachingNotes?: string;
 }
 
 interface ExtractionResult {
   success: boolean;
   techniques?: ExtractedTechnique[];
   error?: string;
+  analysisVersion?: string;
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+}
+
+// Analysis version for tracking which model/prompt version analyzed each video
+const ANALYSIS_VERSION = '2.5';
+
+// Deep analysis model - Gemini 2.5 Pro for comprehensive video understanding
+const DEEP_ANALYSIS_MODEL = 'gemini-2.5-pro';
+
+// Quick test/fallback model - Gemini 2.5 Flash (faster, cheaper)
+const QUICK_MODEL = 'gemini-2.5-flash';
+
+function isVideoNotAccessibleError(error: any): boolean {
+  const message = error?.message || String(error);
+  return message.includes('VIDEO_NOT_ACCESSIBLE') ||
+         message.includes('PERMISSION_DENIED') ||
+         message.includes('Could not process video') ||
+         message.includes('not found') ||
+         message.includes('private') ||
+         message.includes('unavailable') ||
+         (error?.status === 400 && (message.includes('video') || message.includes('file')));
 }
 
 /**
- * Process a YouTube video directly with Gemini - no download needed
+ * Process a YouTube video directly with Gemini 2.5 Pro - visual analysis
  * Gemini natively supports YouTube URLs since Google owns YouTube
+ * Falls back to metadata-only analysis if video is not accessible
  */
 export async function extractKnowledgeWithGemini(
   youtubeId: string,
@@ -173,10 +203,12 @@ export async function extractKnowledgeWithGemini(
 ): Promise<ExtractionResult> {
   try {
     const youtubeUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
-    console.log(`[GEMINI] Processing video: ${youtubeUrl}`);
+    console.log(`[GEMINI] Processing video with ${DEEP_ANALYSIS_MODEL}: ${youtubeUrl}`);
     console.log(`[GEMINI] Title: ${videoMetadata.title}`);
 
-    const prompt = `You are an elite BJJ analyst. Watch this instructional video and extract COMPREHENSIVE structured knowledge for an AI coaching system.
+    const prompt = `You are an elite BJJ analyst. WATCH this entire instructional video carefully and extract COMPREHENSIVE structured knowledge for an AI coaching system.
+
+IMPORTANT: Analyze WHAT YOU SEE in the video — the actual technique demonstrations, positions, movements, grips, and transitions. Not just what is said.
 
 Video Information:
 - Title: ${videoMetadata.title}
@@ -224,7 +256,13 @@ Return ONLY a valid JSON object with this structure:
       "nextToLearn": ["what to learn after mastering this"],
       "bestFor": "competition | self_defense | hobbyist | all",
       
-      "fullSummary": "2-3 sentence summary capturing the essence of what's taught"
+      "fullSummary": "2-3 sentence summary capturing the essence of what's taught",
+      
+      "instructionQuality": 8,
+      "visualQuality": 7,
+      "audioQuality": 8,
+      "uniqueValue": "what makes this video special compared to other videos on the same technique",
+      "coachingNotes": "What a coach would tell a student about this video - key takeaways for training"
     }
   ]
 }
@@ -232,7 +270,7 @@ Return ONLY a valid JSON object with this structure:
 CRITICAL RULES:
 1. Create MULTIPLE entries if video covers different techniques or distinct concepts
 2. Use instructor's EXACT words for instructorQuote - capture their unique voice
-3. ALWAYS include timestamps (MM:SS format) - this is crucial for video references
+3. ALWAYS include timestamps (MM:SS format) verified by what you SEE in the video - this is crucial for video references
 4. For keyConcepts, focus on: grips, angles, weight distribution, timing, hip placement
 5. For instructorTips, capture the "insider knowledge" - things only experienced grapplers know
 6. For commonMistakes, note exactly what they say NOT to do
@@ -241,109 +279,15 @@ CRITICAL RULES:
 9. chainsTo and setupsFrom are CRITICAL for building technique networks
 10. bodyTypeNotes should capture phrases like "if you're tall", "for smaller grapplers", "requires flexibility"
 11. competitionLegal = false for heel hooks in gi, neck cranks, reaping at lower belts, etc.
+12. instructionQuality, visualQuality, audioQuality are 1-10 scores based on what you observe
+13. coachingNotes should be actionable advice a coach would give about this specific video
 
 Return ONLY valid JSON. No markdown, no explanations.`;
 
-    // Retry loop with exponential backoff and KEY ROTATION
-    let lastError: any = null;
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      // Get next available key (rotates between Key 1 and Key 2)
-      const { client: geminiClient, keyIndex, keyName } = getNextGeminiClient();
-      
-      try {
-        console.log(`[GEMINI] Using ${keyName} (attempt ${attempt}/${MAX_RETRIES})`);
-        
-        const response = await geminiClient.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  fileData: {
-                    fileUri: youtubeUrl,
-                    mimeType: 'video/mp4'
-                  }
-                },
-                { text: prompt }
-              ]
-            }
-          ]
-        });
-
-        const responseText = response.text || '';
-        console.log(`[GEMINI] ✅ ${keyName} success - ${responseText.length} chars`);
-        
-        // Success - continue processing
-        // Extract JSON from response
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          console.error(`[GEMINI] No JSON found in response:`, responseText.substring(0, 500));
-          return { success: false, error: 'No JSON found in Gemini response' };
-        }
-
-        const parsed = JSON.parse(jsonMatch[0]);
-        
-        if (!parsed.techniques || !Array.isArray(parsed.techniques)) {
-          return { success: false, error: 'Invalid response structure - missing techniques array' };
-        }
-
-        console.log(`[GEMINI] Extracted ${parsed.techniques.length} techniques from ${videoMetadata.title}`);
-        
-        return {
-          success: true,
-          techniques: parsed.techniques
-        };
-      } catch (attemptError: any) {
-        lastError = attemptError;
-        console.error(`[GEMINI] ${keyName} attempt ${attempt}/${MAX_RETRIES} failed:`, attemptError.message);
-        
-        // If rate limited, mark this key and try the other
-        if (isRateLimitError(attemptError)) {
-          markKeyRateLimited(keyIndex);
-          // Don't count this as a full retry attempt - immediately try other key
-          if (attempt < MAX_RETRIES) {
-            await sleep(1000); // Brief pause before trying other key
-            continue;
-          }
-        }
-        
-        if (isRetryableError(attemptError) && attempt < MAX_RETRIES) {
-          const delay = Math.min(INITIAL_DELAY_MS * Math.pow(2, attempt - 1), MAX_DELAY_MS);
-          console.log(`[GEMINI] Retrying in ${delay/1000}s (attempt ${attempt + 1}/${MAX_RETRIES})...`);
-          await sleep(delay);
-        } else if (!isRetryableError(attemptError)) {
-          // Non-retryable error, break immediately
-          break;
-        }
-      }
-    }
+    // Try direct video analysis first, then fall back to metadata-only
+    const result = await attemptVideoAnalysis(youtubeId, youtubeUrl, prompt, videoMetadata, true);
+    return result;
     
-    // All retries exhausted - handle the error
-    const error = lastError;
-    console.error(`[GEMINI] All ${MAX_RETRIES} attempts failed:`, error?.message);
-    
-    // Check for specific Gemini errors
-    if (error?.message?.includes('API key')) {
-      return { success: false, error: 'Gemini API key not configured' };
-    }
-    if (error?.message?.includes('quota')) {
-      return { success: false, error: 'Gemini API quota exceeded' };
-    }
-    if (error?.message?.includes('blocked') || error?.message?.includes('safety')) {
-      return { success: false, error: 'Video blocked by safety filters' };
-    }
-    if (error?.message?.includes('not found')) {
-      return { success: false, error: 'Video not accessible (private/deleted)' };
-    }
-    if (isRetryableError(error)) {
-      return { success: false, error: 'Gemini API overloaded - please retry later' };
-    }
-    
-    return {
-      success: false,
-      error: error?.message || 'Gemini processing failed'
-    };
   } catch (outerError: any) {
     console.error(`[GEMINI] Outer error:`, outerError.message);
     return {
@@ -351,6 +295,139 @@ Return ONLY valid JSON. No markdown, no explanations.`;
       error: outerError.message || 'Unexpected error in Gemini processing'
     };
   }
+}
+
+/**
+ * Attempt video analysis with retry logic and fallback
+ * If video is not accessible (private/age-restricted/region-locked),
+ * falls back to metadata-only analysis using the same model
+ */
+async function attemptVideoAnalysis(
+  youtubeId: string,
+  youtubeUrl: string,
+  prompt: string,
+  videoMetadata: { title: string; instructorName: string | null; techniqueName: string; positionCategory: string | null },
+  useDirectVideo: boolean
+): Promise<ExtractionResult> {
+  let lastError: any = null;
+  
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const { client: geminiClient, keyIndex, keyName } = getNextGeminiClient();
+    const model = useDirectVideo ? DEEP_ANALYSIS_MODEL : QUICK_MODEL;
+    
+    try {
+      console.log(`[GEMINI] Using ${keyName} with ${model} (attempt ${attempt}/${MAX_RETRIES})${useDirectVideo ? ' [VIDEO]' : ' [METADATA FALLBACK]'}`);
+      
+      const contentParts: any[] = [];
+      
+      if (useDirectVideo) {
+        contentParts.push({
+          fileData: {
+            fileUri: youtubeUrl,
+            mimeType: 'video/*'
+          }
+        });
+      }
+      contentParts.push({ text: prompt });
+      
+      const response = await geminiClient.models.generateContent({
+        model,
+        contents: [
+          {
+            role: 'user',
+            parts: contentParts
+          }
+        ]
+      });
+
+      const responseText = response.text || '';
+      const usageMetadata = response.usageMetadata;
+      
+      console.log(`[GEMINI] ${keyName} success - ${responseText.length} chars`);
+      console.log(`[CURATION COST]`, {
+        videoId: youtubeId,
+        model,
+        inputTokens: usageMetadata?.promptTokenCount,
+        outputTokens: usageMetadata?.candidatesTokenCount,
+        totalTokens: usageMetadata?.totalTokenCount,
+        analysisVersion: ANALYSIS_VERSION,
+        mode: useDirectVideo ? 'video' : 'metadata_fallback'
+      });
+      
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error(`[GEMINI] No JSON found in response:`, responseText.substring(0, 500));
+        return { success: false, error: 'No JSON found in Gemini response' };
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      
+      if (!parsed.techniques || !Array.isArray(parsed.techniques)) {
+        return { success: false, error: 'Invalid response structure - missing techniques array' };
+      }
+
+      console.log(`[GEMINI] Extracted ${parsed.techniques.length} techniques from ${videoMetadata.title}`);
+      
+      return {
+        success: true,
+        techniques: parsed.techniques,
+        analysisVersion: ANALYSIS_VERSION,
+        usageMetadata: {
+          promptTokenCount: usageMetadata?.promptTokenCount,
+          candidatesTokenCount: usageMetadata?.candidatesTokenCount
+        }
+      };
+    } catch (attemptError: any) {
+      lastError = attemptError;
+      console.error(`[GEMINI] ${keyName} attempt ${attempt}/${MAX_RETRIES} failed:`, attemptError.message);
+      
+      // If video is not accessible and we were trying direct video analysis, fall back to metadata-only
+      if (useDirectVideo && isVideoNotAccessibleError(attemptError)) {
+        console.log(`[GEMINI] Video ${youtubeId} not accessible for visual analysis, falling back to metadata-only`);
+        return attemptVideoAnalysis(youtubeId, youtubeUrl, prompt, videoMetadata, false);
+      }
+      
+      if (isRateLimitError(attemptError)) {
+        markKeyRateLimited(keyIndex);
+        if (attempt < MAX_RETRIES) {
+          await sleep(1000);
+          continue;
+        }
+      }
+      
+      if (isRetryableError(attemptError) && attempt < MAX_RETRIES) {
+        const delay = Math.min(INITIAL_DELAY_MS * Math.pow(2, attempt - 1), MAX_DELAY_MS);
+        console.log(`[GEMINI] Retrying in ${delay/1000}s (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+        await sleep(delay);
+      } else if (!isRetryableError(attemptError)) {
+        break;
+      }
+    }
+  }
+  
+  const error = lastError;
+  console.error(`[GEMINI] All ${MAX_RETRIES} attempts failed:`, error?.message);
+  
+  if (error?.message?.includes('API key')) {
+    return { success: false, error: 'Gemini API key not configured' };
+  }
+  if (error?.message?.includes('quota')) {
+    return { success: false, error: 'Gemini API quota exceeded' };
+  }
+  if (error?.message?.includes('blocked') || error?.message?.includes('safety')) {
+    return { success: false, error: 'Video blocked by safety filters' };
+  }
+  if (error?.message?.includes('not found')) {
+    return { success: false, error: 'Video not accessible (private/deleted)' };
+  }
+  if (isRetryableError(error)) {
+    return { success: false, error: 'Gemini API overloaded - please retry later' };
+  }
+  
+  return {
+    success: false,
+    error: error?.message || 'Gemini processing failed'
+  };
 }
 
 /**
@@ -385,7 +462,7 @@ export async function processVideoKnowledge(videoId: number): Promise<{ success:
       return { success: false, error: 'No YouTube ID' };
     }
     
-    // Use Gemini to process the video directly
+    // Use Gemini 2.5 Pro to process the video directly (with visual analysis)
     const extractionResult = await extractKnowledgeWithGemini(video.youtubeId, {
       title: video.title,
       instructorName: video.instructorName,
@@ -393,11 +470,13 @@ export async function processVideoKnowledge(videoId: number): Promise<{ success:
       positionCategory: video.positionCategory
     });
     
+    const sourceLabel = `gemini-${ANALYSIS_VERSION}-pro`;
+    
     if (!extractionResult.success) {
       await db.insert(videoWatchStatus).values({
         videoId: video.id,
         hasTranscript: false,
-        transcriptSource: 'gemini',
+        transcriptSource: sourceLabel,
         processed: true,
         processedAt: new Date(),
         errorMessage: extractionResult.error
@@ -405,7 +484,7 @@ export async function processVideoKnowledge(videoId: number): Promise<{ success:
         target: videoWatchStatus.videoId,
         set: {
           hasTranscript: false,
-          transcriptSource: 'gemini',
+          transcriptSource: sourceLabel,
           processed: true,
           processedAt: new Date(),
           errorMessage: extractionResult.error
@@ -417,7 +496,7 @@ export async function processVideoKnowledge(videoId: number): Promise<{ success:
     // Delete existing knowledge entries for this video (idempotent reprocessing)
     await db.delete(videoKnowledge).where(eq(videoKnowledge.videoId, video.id));
     
-    // Store extracted techniques with comprehensive data
+    // Store extracted techniques with comprehensive data (including new 2.5 fields)
     for (const technique of extractionResult.techniques!) {
       await db.insert(videoKnowledge).values({
         videoId: video.id,
@@ -460,21 +539,29 @@ export async function processVideoKnowledge(videoId: number): Promise<{ success:
         
         // Denormalized video metadata for fast queries
         instructorName: video.instructorName,
-        instructorCredentials: null, // Will be populated if mentioned in video
+        instructorCredentials: null,
         prerequisites: technique.prerequisites || [],
         nextToLearn: technique.nextToLearn || [],
         bestFor: technique.bestFor,
         
         // Summary
-        fullSummary: technique.fullSummary
+        fullSummary: technique.fullSummary,
+        
+        // Quality scores (Gemini 2.5 Pro visual analysis)
+        instructionQuality: technique.instructionQuality || null,
+        visualQuality: technique.visualQuality || null,
+        audioQuality: technique.audioQuality || null,
+        uniqueValue: technique.uniqueValue || null,
+        coachingNotes: technique.coachingNotes || null,
+        analysisVersion: extractionResult.analysisVersion || ANALYSIS_VERSION
       });
     }
     
-    // Mark as processed with Gemini source
+    // Mark as processed with Gemini 2.5 Pro source
     await db.insert(videoWatchStatus).values({
       videoId: video.id,
       hasTranscript: true,
-      transcriptSource: 'gemini',
+      transcriptSource: sourceLabel,
       processed: true,
       processedAt: new Date(),
       errorMessage: null
@@ -482,7 +569,7 @@ export async function processVideoKnowledge(videoId: number): Promise<{ success:
       target: videoWatchStatus.videoId,
       set: {
         hasTranscript: true,
-        transcriptSource: 'gemini',
+        transcriptSource: sourceLabel,
         processed: true,
         processedAt: new Date(),
         errorMessage: null
@@ -1078,7 +1165,7 @@ export async function testGeminiConnection(): Promise<{ success: boolean; error?
   try {
     // Test Key 1
     const response1 = await gemini1.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: QUICK_MODEL,
       contents: 'Say "Key 1 OK" in exactly those words.'
     });
     const text1 = response1.text || '';
@@ -1088,7 +1175,7 @@ export async function testGeminiConnection(): Promise<{ success: boolean; error?
     if (gemini2) {
       try {
         const response2 = await gemini2.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: QUICK_MODEL,
           contents: 'Say "Key 2 OK" in exactly those words.'
         });
         key2Status = 'OK';

@@ -6139,6 +6139,15 @@ export const videoKnowledge = pgTable("video_knowledge", {
   
   // SUMMARY
   fullSummary: text("full_summary"), // 2-3 sentence summary
+  
+  // QUALITY SCORES (Gemini 2.5 Pro visual analysis - v2.5+)
+  instructionQuality: integer("instruction_quality"), // 1-10 teaching quality score
+  visualQuality: integer("visual_quality"), // 1-10 camera/production quality
+  audioQuality: integer("audio_quality"), // 1-10 audio clarity score
+  uniqueValue: text("unique_value"), // what makes this video special
+  coachingNotes: text("coaching_notes"), // coach-level takeaway for training
+  analysisVersion: varchar("analysis_version", { length: 10 }).default('1.0'), // '1.0' = Flash text, '2.5' = Pro visual
+  
   extractedAt: timestamp("extracted_at").defaultNow().notNull(),
 }, (table) => ({
   videoIdx: index("idx_video_knowledge_video").on(table.videoId),

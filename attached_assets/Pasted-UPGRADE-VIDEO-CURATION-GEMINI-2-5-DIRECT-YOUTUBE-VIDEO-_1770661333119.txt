@@ -1,0 +1,245 @@
+UPGRADE VIDEO CURATION — GEMINI 2.5 DIRECT YOUTUBE VIDEO ANALYSIS
+
+Our current video curation pipeline analyzes videos from transcripts and
+metadata (text only). Gemini 2.5 can now WATCH YouTube videos directly
+via URL and analyze what it actually SEES — technique demonstrations,
+positions, transitions, camera angles, timestamps.
+
+For a BJJ app, this is massive. The AI can now SEE the armbar, not just
+read about it.
+
+⚠️ DO NOT remove the existing curation pipeline. UPGRADE it.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 1: UPGRADE GEMINI MODEL
+══════════════════════════════════════════════════════════════════════════
+
+Find every Gemini model string in the codebase. Show me each instance
+with file name and line number.
+
+Update the video analysis model to Gemini 2.5 Pro:
+Model: ‘gemini-2.5-pro’ (or ‘gemini-2.5-pro-preview-05-06’ if the
+stable version isn’t available yet — check Google AI docs)
+
+Keep Gemini Flash for quick pre-filtering if it’s being used for that.
+Only upgrade the DEEP ANALYSIS model to 2.5 Pro.
+
+Check which Gemini SDK/package is installed and update if needed:
+npm list @google/generative-ai
+
+If it’s an older version, update:
+npm install @google/generative-ai@latest
+
+══════════════════════════════════════════════════════════════════════════
+STEP 2: SWITCH TO DIRECT YOUTUBE URL ANALYSIS
+══════════════════════════════════════════════════════════════════════════
+
+Gemini 2.5 can accept YouTube URLs directly. Instead of downloading
+transcripts and sending text, send the YouTube URL as a file part.
+
+BEFORE (text-based analysis):
+
+```javascript
+const result = await model.generateContent({
+  contents: [{
+    role: 'user',
+    parts: [
+      { text: `Analyze this BJJ video:\nTitle: ${title}\nTranscript: ${transcript}` }
+    ]
+  }]
+});
+```
+
+AFTER (direct video analysis):
+
+```javascript
+const result = await model.generateContent({
+  contents: [{
+    role: 'user',
+    parts: [
+      {
+        fileData: {
+          fileUri: `https://www.youtube.com/watch?v=${youtubeId}`,
+          mimeType: 'video/*'
+        }
+      },
+      {
+        text: `You are an expert BJJ analyst. Watch this entire video carefully 
+and provide a comprehensive technical analysis.
+
+Analyze WHAT YOU SEE in the video — the actual technique demonstrations, 
+positions, movements, grips, and transitions. Not just what is said.
+
+Return a JSON object with these fields:
+
+{
+  "title": "video title",
+  "instructor": "instructor name",
+  "instructor_credentials": "any titles, competition wins, or teaching credentials mentioned or known",
+  "skill_level": "beginner|intermediate|advanced",
+  "gi_or_nogi": "gi|nogi|both",
+  
+  "primary_techniques": ["technique1", "technique2"],
+  "positions_covered": ["closed_guard", "half_guard", "mount", etc],
+  "technique_category": "submissions|sweeps|passes|escapes|takedowns|guard_retention|back_attacks|transitions",
+  
+  "key_moments": [
+    {
+      "timestamp": "MM:SS",
+      "description": "What happens at this moment",
+      "technique": "specific technique shown",
+      "detail": "key mechanical detail the instructor demonstrates"
+    }
+  ],
+  
+  "key_concepts": ["concept1", "concept2"],
+  "common_mistakes_addressed": ["mistake1", "mistake2"],
+  "setups_shown": ["setup1", "setup2"],
+  "counters_shown": ["counter1", "counter2"],
+  "follow_ups": ["if this fails, try X"],
+  
+  "body_type_relevance": {
+    "tall_lanky": true/false,
+    "short_stocky": true/false,
+    "heavy": true/false,
+    "light": true/false,
+    "universal": true/false
+  },
+  
+  "instruction_quality": 1-10,
+  "visual_quality": 1-10,
+  "audio_quality": 1-10,
+  "unique_value": "what makes this video special compared to other videos on same technique",
+  
+  "summary": "2-3 sentence summary of what a practitioner will learn",
+  "coaching_notes": "What a coach would tell a student about this video"
+}
+
+Be extremely precise with timestamps — verify them by what you SEE 
+in the video, not by guessing. Every key_moment timestamp should 
+correspond to a visible technique demonstration.
+
+Return ONLY valid JSON, no markdown backticks.`
+      }
+    ]
+  }]
+});
+```
+
+══════════════════════════════════════════════════════════════════════════
+STEP 3: ADD FALLBACK FOR PRIVATE/UNAVAILABLE VIDEOS
+══════════════════════════════════════════════════════════════════════════
+
+Some videos may be private, age-restricted, or region-locked. Gemini
+won’t be able to watch these.
+
+Add error handling:
+
+```javascript
+try {
+  // Try direct video analysis first
+  const result = await analyzeWithVideo(youtubeId);
+  return result;
+} catch (error) {
+  if (error.message?.includes('VIDEO_NOT_ACCESSIBLE') || 
+      error.message?.includes('PERMISSION_DENIED') ||
+      error.status === 400) {
+    // Fallback to transcript-based analysis (old method)
+    console.log(`[CURATION] Video ${youtubeId} not accessible for visual analysis, falling back to transcript`);
+    const result = await analyzeWithTranscript(youtubeId);
+    return result;
+  }
+  throw error;
+}
+```
+
+══════════════════════════════════════════════════════════════════════════
+STEP 4: ENHANCE THE STORED ANALYSIS
+══════════════════════════════════════════════════════════════════════════
+
+The Gemini analysis response now contains richer data. Make sure the
+database stores all of it.
+
+Check the gemini_analysis column in curated_videos (or ai_video_knowledge):
+
+- If it’s a TEXT/JSON column, store the full JSON response
+- Add any new columns if needed for indexed searching:
+  - technique_category (for filtering)
+  - visual_quality (for ranking)
+  - body_type_relevance (for personalization)
+
+Update the video card display to use the enhanced data:
+
+- key_moments with timestamps → show in Analysis modal
+- coaching_notes → Professor OS can reference these
+- body_type_relevance → personalized recommendations
+
+══════════════════════════════════════════════════════════════════════════
+STEP 5: UPDATE THE PRE-FILTER
+══════════════════════════════════════════════════════════════════════════
+
+The pre-filter (GPT-4o Mini) checks if a video is worth deep analysis.
+This can stay as-is OR be replaced with Gemini 2.5 Flash for consistency:
+
+Option A: Keep GPT-4o Mini for pre-filter (it’s cheap and fast)
+Option B: Use Gemini 2.5 Flash for pre-filter (one fewer API dependency)
+
+If switching to Flash, use the same YouTube URL approach but with a
+simpler prompt that only checks:
+
+- Is this an instructional BJJ video? (yes/no)
+- Quality estimate (1-10)
+- Skip if < 6
+
+Either option is fine. Show me which you chose and why.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 6: UPDATE CURATION SCHEDULE
+══════════════════════════════════════════════════════════════════════════
+
+The curation pipeline runs automatically. Make sure:
+
+1. New videos go through the upgraded Gemini 2.5 analysis
+1. Existing videos with old analysis are NOT re-analyzed (waste of money)
+1. Add a flag: analysis_version = ‘2.5’ for new analyses so we can
+   distinguish them from old ones
+1. Add a column if it doesn’t exist:
+   ALTER TABLE curated_videos ADD COLUMN IF NOT EXISTS analysis_version VARCHAR(10) DEFAULT ‘1.0’;
+   
+   Set to ‘2.5’ for all new analyses going forward.
+
+══════════════════════════════════════════════════════════════════════════
+COST AWARENESS
+══════════════════════════════════════════════════════════════════════════
+
+Gemini 2.5 Pro with video input costs more than text-only analysis.
+Log the token usage for each analysis so we can monitor costs:
+
+console.log(’[CURATION COST]’, {
+videoId: youtubeId,
+model: ‘gemini-2.5-pro’,
+inputTokens: response.usageMetadata?.promptTokenCount,
+outputTokens: response.usageMetadata?.candidatesTokenCount,
+analysisVersion: ‘2.5’
+});
+
+══════════════════════════════════════════════════════════════════════════
+DO NOT TOUCH
+══════════════════════════════════════════════════════════════════════════
+
+- Do NOT re-analyze existing 5,444 videos
+- Do NOT change the YouTube search/discovery step
+- Do NOT change how videos are stored in the database (only ADD columns)
+- Do NOT change how Professor OS reads video data for recommendations
+- Do NOT remove the old analysis code (keep as fallback)
+
+══════════════════════════════════════════════════════════════════════════
+SHOW ME
+══════════════════════════════════════════════════════════════════════════
+
+1. All Gemini model strings before and after
+1. The new video analysis function with YouTube URL input
+1. The fallback logic for inaccessible videos
+1. The analysis_version column migration
+1. Cost logging output
+1. Build passes with no errors
