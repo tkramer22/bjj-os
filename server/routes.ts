@@ -2935,16 +2935,88 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ error: 'Invalid or expired preparation. Please start over.' });
       }
 
-      // TODO: In production, verify Apple receipt with Apple's servers
-      // For now, we trust the receipt from the client (StoreKit validated it)
       console.log(`💳 [iOS COMPLETE] Payment received for ${prepData.email}`);
       console.log(`💳 [iOS COMPLETE] Transaction: ${transactionId}, Product: ${productId}`);
 
-      // Create user with ACTIVE subscription (payment succeeded!)
+      // ══════════════════════════════════════════════════════════════
+      // APPLE RECEIPT VERIFICATION — Validate with Apple's servers
+      // ══════════════════════════════════════════════════════════════
+      const APPLE_VERIFY_PRODUCTION = 'https://buy.itunes.apple.com/verifyReceipt';
+      const APPLE_VERIFY_SANDBOX = 'https://sandbox.itunes.apple.com/verifyReceipt';
+
+      let appleVerified = false;
+      let appleReceiptInfo: { original_transaction_id: string; product_id: string; expires_date_ms: string } | null = null;
+      let appleEnvironment = 'production';
+
+      try {
+        const verifyPayload = {
+          'receipt-data': receipt,
+          'password': process.env.APPLE_SHARED_SECRET,
+          'exclude-old-transactions': true,
+        };
+
+        let verifyResponse = await fetch(APPLE_VERIFY_PRODUCTION, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(verifyPayload),
+        });
+        let verifyResult = await verifyResponse.json() as any;
+
+        if (verifyResult.status === 21007) {
+          appleEnvironment = 'sandbox';
+          verifyResponse = await fetch(APPLE_VERIFY_SANDBOX, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(verifyPayload),
+          });
+          verifyResult = await verifyResponse.json() as any;
+        }
+
+        if (verifyResult.status === 0) {
+          const latestReceipt = verifyResult.latest_receipt_info?.[0];
+          if (latestReceipt) {
+            appleReceiptInfo = {
+              original_transaction_id: latestReceipt.original_transaction_id,
+              product_id: latestReceipt.product_id,
+              expires_date_ms: latestReceipt.expires_date_ms,
+            };
+            appleVerified = true;
+            console.log(`✅ [iOS COMPLETE] Apple receipt verified (${appleEnvironment}): txn=${appleReceiptInfo.original_transaction_id}, product=${appleReceiptInfo.product_id}`);
+          } else {
+            console.error(`❌ [iOS COMPLETE] Apple receipt valid but no subscription info found`);
+          }
+        } else {
+          console.error(`❌ [iOS COMPLETE] Apple receipt verification failed with status: ${verifyResult.status}`);
+        }
+      } catch (verifyError: any) {
+        console.error(`❌ [iOS COMPLETE] Apple receipt verification error: ${verifyError.message}`);
+      }
+
+      if (!appleVerified) {
+        console.error(`🚫 [iOS COMPLETE] BLOCKED: User ${prepData.email} attempted signup with invalid Apple receipt`);
+        return res.status(402).json({
+          error: 'Payment could not be verified. Please ensure your purchase was completed successfully.',
+          code: 'RECEIPT_VALIDATION_FAILED',
+        });
+      }
+
+      const appleExpiresAt = appleReceiptInfo ? new Date(parseInt(appleReceiptInfo.expires_date_ms)) : null;
+      const isSubscriptionActive = appleExpiresAt ? appleExpiresAt > new Date() : false;
+
+      if (!isSubscriptionActive) {
+        console.error(`🚫 [iOS COMPLETE] BLOCKED: User ${prepData.email} has expired Apple subscription`);
+        return res.status(402).json({
+          error: 'Your subscription has expired. Please renew to create an account.',
+          code: 'SUBSCRIPTION_EXPIRED',
+        });
+      }
+
+      // ══════════════════════════════════════════════════════════════
+      // CREATE USER — Only after Apple receipt is validated
+      // ══════════════════════════════════════════════════════════════
       let newUser;
       
       if (prepData.authType === 'apple') {
-        // Check one more time for race conditions - only select essential columns
         let [existingUser] = await db.select({
           id: bjjUsers.id,
           email: bjjUsers.email,
@@ -2958,7 +3030,17 @@ export function registerRoutes(app: Express): Server {
           .limit(1);
 
         if (existingUser) {
-          // Race condition - user was created elsewhere
+          await db.update(bjjUsers)
+            .set({
+              appleOriginalTransactionId: appleReceiptInfo!.original_transaction_id,
+              appleProductId: appleReceiptInfo!.product_id,
+              appleReceipt: receipt,
+              appleExpiresAt,
+              appleEnvironment,
+              subscriptionStatus: 'active',
+              subscriptionEndDate: appleExpiresAt,
+            })
+            .where(eq(bjjUsers.id, existingUser.id));
           const token = jwt.sign(
             { userId: existingUser.id, email: existingUser.email, isAdmin: false },
             process.env.SESSION_SECRET || 'bjj-os-secret',
@@ -2975,17 +3057,21 @@ export function registerRoutes(app: Express): Server {
           subscriptionType: 'monthly',
           subscriptionStatus: 'active',
           onboardingCompleted: false,
-          paymentProvider: 'apple', // iOS users pay through Apple IAP
+          paymentProvider: 'apple',
+          appleOriginalTransactionId: appleReceiptInfo!.original_transaction_id,
+          appleProductId: appleReceiptInfo!.product_id,
+          appleReceipt: receipt,
+          appleExpiresAt,
+          appleEnvironment,
+          subscriptionEndDate: appleExpiresAt,
         }).returning({
           id: bjjUsers.id,
           email: bjjUsers.email,
         });
 
-        console.log(`🍎 [iOS COMPLETE] Created Apple account: ${newUser.email || newUser.id}`);
+        console.log(`🍎 [iOS COMPLETE] Created Apple account with verified receipt: ${newUser.email || newUser.id}`);
 
       } else {
-        // Email/password flow
-        // Check one more time for race conditions - only select essential columns
         const [existingUser] = await db.select({
           id: bjjUsers.id,
           email: bjjUsers.email,
@@ -3005,13 +3091,19 @@ export function registerRoutes(app: Express): Server {
           subscriptionType: 'monthly',
           subscriptionStatus: 'active',
           onboardingCompleted: false,
-          paymentProvider: 'apple', // iOS users pay through Apple IAP
+          paymentProvider: 'apple',
+          appleOriginalTransactionId: appleReceiptInfo!.original_transaction_id,
+          appleProductId: appleReceiptInfo!.product_id,
+          appleReceipt: receipt,
+          appleExpiresAt,
+          appleEnvironment,
+          subscriptionEndDate: appleExpiresAt,
         }).returning({
           id: bjjUsers.id,
           email: bjjUsers.email,
         });
 
-        console.log(`📱 [iOS COMPLETE] Created email account: ${newUser.email}`);
+        console.log(`📱 [iOS COMPLETE] Created email account with verified receipt: ${newUser.email}`);
       }
 
       // Generate JWT token
