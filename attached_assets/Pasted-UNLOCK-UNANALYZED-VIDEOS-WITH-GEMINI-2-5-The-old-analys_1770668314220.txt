@@ -1,0 +1,129 @@
+UNLOCK UNANALYZED VIDEOS WITH GEMINI 2.5
+
+The old analysis pipeline required transcripts. Videos without transcripts
+got skipped or received weak/incomplete analysis. Gemini 2.5 Pro WATCHES
+the video directly — no transcript needed. This means we can now properly
+analyze videos that were previously impossible to analyze.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 1: FIND ALL UNANALYZED OR POORLY ANALYZED VIDEOS
+══════════════════════════════════════════════════════════════════════════
+
+Query the Supabase database:
+
+– Videos with NO analysis at all
+SELECT COUNT(*) as no_analysis FROM curated_videos
+WHERE status = ‘active’
+AND (gemini_analysis IS NULL OR gemini_analysis = ‘’);
+
+– Videos with analysis but version 1.0 (old transcript-based)
+SELECT COUNT(*) as old_analysis FROM curated_videos
+WHERE status = ‘active’
+AND gemini_analysis IS NOT NULL
+AND gemini_analysis != ‘’
+AND (analysis_version = ‘1.0’ OR analysis_version IS NULL);
+
+– Videos already analyzed with 2.5
+SELECT COUNT(*) as new_analysis FROM curated_videos
+WHERE status = ‘active’
+AND analysis_version = ‘2.5’;
+
+– TOTAL active videos
+SELECT COUNT(*) as total_active FROM curated_videos
+WHERE status = ‘active’;
+
+Show me all 4 counts.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 2: PRIORITY RE-ANALYSIS — UNANALYZED FIRST
+══════════════════════════════════════════════════════════════════════════
+
+Create an admin endpoint: POST /api/admin/reanalyze-unanalyzed
+
+This endpoint:
+
+1. Finds videos with NO analysis (gemini_analysis IS NULL or empty)
+   that have status = ‘active’ and a valid youtube_id
+1. Processes them in batches of 5 at a time
+1. For each video:
+- Runs the NEW Gemini 2.5 Pro visual analysis (YouTube URL method)
+- Stores the result in gemini_analysis
+- Sets analysis_version = ‘2.5’
+- Populates all standard fields (primary_techniques, positions_covered,
+  skill_level, quality_score, etc.) from the analysis
+- Logs cost per video
+1. Waits 3 seconds between each video (rate limiting)
+1. Returns a summary of how many were analyzed and any failures
+
+Also create: POST /api/admin/reanalyze-batch
+
+This endpoint:
+
+1. Takes parameters: { batchSize: number, minVersion: string }
+1. Finds the oldest videos with analysis_version < minVersion
+1. Re-analyzes them with Gemini 2.5
+1. MERGES new analysis with existing — does NOT delete old data
+1. Updates analysis_version to ‘2.5’
+1. Returns summary
+
+══════════════════════════════════════════════════════════════════════════
+STEP 3: RUN A SMALL TEST BATCH NOW
+══════════════════════════════════════════════════════════════════════════
+
+Pick 5 videos that have NO analysis (gemini_analysis IS NULL).
+Run them through the new Gemini 2.5 visual analyzer.
+
+For each video show me:
+
+- Video title and youtube_id
+- BEFORE: gemini_analysis = NULL, no primary_techniques, no quality_score
+- AFTER: full analysis with techniques, timestamps, quality scores
+- Confirm the video is now searchable by technique keywords
+
+This proves we can unlock videos that were previously invisible to
+Professor OS recommendations.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 4: VERIFY NEWLY ANALYZED VIDEOS APPEAR IN RECOMMENDATIONS
+══════════════════════════════════════════════════════════════════════════
+
+After the 5 test videos are analyzed:
+
+1. Check if they now have the Analysis button in the Library
+1. Check if Professor OS can now recommend them
+   (they should appear in the video cache on next refresh)
+1. Verify the keywords/techniques from the new analysis match
+   what’s actually in the video
+
+══════════════════════════════════════════════════════════════════════════
+STEP 5: COST ESTIMATE FOR FULL RE-ANALYSIS
+══════════════════════════════════════════════════════════════════════════
+
+Based on the 5 test videos, calculate:
+
+- Average cost per video analysis (input + output tokens)
+- Estimated cost to analyze ALL unanalyzed videos
+- Estimated cost to re-analyze ALL v1.0 videos with v2.5
+- Total cost to upgrade entire library
+
+Show the math so I can decide whether to run the full batch or
+do it gradually over time.
+
+══════════════════════════════════════════════════════════════════════════
+DO NOT
+══════════════════════════════════════════════════════════════════════════
+
+- Do NOT run full batch re-analysis without my approval
+- Do NOT delete any existing analysis data
+- Do NOT change video status
+- Do NOT modify any video that already has analysis_version = ‘2.5’
+
+══════════════════════════════════════════════════════════════════════════
+REPORT
+══════════════════════════════════════════════════════════════════════════
+
+1. Counts: unanalyzed, v1.0, v2.5, total active
+1. 5 test video results (before and after)
+1. Admin endpoints created and working
+1. Cost per video and full library estimate
+1. Confirmation newly analyzed videos are searchable
