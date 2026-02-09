@@ -1,0 +1,77 @@
+ADDITIONAL BUGS — ADD THESE TO THE CURRENT FIX
+
+══════════════════════════════════════════════════════════════════════════
+BUG 3: SAVING A VIDEO CREATES DUPLICATE IN SAVED VIDEOS
+══════════════════════════════════════════════════════════════════════════
+
+When I save a video from the Technique Library, it appears TWICE in the
+Saved Videos page. This is the duplicate bug we already tried to fix.
+
+The fix is NOT working. Check:
+
+1. The API endpoint for saving videos — is it checking for existing saves
+   BEFORE inserting?
+1. Run this query:
+   SELECT user_id, video_id, COUNT(*) FROM saved_videos
+   GROUP BY user_id, video_id HAVING COUNT(*) > 1;
+1. Delete ALL duplicates — keep only the oldest entry per user+video pair:
+   DELETE FROM saved_videos WHERE id NOT IN (
+   SELECT MIN(id) FROM saved_videos GROUP BY user_id, video_id
+   );
+1. Add a UNIQUE constraint if it doesn’t exist:
+   DO $$ BEGIN
+   ALTER TABLE saved_videos ADD CONSTRAINT unique_user_video
+   UNIQUE (user_id, video_id);
+   EXCEPTION WHEN duplicate_table THEN NULL;
+   END $$;
+1. Update the save API endpoint to use INSERT … ON CONFLICT DO NOTHING
+   or check existence before inserting
+1. On the frontend, if a video is already saved, the Save button should
+   show “Saved” (greyed out) and not allow clicking again
+
+TEST:
+□ Save a video → appears ONCE in Saved Videos
+□ Try to save same video again → does NOT create duplicate
+□ Save button shows “Saved” for already-saved videos in Library
+□ Clean database: zero duplicate rows
+
+══════════════════════════════════════════════════════════════════════════
+BUG 4: ANALYSIS BUTTON STILL CLICKABLE ON UNANALYZED VIDEOS
+══════════════════════════════════════════════════════════════════════════
+
+We asked to HIDE the Analysis button on videos that don’t have analysis.
+The videos moved to the bottom of the list which is good, but the
+Analysis button is STILL VISIBLE AND CLICKABLE on those videos.
+
+When clicked, it shows “Detailed AI analysis is being processed for
+this video. Check back soon!” — this is a bad user experience.
+
+FIX:
+
+1. Find the video card component
+1. The Analysis button must be COMPLETELY HIDDEN (not just disabled)
+   when the video has no analysis data
+1. Check the field: if gemini_analysis IS NULL or empty string →
+   do NOT render the Analysis button at all
+1. This applies to ALL video cards everywhere:
+- Technique Library
+- Saved Videos
+- Chat recommendations
+
+TEST:
+□ Videos WITH analysis → show purple Analysis button
+□ Videos WITHOUT analysis → NO Analysis button visible at all
+□ Cannot click Analysis on unanalyzed videos (button doesn’t exist)
+□ This works in Library, Saved, and Chat
+
+══════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER
+══════════════════════════════════════════════════════════════════════════
+
+Fix in this order:
+
+1. Chat video cards (thumbnails, analysis, save working) — Regression 1 & 2
+1. Duplicate saves — Bug 3
+1. Hide analysis button on unanalyzed videos — Bug 4
+
+Test everything. Build must pass with no errors.

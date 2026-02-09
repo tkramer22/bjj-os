@@ -8746,7 +8746,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
           viewCount: aiVideoKnowledge.viewCount,
           duration: aiVideoKnowledge.duration,
           createdAt: aiVideoKnowledge.createdAt,
-          hasAnalysis: sql<boolean>`EXISTS (SELECT 1 FROM video_knowledge WHERE video_knowledge.video_id = ${aiVideoKnowledge.id})`,
+          hasAnalysis: sql<boolean>`EXISTS (SELECT 1 FROM video_knowledge WHERE video_knowledge.video_id = ${aiVideoKnowledge.id} AND technique_name IS NOT NULL AND technique_name != '' AND (key_concepts IS NOT NULL OR full_summary IS NOT NULL))`,
         })
         .from(aiVideoKnowledge)
         .where(
@@ -8815,7 +8815,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         viewCount: aiVideoKnowledge.viewCount,
         duration: aiVideoKnowledge.duration,
         createdAt: aiVideoKnowledge.createdAt,
-        hasAnalysis: sql<boolean>`EXISTS (SELECT 1 FROM video_knowledge WHERE video_knowledge.video_id = ${aiVideoKnowledge.id})`,
+        hasAnalysis: sql<boolean>`EXISTS (SELECT 1 FROM video_knowledge WHERE video_knowledge.video_id = ${aiVideoKnowledge.id} AND technique_name IS NOT NULL AND technique_name != '' AND (key_concepts IS NOT NULL OR full_summary IS NOT NULL))`,
       })
       .from(aiVideoKnowledge)
       .where(and(...conditions))

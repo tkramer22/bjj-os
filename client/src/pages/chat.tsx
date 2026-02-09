@@ -217,6 +217,7 @@ export default function ChatPage() {
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [savedVideoIds, setSavedVideoIds] = useState<Set<number>>(new Set());
+  const [analyzedVideoIds, setAnalyzedVideoIds] = useState<Set<number>>(new Set());
   const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string; startTimeSeconds?: number } | null>(null);
   const [analysisVideoId, setAnalysisVideoId] = useState<number | null>(null);
   const [loadingMessage, setLoadingMessage] = useState("Analyzing your training");
@@ -293,6 +294,47 @@ export default function ChatPage() {
       setSavedVideoIds(new Set(savedVideosData.videos.map(v => parseInt(v.id))));
     }
   }, [savedVideosData]);
+
+  // Check which videos have analysis data across all messages
+  useEffect(() => {
+    if (messages.length === 0) return;
+    
+    const allVideoIds: number[] = [];
+    messages.forEach(msg => {
+      if (msg.role === 'assistant' && msg.content) {
+        const segments = parseVideoTokens(msg.content);
+        segments.forEach(s => {
+          if (s.video && s.video.id > 0) allVideoIds.push(s.video.id);
+        });
+      }
+    });
+    
+    if (allVideoIds.length === 0) return;
+    
+    const uniqueIds = [...new Set(allVideoIds)];
+    
+    const checkAnalysis = async () => {
+      try {
+        const response = await fetch('/api/ai/videos/has-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoIds: uniqueIds }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const ids = new Set<number>();
+          for (const [id, hasIt] of Object.entries(data.analyzed)) {
+            if (hasIt) ids.add(parseInt(id));
+          }
+          setAnalyzedVideoIds(ids);
+        }
+      } catch (error) {
+        console.error('Failed to check analysis status:', error);
+      }
+    };
+    
+    checkAnalysis();
+  }, [messages]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -761,6 +803,7 @@ export default function ChatPage() {
                                   ? `@ ${Math.floor(segment.video!.startTimeSeconds / 60)}:${String(segment.video!.startTimeSeconds % 60).padStart(2, '0')}` 
                                   : 'full'}
                               </Button>
+                              {analyzedVideoIds.has(segment.video.id) && (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -771,6 +814,7 @@ export default function ChatPage() {
                                 <Brain className="h-4 w-4" />
                                 <span className="text-xs">Analysis</span>
                               </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="ghost"
