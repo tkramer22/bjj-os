@@ -2948,6 +2948,11 @@ export function registerRoutes(app: Express): Server {
       let appleReceiptInfo: { original_transaction_id: string; product_id: string; expires_date_ms: string } | null = null;
       let appleEnvironment = 'production';
 
+      if (!process.env.APPLE_SHARED_SECRET) {
+        console.error(`🚫 [iOS COMPLETE] APPLE_SHARED_SECRET not configured — cannot verify receipts`);
+        return res.status(500).json({ error: 'Server configuration error. Please contact support.', code: 'SERVER_CONFIG_ERROR' });
+      }
+
       try {
         const verifyPayload = {
           'receipt-data': receipt,
@@ -2973,15 +2978,22 @@ export function registerRoutes(app: Express): Server {
         }
 
         if (verifyResult.status === 0) {
-          const latestReceipt = verifyResult.latest_receipt_info?.[0];
-          if (latestReceipt) {
+          const receiptInfos = verifyResult.latest_receipt_info as any[];
+          if (receiptInfos && receiptInfos.length > 0) {
+            const sortedReceipts = [...receiptInfos].sort(
+              (a, b) => parseInt(b.expires_date_ms) - parseInt(a.expires_date_ms)
+            );
+            const bestMatch = transactionId
+              ? sortedReceipts.find((r: any) => r.original_transaction_id === transactionId || r.transaction_id === transactionId) || sortedReceipts[0]
+              : sortedReceipts[0];
+
             appleReceiptInfo = {
-              original_transaction_id: latestReceipt.original_transaction_id,
-              product_id: latestReceipt.product_id,
-              expires_date_ms: latestReceipt.expires_date_ms,
+              original_transaction_id: bestMatch.original_transaction_id,
+              product_id: bestMatch.product_id,
+              expires_date_ms: bestMatch.expires_date_ms,
             };
             appleVerified = true;
-            console.log(`✅ [iOS COMPLETE] Apple receipt verified (${appleEnvironment}): txn=${appleReceiptInfo.original_transaction_id}, product=${appleReceiptInfo.product_id}`);
+            console.log(`✅ [iOS COMPLETE] Apple receipt verified (${appleEnvironment}): txn=${appleReceiptInfo.original_transaction_id}, product=${appleReceiptInfo.product_id}, entries=${receiptInfos.length}`);
           } else {
             console.error(`❌ [iOS COMPLETE] Apple receipt valid but no subscription info found`);
           }
