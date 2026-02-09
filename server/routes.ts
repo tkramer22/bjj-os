@@ -14596,6 +14596,215 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     }
   });
 
+  // /api/admin/videos/analysis-counts - Get counts of unanalyzed, v1.0, v2.5, total
+  app.get('/api/admin/videos/analysis-counts', checkAdminAuth, async (req, res) => {
+    try {
+      const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
+      
+      const result = await db.execute(sql`
+        SELECT
+          (SELECT COUNT(*) FROM ai_video_knowledge WHERE status = 'active') as total_active,
+          (SELECT COUNT(*) FROM video_watch_status WHERE processed = true) as total_processed,
+          (SELECT COUNT(*) FROM video_watch_status WHERE processed = false AND error_message IS NOT NULL) as failed_with_errors,
+          (SELECT COUNT(DISTINCT video_id) FROM video_knowledge) as has_knowledge
+      `);
+      
+      const row = getRows(result)[0] || {};
+      const totalActive = parseInt(row.total_active || '0');
+      const totalProcessed = parseInt(row.total_processed || '0');
+      
+      res.json({
+        total_active: totalActive,
+        total_processed: totalProcessed,
+        no_analysis: totalActive - totalProcessed,
+        has_knowledge: parseInt(row.has_knowledge || '0'),
+        failed_with_errors: parseInt(row.failed_with_errors || '0')
+      });
+    } catch (error: any) {
+      console.error('[ADMIN ANALYSIS COUNTS] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/admin/reanalyze-unanalyzed - Process videos with NO analysis
+  app.post('/api/admin/reanalyze-unanalyzed', checkAdminAuth, async (req, res) => {
+    try {
+      const batchSize = Math.min(parseInt(req.body.batchSize) || 5, 20);
+      const { processVideoKnowledge } = await import('./video-knowledge-service');
+      const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
+      
+      const unanalyzedResult = await db.execute(sql`
+        SELECT v.id, v.title, v.youtube_id, v.instructor_name
+        FROM ai_video_knowledge v
+        WHERE v.status = 'active'
+        AND v.youtube_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM video_watch_status vws 
+          WHERE vws.video_id = v.id AND vws.processed = true
+        )
+        ORDER BY v.quality_score DESC NULLS LAST
+        LIMIT ${batchSize}
+      `);
+      
+      const videos = getRows(unanalyzedResult);
+      
+      if (videos.length === 0) {
+        return res.json({ message: 'No unanalyzed videos found', processed: 0, results: [] });
+      }
+      
+      console.log(`[REANALYZE] Starting batch of ${videos.length} unanalyzed videos`);
+      
+      const results: any[] = [];
+      for (const video of videos) {
+        const startTime = Date.now();
+        console.log(`[REANALYZE] Processing: ${video.title} (ID: ${video.id}, YT: ${video.youtube_id})`);
+        
+        try {
+          const result = await processVideoKnowledge(video.id);
+          const elapsed = Date.now() - startTime;
+          
+          results.push({
+            id: video.id,
+            title: video.title,
+            youtube_id: video.youtube_id,
+            instructor: video.instructor_name,
+            success: result.success,
+            techniques_added: result.techniquesAdded || 0,
+            error: result.error || null,
+            elapsed_ms: elapsed
+          });
+          
+          console.log(`[REANALYZE] ${result.success ? 'SUCCESS' : 'FAILED'}: ${video.title} (${elapsed}ms, ${result.techniquesAdded || 0} techniques)`);
+        } catch (err: any) {
+          results.push({
+            id: video.id,
+            title: video.title,
+            youtube_id: video.youtube_id,
+            instructor: video.instructor_name,
+            success: false,
+            techniques_added: 0,
+            error: err.message,
+            elapsed_ms: Date.now() - startTime
+          });
+          console.error(`[REANALYZE] ERROR: ${video.title}: ${err.message}`);
+        }
+        
+        if (videos.indexOf(video) < videos.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+      }
+      
+      const succeeded = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
+      const totalTechniques = results.reduce((sum, r) => sum + r.techniques_added, 0);
+      
+      console.log(`[REANALYZE] Batch complete: ${succeeded} succeeded, ${failed} failed, ${totalTechniques} techniques added`);
+      
+      res.json({
+        processed: results.length,
+        succeeded,
+        failed,
+        total_techniques_added: totalTechniques,
+        results
+      });
+    } catch (error: any) {
+      console.error('[REANALYZE UNANALYZED] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/admin/reanalyze-batch - Re-analyze already-processed videos (force fresh Gemini 2.5 Pro analysis)
+  app.post('/api/admin/reanalyze-batch', checkAdminAuth, async (req, res) => {
+    try {
+      const batchSize = Math.min(parseInt(req.body.batchSize) || 5, 20);
+      const { processVideoKnowledge } = await import('./video-knowledge-service');
+      const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
+      
+      const oldVideosResult = await db.execute(sql`
+        SELECT v.id, v.title, v.youtube_id, v.instructor_name,
+          COUNT(vk.id) as knowledge_rows,
+          vws.processed_at
+        FROM ai_video_knowledge v
+        JOIN video_watch_status vws ON vws.video_id = v.id AND vws.processed = true
+        LEFT JOIN video_knowledge vk ON vk.video_id = v.id
+        WHERE v.status = 'active'
+        AND v.youtube_id IS NOT NULL
+        GROUP BY v.id, v.title, v.youtube_id, v.instructor_name, vws.processed_at
+        ORDER BY vws.processed_at ASC NULLS FIRST
+        LIMIT ${batchSize}
+      `);
+      
+      const videos = getRows(oldVideosResult);
+      
+      if (videos.length === 0) {
+        return res.json({ message: 'No previously-processed videos found to re-analyze', processed: 0, results: [] });
+      }
+      
+      console.log(`[REANALYZE-BATCH] Re-analyzing ${videos.length} previously-processed videos with fresh Gemini 2.5 Pro`);
+      
+      const results: any[] = [];
+      for (const video of videos) {
+        const startTime = Date.now();
+        console.log(`[REANALYZE-BATCH] Re-analyzing: ${video.title} (ID: ${video.id}, had ${video.knowledge_rows} rows)`);
+        
+        try {
+          await db.execute(sql`
+            UPDATE video_watch_status SET processed = false, error_message = NULL 
+            WHERE video_id = ${video.id}
+          `);
+          
+          const result = await processVideoKnowledge(video.id);
+          const elapsed = Date.now() - startTime;
+          
+          results.push({
+            id: video.id,
+            title: video.title,
+            youtube_id: video.youtube_id,
+            instructor: video.instructor_name,
+            previous_knowledge_rows: parseInt(video.knowledge_rows),
+            success: result.success,
+            techniques_added: result.techniquesAdded || 0,
+            error: result.error || null,
+            elapsed_ms: elapsed
+          });
+          
+          console.log(`[REANALYZE-BATCH] ${result.success ? 'UPGRADED' : 'FAILED'}: ${video.title} (${elapsed}ms)`);
+        } catch (err: any) {
+          results.push({
+            id: video.id,
+            title: video.title,
+            youtube_id: video.youtube_id,
+            instructor: video.instructor_name,
+            previous_knowledge_rows: parseInt(video.knowledge_rows),
+            success: false,
+            techniques_added: 0,
+            error: err.message,
+            elapsed_ms: Date.now() - startTime
+          });
+        }
+        
+        if (videos.indexOf(video) < videos.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+      }
+      
+      const succeeded = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
+      const totalTechniques = results.reduce((sum, r) => sum + r.techniques_added, 0);
+      
+      res.json({
+        processed: results.length,
+        succeeded,
+        failed,
+        total_techniques_added: totalTechniques,
+        results
+      });
+    } catch (error: any) {
+      console.error('[REANALYZE BATCH] Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // /api/admin/videos/:id/knowledge - Get video knowledge details
   app.get('/api/admin/videos/:id/knowledge', checkAdminAuth, async (req, res) => {
     try {
