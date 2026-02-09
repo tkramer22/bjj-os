@@ -1,0 +1,101 @@
+CRITICAL FIX: VALIDATE APPLE RECEIPTS BEFORE CREATING USERS
+
+The iOS signup flow at /api/auth/ios/complete trusts the client’s claim
+of payment without verifying with Apple. This is a revenue leak — 22 users
+have access but only 2 actually paid through Apple.
+
+══════════════════════════════════════════════════════════════════════════
+THE FIX
+══════════════════════════════════════════════════════════════════════════
+
+In /api/auth/ios/complete (server/routes.ts around line 2918):
+
+1. BEFORE creating the user, validate the receipt with Apple’s
+   verifyReceipt API. The verification logic already exists in
+   server/routes/apple.ts — integrate it into the signup flow.
+1. Call Apple’s verification endpoint:
+- Production: https://buy.itunes.apple.com/verifyReceipt
+- Sandbox: https://sandbox.itunes.apple.com/verifyReceipt
+   
+   Send: { “receipt-data”: receipt, “password”: APPLE_SHARED_SECRET }
+   
+   If production returns status 21007, retry with sandbox URL
+   (this handles TestFlight/sandbox purchases).
+1. Only create the user if Apple returns status 0 (valid receipt) AND
+   the receipt contains an active subscription for your product ID.
+1. From the validated response, extract and STORE:
+- apple_original_transaction_id (from latest_receipt_info)
+- apple_product_id (from latest_receipt_info)
+- apple_receipt (the raw receipt data)
+1. If receipt validation FAILS:
+- DO NOT create the user
+- Return an error: { error: “Payment could not be verified” }
+- Log the failed attempt with email and timestamp
+
+══════════════════════════════════════════════════════════════════════════
+ALSO FIX: STRIPE WEBHOOK NOT STORING IDS
+══════════════════════════════════════════════════════════════════════════
+
+The Stripe webhook handler (checkout.session.completed) creates users
+but does NOT store stripe_customer_id or stripe_subscription_id.
+
+Find the webhook handler and ensure it stores:
+
+- stripe_customer_id from session.customer
+- stripe_subscription_id from session.subscription
+
+══════════════════════════════════════════════════════════════════════════
+HANDLE EXISTING UNPAID USERS
+══════════════════════════════════════════════════════════════════════════
+
+For the 20 existing Apple users with no valid receipt:
+
+DO NOT delete them. But update their status so they cannot access
+the app without paying:
+
+UPDATE users
+SET subscription_status = ‘expired’,
+subscription_type = ‘none’
+WHERE payment_provider = ‘apple’
+AND (apple_receipt IS NULL OR apple_receipt = ‘’)
+AND (apple_original_transaction_id IS NULL OR apple_original_transaction_id = ‘’)
+AND is_admin = false;
+
+When these users try to log in, the app should detect expired status
+and prompt them to subscribe again.
+
+DO NOT touch admin accounts or the 2 legitimate Apple subscribers
+(if we can identify them — they may be the ones with apple_user_id
+populated). Before running the update, show me which users have
+apple_user_id populated vs null so we can protect the real subscribers.
+
+══════════════════════════════════════════════════════════════════════════
+CHECK: APPLE SHARED SECRET
+══════════════════════════════════════════════════════════════════════════
+
+Does the environment have APPLE_SHARED_SECRET configured?
+Check .env / Replit secrets for:
+
+- APPLE_SHARED_SECRET
+- APP_STORE_SHARED_SECRET
+- Any Apple-related secret
+
+If not configured, this needs to be set up in App Store Connect:
+App Store Connect → Your App → In-App Purchases → App-Specific Shared Secret
+
+══════════════════════════════════════════════════════════════════════════
+TEST
+══════════════════════════════════════════════════════════════════════════
+
+□ New iOS signup with VALID Apple payment → account created, receipt stored
+□ New iOS signup with FAKE receipt → account NOT created, error returned
+□ Existing expired users → prompted to subscribe when they open app
+□ Admin accounts → unaffected
+□ Legitimate Apple subscribers → unaffected
+□ Stripe webhook → customer and subscription IDs stored
+□ Build passes with no errors
+
+══════════════════════════════════════════════════════════════════════════
+IMPORTANT: Show me which users have apple_user_id populated BEFORE
+running any updates. I need to approve which users to expire.
+══════════════════════════════════════════════════════════════════════════
