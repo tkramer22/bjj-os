@@ -611,6 +611,7 @@ export async function handleClaudeStream(req: any, res: any) {
       })
         .from(aiVideoKnowledge)
         .where(and(
+          eq(aiVideoKnowledge.status, 'active'),
           sql`${aiVideoKnowledge.youtubeId} IS NOT NULL AND ${aiVideoKnowledge.youtubeId} != ''`,
           sql`${aiVideoKnowledge.videoUrl} IS NOT NULL AND ${aiVideoKnowledge.videoUrl} != ''`,
           sql`${aiVideoKnowledge.title} IS NOT NULL AND ${aiVideoKnowledge.title} != ''`,

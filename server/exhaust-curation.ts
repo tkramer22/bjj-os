@@ -23,7 +23,7 @@ import { runContentFirstCuration } from './content-first-curator';
 import { db, pool } from './db';
 import { curationRuns, aiVideoKnowledge } from '@shared/schema';
 import { randomUUID } from 'crypto';
-import { eq, sql, gt } from 'drizzle-orm';
+import { eq, sql, gt, and } from 'drizzle-orm';
 import { sendCurationReportEmail } from './curation-report.js';
 
 // Parse command line arguments
@@ -83,7 +83,7 @@ function sleep(seconds: number): Promise<void> {
 
 // Get video count
 async function getVideoCount(): Promise<number> {
-  const result = await db.select({ count: sql`count(*)` }).from(aiVideoKnowledge);
+  const result = await db.select({ count: sql`count(*)` }).from(aiVideoKnowledge).where(eq(aiVideoKnowledge.status, 'active'));
   return Number(result[0].count);
 }
 
@@ -95,7 +95,7 @@ async function getNewVideos(since: Date) {
     quality_score: aiVideoKnowledge.qualityScore
   })
   .from(aiVideoKnowledge)
-  .where(gt(aiVideoKnowledge.createdAt!, since))
+  .where(and(gt(aiVideoKnowledge.createdAt!, since), eq(aiVideoKnowledge.status, 'active')))
   .orderBy(sql`${aiVideoKnowledge.createdAt} DESC`);
   
   return result;

@@ -157,6 +157,7 @@ async function runMassCuration() {
       SELECT COUNT(*) as count 
       FROM ai_video_knowledge 
       WHERE quality_score >= ${QUALITY_THRESHOLD}
+        AND status = 'active'
     `);
     
     const currentCount = parseInt(currentResult.rows[0].count as string);
@@ -273,6 +274,7 @@ async function runMassCuration() {
       FROM ai_video_knowledge
       WHERE (LOWER(title) LIKE '%octopus%' OR LOWER(technique_name) LIKE '%octopus%')
         AND quality_score >= ${QUALITY_THRESHOLD}
+        AND status = 'active'
     `);
     
     console.log(`\n🐙 OCTOPUS GUARD VERIFICATION: ${octopusCheck.rows[0].count} videos found\n`);

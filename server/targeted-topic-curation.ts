@@ -49,6 +49,7 @@ async function getDatabaseInstructors(): Promise<DatabaseInstructor[]> {
       WHERE instructor_name IS NOT NULL 
         AND instructor_name != ''
         AND CAST(quality_score AS DECIMAL) >= 7
+        AND status = 'active'
       GROUP BY instructor_name
       HAVING COUNT(*) >= 1
       ORDER BY AVG(CAST(quality_score AS DECIMAL)) DESC, COUNT(*) DESC
@@ -737,7 +738,7 @@ export async function runTargetedCuration(
       }
     }
     
-    const totalCount = await db.select({ count: sql<number>`count(*)` }).from(aiVideoKnowledge);
+    const totalCount = await db.select({ count: sql<number>`count(*)` }).from(aiVideoKnowledge).where(eq(aiVideoKnowledge.status, 'active'));
     result.databaseTotal = Number(totalCount[0]?.count || 0);
     
     result.topInstructors = Object.entries(instructorCounts)
@@ -1161,7 +1162,7 @@ export async function runExpandedCuration(): Promise<ExpandedCurationResult> {
   
   // Get final library count
   try {
-    const countResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`);
+    const countResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`);
     const rows = Array.isArray(countResult) ? countResult : (countResult as any).rows || [];
     result.databaseTotal = parseInt(rows[0]?.count || '0');
   } catch (err) {

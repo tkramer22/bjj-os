@@ -158,7 +158,7 @@ function calculateEngagementScore(signalType: string, signalValue: string): numb
 async function getTechniqueType(videoId: number): Promise<string> {
   const result = await db.select({ techniqueType: aiVideoKnowledge.techniqueType })
     .from(aiVideoKnowledge)
-    .where(eq(aiVideoKnowledge.id, videoId))
+    .where(and(eq(aiVideoKnowledge.id, videoId), eq(aiVideoKnowledge.status, 'active')))
     .limit(1);
   return result[0]?.techniqueType || 'unknown';
 }
@@ -166,7 +166,7 @@ async function getTechniqueType(videoId: number): Promise<string> {
 async function getTechniqueName(videoId: number): Promise<string> {
   const result = await db.select({ techniqueName: aiVideoKnowledge.techniqueName })
     .from(aiVideoKnowledge)
-    .where(eq(aiVideoKnowledge.id, videoId))
+    .where(and(eq(aiVideoKnowledge.id, videoId), eq(aiVideoKnowledge.status, 'active')))
     .limit(1);
   return result[0]?.techniqueName || 'Unknown Technique';
 }
@@ -439,7 +439,7 @@ Format as JSON array: [{"technique": "name", "why": "explanation"}]`;
       for (const solution of solutions) {
         const videos = await db.select({ id: aiVideoKnowledge.id })
           .from(aiVideoKnowledge)
-          .where(sql`${aiVideoKnowledge.techniqueName} ILIKE ${'%' + solution.technique + '%'}`)
+          .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.techniqueName} ILIKE ${'%' + solution.technique + '%'}`))
           .limit(3);
         
         solutionVideoIds.push(...videos.map(v => v.id));
@@ -593,7 +593,7 @@ export async function mapTechniqueRelationships(
       for (const relatedTechnique of analysis.combinations) {
         const related = await db.select({ id: aiVideoKnowledge.id })
           .from(aiVideoKnowledge)
-          .where(sql`${aiVideoKnowledge.techniqueName} ILIKE ${'%' + relatedTechnique + '%'}`)
+          .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.techniqueName} ILIKE ${'%' + relatedTechnique + '%'}`))
           .limit(1);
         
         if (related.length > 0) {
@@ -622,7 +622,7 @@ export async function mapTechniqueRelationships(
       for (const counter of analysis.counters) {
         const counterVideo = await db.select({ id: aiVideoKnowledge.id })
           .from(aiVideoKnowledge)
-          .where(sql`${aiVideoKnowledge.techniqueName} ILIKE ${'%' + counter + '%'}`)
+          .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.techniqueName} ILIKE ${'%' + counter + '%'}`))
           .limit(1);
         
         if (counterVideo.length > 0) {
@@ -650,7 +650,7 @@ export async function mapTechniqueRelationships(
       for (const prereq of analysis.prerequisites) {
         const prereqVideo = await db.select({ id: aiVideoKnowledge.id })
           .from(aiVideoKnowledge)
-          .where(sql`${aiVideoKnowledge.techniqueName} ILIKE ${'%' + prereq + '%'}`)
+          .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.techniqueName} ILIKE ${'%' + prereq + '%'}`))
           .limit(1);
         
         if (prereqVideo.length > 0) {
@@ -1013,7 +1013,8 @@ export async function enhancedTechniqueScoring(userId: string): Promise<any | nu
         COALESCE(vk.avg_user_rating, '3.0') as rating,
         COALESCE(vk.times_sent_to_users, 0) as send_count
       FROM ai_video_knowledge vk
-      WHERE vk.id NOT IN (
+      WHERE vk.status = 'active'
+        AND vk.id NOT IN (
         SELECT video_id FROM ai_user_feedback_signals
         WHERE user_id = ${userId}
         AND video_id IS NOT NULL

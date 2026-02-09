@@ -129,7 +129,7 @@ export class MatcherAgent {
         
         const results = await db.select()
           .from(aiVideoKnowledge)
-          .where(sql`(${sql.join(techniqueConditions, sql.raw(' OR '))})`)
+          .where(and(sql`(${sql.join(techniqueConditions, sql.raw(' OR '))})`, eq(aiVideoKnowledge.status, 'active')))
           .orderBy(desc(aiVideoKnowledge.qualityScore))
           .limit(20);
         
@@ -151,7 +151,7 @@ export class MatcherAgent {
         const positionPattern = `%${understanding.explicit.position}%`;
         const results = await db.select()
           .from(aiVideoKnowledge)
-          .where(sql`LOWER(${aiVideoKnowledge.title}) ILIKE ${positionPattern}`)
+          .where(and(sql`LOWER(${aiVideoKnowledge.title}) ILIKE ${positionPattern}`, eq(aiVideoKnowledge.status, 'active')))
           .orderBy(desc(aiVideoKnowledge.qualityScore))
           .limit(20);
         
@@ -166,7 +166,7 @@ export class MatcherAgent {
         const keywordPattern = `%${keyword}%`;
         const results = await db.select()
           .from(aiVideoKnowledge)
-          .where(sql`LOWER(${aiVideoKnowledge.title}) ILIKE ${keywordPattern}`)
+          .where(and(sql`LOWER(${aiVideoKnowledge.title}) ILIKE ${keywordPattern}`, eq(aiVideoKnowledge.status, 'active')))
           .orderBy(desc(aiVideoKnowledge.qualityScore))
           .limit(20);
         

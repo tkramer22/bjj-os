@@ -5,7 +5,7 @@
 
 import { db } from '../db';
 import { coverageStatus, aiVideoKnowledge } from '@shared/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 export interface CoverageAnalysis {
   currentCount: number;
@@ -114,7 +114,7 @@ export async function analyzeCoverageGap(
 async function getCurrentVideoCount(techniqueName: string): Promise<number> {
   const result = await db.select({ count: sql<number>`count(*)` })
     .from(aiVideoKnowledge)
-    .where(eq(aiVideoKnowledge.techniqueName, techniqueName));
+    .where(and(eq(aiVideoKnowledge.techniqueName, techniqueName), eq(aiVideoKnowledge.status, 'active')));
   
   return Number(result[0].count);
 }

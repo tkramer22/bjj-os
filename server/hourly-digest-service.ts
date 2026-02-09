@@ -62,13 +62,14 @@ export async function sendHourlyDigest() {
     // VIDEO LIBRARY METRICS
     // ═══════════════════════════════════════════════════════════════
     const totalVideos = await db.execute(sql`
-      SELECT COUNT(*) as count FROM ai_video_knowledge
+      SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'
     `);
     
     const videosAddedToday = await db.execute(sql`
       SELECT COUNT(*) as count 
       FROM ai_video_knowledge 
-      WHERE DATE(created_at) = ${today.toISOString().split('T')[0]}
+      WHERE status = 'active'
+        AND DATE(created_at) = ${today.toISOString().split('T')[0]}
     `);
     
     // ═══════════════════════════════════════════════════════════════

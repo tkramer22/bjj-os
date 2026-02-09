@@ -176,6 +176,7 @@ export async function searchGeminiFirst(technique: string): Promise<{
     .innerJoin(aiVideoKnowledge, eq(videoKnowledge.videoId, aiVideoKnowledge.id))
     .where(
       and(
+        eq(aiVideoKnowledge.status, 'active'),
         // Quality threshold
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`,
         // Completeness filter: Must have technique_name AND at least one of key_concepts or full_summary
@@ -310,7 +311,7 @@ async function loadInstructorCache(): Promise<void> {
     // Query database for all unique instructor names
     const results = await db.selectDistinct({ name: aiVideoKnowledge.instructorName })
       .from(aiVideoKnowledge)
-      .where(sql`${aiVideoKnowledge.instructorName} IS NOT NULL`);
+      .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.instructorName} IS NOT NULL`));
     
     // Build list with the canonical names
     const instructorNames = results
@@ -511,6 +512,7 @@ export async function searchByInstructor(instructorName: string, limit: number =
     const videos = await db.select()
       .from(aiVideoKnowledge)
       .where(and(
+        eq(aiVideoKnowledge.status, 'active'),
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
         ilike(aiVideoKnowledge.instructorName, `%${instructorName}%`)
       ))
@@ -521,6 +523,7 @@ export async function searchByInstructor(instructorName: string, limit: number =
     const countResult = await db.select({ count: sql`COUNT(*)` })
       .from(aiVideoKnowledge)
       .where(and(
+        eq(aiVideoKnowledge.status, 'active'),
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
         ilike(aiVideoKnowledge.instructorName, `%${instructorName}%`)
       ));
@@ -550,7 +553,7 @@ export async function getAvailableInstructors(): Promise<{ name: string; videoCo
       count: sql<number>`COUNT(*)`
     })
       .from(aiVideoKnowledge)
-      .where(sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`)
+      .where(and(eq(aiVideoKnowledge.status, 'active'), sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`))
       .groupBy(aiVideoKnowledge.instructorName)
       .orderBy(desc(sql`COUNT(*)`))
       .limit(50);
@@ -915,6 +918,9 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
     
     const conditions: any[] = [];
     
+    // Only include active videos
+    conditions.push(eq(aiVideoKnowledge.status, 'active'));
+    
     // Base quality threshold
     conditions.push(sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`);
     
@@ -1251,6 +1257,7 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
       // Simple instructor-only fallback: quality + instructor name only
       // No technique filters needed here since hasTechniqueTerms is false
       const fallbackConditions: any[] = [
+        eq(aiVideoKnowledge.status, 'active'),
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`,
         ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`)
       ];
@@ -1272,6 +1279,7 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
       
       // Lower quality threshold but KEEP technique mandatory
       const fallbackConditions: any[] = [
+        eq(aiVideoKnowledge.status, 'active'),
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.5`
       ];
       
@@ -1302,6 +1310,7 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
       
       // Keep position locked, but remove intent/technique restrictions
       const fallbackConditions: any[] = [
+        eq(aiVideoKnowledge.status, 'active'),
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`
       ];
       
@@ -1455,6 +1464,7 @@ export async function searchVideos(params: VideoSearchParams): Promise<VideoSear
       const directSearchResults = await db.select()
         .from(aiVideoKnowledge)
         .where(and(
+          eq(aiVideoKnowledge.status, 'active'),
           sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`, // Lower threshold for last resort
           or(...directTermConditions)
         ))
@@ -1568,6 +1578,7 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
     videos = await db.select()
       .from(aiVideoKnowledge)
       .where(and(
+        eq(aiVideoKnowledge.status, 'active'),
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
         ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`),
         or(...termConditions), // MUST match the technique
@@ -1582,6 +1593,7 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
     videos = await db.select()
       .from(aiVideoKnowledge)
       .where(and(
+        eq(aiVideoKnowledge.status, 'active'),
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
         ilike(aiVideoKnowledge.instructorName, `%${intent.requestedInstructor}%`),
         analyzedVideoFilter
@@ -1596,6 +1608,7 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
     videos = await db.select()
       .from(aiVideoKnowledge)
       .where(and(
+        eq(aiVideoKnowledge.status, 'active'),
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 7.0`,
         eq(aiVideoKnowledge.positionCategory, intent.positionCategory),
         analyzedVideoFilter
@@ -1611,6 +1624,7 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
     videos = await db.select()
       .from(aiVideoKnowledge)
       .where(and(
+        eq(aiVideoKnowledge.status, 'active'),
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 7.0`,
         sql`${aiVideoKnowledge.title} ILIKE ${`%${intentKeyword}%`}`,
         analyzedVideoFilter
@@ -1634,6 +1648,7 @@ export async function fallbackSearch(userMessage: string): Promise<VideoSearchRe
     videos = await db.select()
       .from(aiVideoKnowledge)
       .where(and(
+        eq(aiVideoKnowledge.status, 'active'),
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`, // Lower threshold for better technique coverage
         or(...termConditions),
         analyzedVideoFilter
@@ -1829,14 +1844,14 @@ export async function getVideoLibrarySummary(): Promise<string> {
     concepts: sql`COUNT(CASE WHEN technique_type = 'concept' THEN 1 END)`
   })
     .from(aiVideoKnowledge)
-    .where(sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`);
+    .where(and(eq(aiVideoKnowledge.status, 'active'), sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`));
   
   const positionStats = await db.select({
     position: aiVideoKnowledge.positionCategory,
     count: sql`COUNT(*)`
   })
     .from(aiVideoKnowledge)
-    .where(sql`${aiVideoKnowledge.positionCategory} IS NOT NULL`)
+    .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.positionCategory} IS NOT NULL`))
     .groupBy(aiVideoKnowledge.positionCategory)
     .orderBy(desc(sql`COUNT(*)`))
     .limit(10);
@@ -2008,6 +2023,7 @@ export async function searchVideosForTechnique(
       .from(aiVideoKnowledge)
       .where(
         and(
+          eq(aiVideoKnowledge.status, 'active'),
           sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`, // Lower threshold to get more candidates
           or(
             // Primary technique fields - HIGHEST PRIORITY

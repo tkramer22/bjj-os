@@ -14,7 +14,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { aiVideoKnowledge } from '@shared/schema';
-import { sql, eq } from 'drizzle-orm';
+import { sql, eq, and } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import * as schema from '@shared/schema';
 
@@ -322,7 +322,7 @@ async function addVideoToDatabase(
 async function getCurrentGiCount(): Promise<number> {
   const result = await db.select({ count: sql<number>`count(*)` })
     .from(aiVideoKnowledge)
-    .where(sql`
+    .where(and(sql`
       LOWER(gi_or_nogi) = 'gi'
       OR LOWER(title) LIKE '%collar choke%'
       OR LOWER(title) LIKE '%lapel%'
@@ -331,7 +331,7 @@ async function getCurrentGiCount(): Promise<number> {
       OR LOWER(title) LIKE '%worm guard%'
       OR LOWER(title) LIKE '%bow and arrow%'
       OR LOWER(title) LIKE '%berimbolo%'
-    `);
+    `, eq(aiVideoKnowledge.status, 'active')));
   return Number(result[0].count);
 }
 

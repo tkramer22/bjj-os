@@ -14,7 +14,7 @@
 import { runTargetedInstructorCuration } from './targeted-instructor-curation';
 import { db } from './db';
 import { aiVideoKnowledge } from '@shared/schema';
-import { sql, ilike, or } from 'drizzle-orm';
+import { sql, ilike, or, eq, and } from 'drizzle-orm';
 
 const ELITE_INSTRUCTORS = [
   "JT Torres",
@@ -56,16 +56,17 @@ interface InstructorReport {
 async function getInstructorCount(name: string): Promise<number> {
   const result = await db.select({ count: sql<number>`count(*)` })
     .from(aiVideoKnowledge)
-    .where(or(
+    .where(and(or(
       ilike(aiVideoKnowledge.instructorName, `%${name}%`),
       ilike(aiVideoKnowledge.instructorName, name)
-    ));
+    ), eq(aiVideoKnowledge.status, 'active')));
   return Number(result[0]?.count || 0);
 }
 
 async function getTotalLibraryCount(): Promise<number> {
   const result = await db.select({ count: sql<number>`count(*)` })
-    .from(aiVideoKnowledge);
+    .from(aiVideoKnowledge)
+    .where(eq(aiVideoKnowledge.status, 'active'));
   return Number(result[0]?.count || 0);
 }
 

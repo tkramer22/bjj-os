@@ -43,7 +43,7 @@ export async function getSystemSnapshot() {
   ).length;
   
   // Video metrics
-  const allVideos = await db.select().from(aiVideoKnowledge);
+  const allVideos = await db.select().from(aiVideoKnowledge).where(eq(aiVideoKnowledge.status, 'active'));
   const totalVideos = allVideos.length;
   const videosAddedToday = allVideos.filter(v => 
     v.analyzedAt && new Date(v.analyzedAt) >= today
@@ -187,7 +187,7 @@ async function getCurationStatus() {
   
   const recentVideos = await db.select()
     .from(aiVideoKnowledge)
-    .where(gte(aiVideoKnowledge.analyzedAt, lastHour));
+    .where(and(eq(aiVideoKnowledge.status, 'active'), gte(aiVideoKnowledge.analyzedAt, lastHour)));
   
   return {
     running: recentVideos.length > 0,

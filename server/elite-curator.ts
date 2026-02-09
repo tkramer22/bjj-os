@@ -70,6 +70,7 @@ async function identifyTechniqueGaps(): Promise<TechniqueGap[]> {
         COUNT(*) as current_count
       FROM ai_video_knowledge
       WHERE quality_score >= 7.0
+        AND status = 'active'
       GROUP BY technique_name
     )
     SELECT 
@@ -382,7 +383,7 @@ export async function runEliteCuration(): Promise<{
     
     // Get current library size
     const librarySize = await db.execute(sql`
-      SELECT COUNT(*) as total FROM ai_video_knowledge WHERE quality_score >= 7.0
+      SELECT COUNT(*) as total FROM ai_video_knowledge WHERE quality_score >= 7.0 AND status = 'active'
     `);
     const currentTotal = parseInt((librarySize.rows[0] as any).total);
     const remaining = (settings.targetTotalVideos || 3000) - currentTotal;
@@ -456,7 +457,7 @@ export async function getEliteCuratorStats() {
   
   // Library progress
   const librarySize = await db.execute(sql`
-    SELECT COUNT(*) as total FROM ai_video_knowledge WHERE quality_score >= 7.0
+    SELECT COUNT(*) as total FROM ai_video_knowledge WHERE quality_score >= 7.0 AND status = 'active'
   `);
   const currentTotal = parseInt((librarySize.rows[0] as any)?.total || '0');
   const targetTotal = config[0]?.targetTotalVideos || 3000;

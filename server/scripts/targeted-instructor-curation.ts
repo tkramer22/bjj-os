@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { aiVideoKnowledge } from '../../shared/schema';
-import { sql, ilike } from 'drizzle-orm';
+import { sql, ilike, eq, and } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
@@ -179,7 +179,7 @@ async function addVideoToDatabase(video: SearchResult, analysis: AnalysisResult)
 async function getInstructorCount(instructor: string): Promise<number> {
   const result = await db.select({ count: sql`COUNT(*)` })
     .from(aiVideoKnowledge)
-    .where(ilike(aiVideoKnowledge.instructorName, `%${instructor}%`));
+    .where(and(ilike(aiVideoKnowledge.instructorName, `%${instructor}%`), eq(aiVideoKnowledge.status, 'active')));
   return Number(result[0].count);
 }
 
@@ -269,7 +269,7 @@ async function runTargetedCuration() {
     console.log(`  📈 ${instructor}: ${beforeCounts[instructor]} → ${afterCounts[instructor]} (+${afterCounts[instructor] - beforeCounts[instructor]})`);
   }
 
-  const [totalVideos] = await db.select({ count: sql`COUNT(*)` }).from(aiVideoKnowledge);
+  const [totalVideos] = await db.select({ count: sql`COUNT(*)` }).from(aiVideoKnowledge).where(eq(aiVideoKnowledge.status, 'active'));
 
   console.log('\n═══════════════════════════════════════════════════════════════');
   console.log('📊 CURATION COMPLETE - FINAL REPORT');

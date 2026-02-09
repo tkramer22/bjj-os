@@ -215,7 +215,7 @@ async function runOptimizedCuration() {
   const startTime = new Date();
   
   // Get counts before
-  const [beforeCount] = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`);
+  const [beforeCount] = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`);
   const [beforeUnprocessed] = await db.execute(sql`SELECT COUNT(*) as count FROM video_watch_status WHERE processed = false`);
   
   console.log(`\n📊 BEFORE:`);
@@ -237,7 +237,7 @@ async function runOptimizedCuration() {
     const instructorCounts = await db.execute(sql`
       SELECT instructor_name, COUNT(*) as count 
       FROM ai_video_knowledge 
-      WHERE instructor_name IS NOT NULL 
+      WHERE instructor_name IS NOT NULL AND status = 'active'
       GROUP BY instructor_name
     `) as any[];
 
@@ -402,7 +402,7 @@ async function runOptimizedCuration() {
   }
 
   // Get counts after
-  const [afterCount] = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`);
+  const [afterCount] = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`);
   const [afterUnprocessed] = await db.execute(sql`SELECT COUNT(*) as count FROM video_watch_status WHERE processed = false`);
   
   const endTime = new Date();

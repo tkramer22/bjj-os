@@ -373,7 +373,7 @@ export async function buildComprehensiveUserContext(userId: string): Promise<str
     })
     .from(userSavedVideos)
     .innerJoin(aiVideoKnowledge, eq(userSavedVideos.videoId, aiVideoKnowledge.id))
-    .where(eq(userSavedVideos.userId, userId))
+    .where(and(eq(userSavedVideos.userId, userId), eq(aiVideoKnowledge.status, 'active')))
     .orderBy(desc(userSavedVideos.savedDate))
     .limit(10);
     
@@ -495,7 +495,7 @@ async function detectSuccessCorrelation(userId: string): Promise<{
     })
     .from(userSavedVideos)
     .innerJoin(aiVideoKnowledge, eq(userSavedVideos.videoId, aiVideoKnowledge.id))
-    .where(eq(userSavedVideos.userId, userId))
+    .where(and(eq(userSavedVideos.userId, userId), eq(aiVideoKnowledge.status, 'active')))
     .orderBy(desc(userSavedVideos.savedDate));
     
     if (savedVideos.length === 0) {

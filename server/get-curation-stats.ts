@@ -10,7 +10,7 @@ async function getStats() {
   console.log('═'.repeat(70));
   
   // Total count
-  const totalResult = await db.execute(sql`SELECT COUNT(*)::int as total FROM ai_video_knowledge`);
+  const totalResult = await db.execute(sql`SELECT COUNT(*)::int as total FROM ai_video_knowledge WHERE status = 'active'`);
   const total = (totalResult as any)[0]?.total || 0;
   console.log(`\n📚 TOTAL VIDEOS: ${total}`);
   
@@ -19,6 +19,7 @@ async function getStats() {
     SELECT COUNT(*)::int as today_count 
     FROM ai_video_knowledge 
     WHERE created_at > NOW() - INTERVAL '24 hours'
+      AND status = 'active'
   `);
   const todayCount = (todayResult as any)[0]?.today_count || 0;
   console.log(`📈 ADDED LAST 24H: ${todayCount}`);
@@ -43,6 +44,7 @@ async function getStats() {
     SELECT instructor_name, COUNT(*)::int as count 
     FROM ai_video_knowledge 
     WHERE instructor_name IS NOT NULL
+      AND status = 'active'
     GROUP BY instructor_name 
     ORDER BY count DESC 
     LIMIT 25
@@ -62,6 +64,7 @@ async function getStats() {
     FROM ai_video_knowledge 
     WHERE created_at > NOW() - INTERVAL '24 hours'
     AND instructor_name IS NOT NULL
+    AND status = 'active'
     GROUP BY instructor_name 
     ORDER BY count DESC 
     LIMIT 15

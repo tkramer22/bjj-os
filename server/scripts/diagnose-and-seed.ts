@@ -13,14 +13,14 @@ async function runDiagnosticsAndSeed() {
   
   try {
     // 1. Total videos in library
-    const videoCount = await db.execute(sql`SELECT COUNT(*)::int as cnt FROM ai_video_knowledge`);
+    const videoCount = await db.execute(sql`SELECT COUNT(*)::int as cnt FROM ai_video_knowledge WHERE status = 'active'`);
     const totalVideos = (videoCount as any).rows?.[0]?.cnt || (videoCount as any)[0]?.cnt || 0;
     console.log(`📚 Total Videos in Library: ${totalVideos}`);
     
     // 2. Videos added in last 7 days
     const recentVideos = await db.execute(sql`
       SELECT COUNT(*)::int as cnt FROM ai_video_knowledge 
-      WHERE created_at >= NOW() - INTERVAL '7 days'
+      WHERE created_at >= NOW() - INTERVAL '7 days' AND status = 'active'
     `);
     const recent7d = (recentVideos as any).rows?.[0]?.cnt || (recentVideos as any)[0]?.cnt || 0;
     console.log(`📅 Videos Added (Last 7 Days): ${recent7d}`);
@@ -30,7 +30,7 @@ async function runDiagnosticsAndSeed() {
     const topInstructors = await db.execute(sql`
       SELECT instructor_name, COUNT(*)::int as video_count
       FROM ai_video_knowledge
-      WHERE instructor_name IS NOT NULL AND instructor_name != ''
+      WHERE instructor_name IS NOT NULL AND instructor_name != '' AND status = 'active'
       GROUP BY instructor_name
       ORDER BY COUNT(*) DESC
       LIMIT 20
@@ -53,7 +53,7 @@ async function runDiagnosticsAndSeed() {
     for (const name of eliteNames) {
       const result = await db.execute(sql`
         SELECT COUNT(*)::int as cnt FROM ai_video_knowledge
-        WHERE LOWER(instructor_name) LIKE LOWER(${`%${name}%`})
+        WHERE LOWER(instructor_name) LIKE LOWER(${`%${name}%`}) AND status = 'active'
       `);
       const count = (result as any).rows?.[0]?.cnt || (result as any)[0]?.cnt || 0;
       const status = count > 0 ? `✅ ${count} videos` : '❌ NOT FOUND';
@@ -113,7 +113,7 @@ async function runDiagnosticsAndSeed() {
       // Check if already exists
       const existing = await db.execute(sql`
         SELECT COUNT(*)::int as cnt FROM ai_video_knowledge
-        WHERE LOWER(instructor_name) LIKE LOWER(${`%${name}%`})
+        WHERE LOWER(instructor_name) LIKE LOWER(${`%${name}%`}) AND status = 'active'
       `);
       const existingCount = (existing as any).rows?.[0]?.cnt || (existing as any)[0]?.cnt || 0;
       

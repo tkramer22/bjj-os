@@ -11,7 +11,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { aiVideoKnowledge } from '@shared/schema';
-import { sql, eq } from 'drizzle-orm';
+import { sql, eq, and } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import * as schema from '@shared/schema';
 
@@ -322,7 +322,7 @@ async function addVideoToDatabase(
 async function getCurrentLegLockCount(): Promise<number> {
   const result = await db.select({ count: sql<number>`count(*)` })
     .from(aiVideoKnowledge)
-    .where(sql`
+    .where(and(sql`
       LOWER(title) LIKE ANY(ARRAY[
         '%heel hook%', '%ankle lock%', '%knee bar%', '%kneebar%', 
         '%toe hold%', '%ashi garami%', '%leg lock%', '%leg entangle%', 
@@ -332,7 +332,7 @@ async function getCurrentLegLockCount(): Promise<number> {
       OR position_category LIKE '%leg%'
       OR position_category = 'ashi_garami'
       OR position_category = '50_50'
-    `);
+    `, eq(aiVideoKnowledge.status, 'active')));
   return Number(result[0].count);
 }
 

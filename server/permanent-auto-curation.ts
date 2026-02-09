@@ -278,7 +278,8 @@ async function getUnderrepresentedInstructors(): Promise<{name: string; count: n
         END as priority
       FROM ai_video_knowledge avk
       LEFT JOIN fully_mined_instructors fmi ON LOWER(avk.instructor_name) = LOWER(fmi.instructor_name)
-      WHERE avk.instructor_name IS NOT NULL 
+      WHERE avk.status = 'active'
+        AND avk.instructor_name IS NOT NULL 
         AND avk.instructor_name != ''
         AND avk.instructor_name NOT LIKE '%Unknown%'
         AND avk.instructor_name NOT LIKE '%Not Identified%'
@@ -1063,7 +1064,7 @@ async function sendLowYieldAlert(result: CurationResult): Promise<void> {
 
 async function sendCurationEmail(result: CurationResult): Promise<void> {
   try {
-    const totalVideosResult = await db.execute(sql`SELECT COUNT(*)::int as cnt FROM ai_video_knowledge`);
+    const totalVideosResult = await db.execute(sql`SELECT COUNT(*)::int as cnt FROM ai_video_knowledge WHERE status = 'active'`);
     const totalRows = Array.isArray(totalVideosResult) ? totalVideosResult : (totalVideosResult.rows || []);
     const libraryTotal = totalRows[0]?.cnt || 0;
     

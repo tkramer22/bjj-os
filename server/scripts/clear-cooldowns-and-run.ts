@@ -92,7 +92,7 @@ async function clearCooldownsAndRunCuration() {
     }
     
     // Get updated library count
-    const finalCount = await db.execute(sql`SELECT COUNT(*)::int as cnt FROM ai_video_knowledge`);
+    const finalCount = await db.execute(sql`SELECT COUNT(*)::int as cnt FROM ai_video_knowledge WHERE status = 'active'`);
     const total = (finalCount as any).rows?.[0]?.cnt || (finalCount as any)[0]?.cnt || 0;
     
     console.log('\n' + '═'.repeat(70));

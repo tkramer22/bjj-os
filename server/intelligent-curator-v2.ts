@@ -258,7 +258,7 @@ async function getInstructorPool(): Promise<string[]> {
   const libraryInstructors = await db
     .selectDistinct({ instructor: aiVideoKnowledge.instructorName })
     .from(aiVideoKnowledge)
-    .where(gte(aiVideoKnowledge.qualityScore, 7.5));
+    .where(and(gte(aiVideoKnowledge.qualityScore, 7.5), eq(aiVideoKnowledge.status, 'active')));
   
   const uniqueInstructors = new Set<string>();
   
@@ -539,7 +539,8 @@ async function checkDuplicateStatus(videoId: string, instructor: string, techniq
     .where(
       and(
         ilike(aiVideoKnowledge.instructorName, `%${instructor}%`),
-        ilike(aiVideoKnowledge.techniqueName, `%${technique}%`)
+        ilike(aiVideoKnowledge.techniqueName, `%${technique}%`),
+        eq(aiVideoKnowledge.status, 'active')
       )
     );
   

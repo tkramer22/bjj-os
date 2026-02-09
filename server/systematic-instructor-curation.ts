@@ -1,6 +1,6 @@
 import { db } from './db';
 import { aiVideoKnowledge } from '@shared/schema';
-import { sql, eq, ilike, or } from 'drizzle-orm';
+import { sql, eq, ilike, or, and } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic();
@@ -229,6 +229,7 @@ export async function runSystematicInstructorCuration(): Promise<CurationResult>
   // Get initial library count
   const libraryBefore = await db.select({ count: sql<number>`count(*)` })
     .from(aiVideoKnowledge)
+    .where(eq(aiVideoKnowledge.status, 'active'))
     .then(r => Number(r[0].count));
 
   console.log(`📚 Library before: ${libraryBefore} videos\n`);
@@ -243,6 +244,7 @@ export async function runSystematicInstructorCuration(): Promise<CurationResult>
       AND instructor_name NOT LIKE '%(%'
       AND instructor_name NOT LIKE '% and %'
       AND LENGTH(instructor_name) > 5
+      AND status = 'active'
     GROUP BY instructor_name 
     HAVING COUNT(*) BETWEEN 2 AND 15
     ORDER BY COUNT(*) ASC
@@ -266,7 +268,7 @@ export async function runSystematicInstructorCuration(): Promise<CurationResult>
     // Get updated count
     const afterCountResult = await db.select({ count: sql<number>`count(*)` })
       .from(aiVideoKnowledge)
-      .where(eq(aiVideoKnowledge.instructorName, name));
+      .where(and(eq(aiVideoKnowledge.instructorName, name), eq(aiVideoKnowledge.status, 'active')));
     const afterCount = Number(afterCountResult[0].count);
 
     const stat: InstructorStats = {
@@ -289,6 +291,7 @@ export async function runSystematicInstructorCuration(): Promise<CurationResult>
   // Get final library count
   const libraryAfter = await db.select({ count: sql<number>`count(*)` })
     .from(aiVideoKnowledge)
+    .where(eq(aiVideoKnowledge.status, 'active'))
     .then(r => Number(r[0].count));
 
   // Print summary

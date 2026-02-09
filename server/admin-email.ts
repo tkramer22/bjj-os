@@ -54,10 +54,11 @@ async function getDailyStats(): Promise<DailyStats> {
     let videoStats = { total: 0, today: 0, batches: 0 };
     
     try {
-      const videosTotal = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`);
+      const videosTotal = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`);
       const videosToday = await db.execute(sql`
         SELECT COUNT(*) as count FROM ai_video_knowledge 
-        WHERE DATE(upload_date AT TIME ZONE 'America/New_York') = CURRENT_DATE AT TIME ZONE 'America/New_York'
+        WHERE status = 'active'
+          AND DATE(upload_date AT TIME ZONE 'America/New_York') = CURRENT_DATE AT TIME ZONE 'America/New_York'
       `);
       
       videoStats.total = parseInt((videosTotal.rows[0] as any)?.count) || 0;

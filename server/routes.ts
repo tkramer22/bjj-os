@@ -685,9 +685,12 @@ export function registerRoutes(app: Express): Server {
       })
       .from(aiVideoKnowledge)
       .where(
-        or(
-          ilike(aiVideoKnowledge.title, `%${technique}%`),
-          ilike(aiVideoKnowledge.techniqueName, `%${technique}%`)
+        and(
+          eq(aiVideoKnowledge.status, 'active'),
+          or(
+            ilike(aiVideoKnowledge.title, `%${technique}%`),
+            ilike(aiVideoKnowledge.techniqueName, `%${technique}%`)
+          )
         )
       )
       .limit(10);
@@ -714,7 +717,8 @@ export function registerRoutes(app: Express): Server {
       
       // Test 3: Get column count from ai_video_knowledge
       const totalVideos = await db.select({ count: sql<number>`COUNT(*)` })
-        .from(aiVideoKnowledge);
+        .from(aiVideoKnowledge)
+        .where(eq(aiVideoKnowledge.status, 'active'));
       
       // Test 4: Get column count from video_knowledge  
       const geminiRows = await db.select({ count: sql<number>`COUNT(*)` })
@@ -809,7 +813,7 @@ export function registerRoutes(app: Express): Server {
       const avResult = await db.execute(sql`
         SELECT DISTINCT technique_name, COUNT(*) as count
         FROM ai_video_knowledge
-        WHERE technique_name IS NOT NULL
+        WHERE technique_name IS NOT NULL AND status = 'active'
         GROUP BY technique_name
         ORDER BY count DESC
         LIMIT 50
@@ -835,10 +839,10 @@ export function registerRoutes(app: Express): Server {
     try {
       const stats = await db.execute(sql`
         SELECT 
-          (SELECT COUNT(*) FROM ai_video_knowledge) as total_videos,
+          (SELECT COUNT(*) FROM ai_video_knowledge WHERE status = 'active') as total_videos,
           (SELECT COUNT(*) FROM video_knowledge) as gemini_analyzed_rows,
           (SELECT COUNT(DISTINCT video_id) FROM video_knowledge) as unique_videos_with_gemini,
-          (SELECT COUNT(*) FROM ai_video_knowledge WHERE quality_score >= 5.0) as quality_videos
+          (SELECT COUNT(*) FROM ai_video_knowledge WHERE quality_score >= 5.0 AND status = 'active') as quality_videos
       `);
       
       res.json({
@@ -8605,7 +8609,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
     try {
       const stats = await db.execute(drizzleSql`
         SELECT 
-          (SELECT COUNT(*) FROM ai_video_knowledge) as total_videos,
+          (SELECT COUNT(*) FROM ai_video_knowledge WHERE status = 'active') as total_videos,
           (SELECT COUNT(*) FROM ai_user_feedback_signals) as total_signals,
           (SELECT COUNT(*) FROM ai_user_context) as users_with_context,
           (SELECT COUNT(*) FROM ai_technique_relationships) as relationships_mapped,
@@ -8725,7 +8729,8 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       
       // Get TOTAL count first (for accurate dashboard display)
       const [totalCountResult] = await db.select({ count: sql<number>`COUNT(*)` })
-        .from(aiVideoKnowledge);
+        .from(aiVideoKnowledge)
+        .where(eq(aiVideoKnowledge.status, 'active'));
       const totalCount = Number(totalCountResult?.count || 0);
       
       // Special handling for "Recently Added" - return 100 most recent videos
@@ -8751,6 +8756,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         .from(aiVideoKnowledge)
         .where(
           and(
+            eq(aiVideoKnowledge.status, 'active'),
             isNotNull(aiVideoKnowledge.thumbnailUrl),
             sql`${aiVideoKnowledge.thumbnailUrl} != ''`
           )
@@ -8789,6 +8795,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       
       // Build query conditions for normal technique filter
       const conditions = [
+        eq(aiVideoKnowledge.status, 'active'),
         isNotNull(aiVideoKnowledge.thumbnailUrl),
         sql`${aiVideoKnowledge.thumbnailUrl} != ''`
       ];
@@ -8908,6 +8915,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       .from(aiVideoKnowledge)
       .where(
         and(
+          eq(aiVideoKnowledge.status, 'active'),
           sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 5.0`,
           sql`(${sql.join(conditions, sql` OR `)})`
         )
@@ -8979,7 +8987,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         commonMistakesTimestamp: aiVideoKnowledge.commonMistakesTimestamp,
       })
       .from(aiVideoKnowledge)
-      .where(eq(aiVideoKnowledge.id, videoId))
+      .where(and(eq(aiVideoKnowledge.status, 'active'), eq(aiVideoKnowledge.id, videoId)))
       .limit(1);
       
       if (!videoInfo) {
@@ -9105,6 +9113,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         FROM ai_video_knowledge
         WHERE technique_type IS NOT NULL
           AND technique_type != ''
+          AND status = 'active'
         GROUP BY technique_type
         ORDER BY count DESC
       `);
@@ -9147,6 +9156,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
         WHERE instructor_name IS NOT NULL
           AND instructor_name != ''
           AND instructor_name != 'Unknown Instructor'
+          AND status = 'active'
         GROUP BY instructor_name
         ORDER BY count DESC
       `);
@@ -9482,7 +9492,7 @@ NEVER recommend videos from unrelated positions.
           videoUrl: aiVideoKnowledge.videoUrl
         })
           .from(aiVideoKnowledge)
-          .where(sql`${aiVideoKnowledge.qualityScore} IS NOT NULL AND ${aiVideoKnowledge.qualityScore} >= 7.0`)
+          .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.qualityScore} IS NOT NULL AND ${aiVideoKnowledge.qualityScore} >= 7.0`))
           .orderBy(desc(aiVideoKnowledge.qualityScore))
           .limit(50);
         
@@ -10162,7 +10172,7 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
   app.get('/api/ai/health', async (req, res) => {
     try {
       // Check video library
-      const videoCount = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`);
+      const videoCount = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`);
       
       // Check recent diagnostics
       const recentDiag = await db.execute(sql`
@@ -10254,7 +10264,7 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
         techniqueType: aiVideoKnowledge.techniqueType
       })
       .from(aiVideoKnowledge)
-      .where(sql`${aiVideoKnowledge.qualityScore} >= 8`)
+      .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.qualityScore} >= 8`))
       .limit(30);
       
       // Build empty context for admin (no specific user)
@@ -10544,7 +10554,7 @@ Run another: https://bjjos.app/admin/command-center`
           // Get current metrics before snapshot
           const videoCountBefore = await db.select({ count: sql<number>`count(*)::int` })
             .from(aiVideoKnowledge)
-            .where(sql`${aiVideoKnowledge.qualityScore} >= 7.0`);
+            .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.qualityScore} >= 7.0`));
           
           const userCountBefore = await db.select({ count: sql<number>`count(*)::int` })
             .from(bjjUsers);
@@ -11034,14 +11044,14 @@ Run another: https://bjjos.app/admin/command-center`
           qualityScore: aiVideoKnowledge.qualityScore
         })
         .from(aiVideoKnowledge)
-        .where(sql`${aiVideoKnowledge.createdAt} > ${run.createdAt}`)
+        .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.createdAt} > ${run.createdAt}`))
         .orderBy(sql`${aiVideoKnowledge.createdAt} DESC`)
         .limit(10);
         
         // Get total library count
         const totalCount = await db.select({ count: sql<number>`count(*)::int` })
           .from(aiVideoKnowledge)
-          .where(sql`${aiVideoKnowledge.qualityScore} >= 7.0`);
+          .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.qualityScore} >= 7.0`));
         
         return res.json({
           status: 'completed',
@@ -11317,7 +11327,7 @@ Run another: https://bjjos.app/admin/command-center`
         const todayStart = new Date(now.toLocaleDateString('en-US', { timeZone: 'America/New_York' }));
         
         const [videoCount, userCount, curationStatus] = await Promise.all([
-          db.select({ count: sql`COUNT(*)::int` }).from(aiVideoKnowledge),
+          db.select({ count: sql`COUNT(*)::int` }).from(aiVideoKnowledge).where(eq(aiVideoKnowledge.status, 'active')),
           db.select({ count: sql`COUNT(*)::int` }).from(bjjUsers),
           db.select().from(curationRuns).where(eq(curationRuns.status, 'running')).limit(1)
         ]);
@@ -11949,6 +11959,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         SELECT 
           COUNT(*) as total_videos
         FROM ai_video_knowledge
+        WHERE status = 'active'
       `);
       
       // Get curation stats for today
@@ -12706,6 +12717,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           AVG(quality_score) as avg_quality,
           AVG(helpful_ratio) as avg_helpful_ratio
         FROM ai_video_knowledge
+        WHERE status = 'active'
       `);
       
       // Handle both postgres-js and node-postgres result formats
@@ -12969,7 +12981,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       
       // Get total video count
       const totalVideos = await db.execute(sql`
-        SELECT COUNT(*) as count FROM ai_video_knowledge
+        SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'
       `);
       
       res.json({
@@ -13265,19 +13277,19 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       
       // VIDEO METRICS
       const totalVideos = await db.execute(sql`
-        SELECT COUNT(*) as count FROM ai_video_knowledge
+        SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'
       `);
       
       const eliteVideos = await db.execute(sql`
         SELECT COUNT(*) as count 
         FROM ai_video_knowledge 
-        WHERE quality_score >= 9.0
+        WHERE quality_score >= 9.0 AND status = 'active'
       `);
       
       const videosAddedToday = await db.execute(sql`
         SELECT COUNT(*) as count 
         FROM ai_video_knowledge 
-        WHERE DATE(created_at) = ${today}
+        WHERE DATE(created_at) = ${today} AND status = 'active'
       `);
       
       const total = Number(totalVideos.rows[0].count);
@@ -13519,7 +13531,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
       
       const [videosResult, usersResult] = await Promise.all([
-        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`),
+        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`),
         db.execute(sql`SELECT COUNT(*) as count FROM bjj_users`)
       ]);
       
@@ -13563,8 +13575,8 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         // Combined query for videos, users, and subscriptions
         db.execute(sql`
           SELECT 
-            (SELECT COUNT(*) FROM ai_video_knowledge) as total_videos,
-            (SELECT COUNT(*) FROM ai_video_knowledge WHERE DATE(created_at) = ${today}) as videos_today,
+            (SELECT COUNT(*) FROM ai_video_knowledge WHERE status = 'active') as total_videos,
+            (SELECT COUNT(*) FROM ai_video_knowledge WHERE DATE(created_at) = ${today} AND status = 'active') as videos_today,
             (SELECT COUNT(*) FROM bjj_users) as total_users,
             (SELECT COUNT(*) FROM bjj_users WHERE DATE(created_at) = ${today}) as users_today,
             (SELECT COUNT(*) FROM bjj_users 
@@ -13704,6 +13716,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           AVG(ai_rating) as avg_quality,
           COUNT(DISTINCT instructor_name) as unique_instructors
         FROM ai_video_knowledge
+        WHERE status = 'active'
       `);
       diagnostic.videos = getRows(videosQuery)[0] || null;
       
@@ -14150,7 +14163,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         thumbnailUrl: aiVideoKnowledge.thumbnailUrl,
         viewCount: aiVideoKnowledge.viewCount
       }).from(aiVideoKnowledge);
-      let conditions = [];
+      let conditions = [eq(aiVideoKnowledge.status, 'active')];
 
       // Search filter
       if (search) {
@@ -14265,6 +14278,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         created_at: aiVideoKnowledge.createdAt,
       }).from(aiVideoKnowledge);
       
+      conditions.push(eq(aiVideoKnowledge.status, 'active'));
       if (conditions.length > 0) {
         query = query.where(and(...conditions)) as any;
       }
@@ -14274,7 +14288,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         .limit(parseInt(limit as string));
       
       // Get total count
-      const countResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`);
+      const countResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`);
       const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
       const total = parseInt(getRows(countResult)[0]?.count || '0');
       
@@ -14291,10 +14305,10 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
       
       const [totalResult, instructorsResult, techniquesResult, avgQualityResult] = await Promise.all([
-        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`),
-        db.execute(sql`SELECT COUNT(DISTINCT instructor_name) as count FROM ai_video_knowledge`),
-        db.execute(sql`SELECT COUNT(DISTINCT technique_name) as count FROM ai_video_knowledge WHERE technique_name IS NOT NULL`),
-        db.execute(sql`SELECT AVG(quality_score) as avg FROM ai_video_knowledge WHERE quality_score IS NOT NULL`)
+        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`),
+        db.execute(sql`SELECT COUNT(DISTINCT instructor_name) as count FROM ai_video_knowledge WHERE status = 'active'`),
+        db.execute(sql`SELECT COUNT(DISTINCT technique_name) as count FROM ai_video_knowledge WHERE technique_name IS NOT NULL AND status = 'active'`),
+        db.execute(sql`SELECT AVG(quality_score) as avg FROM ai_video_knowledge WHERE quality_score IS NOT NULL AND status = 'active'`)
       ]);
       
       res.json({
@@ -14315,7 +14329,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
       
       const [totalResult, processedResult, withTranscriptResult, techniquesResult] = await Promise.all([
-        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`),
+        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`),
         db.execute(sql`SELECT COUNT(*) as count FROM video_watch_status WHERE processed = true`),
         db.execute(sql`SELECT COUNT(*) as count FROM video_watch_status WHERE transcript IS NOT NULL`),
         db.execute(sql`SELECT COUNT(*) as count FROM video_techniques`)
@@ -14455,7 +14469,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         incompleteVideosResult
       ] = await Promise.all([
         // Total videos
-        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`),
+        db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`),
         
         // Videos with COMPLETE analysis (has meaningful content in video_knowledge)
         db.execute(sql`
@@ -14471,7 +14485,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           SELECT COUNT(*) as count
           FROM ai_video_knowledge a
           LEFT JOIN video_knowledge v ON a.id = v.video_id
-          WHERE v.video_id IS NULL
+          WHERE v.video_id IS NULL AND a.status = 'active'
         `),
         
         // COUNT of videos with INCOMPLETE analysis
@@ -14479,8 +14493,8 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           SELECT COUNT(DISTINCT a.id) as count
           FROM ai_video_knowledge a
           INNER JOIN video_knowledge v ON a.id = v.video_id
-          WHERE (v.technique_name IS NULL OR v.technique_name = '')
-             OR (v.key_concepts IS NULL AND v.full_summary IS NULL)
+          WHERE a.status = 'active' AND ((v.technique_name IS NULL OR v.technique_name = '')
+             OR (v.key_concepts IS NULL AND v.full_summary IS NULL))
         `),
         
         // Sample videos with NO analysis (for display, limited to 50)
@@ -14491,7 +14505,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
             'NO_ANALYSIS' as gap_type
           FROM ai_video_knowledge a
           LEFT JOIN video_knowledge v ON a.id = v.video_id
-          WHERE v.video_id IS NULL
+          WHERE v.video_id IS NULL AND a.status = 'active'
           ORDER BY a.created_at DESC
           LIMIT 50
         `),
@@ -14504,8 +14518,8 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
             'INCOMPLETE' as gap_type
           FROM ai_video_knowledge a
           INNER JOIN video_knowledge v ON a.id = v.video_id
-          WHERE (v.technique_name IS NULL OR v.technique_name = '')
-             OR (v.key_concepts IS NULL AND v.full_summary IS NULL)
+          WHERE a.status = 'active' AND ((v.technique_name IS NULL OR v.technique_name = '')
+             OR (v.key_concepts IS NULL AND v.full_summary IS NULL))
           ORDER BY a.id, a.created_at DESC
           LIMIT 50
         `)
@@ -14608,9 +14622,9 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         SELECT DISTINCT a.id, a.youtube_id, a.title
         FROM ai_video_knowledge a
         LEFT JOIN video_knowledge v ON a.id = v.video_id
-        WHERE v.video_id IS NULL
+        WHERE a.status = 'active' AND (v.video_id IS NULL
            OR (v.technique_name IS NULL OR v.technique_name = '')
-           OR (v.key_concepts IS NULL AND v.full_summary IS NULL)
+           OR (v.key_concepts IS NULL AND v.full_summary IS NULL))
         ORDER BY a.id
         LIMIT ${limit}
       `);
@@ -14806,6 +14820,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const totalVideosResult = await db.execute(sql`
         SELECT COUNT(*) as total_videos
         FROM ai_video_knowledge
+        WHERE status = 'active'
       `);
       
       // Video curation metrics
@@ -14938,7 +14953,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         FROM ai_video_knowledge v
         LEFT JOIN user_activity ua ON ua.video_id = v.id 
           AND ua.created_at > NOW() - make_interval(hours => ${hoursAgo})
-        WHERE v.created_at > NOW() - INTERVAL '30 days'
+        WHERE v.status = 'active' AND v.created_at > NOW() - INTERVAL '30 days'
         GROUP BY v.id, v.technique_name, v.instructor_name, v.quality_score, v.helpful_count
         ORDER BY times_saved DESC, v.helpful_count DESC
         LIMIT 10
@@ -15159,7 +15174,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const avgRatioResult = await db.execute(sql`
         SELECT AVG(helpful_ratio) as avg_helpful
         FROM ai_video_knowledge 
-        WHERE total_votes >= 50
+        WHERE total_votes >= 50 AND status = 'active'
       `);
       const avgHelpfulRatio = Number(avgRatioResult.rows[0]?.avg_helpful ?? 0);
 
@@ -15167,7 +15182,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const removedCountResult = await db.execute(sql`
         SELECT COUNT(*) as total 
         FROM ai_video_knowledge 
-        WHERE quality_tier = 'removed'
+        WHERE quality_tier = 'removed' AND status = 'active'
       `);
       const videosRemoved = Number(removedCountResult.rows[0]?.total ?? 0);
 
@@ -15175,7 +15190,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const topTierCountResult = await db.execute(sql`
         SELECT COUNT(*) as total 
         FROM ai_video_knowledge 
-        WHERE quality_tier = 'top_tier'
+        WHERE quality_tier = 'top_tier' AND status = 'active'
       `);
       const topTierVideos = Number(topTierCountResult.rows[0]?.total ?? 0);
 
@@ -15206,7 +15221,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         notHelpfulCount: aiVideoKnowledge.notHelpfulCount
       })
         .from(aiVideoKnowledge)
-        .where(eq(aiVideoKnowledge.qualityTier, 'flagged'))
+        .where(and(eq(aiVideoKnowledge.status, 'active'), eq(aiVideoKnowledge.qualityTier, 'flagged')))
         .orderBy(desc(aiVideoKnowledge.totalVotes));
       
       res.json(flagged);
@@ -15231,7 +15246,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         notHelpfulCount: aiVideoKnowledge.notHelpfulCount
       })
         .from(aiVideoKnowledge)
-        .where(eq(aiVideoKnowledge.qualityTier, 'top_tier'))
+        .where(and(eq(aiVideoKnowledge.status, 'active'), eq(aiVideoKnowledge.qualityTier, 'top_tier')))
         .orderBy(desc(aiVideoKnowledge.helpfulRatio));
       
       res.json(topTier);
@@ -16677,7 +16692,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     try {
       const { search, belt, style, minScore, instructor = 'all', category = 'all', score = 'all', status = 'all' } = req.query;
 
-      const conditions: any[] = [];
+      const conditions: any[] = [eq(aiVideoKnowledge.status, 'active')];
 
       // Search filter - search in title and instructor name
       if (search && typeof search === 'string' && search.trim() !== '') {
@@ -16828,7 +16843,8 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     try {
       // Fetch all records once and calculate stats in JavaScript
       const allRecords = await db.select()
-        .from(aiVideoKnowledge);
+        .from(aiVideoKnowledge)
+        .where(eq(aiVideoKnowledge.status, 'active'));
       
       const total = allRecords.length;
       const avgScore = total > 0 
@@ -16867,7 +16883,8 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     try {
       const allInstructors = await db
         .select()
-        .from(aiVideoKnowledge);
+        .from(aiVideoKnowledge)
+        .where(eq(aiVideoKnowledge.status, 'active'));
 
       // Get unique, non-null instructors and sort
       const uniqueInstructors = Array.from(
@@ -18301,7 +18318,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         videoDuration: aiVideoKnowledge.videoDuration
       })
         .from(aiVideoKnowledge)
-        .where(eq(aiVideoKnowledge.id, videoId))
+        .where(and(eq(aiVideoKnowledge.status, 'active'), eq(aiVideoKnowledge.id, videoId)))
         .limit(1);
 
       if (!video.length) {
@@ -18645,6 +18662,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           AVG(CAST(quality_score AS NUMERIC)) as avg_quality,
           MAX(created_at) as last_added
         FROM ai_video_knowledge
+        WHERE status = 'active'
       `);
 
       // Get last curation run info from videoCurationLog if it exists
@@ -18827,6 +18845,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           AVG(CAST(quality_score AS NUMERIC)) as avg_quality,
           MAX(created_at) as last_added
         FROM ai_video_knowledge
+        WHERE status = 'active'
       `);
 
       // Handle both postgres-js (array) and Neon (rows array) formats
@@ -20200,7 +20219,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       // Get today's video stats
       const videosToday = await db.execute(sql`
         SELECT COUNT(*) as count FROM ai_video_knowledge 
-        WHERE DATE(upload_date AT TIME ZONE 'America/New_York') = CURRENT_DATE AT TIME ZONE 'America/New_York'
+        WHERE status = 'active' AND DATE(upload_date AT TIME ZONE 'America/New_York') = CURRENT_DATE AT TIME ZONE 'America/New_York'
       `);
       const videosAddedToday = parseInt((videosToday.rows[0] as any)?.count) || 0;
 
@@ -20355,7 +20374,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const dbHealth = await db.execute(sql`SELECT 1 as healthy`);
       
       // Get total videos
-      const totalVideos = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`);
+      const totalVideos = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`);
       const videoCount = parseInt((totalVideos.rows[0] as any)?.count) || 0;
 
       // Get active users count
@@ -20838,26 +20857,26 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     try {
       const missingThumbnails = await db.execute(sql`
         SELECT COUNT(*) as count FROM ai_video_knowledge 
-        WHERE thumbnail_url IS NULL OR thumbnail_url = ''
+        WHERE status = 'active' AND (thumbnail_url IS NULL OR thumbnail_url = '')
       `);
       
       const genericInstructors = await db.execute(sql`
         SELECT COUNT(*) as count FROM ai_video_knowledge 
-        WHERE instructor_name IS NULL 
+        WHERE status = 'active' AND (instructor_name IS NULL 
            OR instructor_name = '' 
            OR instructor_name ILIKE '%Unknown%'
-           OR instructor_name ILIKE '%BJJ Instructor%'
+           OR instructor_name ILIKE '%BJJ Instructor%')
       `);
       
       const missingYoutubeIds = await db.execute(sql`
         SELECT COUNT(*) as count FROM ai_video_knowledge 
-        WHERE video_url IS NULL 
+        WHERE status = 'active' AND (video_url IS NULL 
            OR video_url = ''
-           OR video_url NOT LIKE '%youtube%'
+           OR video_url NOT LIKE '%youtube%')
       `);
       
       const totalVideos = await db.execute(sql`
-        SELECT COUNT(*) as count FROM ai_video_knowledge
+        SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'
       `);
       
       const total = parseInt((totalVideos.rows?.[0] as any)?.count || '0');
@@ -20979,12 +20998,12 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
   // Get library stats
   app.get('/api/admin/curation/library-stats', checkAdminAuth, async (req, res) => {
     try {
-      const totalResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`);
-      const giResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE gi_or_nogi = 'gi'`);
-      const nogiResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE gi_or_nogi = 'nogi'`);
-      const bothResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE gi_or_nogi = 'both'`);
-      const avgQualityResult = await db.execute(sql`SELECT AVG(quality_score) as avg FROM ai_video_knowledge WHERE quality_score IS NOT NULL`);
-      const instructorResult = await db.execute(sql`SELECT COUNT(DISTINCT instructor_name) as count FROM ai_video_knowledge WHERE instructor_name IS NOT NULL`);
+      const totalResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`);
+      const giResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE gi_or_nogi = 'gi' AND status = 'active'`);
+      const nogiResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE gi_or_nogi = 'nogi' AND status = 'active'`);
+      const bothResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE gi_or_nogi = 'both' AND status = 'active'`);
+      const avgQualityResult = await db.execute(sql`SELECT AVG(quality_score) as avg FROM ai_video_knowledge WHERE quality_score IS NOT NULL AND status = 'active'`);
+      const instructorResult = await db.execute(sql`SELECT COUNT(DISTINCT instructor_name) as count FROM ai_video_knowledge WHERE instructor_name IS NOT NULL AND status = 'active'`);
       
       res.json({
         totalVideos: parseInt((totalResult.rows?.[0] as any)?.count || '0'),
@@ -21038,7 +21057,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       const result = await db.execute(sql`
         SELECT instructor_name, COUNT(*) as count 
         FROM ai_video_knowledge 
-        WHERE instructor_name IS NOT NULL AND instructor_name != ''
+        WHERE instructor_name IS NOT NULL AND instructor_name != '' AND status = 'active'
         GROUP BY instructor_name 
         ORDER BY count DESC 
         LIMIT 50

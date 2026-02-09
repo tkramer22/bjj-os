@@ -63,7 +63,7 @@ async function runMaxBlastCuration() {
   console.log('🚀 MAXIMUM BLAST CURATION - STARTING');
   console.log('═══════════════════════════════════════════════════════════════\n');
 
-  const startCount = await db.select({ count: sql<number>`count(*)::int` }).from(aiVideoKnowledge);
+  const startCount = await db.select({ count: sql<number>`count(*)::int` }).from(aiVideoKnowledge).where(eq(aiVideoKnowledge.status, 'active'));
   console.log(`📊 Starting library count: ${startCount[0]?.count || 0}`);
 
   let videosFound = 0;
@@ -133,7 +133,7 @@ async function runMaxBlastCuration() {
   }
 
   // Final count
-  const endCount = await db.select({ count: sql<number>`count(*)::int` }).from(aiVideoKnowledge);
+  const endCount = await db.select({ count: sql<number>`count(*)::int` }).from(aiVideoKnowledge).where(eq(aiVideoKnowledge.status, 'active'));
   const queuedForGemini = await db.select({ count: sql<number>`count(*)::int` })
     .from(videoWatchStatus)
     .where(eq(videoWatchStatus.status, 'pending'));

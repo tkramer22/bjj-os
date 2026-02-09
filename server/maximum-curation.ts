@@ -9,7 +9,7 @@
 
 import { db } from './db';
 import { aiVideoKnowledge } from '@shared/schema';
-import { sql, eq, count as drizzleCount } from 'drizzle-orm';
+import { sql, eq, count as drizzleCount, and } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 
 // YouTube API Setup
@@ -165,7 +165,7 @@ async function checkVideoExists(youtubeId: string): Promise<boolean> {
 async function getInstructorVideoCount(instructorName: string): Promise<number> {
   const result = await db.select({ count: drizzleCount() })
     .from(aiVideoKnowledge)
-    .where(sql`LOWER(${aiVideoKnowledge.instructorName}) LIKE LOWER(${'%' + instructorName + '%'})`);
+    .where(and(sql`LOWER(${aiVideoKnowledge.instructorName}) LIKE LOWER(${'%' + instructorName + '%'})`, eq(aiVideoKnowledge.status, 'active')));
   return result[0]?.count || 0;
 }
 
@@ -329,7 +329,8 @@ async function runMaximumCuration() {
   
   // Get starting count
   const startCount = await db.select({ count: drizzleCount() })
-    .from(aiVideoKnowledge);
+    .from(aiVideoKnowledge)
+    .where(eq(aiVideoKnowledge.status, 'active'));
   const startingTotal = startCount[0]?.count || 0;
   console.log(`\n📊 Starting video library: ${startingTotal} videos`);
   
@@ -353,12 +354,13 @@ async function runMaximumCuration() {
   
   // Final report
   const endCount = await db.select({ count: drizzleCount() })
-    .from(aiVideoKnowledge);
+    .from(aiVideoKnowledge)
+    .where(eq(aiVideoKnowledge.status, 'active'));
   const endingTotal = endCount[0]?.count || 0;
   
   const pendingCount = await db.select({ count: drizzleCount() })
     .from(aiVideoKnowledge)
-    .where(eq(aiVideoKnowledge.geminiStatus, 'pending'));
+    .where(and(eq(aiVideoKnowledge.geminiStatus, 'pending'), eq(aiVideoKnowledge.status, 'active')));
   const pendingTotal = pendingCount[0]?.count || 0;
   
   const totalAdded = allStats.reduce((sum, s) => sum + s.videosAdded, 0);

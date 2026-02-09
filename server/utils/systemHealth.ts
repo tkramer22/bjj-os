@@ -25,6 +25,7 @@ export async function getSystemHealth() {
         COUNT(CASE WHEN quality_score >= 7.0 THEN 1 END) as high_quality
       FROM ai_video_knowledge
       WHERE quality_score IS NOT NULL
+        AND status = 'active'
     `);
     
     // Curation stats (today)

@@ -104,6 +104,7 @@ export async function buildSystemPrompt(userId: string, struggleAreaBoost?: stri
     })
       .from(aiVideoKnowledge)
       .where(and(
+        eq(aiVideoKnowledge.status, 'active'),
         sql`COALESCE(${aiVideoKnowledge.qualityScore}, 0) >= 6.5`,
         sql`${aiVideoKnowledge.youtubeId} IS NOT NULL AND ${aiVideoKnowledge.youtubeId} != ''`,
         sql`${aiVideoKnowledge.thumbnailUrl} IS NOT NULL AND ${aiVideoKnowledge.thumbnailUrl} != ''`,

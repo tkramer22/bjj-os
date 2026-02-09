@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { aiVideoKnowledge, videoKnowledge } from '../../shared/schema';
-import { sql, ilike, or, and } from 'drizzle-orm';
+import { sql, ilike, or, and, eq } from 'drizzle-orm';
 
 /**
  * 🧠 KNOWLEDGE SYNTHESIZER V1
@@ -62,6 +62,7 @@ export async function synthesizeKnowledgeByTopic(
     .from(aiVideoKnowledge)
     .where(
       and(
+        eq(aiVideoKnowledge.status, 'active'),
         sql`CAST(${aiVideoKnowledge.qualityScore} AS NUMERIC) >= 7.0`,
         or(
           ...topicVariants.map(v => ilike(aiVideoKnowledge.techniqueName, `%${v}%`)),

@@ -50,7 +50,8 @@ export async function assessUniqueValue(
           .from(aiVideoKnowledge)
           .where(and(
             eq(aiVideoKnowledge.techniqueName, techniqueName),
-            eq(aiVideoKnowledge.instructorName, instructorName)
+            eq(aiVideoKnowledge.instructorName, instructorName),
+            eq(aiVideoKnowledge.status, 'active')
           ))
           .limit(10)
       : [];

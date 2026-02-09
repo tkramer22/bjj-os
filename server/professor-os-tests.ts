@@ -1,6 +1,6 @@
 import { db } from './db';
 import { aiVideoKnowledge } from '@shared/schema';
-import { sql, ilike, or, and } from 'drizzle-orm';
+import { sql, ilike, or, and, eq } from 'drizzle-orm';
 
 export interface TestResult {
   id: string;
@@ -116,7 +116,8 @@ export async function checkVideoExistsInDatabase(keywords: string[], mode: 'AND'
       )
     );
     
-    const whereClause = mode === 'AND' ? and(...conditions) : or(...conditions);
+    const baseWhereClause = mode === 'AND' ? and(...conditions) : or(...conditions);
+    const whereClause = and(baseWhereClause, eq(aiVideoKnowledge.status, 'active'));
     
     const results = await db.select({
       title: aiVideoKnowledge.title,

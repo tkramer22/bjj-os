@@ -6,7 +6,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { db } from './db';
 import { aiVideoKnowledge, instructorCredibility } from '@shared/schema';
-import { eq, sql, or, ilike } from 'drizzle-orm';
+import { eq, sql, or, ilike, and } from 'drizzle-orm';
 import { getVideoDetails } from './youtube-service';
 
 const anthropic = new Anthropic({
@@ -156,9 +156,12 @@ export async function runTargetedInstructorCuration(
   // Get current count
   const beforeCount = await db.select({ count: sql<number>`count(*)` })
     .from(aiVideoKnowledge)
-    .where(or(
-      ilike(aiVideoKnowledge.instructorName, `%${instructorName}%`),
-      ilike(aiVideoKnowledge.instructorName, instructorName)
+    .where(and(
+      or(
+        ilike(aiVideoKnowledge.instructorName, `%${instructorName}%`),
+        ilike(aiVideoKnowledge.instructorName, instructorName)
+      ),
+      eq(aiVideoKnowledge.status, 'active')
     ));
   const totalBefore = Number(beforeCount[0]?.count || 0);
   console.log(`\n📊 Current ${instructorName} videos: ${totalBefore}`);
@@ -286,9 +289,12 @@ export async function runTargetedInstructorCuration(
   // Get final count
   const afterCount = await db.select({ count: sql<number>`count(*)` })
     .from(aiVideoKnowledge)
-    .where(or(
-      ilike(aiVideoKnowledge.instructorName, `%${instructorName}%`),
-      ilike(aiVideoKnowledge.instructorName, instructorName)
+    .where(and(
+      or(
+        ilike(aiVideoKnowledge.instructorName, `%${instructorName}%`),
+        ilike(aiVideoKnowledge.instructorName, instructorName)
+      ),
+      eq(aiVideoKnowledge.status, 'active')
     ));
   const totalAfter = Number(afterCount[0]?.count || 0);
 

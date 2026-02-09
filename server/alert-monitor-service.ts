@@ -125,7 +125,8 @@ export async function runAlertMonitor() {
     const videosAddedToday = await db.execute(sql`
       SELECT COUNT(*) as count 
       FROM ai_video_knowledge 
-      WHERE DATE(created_at) = ${today}
+      WHERE status = 'active'
+        AND DATE(created_at) = ${today}
     `);
     
     const addedRow = Array.isArray(videosAddedToday) ? videosAddedToday[0] : ((videosAddedToday as any).rows?.[0] || {});

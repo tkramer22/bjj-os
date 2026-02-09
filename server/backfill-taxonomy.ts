@@ -166,7 +166,8 @@ async function backfillTaxonomy() {
       title: aiVideoKnowledge.title,
       techniqueName: aiVideoKnowledge.techniqueName
     })
-    .from(aiVideoKnowledge);
+    .from(aiVideoKnowledge)
+    .where(eq(aiVideoKnowledge.status, 'active'));
   
   console.log(`📊 Processing ${allVideos.length} total videos`);
   

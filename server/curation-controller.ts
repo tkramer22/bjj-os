@@ -193,7 +193,8 @@ export async function canRunCuration(): Promise<{
     // Check if we've reached the target video count (2,000 videos)
     const { aiVideoKnowledge } = await import('@shared/schema');
     const videoCountResult = await db.select({ count: sql<number>`count(*)` })
-      .from(aiVideoKnowledge);
+      .from(aiVideoKnowledge)
+      .where(eq(aiVideoKnowledge.status, 'active'));
     const currentVideoCount = Number(videoCountResult[0].count);
     const targetVideoCount = await getSetting('target_video_count', 10000);
     

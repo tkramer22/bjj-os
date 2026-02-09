@@ -176,7 +176,7 @@ async function getUnderrepresentedEliteInstructors(): Promise<string[]> {
     const result = await db.execute(sql`
       SELECT i.name, COUNT(v.id) as video_count 
       FROM instructors i 
-      LEFT JOIN ai_video_knowledge v ON LOWER(v.instructor_name) = LOWER(i.name)
+      LEFT JOIN ai_video_knowledge v ON LOWER(v.instructor_name) = LOWER(i.name) AND v.status = 'active'
       WHERE i.credibility_score >= 80
       GROUP BY i.name 
       HAVING COUNT(v.id) < 10

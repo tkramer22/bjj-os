@@ -138,7 +138,7 @@ export async function loadPromptContext(
     keyTimestamps: aiVideoKnowledge.keyTimestamps
   })
     .from(aiVideoKnowledge)
-    .where(sql`${aiVideoKnowledge.qualityScore} IS NOT NULL`)
+    .where(and(eq(aiVideoKnowledge.status, 'active'), sql`${aiVideoKnowledge.qualityScore} IS NOT NULL`))
     .orderBy(desc(aiVideoKnowledge.qualityScore))
     .limit(100);
 

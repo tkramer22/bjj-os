@@ -7,7 +7,7 @@
 import { runTargetedInstructorCuration } from './targeted-instructor-curation';
 import { db } from './db';
 import { aiVideoKnowledge } from '@shared/schema';
-import { sql, asc } from 'drizzle-orm';
+import { sql, asc, eq, and } from 'drizzle-orm';
 
 interface InstructorToMine {
   name: string;
@@ -62,7 +62,7 @@ async function runSystematicCuration() {
   for (const name of PRIORITY_INSTRUCTORS) {
     const result = await db.select({ count: sql<number>`count(*)` })
       .from(aiVideoKnowledge)
-      .where(sql`instructor_name ILIKE ${`%${name}%`}`);
+      .where(and(sql`instructor_name ILIKE ${`%${name}%`}`, eq(aiVideoKnowledge.status, 'active')));
     
     const count = Number(result[0]?.count || 0);
     if (count < 30) {
@@ -80,7 +80,8 @@ async function runSystematicCuration() {
   console.log('');
 
   const startTotal = await db.select({ count: sql<number>`count(*)` })
-    .from(aiVideoKnowledge);
+    .from(aiVideoKnowledge)
+    .where(eq(aiVideoKnowledge.status, 'active'));
   const startingVideos = Number(startTotal[0]?.count || 0);
   console.log(`📦 Starting library size: ${startingVideos} videos\n`);
 
@@ -131,7 +132,8 @@ async function runSystematicCuration() {
   }
 
   const endTotal = await db.select({ count: sql<number>`count(*)` })
-    .from(aiVideoKnowledge);
+    .from(aiVideoKnowledge)
+    .where(eq(aiVideoKnowledge.status, 'active'));
   const endingVideos = Number(endTotal[0]?.count || 0);
 
   console.log('\n' + '═'.repeat(70));

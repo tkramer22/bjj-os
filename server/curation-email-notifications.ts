@@ -38,7 +38,7 @@ export async function sendCurationResultsEmail(results: CurationResults): Promis
       hour12: true
     });
     
-    const totalVideos = await db.select({ count: sql<number>`count(*)` }).from(aiVideoKnowledge);
+    const totalVideos = await db.select({ count: sql<number>`count(*)` }).from(aiVideoKnowledge).where(eq(aiVideoKnowledge.status, 'active'));
     const librarySize = Number(totalVideos[0]?.count || 0);
     
     const subject = results.videosAdded > 0
@@ -145,10 +145,10 @@ export async function sendDailySummaryEmail(): Promise<boolean> {
       year: 'numeric'
     });
     
-    const totalVideosResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge`);
+    const totalVideosResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active'`);
     const totalVideos = Number((totalVideosResult.rows[0] as any)?.count || 0);
     
-    const videosTodayResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE analyzed_at >= CURRENT_DATE`);
+    const videosTodayResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE status = 'active' AND analyzed_at >= CURRENT_DATE`);
     const videosToday = Number((videosTodayResult.rows[0] as any)?.count || 0);
     
     const totalUsersResult = await db.execute(sql`SELECT COUNT(*) as count FROM bjj_users`);
@@ -172,6 +172,7 @@ export async function sendDailySummaryEmail(): Promise<boolean> {
     const topInstructors = await db.execute(sql`
       SELECT instructor_name, COUNT(*) as video_count
       FROM ai_video_knowledge
+      WHERE status = 'active'
       GROUP BY instructor_name
       ORDER BY video_count DESC
       LIMIT 10
@@ -180,7 +181,8 @@ export async function sendDailySummaryEmail(): Promise<boolean> {
     const recentTechniques = await db.execute(sql`
       SELECT technique_name, COUNT(*) as count
       FROM ai_video_knowledge
-      WHERE analyzed_at >= CURRENT_DATE
+      WHERE status = 'active'
+        AND analyzed_at >= CURRENT_DATE
       GROUP BY technique_name
       ORDER BY count DESC
       LIMIT 5

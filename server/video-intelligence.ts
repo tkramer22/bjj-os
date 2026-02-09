@@ -74,7 +74,8 @@ export async function identifyLowPerformingVideos(
       FROM ai_video_knowledge avk
       LEFT JOIN video_success_patterns vsp ON avk.id = vsp.video_id
       WHERE 
-        avk.total_votes >= ${minVotes}
+        avk.status = 'active'
+        AND avk.total_votes >= ${minVotes}
         AND avk.helpful_ratio < ${maxSuccessRate / 100}
       GROUP BY avk.id, avk.technique_name, avk.instructor_name, 
                avk.helpful_ratio, avk.helpful_count, avk.not_helpful_count, avk.total_votes
@@ -112,7 +113,8 @@ export async function detectContentGaps() {
           COUNT(*) as available_videos,
           AVG(helpful_ratio::numeric) as avg_success_rate
         FROM ai_video_knowledge
-        WHERE quality_tier NOT IN ('removed', 'flagged')
+        WHERE status = 'active'
+          AND quality_tier NOT IN ('removed', 'flagged')
         GROUP BY technique_name
       ),
       combined_data AS (

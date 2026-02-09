@@ -36,7 +36,8 @@ export async function collectSystemMetrics(): Promise<SystemMetrics> {
   try {
     // Get video count
     const videoCountResult = await db.select({ count: sqlBuilder`count(*)::int` })
-      .from(aiVideoKnowledge);
+      .from(aiVideoKnowledge)
+      .where(eq(aiVideoKnowledge.status, 'active'));
     const videoCount = videoCountResult[0]?.count || 0;
     
     // Get videos added today
@@ -45,7 +46,7 @@ export async function collectSystemMetrics(): Promise<SystemMetrics> {
     
     const videosAddedTodayResult = await db.select({ count: sqlBuilder`count(*)::int` })
       .from(aiVideoKnowledge)
-      .where(gte(aiVideoKnowledge.analyzedAt, todayStart));
+      .where(and(eq(aiVideoKnowledge.status, 'active'), gte(aiVideoKnowledge.analyzedAt, todayStart)));
     const videosAddedToday = videosAddedTodayResult[0]?.count || 0;
     
     // Get user count

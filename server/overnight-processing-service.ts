@@ -83,7 +83,7 @@ export async function startOvernightProcessing(): Promise<{ success: boolean; ru
     
     // Get total count
     const totalResult = await db.execute(sql`
-      SELECT COUNT(*) as count FROM ai_video_knowledge WHERE quality_score IS NOT NULL
+      SELECT COUNT(*) as count FROM ai_video_knowledge WHERE quality_score IS NOT NULL AND status = 'active'
     `);
     const totalVideos = Number(totalResult[0]?.count || 0);
     
@@ -139,6 +139,7 @@ async function processInBackground() {
         FROM ai_video_knowledge v
         LEFT JOIN video_watch_status s ON v.id = s.video_id
         WHERE v.quality_score IS NOT NULL
+        AND v.status = 'active'
         AND (s.processed IS NULL OR s.processed = false)
         AND v.video_url LIKE 'https://www.youtube.com/watch%'
         AND LENGTH(v.video_url) > 30
@@ -256,6 +257,7 @@ async function getRemaining(): Promise<number> {
     FROM ai_video_knowledge v
     LEFT JOIN video_watch_status s ON v.id = s.video_id
     WHERE v.quality_score IS NOT NULL
+    AND v.status = 'active'
     AND (s.processed IS NULL OR s.processed = false)
   `);
   return Number(result[0]?.count || 0);
@@ -314,7 +316,7 @@ export async function getOvernightStatus(): Promise<any> {
   }
   
   // Get current stats
-  const totalResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE quality_score IS NOT NULL`);
+  const totalResult = await db.execute(sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE quality_score IS NOT NULL AND status = 'active'`);
   const total = Number(totalResult[0]?.count || 0);
   
   const processedResult = await db.execute(sql`SELECT COUNT(*) as count FROM video_watch_status WHERE processed = true`);

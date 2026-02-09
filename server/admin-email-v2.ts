@@ -130,6 +130,7 @@ async function gatherComprehensiveStats(reportType: 'morning' | 'midday' | 'even
       COUNT(*) FILTER (WHERE DATE(created_at AT TIME ZONE 'America/New_York') = DATE(NOW() AT TIME ZONE 'America/New_York')) as today,
       COUNT(*) FILTER (WHERE created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') - INTERVAL '12 hours') as overnight
     FROM ai_video_knowledge
+    WHERE status = 'active'
   `);
   const videoRow = videoStats.rows[0] as any;
   const totalVideos = parseInt(videoRow?.total) || 0;
@@ -165,7 +166,8 @@ async function gatherComprehensiveStats(reportType: 'morning' | 'midday' | 'even
   const topInstructors = await db.execute(sql`
     SELECT instructor_name, COUNT(*) as count
     FROM ai_video_knowledge
-    WHERE DATE(created_at AT TIME ZONE 'America/New_York') = DATE(NOW() AT TIME ZONE 'America/New_York')
+    WHERE status = 'active'
+      AND DATE(created_at AT TIME ZONE 'America/New_York') = DATE(NOW() AT TIME ZONE 'America/New_York')
     GROUP BY instructor_name
     ORDER BY count DESC
     LIMIT 5

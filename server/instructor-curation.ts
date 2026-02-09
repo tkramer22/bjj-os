@@ -13,7 +13,7 @@
 
 import { db } from './db';
 import { aiVideoKnowledge, curationRuns } from '@shared/schema';
-import { sql, eq, ilike } from 'drizzle-orm';
+import { sql, eq, ilike, and } from 'drizzle-orm';
 import { runMultiStageAnalysis } from './multi-stage-analyzer';
 import { google } from 'googleapis';
 
@@ -43,6 +43,7 @@ export async function getInstructorsNeedingContent(limit: number = 15, maxVideos
       AND instructor_name != ''
       AND instructor_name NOT LIKE '%Unknown%'
       AND instructor_name NOT LIKE '%Not Identified%'
+      AND status = 'active'
     GROUP BY instructor_name
     HAVING COUNT(*) < ${maxVideos}
     ORDER BY COUNT(*) ASC
@@ -64,6 +65,7 @@ export async function getAllExistingInstructors(): Promise<Set<string>> {
       AND instructor_name != ''
       AND instructor_name NOT LIKE '%Unknown%'
       AND instructor_name NOT LIKE '%Not Identified%'
+      AND status = 'active'
   `);
   
   return new Set((result.rows as any[]).map(row => row.instructor));
@@ -462,6 +464,7 @@ export async function runTargetedInstructorCuration(
     const result = await db.execute(sql`
       SELECT COUNT(*) as count FROM ai_video_knowledge 
       WHERE LOWER(instructor_name) LIKE LOWER(${`%${instructor}%`})
+      AND status = 'active'
     `);
     const beforeCount = parseInt((result.rows[0] as any)?.count || '0');
     instructorResults[instructor] = { before: beforeCount, after: beforeCount, added: 0 };
@@ -594,6 +597,7 @@ export async function runTargetedInstructorCuration(
     const result = await db.execute(sql`
       SELECT COUNT(*) as count FROM ai_video_knowledge 
       WHERE LOWER(instructor_name) LIKE LOWER(${`%${instructor}%`})
+      AND status = 'active'
     `);
     instructorResults[instructor].after = parseInt((result.rows[0] as any)?.count || '0');
   }

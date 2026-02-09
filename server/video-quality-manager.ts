@@ -24,7 +24,7 @@ export async function manageVideoQuality() {
         COUNT(*) FILTER (WHERE f.feedback_category = 'too_basic') as too_basic_count
       FROM ai_video_knowledge v
       LEFT JOIN user_video_feedback f ON v.id = f.video_id
-      WHERE v.total_votes >= 50 AND v.quality_tier != 'removed'
+      WHERE v.total_votes >= 50 AND v.quality_tier != 'removed' AND v.status = 'active'
       GROUP BY v.id
     `);
 

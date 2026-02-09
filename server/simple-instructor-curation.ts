@@ -14,7 +14,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { db } from './db';
 import { aiVideoKnowledge } from '@shared/schema';
-import { sql, eq } from 'drizzle-orm';
+import { sql, eq, and } from 'drizzle-orm';
 import { searchBJJVideos, getVideoDetails } from './youtube-service';
 
 const anthropic = new Anthropic();
@@ -201,7 +201,7 @@ export async function runSimpleInstructorCuration(
   for (const instructor of instructors) {
     // Get current count
     const beforeCount = await db.execute(
-      sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE LOWER(instructor_name) LIKE LOWER(${'%' + instructor + '%'})`
+      sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE LOWER(instructor_name) LIKE LOWER(${'%' + instructor + '%'}) AND status = 'active'`
     );
     const before = parseInt((beforeCount.rows[0] as any)?.count || '0');
     
@@ -260,7 +260,7 @@ export async function runSimpleInstructorCuration(
               for (const inst of instructors) {
                 if (!results[inst]) {
                   const count = await db.execute(
-                    sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE LOWER(instructor_name) LIKE LOWER(${'%' + inst + '%'})`
+                    sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE LOWER(instructor_name) LIKE LOWER(${'%' + inst + '%'}) AND status = 'active'`
                   );
                   results[inst] = { 
                     before: parseInt((count.rows[0] as any)?.count || '0'), 
@@ -334,7 +334,7 @@ export async function runSimpleInstructorCuration(
     
     // Get final count for this instructor
     const afterCount = await db.execute(
-      sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE LOWER(instructor_name) LIKE LOWER(${'%' + instructor + '%'})`
+      sql`SELECT COUNT(*) as count FROM ai_video_knowledge WHERE LOWER(instructor_name) LIKE LOWER(${'%' + instructor + '%'}) AND status = 'active'`
     );
     const after = parseInt((afterCount.rows[0] as any)?.count || '0');
     

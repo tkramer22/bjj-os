@@ -13,7 +13,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { aiVideoKnowledge } from '@shared/schema';
-import { sql, eq, isNull, or } from 'drizzle-orm';
+import { sql, eq, isNull, or, and } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import * as schema from '@shared/schema';
 
@@ -559,14 +559,15 @@ async function runPhase3(): Promise<void> {
   
   // Total videos
   const totalResult = await db.select({ count: sql<number>`count(*)` })
-    .from(aiVideoKnowledge);
+    .from(aiVideoKnowledge)
+    .where(eq(aiVideoKnowledge.status, 'active'));
   const totalVideos = Number(totalResult[0].count);
   
   // Videos by position
   const positionResult = await db.execute(sql`
     SELECT position_category, COUNT(*) as count
     FROM ai_video_knowledge
-    WHERE position_category IS NOT NULL
+    WHERE position_category IS NOT NULL AND status = 'active'
     GROUP BY position_category
     ORDER BY count DESC
   `);
@@ -575,7 +576,7 @@ async function runPhase3(): Promise<void> {
   const instructorResult = await db.execute(sql`
     SELECT instructor_name, COUNT(*) as count
     FROM ai_video_knowledge
-    WHERE instructor_name IS NOT NULL AND instructor_name != ''
+    WHERE instructor_name IS NOT NULL AND instructor_name != '' AND status = 'active'
     GROUP BY instructor_name
     ORDER BY count DESC
     LIMIT 10
@@ -615,10 +616,10 @@ async function runPhase3(): Promise<void> {
       position: aiVideoKnowledge.positionCategory
     })
       .from(aiVideoKnowledge)
-      .where(sql`
+      .where(and(sql`
         LOWER(title) LIKE LOWER(${`%${test.query}%`})
         OR LOWER(technique_name) LIKE LOWER(${`%${test.query}%`})
-      `)
+      `, eq(aiVideoKnowledge.status, 'active')))
       .limit(3);
     
     if (results.length === 0) {

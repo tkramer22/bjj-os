@@ -6,7 +6,7 @@
 import { runTargetedInstructorCuration } from './targeted-instructor-curation';
 import { db } from './db';
 import { aiVideoKnowledge } from '@shared/schema';
-import { sql } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 
 interface InstructorTarget {
   name: string;
@@ -91,7 +91,8 @@ async function runBatch2Curation() {
   console.log('═'.repeat(70) + '\n');
 
   const startTotal = await db.select({ count: sql<number>`count(*)` })
-    .from(aiVideoKnowledge);
+    .from(aiVideoKnowledge)
+    .where(eq(aiVideoKnowledge.status, 'active'));
   const startingVideos = Number(startTotal[0]?.count || 0);
   console.log(`📊 Starting library size: ${startingVideos} videos\n`);
 
@@ -132,7 +133,8 @@ async function runBatch2Curation() {
   }
 
   const endTotal = await db.select({ count: sql<number>`count(*)` })
-    .from(aiVideoKnowledge);
+    .from(aiVideoKnowledge)
+    .where(eq(aiVideoKnowledge.status, 'active'));
   const endingVideos = Number(endTotal[0]?.count || 0);
 
   console.log('\n' + '═'.repeat(70));
