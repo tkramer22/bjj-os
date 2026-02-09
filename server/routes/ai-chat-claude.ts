@@ -102,7 +102,7 @@ async function saveDiagnostics(
     await db.insert(professorOsDiagnostics).values({
       userId,
       userMessage,
-      modelUsed: 'claude-sonnet-4-5',
+      modelUsed: 'claude-sonnet-4-5-20250929',
       responseTimeMs: diagnostics.timingBreakdown.totalMs,
       diagnostics: diagnostics
     });
@@ -855,11 +855,34 @@ export async function handleClaudeStream(req: any, res: any) {
       return colonIdx + 1 + quoteIdx + 1; // Position after opening quote
     };
     
+    // Split system prompt at cache breakpoint for Anthropic prompt caching
+    // Static part (coaching personality, rules, sections 1-5) is IDENTICAL across ALL users → cached globally
+    // Dynamic part (user profile, video library, search results, news) changes per user/message
+    const CACHE_BREAK_MARKER = '<!-- PROMPT_CACHE_BREAK -->';
+    const cacheBreakIndex = finalSystemPrompt.indexOf(CACHE_BREAK_MARKER);
+    
+    let systemContent: string | Array<{type: "text", text: string, cache_control?: {type: "ephemeral"}}>;
+    
+    if (cacheBreakIndex !== -1) {
+      const staticPart = finalSystemPrompt.substring(0, cacheBreakIndex).trim();
+      const dynamicPart = finalSystemPrompt.substring(cacheBreakIndex + CACHE_BREAK_MARKER.length).trim();
+      
+      systemContent = [
+        { type: "text" as const, text: staticPart, cache_control: { type: "ephemeral" as const } },
+        ...(dynamicPart.length > 0 ? [{ type: "text" as const, text: dynamicPart }] : [])
+      ];
+      
+      console.log(`🔒 [PROMPT CACHE] Static: ${staticPart.length} chars (cached) | Dynamic: ${dynamicPart.length} chars`);
+    } else {
+      systemContent = finalSystemPrompt;
+      console.log(`⚠️ [PROMPT CACHE] No cache breakpoint found, sending full prompt uncached`);
+    }
+    
     const stream = anthropic.messages.stream({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-5-20250929',
       max_tokens: 2048,
-      temperature: 0.7, // Conversational but focused
-      system: finalSystemPrompt,
+      temperature: 0.7,
+      system: systemContent,
       messages: messages,
       tools: tools,
       tool_choice: { type: "tool", name: "professor_os_response" }
@@ -930,6 +953,18 @@ export async function handleClaudeStream(req: any, res: any) {
         }
       } else if (event.type === 'message_delta') {
         outputTokens = event.usage?.output_tokens || 0;
+      } else if (event.type === 'message_start') {
+        const usage = (event as any).message?.usage;
+        if (usage) {
+          const cacheRead = usage.cache_read_input_tokens || 0;
+          const cacheCreation = usage.cache_creation_input_tokens || 0;
+          const inputTokens = usage.input_tokens || 0;
+          if (cacheRead > 0 || cacheCreation > 0) {
+            console.log(`🔒 [PROMPT CACHE] Hit: ${cacheRead} tokens cached | Creation: ${cacheCreation} tokens | Uncached: ${inputTokens - cacheRead} tokens`);
+            (diagnosticData as any).promptCacheReadTokens = cacheRead;
+            (diagnosticData as any).promptCacheCreationTokens = cacheCreation;
+          }
+        }
       }
     }
     

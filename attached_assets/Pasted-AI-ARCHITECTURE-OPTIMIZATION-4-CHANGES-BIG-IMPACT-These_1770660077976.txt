@@ -1,0 +1,267 @@
+AI ARCHITECTURE OPTIMIZATION — 4 CHANGES, BIG IMPACT
+
+These changes will make Professor OS faster, cheaper, smarter, and more
+reliable. Implement in this exact order.
+
+══════════════════════════════════════════════════════════════════════════
+CHANGE 1: ADD PROMPT CACHING (90% COST REDUCTION)
+══════════════════════════════════════════════════════════════════════════
+
+Our system prompt is ~8,000+ tokens and gets sent with EVERY chat message.
+Right now we pay full price every time. Anthropic’s prompt caching lets
+us pay full price ONCE, then 90% less on every subsequent message.
+
+IMPLEMENTATION:
+
+In the Claude API call (server/routes.ts or wherever we call anthropic.messages.create),
+change the system prompt from a string to an array with cache_control:
+
+BEFORE:
+
+```javascript
+const claudeMessage = await anthropic.messages.create({
+  model: 'claude-sonnet-4-20250514',
+  max_tokens: 4096,
+  system: aiPrompt,
+  messages: [{ role: 'user', content: message }]
+});
+```
+
+AFTER:
+
+```javascript
+const claudeMessage = await anthropic.messages.create({
+  model: 'claude-sonnet-4-5-20250929',
+  max_tokens: 4096,
+  system: [
+    {
+      type: 'text',
+      text: systemPromptStaticPart,  // The base Professor OS personality, 
+                                      // rules, instructor knowledge, 
+                                      // video format rules — everything 
+                                      // that does NOT change per user
+      cache_control: { type: 'ephemeral' }
+    },
+    {
+      type: 'text',
+      text: userContextPart  // User profile, belt level, name, goals,
+                              // conversation history, available videos —
+                              // everything that DOES change per user
+    }
+  ],
+  messages: [{ role: 'user', content: message }]
+});
+```
+
+CRITICAL DETAILS:
+
+- Split buildSystemPrompt() into TWO parts:
+1. STATIC part: Professor OS personality, coaching philosophy,
+   instructor knowledge base, response rules, video format rules,
+   forbidden responses, belt-specific guidelines, language support.
+   This is the same for ALL users and ALL messages.
+1. DYNAMIC part: User name, belt level, goals, injuries, struggle
+   techniques, conversation history, available videos, learning context.
+   This changes per user and per message.
+- Put cache_control on the STATIC part only
+- The static part must be at least 1,024 tokens (ours is ~5,000+ so no issue)
+- Cache lasts 5 minutes by default, refreshes on each hit
+- For our use case (users chatting multiple times in a session),
+  cache hit rate will be very high
+- Also add the anthropic-version header if not already present:
+  ‘anthropic-version’: ‘2023-06-01’
+
+EXPECTED SAVINGS:
+
+- First message per 5-min window: full price (~5,000 input tokens)
+- Every subsequent message: 90% cheaper on those 5,000 tokens
+- At 100+ users chatting, this saves $40-80/month
+
+══════════════════════════════════════════════════════════════════════════
+CHANGE 2: REMOVE GPT-4o COMPLEXITY ROUTER
+══════════════════════════════════════════════════════════════════════════
+
+Currently every message goes through this flow:
+
+1. User sends message
+1. GPT-4o analyzes complexity (0-10 score) — COSTS MONEY, ADDS LATENCY
+1. If complexity > 7 → Claude Sonnet 4
+1. If complexity <= 7 → GPT-4o or Claude
+
+This is unnecessary. Claude Sonnet handles ALL complexity levels well.
+The GPT-4o call adds 500ms-1500ms latency to EVERY message and costs
+money for zero benefit.
+
+REMOVE:
+
+1. Find the GPT-4o complexity analysis call (server/routes.ts around
+   lines 6157-6199 or in server/ai-orchestrator.ts)
+1. DELETE the entire complexity analysis step
+1. DELETE the model routing logic based on complexity score
+1. Send ALL messages directly to Claude Sonnet 4.5
+
+BEFORE FLOW:
+User → GPT-4o complexity check → route to model → response
+(2 API calls, 1-3 seconds added latency)
+
+AFTER FLOW:
+User → Claude Sonnet 4.5 → response
+(1 API call, faster response)
+
+Also remove any OpenAI API calls that are ONLY used for the complexity
+router. If OpenAI is also used for other things (like video curation
+pre-filter), keep those. Only remove the complexity routing call.
+
+Show me what GPT-4o / OpenAI calls remain after this change.
+
+══════════════════════════════════════════════════════════════════════════
+CHANGE 3: UPGRADE TO CLAUDE SONNET 4.5
+══════════════════════════════════════════════════════════════════════════
+
+Update the model string everywhere in the codebase:
+
+FIND ALL instances of:
+‘claude-sonnet-4-20250514’
+
+REPLACE with:
+‘claude-sonnet-4-5-20250929’
+
+Sonnet 4.5 is better at:
+
+- Following complex system prompts (our 8,000+ token prompt)
+- Natural conversational tone (less robotic)
+- Reasoning about technique sequences
+- Structured output generation
+- Same price as Sonnet 4
+
+Search the ENTIRE codebase for any Claude model string and show me
+every instance. Update all of them to Sonnet 4.5.
+
+Also check for any hardcoded model strings in:
+
+- server/routes.ts
+- server/ai-orchestrator.ts
+- server/ai-intelligence.ts
+- server/multi-agent-integration.ts
+- server/intelligence-enhancer.ts
+- Any other file that calls the Anthropic API
+
+══════════════════════════════════════════════════════════════════════════
+CHANGE 4: STRUCTURED OUTPUTS FOR VIDEO RECOMMENDATIONS
+══════════════════════════════════════════════════════════════════════════
+
+Currently Professor OS returns video recommendations as text embedded
+in the response. The frontend has to parse this text to extract video
+IDs, titles, timestamps etc. This is fragile and causes rendering bugs.
+
+Instead, use Claude’s tool use / function calling to get structured
+video recommendations alongside the text response.
+
+Add a tool definition to the Claude API call:
+
+```javascript
+const claudeMessage = await anthropic.messages.create({
+  model: 'claude-sonnet-4-5-20250929',
+  max_tokens: 4096,
+  system: [/* cached system prompt from Change 1 */],
+  tools: [
+    {
+      name: 'recommend_videos',
+      description: 'Recommend BJJ technique videos to the user. Use this whenever you want to show the user a video. Always use this tool instead of writing video links in text.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          videos: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                video_id: { 
+                  type: 'number', 
+                  description: 'The video ID from the available videos list' 
+                },
+                title: { 
+                  type: 'string', 
+                  description: 'The video title' 
+                },
+                instructor: { 
+                  type: 'string', 
+                  description: 'The instructor name' 
+                },
+                start_time: { 
+                  type: 'string', 
+                  description: 'The recommended start timestamp (e.g. 2:15)' 
+                },
+                why: { 
+                  type: 'string', 
+                  description: 'Brief explanation of why this video is relevant' 
+                }
+              },
+              required: ['video_id', 'title', 'instructor']
+            }
+          }
+        },
+        required: ['videos']
+      }
+    }
+  ],
+  messages: [{ role: 'user', content: message }]
+});
+```
+
+Then in the response handler, check for tool_use blocks:
+
+```javascript
+const response = claudeMessage.content;
+const textBlocks = response.filter(b => b.type === 'text');
+const toolBlocks = response.filter(b => b.type === 'tool_use');
+
+const aiText = textBlocks.map(b => b.text).join('');
+const videoRecommendations = toolBlocks
+  .filter(b => b.name === 'recommend_videos')
+  .flatMap(b => b.input.videos);
+```
+
+Now the frontend receives:
+
+- Clean text response (Professor OS coaching)
+- Structured video array with guaranteed fields
+
+The frontend can render video cards directly from the structured data
+instead of parsing text. No more broken thumbnails or missing fields.
+
+UPDATE the system prompt to instruct Professor OS:
+“When recommending videos, ALWAYS use the recommend_videos tool.
+Do not write video titles or links in your text response. The tool
+will render beautiful video cards for the user automatically.”
+
+UPDATE the frontend chat component to:
+
+1. Render the text response as the message
+1. Render video cards from the structured video array
+1. Match video_id to the full video record for thumbnail, youtube_id, etc.
+
+══════════════════════════════════════════════════════════════════════════
+TEST EVERYTHING
+══════════════════════════════════════════════════════════════════════════
+
+□ Chat with Professor OS — response should come from Sonnet 4.5
+□ Check server logs — NO GPT-4o complexity calls
+□ Check server logs — prompt caching working (look for cache_read_input_tokens > 0)
+□ Send 3 messages in a row — 2nd and 3rd should be faster (cached)
+□ Ask for technique recommendations — video cards render correctly
+□ Video cards have: thumbnail, title, instructor, timestamp, Analysis/Save/Share
+□ No GPT-4o calls for chat (may still be used for video curation)
+□ Build passes with no errors
+
+══════════════════════════════════════════════════════════════════════════
+SHOW ME
+══════════════════════════════════════════════════════════════════════════
+
+1. The split system prompt (static vs dynamic parts)
+1. The cache_control implementation
+1. Every GPT-4o call that was removed vs kept
+1. Every model string that was updated to Sonnet 4.5
+1. The tool definition for video recommendations
+1. The response handler that extracts text + video data
+1. Server logs showing cache hits after 2+ messages
