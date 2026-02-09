@@ -783,6 +783,9 @@ export const videos = pgTable("videos", {
   archived: boolean("archived").default(false),
   archiveReason: text("archive_reason"),
   
+  // Video availability status
+  status: varchar("status", { length: 20 }).default('active'), // active, unavailable
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

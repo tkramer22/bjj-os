@@ -1,0 +1,77 @@
+FIND AND MARK DEAD YOUTUBE VIDEOS
+
+⚠️ DO NOT DELETE ANY VIDEOS FROM THE DATABASE. EVER.
+Only mark them so they are excluded from all queries.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 1: ADD STATUS COLUMN IF IT DOESN’T EXIST
+══════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE curated_videos ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT ‘active’;
+
+══════════════════════════════════════════════════════════════════════════
+STEP 2: FIND ALL DEAD VIDEOS
+══════════════════════════════════════════════════════════════════════════
+
+Write a script that checks every video in curated_videos with a youtube_id:
+
+1. Use the YouTube oEmbed endpoint to check availability:
+   https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${youtube_id}&format=json
+- 200 = alive
+- 401/403/404 = dead
+1. Also flag any videos where youtube_id is NULL or empty
+1. For every dead video, run:
+   UPDATE curated_videos SET status = ‘unavailable’ WHERE id = [video_id];
+
+⚠️ DO NOT DELETE. Only UPDATE status.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 3: EXCLUDE UNAVAILABLE VIDEOS FROM ALL QUERIES
+══════════════════════════════════════════════════════════════════════════
+
+Find EVERY query in the codebase that selects from curated_videos and
+add: WHERE status = ‘active’ (or WHERE status != ‘unavailable’)
+
+This includes:
+
+- Professor OS video recommendations
+- Technique Library listing
+- Video search
+- Video cache for chat enrichment
+- Saved Videos display (show “This video is no longer available” for
+  saved videos that are now unavailable, but do NOT remove from saved)
+- Any admin dashboard video counts
+- Random video selection
+- Any other query that touches curated_videos
+
+Search the entire codebase for: FROM curated_videos
+and: FROM ai_video_knowledge
+Show me every instance and confirm each one now filters by status.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 4: ADD TO CURATION PIPELINE
+══════════════════════════════════════════════════════════════════════════
+
+Add a weekly check function that re-validates all active videos and
+marks any newly dead ones as unavailable. This should run automatically.
+
+══════════════════════════════════════════════════════════════════════════
+REPORT
+══════════════════════════════════════════════════════════════════════════
+
+Show me:
+
+- Total videos checked
+- How many marked unavailable
+- List the unavailable video titles
+- Every query you updated to filter by status
+- Confirm ZERO videos were deleted
+
+TEST:
+□ Ask Professor OS a question — no dead videos recommended
+□ Technique Library — no dead videos shown
+□ No blank grey thumbnails anywhere
+□ Videos still exist in database (just marked unavailable)
+□ SELECT COUNT(*) FROM curated_videos WHERE status = ‘unavailable’;
+□ SELECT COUNT(*) FROM curated_videos WHERE status = ‘active’;
+□ Build passes with no errors
