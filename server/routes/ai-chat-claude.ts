@@ -959,6 +959,12 @@ export async function handleClaudeStream(req: any, res: any) {
           const cacheRead = usage.cache_read_input_tokens || 0;
           const cacheCreation = usage.cache_creation_input_tokens || 0;
           const inputTokens = usage.input_tokens || 0;
+          console.log('[CACHE]', JSON.stringify({
+            input_tokens: inputTokens,
+            cache_creation: cacheCreation,
+            cache_read: cacheRead,
+            output_tokens: usage.output_tokens || 0
+          }));
           if (cacheRead > 0 || cacheCreation > 0) {
             console.log(`🔒 [PROMPT CACHE] Hit: ${cacheRead} tokens cached | Creation: ${cacheCreation} tokens | Uncached: ${inputTokens - cacheRead} tokens`);
             (diagnosticData as any).promptCacheReadTokens = cacheRead;

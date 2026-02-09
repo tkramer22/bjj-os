@@ -1,0 +1,227 @@
+MASTER TEST — ALL CHANGES MUST PASS BEFORE PUBLISHING
+
+Test EVERY change made today. Do NOT publish until all sections pass.
+
+══════════════════════════════════════════════════════════════════════════
+TEST A: CLAUDE SONNET 4.5 IS ACTIVE
+══════════════════════════════════════════════════════════════════════════
+
+1. Search entire codebase for Claude model strings. Show every instance:
+   grep -rn “claude-sonnet” –include=”*.ts” –include=”*.tsx” –include=”*.js”
+1. Every chat-related Claude call must use: claude-sonnet-4-5-20250929
+1. ZERO instances of old model strings in chat code
+
+Result: □ PASS □ FAIL
+
+══════════════════════════════════════════════════════════════════════════
+TEST B: NO GPT-4o IN CHAT FLOW
+══════════════════════════════════════════════════════════════════════════
+
+1. Search for complexity router remnants:
+   grep -rn “complexityAnalysis|complexity_analysis|complexityScore|complexity_score|complexity analyzer” –include=”*.ts” –include=”*.tsx”
+1. Should be ZERO results related to chat message routing
+1. List ALL remaining OpenAI API calls with file + purpose:
+   grep -rn “openai.” –include=”*.ts” –include=”*.tsx” | grep -v node_modules
+1. None should be in the chat message path
+
+Result: □ PASS □ FAIL
+
+══════════════════════════════════════════════════════════════════════════
+TEST C: PROMPT CACHING WORKING
+══════════════════════════════════════════════════════════════════════════
+
+1. Ensure this logging exists in the chat endpoint after Claude responds:
+   console.log(’[CACHE]’, JSON.stringify({
+   input_tokens: response.usage.input_tokens,
+   cache_creation: response.usage.cache_creation_input_tokens || 0,
+   cache_read: response.usage.cache_read_input_tokens || 0,
+   output_tokens: response.usage.output_tokens
+   }));
+1. Send test message 1: “What’s a good sweep from half guard?”
+   Show me the log output. cache_creation should be > 0.
+1. Wait 10 seconds. Send test message 2: “What about from closed guard?”
+   Show me the log output. cache_read should be > 0.
+1. If cache_read is 0 on the second message, caching is NOT working.
+   Debug: Is system prompt split into static + dynamic with cache_control?
+
+Result: □ PASS □ FAIL
+Log output message 1: _______________
+Log output message 2: _______________
+
+══════════════════════════════════════════════════════════════════════════
+TEST D: CHAT RESPONSE QUALITY
+══════════════════════════════════════════════════════════════════════════
+
+1. Send: “I keep getting stuck in bottom side control”
+   □ Response uses user’s name
+   □ Response references belt level
+   □ Response feels like a coach (not a search engine)
+   □ Video cards appear with real thumbnails
+   □ Bold text renders properly (no raw ** asterisks)
+1. Send: “Hey what’s up”
+   □ Casual conversational response
+   □ No unnecessary video recommendations
+1. Measure response time for each message:
+   const start = Date.now();
+   // … API call …
+   console.log(’[RESPONSE TIME]’, Date.now() - start, ‘ms’);
+   
+   Show me the times. Should be under 3 seconds.
+
+Result: □ PASS □ FAIL
+
+══════════════════════════════════════════════════════════════════════════
+TEST E: VIDEO CARDS IN CHAT
+══════════════════════════════════════════════════════════════════════════
+
+1. Send: “Show me triangle choke techniques”
+1. Video cards must show:
+   □ Real YouTube thumbnails (not placeholder/logo)
+   □ Video title
+   □ Instructor name
+   □ Timestamp
+   □ Analysis button (only if video has analysis data)
+   □ Save button
+   □ Share button
+1. Click Save on a video card in chat:
+   □ Video appears in Saved Videos page
+   □ Only ONE entry (no duplicates)
+1. Click Analysis on a video with analysis:
+   □ Modal opens with full analysis data
+1. Try saving same video again:
+   □ Should NOT create duplicate
+   □ Button should show “Saved” or prevent re-save
+
+Result: □ PASS □ FAIL
+
+══════════════════════════════════════════════════════════════════════════
+TEST F: VIDEO LIBRARY
+══════════════════════════════════════════════════════════════════════════
+
+1. Open Videos tab:
+   □ Videos load
+   □ All have thumbnails (no grey placeholders)
+   □ No dead/unavailable videos shown
+1. Save a video from Library:
+   □ Appears in Saved Videos
+   □ Only ONE entry
+   □ Button changes to “Saved”
+1. Check for dead videos:
+   SELECT COUNT(*) FROM curated_videos WHERE status = ‘unavailable’;
+   SELECT COUNT(*) FROM curated_videos WHERE status = ‘active’;
+   □ Unavailable videos exist but are NOT shown in library
+1. Analysis button:
+   □ Visible on videos WITH analysis
+   □ HIDDEN on videos WITHOUT analysis
+   □ Cannot click non-existent button
+
+Result: □ PASS □ FAIL
+
+══════════════════════════════════════════════════════════════════════════
+TEST G: SAVED VIDEOS PAGE
+══════════════════════════════════════════════════════════════════════════
+
+1. Open Saved tab:
+   □ Videos load
+   □ No duplicates visible
+   □ Each video appears only once
+1. Check database for duplicates:
+   SELECT user_id, video_id, COUNT(*) as cnt
+   FROM saved_videos
+   GROUP BY user_id, video_id
+   HAVING COUNT(*) > 1;
+   
+   □ Should return ZERO rows
+1. Check UNIQUE constraint exists:
+   SELECT constraint_name FROM information_schema.table_constraints
+   WHERE table_name = ‘saved_videos’ AND constraint_type = ‘UNIQUE’;
+   
+   □ Should show unique constraint on (user_id, video_id)
+
+Result: □ PASS □ FAIL
+
+══════════════════════════════════════════════════════════════════════════
+TEST H: GEMINI 2.5 VIDEO CURATION UPGRADE
+══════════════════════════════════════════════════════════════════════════
+
+1. Show all Gemini model strings in codebase:
+   grep -rn “gemini” –include=”*.ts” –include=”*.tsx” | grep -i model
+1. Deep analysis model should be Gemini 2.5 Pro
+1. Run a test analysis on ONE video manually:
+- Pick a known good BJJ YouTube video
+- Run it through the new Gemini 2.5 analysis
+- Show me the full JSON output
+- Verify timestamps match what’s actually in the video
+- Verify key_moments are accurate
+1. Check the analysis_version column exists:
+   SELECT column_name FROM information_schema.columns
+   WHERE table_name = ‘curated_videos’ AND column_name = ‘analysis_version’;
+1. Check cost logging works:
+   □ [CURATION COST] log appears with token counts
+1. Check fallback works:
+   □ If video is unavailable, falls back to transcript analysis
+   □ No crash on inaccessible videos
+
+Result: □ PASS □ FAIL
+
+══════════════════════════════════════════════════════════════════════════
+TEST I: APPLE RECEIPT VALIDATION
+══════════════════════════════════════════════════════════════════════════
+
+1. Check /api/auth/ios/complete endpoint:
+   □ Validates receipt with Apple servers BEFORE creating user
+   □ Returns 402 if receipt is invalid
+   □ Returns 500 if APPLE_SHARED_SECRET is missing
+   □ Stores apple_original_transaction_id on success
+   □ Stores apple_product_id on success
+   □ Stores apple_receipt on success
+1. Check APPLE_SHARED_SECRET is configured:
+   □ Exists in Replit secrets / environment variables
+   (If NOT configured, flag this — it needs to be set up in
+   App Store Connect before this will work)
+1. Check expired users:
+   SELECT COUNT(*) FROM users
+   WHERE payment_provider = ‘apple’
+   AND subscription_status = ‘expired’;
+   
+   □ All 22 Apple users should be expired (or at minimum the 5 test accounts)
+
+Result: □ PASS □ FAIL
+
+══════════════════════════════════════════════════════════════════════════
+TEST J: SERVER STABILITY
+══════════════════════════════════════════════════════════════════════════
+
+1. □ Server is running with no crash loops
+1. □ No unhandled promise rejections in logs
+1. □ Build passes with zero errors
+1. □ bjjos.app loads the login screen
+1. □ Can log in with admin account
+1. □ Chat loads and responds
+1. □ Videos tab loads
+1. □ Saved tab loads
+1. □ Profile tab loads
+
+Result: □ PASS □ FAIL
+
+══════════════════════════════════════════════════════════════════════════
+FINAL SCORECARD
+══════════════════════════════════════════════════════════════════════════
+
+Test A (Sonnet 4.5):        □ PASS □ FAIL
+Test B (No GPT-4o router):  □ PASS □ FAIL
+Test C (Prompt caching):    □ PASS □ FAIL
+Test D (Response quality):  □ PASS □ FAIL
+Test E (Chat video cards):  □ PASS □ FAIL
+Test F (Video library):     □ PASS □ FAIL
+Test G (Saved videos):      □ PASS □ FAIL
+Test H (Gemini 2.5):        □ PASS □ FAIL
+Test I (Apple validation):  □ PASS □ FAIL
+Test J (Server stability):  □ PASS □ FAIL
+
+══════════════════════════════════════════════════════════════════════════
+
+IF ALL PASS → Publish and push to GitHub
+IF ANY FAIL → Fix the failures, re-test, then publish
+
+Show me the completed scorecard with results for each test.
