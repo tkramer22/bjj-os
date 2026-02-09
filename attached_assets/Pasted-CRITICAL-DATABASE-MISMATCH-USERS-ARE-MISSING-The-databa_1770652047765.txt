@@ -1,0 +1,80 @@
+CRITICAL: DATABASE MISMATCH — USERS ARE MISSING
+
+The database query says 1 user. But:
+
+- Apple App Store Connect shows 2 subscribers
+- Stripe dashboard shows 1 subscriber
+- The admin dashboard shows multiple users with “monthly” status
+
+Something is very wrong. The query is not looking in the right place.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 1: CHECK ALL TABLES THAT COULD STORE USERS
+══════════════════════════════════════════════════════════════════════════
+
+List ALL tables in the database:
+
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = ‘public’
+ORDER BY table_name;
+
+Then check if there are multiple user-related tables:
+
+- users
+- accounts
+- subscribers
+- customers
+- profiles
+- sessions
+- Any other table with user data
+
+For EACH table found, run: SELECT COUNT(*) FROM [table_name];
+
+══════════════════════════════════════════════════════════════════════════
+STEP 2: CHECK WHAT THE ADMIN DASHBOARD QUERIES
+══════════════════════════════════════════════════════════════════════════
+
+Find the admin dashboard code that displays the user list.
+Show me the EXACT query or API endpoint it uses to get user data.
+
+Is it querying a different table than “users”?
+Is it querying a different database?
+Is it using a view or join?
+
+Search the codebase for:
+
+- “monthly” subscription status references
+- Admin dashboard user listing component
+- The API route that returns users to the admin page
+
+══════════════════════════════════════════════════════════════════════════
+STEP 3: CHECK DATABASE CONNECTION
+══════════════════════════════════════════════════════════════════════════
+
+Show me the DATABASE_URL or database connection string being used.
+Is there more than one database configured?
+Check .env and all config files for database connections.
+
+Are there separate databases for production and development?
+
+══════════════════════════════════════════════════════════════════════════
+STEP 4: SEARCH FOR ALL USER RECORDS ACROSS ALL TABLES
+══════════════════════════════════════════════════════════════════════════
+
+For every table that has an “email” column, run:
+SELECT * FROM [table_name] ORDER BY created_at DESC LIMIT 20;
+
+I need to find where the Apple and Stripe subscribers are stored.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 5: CHECK STRIPE WEBHOOK HANDLER
+══════════════════════════════════════════════════════════════════════════
+
+Show me the Stripe webhook handler code. When checkout.session.completed
+fires, what table does it write the user to?
+
+Show me the Apple IAP receipt validation code. When an Apple purchase is
+verified, what table does it write to?
+
+══════════════════════════════════════════════════════════════════════════
+REPORT EVERYTHING. DO NOT SUMMARIZE. Show me raw data from every table.
