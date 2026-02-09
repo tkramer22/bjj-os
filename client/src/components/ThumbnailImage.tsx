@@ -20,18 +20,32 @@ export function ThumbnailImage({ thumbnailUrl, videoId, title, className = "" }:
     return /^[a-zA-Z0-9_-]{11}$/.test(id.trim());
   };
 
+  const isVideoThumbnail = (url: string): boolean => {
+    const trimmed = url.trim().toLowerCase();
+    if (trimmed.includes('yt3.ggpht.com')) return false;
+    if (trimmed.includes('yt3.googleusercontent.com')) return false;
+    if (trimmed.includes('/channels/') || trimmed.includes('/channel/')) return false;
+    return true;
+  };
+
   // Build ordered list of thumbnail sources to try (highest quality first)
+  // When we have a valid YouTube video ID, always prefer YouTube thumbnail URLs
+  // to avoid showing channel avatars or stale cached thumbnails
   const sources = useMemo(() => {
     const urls: string[] = [];
-    if (thumbnailUrl && thumbnailUrl.trim()) urls.push(thumbnailUrl);
-    // Only add YouTube URLs if we have a valid 11-character YouTube ID
-    if (videoId && isValidYouTubeId(videoId)) {
-      const cleanId = videoId.trim();
-      // Try multiple YouTube thumbnail quality levels with fallbacks
-      urls.push(`https://img.youtube.com/vi/${cleanId}/maxresdefault.jpg`);
+    const hasValidVideoId = videoId && isValidYouTubeId(videoId);
+
+    if (hasValidVideoId) {
+      const cleanId = videoId!.trim();
       urls.push(`https://img.youtube.com/vi/${cleanId}/hqdefault.jpg`);
       urls.push(`https://img.youtube.com/vi/${cleanId}/mqdefault.jpg`);
       urls.push(`https://i.ytimg.com/vi/${cleanId}/mqdefault.jpg`);
+    }
+
+    if (thumbnailUrl && thumbnailUrl.trim() && isVideoThumbnail(thumbnailUrl)) {
+      if (!hasValidVideoId) {
+        urls.unshift(thumbnailUrl);
+      }
     }
     return urls;
   }, [thumbnailUrl, videoId]);

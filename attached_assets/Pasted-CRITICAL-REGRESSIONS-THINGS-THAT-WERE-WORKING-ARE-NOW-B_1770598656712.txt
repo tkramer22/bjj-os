@@ -1,0 +1,92 @@
+CRITICAL REGRESSIONS — THINGS THAT WERE WORKING ARE NOW BROKEN
+
+These features were working correctly before recent changes. Something
+broke them. Find what changed and fix it.
+
+⚠️ These are REGRESSIONS not new features. Do not rebuild from scratch.
+Find what broke and restore correct behavior.
+
+══════════════════════════════════════════════════════════════════════════
+REGRESSION 1: CHAT VIDEO CARDS ARE BROKEN
+══════════════════════════════════════════════════════════════════════════
+
+BEFORE: When Professor OS recommended videos in chat, the cards showed:
+
+- Actual YouTube video thumbnails
+- Video title and instructor
+- Analysis button (purple)
+- Save button
+- Share button
+  These looked IDENTICAL to the video cards in the Technique Library and
+  Saved Videos pages.
+
+NOW: Chat video cards show:
+
+- Wrong thumbnail (channel logo instead of video thumbnail)
+- No Analysis button
+- Save button exists but DOES NOT WORK (see Regression 2)
+- Share button exists
+
+FIX:
+
+1. Run: git log –oneline -20
+1. Find which commit changed the chat video card component
+1. Look at the PREVIOUS working version of the chat video card rendering
+1. Compare what changed
+1. Restore the working version of the chat video cards
+
+The chat video cards MUST use the exact same component or rendering logic
+as the Technique Library video cards. If they used to share a component
+and someone created a separate one for chat, DELETE the separate one and
+go back to using the shared component.
+
+══════════════════════════════════════════════════════════════════════════
+REGRESSION 2: SAVE BUTTON IN CHAT DOES NOT SAVE TO LIBRARY
+══════════════════════════════════════════════════════════════════════════
+
+BEFORE: Clicking Save on a video card in chat saved the video to the
+user’s Saved Videos library.
+
+NOW: Clicking Save in chat does nothing. The video does not appear in
+the Saved Videos page.
+
+FIX:
+
+1. Check the Save button onClick handler in the chat video card
+1. Check if it’s calling the correct API endpoint
+1. Check server logs for any errors when Save is clicked in chat
+1. Check if the recent duplicate prevention code accidentally broke
+   the save functionality
+1. Test: Save a video from chat → confirm it appears in Saved Videos
+
+══════════════════════════════════════════════════════════════════════════
+HOW TO FIX PROPERLY
+══════════════════════════════════════════════════════════════════════════
+
+DO NOT write new code for chat video cards.
+
+1. Find the video card component used by Technique Library (this works)
+1. Find the video card component used by Saved Videos (this works)
+1. Find what chat is using (this is broken)
+1. Make chat use the SAME working component as Library/Saved
+1. If there are data format differences between chat and library,
+   normalize the data BEFORE passing to the shared component
+
+The golden rule: ONE video card component used EVERYWHERE.
+
+══════════════════════════════════════════════════════════════════════════
+TEST — ALL MUST PASS
+══════════════════════════════════════════════════════════════════════════
+
+□ Ask Professor OS “show me triangle chokes”
+□ Video cards show correct YouTube thumbnails (not channel logos)
+□ Video cards show Analysis button (purple)
+□ Click Analysis → modal opens with full analysis data
+□ Click Save → video appears in Saved Videos page
+□ Click Share → share dialog opens
+□ Technique Library video cards still work correctly
+□ Saved Videos page still works correctly
+□ No duplicate saves allowed (save same video twice = only one entry)
+□ Build passes with no errors
+
+Show me git log of what commits caused these regressions.

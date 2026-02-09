@@ -1,0 +1,69 @@
+TWO ISSUES WITH CHAT VIDEO CARDS — FIX BOTH
+
+⚠️ DO NOT touch anything except the chat video card rendering.
+
+══════════════════════════════════════════════════════════════════════════
+ISSUE 1: NO ANALYSIS BUTTON ON CHAT VIDEO CARDS
+══════════════════════════════════════════════════════════════════════════
+
+The video cards in Professor OS chat responses show Save and Share buttons
+but NO Analysis button.
+
+The Saved Videos page and Technique Library both show the Analysis button
+on their video cards. The chat cards need to match.
+
+Find the component that renders video cards inside chat messages and add
+the Analysis button (purple, same style as the library/saved pages).
+
+Compare these files:
+
+- Chat video card component (in chat-mobile.tsx or a sub-component)
+- Library/Saved video card component (in ios-library.tsx or ios-saved.tsx)
+
+The Analysis button should open the same analysis modal that the library
+and saved pages use.
+
+══════════════════════════════════════════════════════════════════════════
+ISSUE 2: WRONG THUMBNAIL IMAGE
+══════════════════════════════════════════════════════════════════════════
+
+The chat video cards are showing the YouTube channel logo/avatar instead
+of the actual video thumbnail.
+
+The correct thumbnail URL format is:
+https://img.youtube.com/vi/[youtubeId]/mqdefault.jpg
+
+Check how the chat video cards build the thumbnail URL. They need to use
+the video’s youtubeId (or youtube_id) field, NOT the channel image.
+
+Look at how the Library and Saved pages render thumbnails — they work
+correctly. Use the same approach in the chat cards.
+
+══════════════════════════════════════════════════════════════════════════
+REFERENCE: WHAT A CORRECT VIDEO CARD LOOKS LIKE
+══════════════════════════════════════════════════════════════════════════
+
+Every video card everywhere in the app should show:
+
+1. YouTube video thumbnail (from img.youtube.com/vi/[id]/mqdefault.jpg)
+1. Video duration overlay on thumbnail
+1. Video title
+1. Instructor name
+1. Analysis button (purple) — ONLY if video has analysis data
+1. Save button
+1. Share button
+
+The Library and Saved pages already render this correctly.
+The Chat page needs to match exactly.
+
+══════════════════════════════════════════════════════════════════════════
+TEST
+══════════════════════════════════════════════════════════════════════════
+
+□ Ask Professor OS “show me half guard passes”
+□ Video cards in chat show actual YouTube thumbnails (not channel logos)
+□ Video cards show Analysis button (purple)
+□ Click Analysis — modal opens with full analysis
+□ Save and Share buttons still work
+□ Compare chat cards to Library cards — should look identical
+□ Build passes with no errors

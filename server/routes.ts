@@ -9075,7 +9075,7 @@ Reply: WHITE, BLUE, PURPLE, BROWN, or BLACK
       .from(videoKnowledge)
       .where(
         and(
-          sql`${videoKnowledge.videoId} = ANY(${parsedIds}::int[])`,
+          inArray(videoKnowledge.videoId, parsedIds),
           isNotNull(videoKnowledge.techniqueName),
           sql`${videoKnowledge.techniqueName} != ''`,
           sql`(${videoKnowledge.keyConcepts} IS NOT NULL OR ${videoKnowledge.fullSummary} IS NOT NULL)`
