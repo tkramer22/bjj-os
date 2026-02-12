@@ -1,0 +1,194 @@
+URGENT: ADMIN DASHBOARD FROZEN + IMPLEMENT AUTO-RESTART
+
+The admin dashboard is frozen/unresponsive. Fix it now, then implement
+safeguards so this never requires manual intervention again.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 1: DIAGNOSE AND FIX NOW
+══════════════════════════════════════════════════════════════════════════
+
+1. Check if the server is running:
+- Check the Replit logs for errors
+- Check memory usage — is it maxed out?
+- Check for unhandled promise rejections or crash loops
+- Check if the database connection is alive
+1. If the server is hung but not crashed:
+- Kill and restart the process
+- Check what caused it to hang (memory leak? long-running query?
+  blocked event loop?)
+1. If it’s a database issue:
+- Check active connections: are they maxed out?
+- Check for long-running queries blocking the pool
+- Check Supabase dashboard for connection limits
+1. Get the dashboard loading again before anything else.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 2: ADD HEALTH CHECK ENDPOINT
+══════════════════════════════════════════════════════════════════════════
+
+Create GET /api/health that returns:
+
+```javascript
+app.get('/api/health', async (req, res) => {
+  try {
+    // Check database connection
+    const dbCheck = await db.execute(sql`SELECT 1`);
+    
+    // Check memory
+    const memUsage = process.memoryUsage();
+    const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    
+    // Check uptime
+    const uptimeMinutes = Math.round(process.uptime() / 60);
+    
+    res.json({
+      status: 'healthy',
+      database: 'connected',
+      memory_mb: memMB,
+      uptime_minutes: uptimeMinutes,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+```
+
+══════════════════════════════════════════════════════════════════════════
+STEP 3: AUTO-RESTART ON CRASH
+══════════════════════════════════════════════════════════════════════════
+
+Add global error handlers that prevent the server from hanging:
+
+```javascript
+// Catch unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL] Unhandled Rejection:', reason);
+  // Log the error but don't crash — let the server continue
+});
+
+// Catch uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('[FATAL] Uncaught Exception:', error);
+  // Give the server 5 seconds to finish current requests, then restart
+  setTimeout(() => {
+    process.exit(1); // Replit will auto-restart the process
+  }, 5000);
+});
+```
+
+══════════════════════════════════════════════════════════════════════════
+STEP 4: WATCHDOG — SELF-HEALING SERVER
+══════════════════════════════════════════════════════════════════════════
+
+Add an internal watchdog that monitors the server’s own health:
+
+```javascript
+// Self-healing watchdog — runs every 60 seconds
+setInterval(async () => {
+  try {
+    // Test database connection
+    await db.execute(sql`SELECT 1`);
+    
+    // Check memory — restart if over 450MB (Replit limit is ~512MB)
+    const memUsage = process.memoryUsage();
+    const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    
+    if (memMB > 450) {
+      console.error(`[WATCHDOG] Memory critical: ${memMB}MB. Restarting...`);
+      process.exit(1); // Replit auto-restarts
+    }
+    
+    console.log(`[WATCHDOG] Healthy — Memory: ${memMB}MB, Uptime: ${Math.round(process.uptime() / 60)}min`);
+    
+  } catch (error) {
+    console.error('[WATCHDOG] Health check failed:', error.message);
+    // If DB is unreachable for 3 consecutive checks, restart
+    watchdogFailCount = (watchdogFailCount || 0) + 1;
+    if (watchdogFailCount >= 3) {
+      console.error('[WATCHDOG] 3 consecutive failures. Restarting...');
+      process.exit(1);
+    }
+  }
+}, 60000); // Every 60 seconds
+
+let watchdogFailCount = 0;
+```
+
+══════════════════════════════════════════════════════════════════════════
+STEP 5: REQUEST TIMEOUT PROTECTION
+══════════════════════════════════════════════════════════════════════════
+
+Add middleware that kills requests that take too long (prevents hung
+requests from blocking the server):
+
+```javascript
+// Timeout middleware — kill requests after 30 seconds
+app.use((req, res, next) => {
+  req.setTimeout(30000, () => {
+    console.error(`[TIMEOUT] Request timed out: ${req.method} ${req.path}`);
+    if (!res.headersSent) {
+      res.status(408).json({ error: 'Request timed out' });
+    }
+  });
+  next();
+});
+```
+
+For AI chat requests (which legitimately take longer), set a higher
+timeout of 60 seconds on just that route.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 6: MEMORY LEAK PREVENTION
+══════════════════════════════════════════════════════════════════════════
+
+Check for common memory leaks:
+
+1. Video cache — is it growing unbounded? Add a max size and TTL
+1. Conversation history loading — are we loading ALL messages or just
+   the last 20? If loading all, that’s a memory bomb for active users
+1. Gemini/Claude response objects — are they being garbage collected?
+1. Event listeners — any listeners being added without removal?
+
+Show me the current video cache implementation and conversation
+history loading. These are the most likely leak sources.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 7: REPLIT AUTO-RESTART CONFIGURATION
+══════════════════════════════════════════════════════════════════════════
+
+Verify Replit is configured to auto-restart on crash:
+
+1. Check .replit file for restart behavior
+1. Replit should automatically restart the process when it exits
+1. If not configured, add:
+   [deployment]
+   run = [“npm”, “start”]
+   restartOnCrash = true
+
+══════════════════════════════════════════════════════════════════════════
+TEST
+══════════════════════════════════════════════════════════════════════════
+
+□ Admin dashboard loads and responds
+□ /api/health returns healthy status
+□ Server logs show [WATCHDOG] Healthy messages every 60 seconds
+□ Memory usage is reasonable (under 300MB)
+□ Chat still works after all changes
+□ No console errors
+□ Build passes
+
+══════════════════════════════════════════════════════════════════════════
+SHOW ME
+══════════════════════════════════════════════════════════════════════════
+
+1. What caused the freeze (error logs)
+1. Health check endpoint working
+1. Watchdog logs showing healthy status
+1. Current memory usage
+1. Request timeout middleware in place
+1. Replit restart configuration confirmed

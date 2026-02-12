@@ -29,9 +29,10 @@ if (isSupabasePooler) {
   postgresClient = postgres(databaseUrl, {
     max: 5,                         // Reduced from 10 to 5 for memory efficiency
     idle_timeout: 20,               // Close idle connections after 20s (faster cleanup)
-    connect_timeout: 10,            // Connection timeout
+    connect_timeout: 15,            // Connection timeout (15s to tolerate brief Supabase hiccups)
     prepare: false,                 // Supabase transaction mode doesn't support prepared statements
     max_lifetime: 60 * 30,          // Max 30 minutes per connection (prevent stale)
+    onnotice: () => {},             // Suppress notice messages
   });
   console.log('📊 [DB POOL] Configured with max=5 connections (memory optimized)');
   

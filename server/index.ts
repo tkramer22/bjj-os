@@ -87,6 +87,25 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
 
 // ═══════════════════════════════════════════════════════════════
+// GLOBAL ERROR HANDLERS - Prevent server from hanging on errors
+// ═══════════════════════════════════════════════════════════════
+process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+  console.error('[FATAL] Unhandled Rejection:', reason?.message || reason);
+  if (reason?.stack) {
+    console.error('[FATAL] Stack:', reason.stack.split('\n').slice(0, 3).join('\n'));
+  }
+});
+
+process.on('uncaughtException', (error: Error) => {
+  console.error('[FATAL] Uncaught Exception:', error.message);
+  console.error('[FATAL] Stack:', error.stack?.split('\n').slice(0, 5).join('\n'));
+  console.error('[FATAL] Server will restart in 5 seconds...');
+  setTimeout(() => {
+    process.exit(1);
+  }, 5000);
+});
+
+// ═══════════════════════════════════════════════════════════════
 // PORT CLEANUP - Safe check with no automatic killing
 // ═══════════════════════════════════════════════════════════════
 async function cleanupPort(port: number): Promise<boolean> {
@@ -404,6 +423,27 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// ═══════════════════════════════════════════════════════════════
+// REQUEST TIMEOUT PROTECTION - Kill hung requests
+// ═══════════════════════════════════════════════════════════════
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const isAIChat = req.path.includes('/chat') || req.path.includes('/ai') || req.path.includes('/professor');
+  const isAdmin = req.path.includes('/admin');
+  const isSSE = req.headers.accept === 'text/event-stream';
+  const timeoutMs = isSSE ? 120000 : isAIChat ? 90000 : isAdmin ? 60000 : 30000;
+
+  const timer = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error(`[TIMEOUT] Request timed out after ${timeoutMs / 1000}s: ${req.method} ${req.path}`);
+      res.status(408).json({ error: 'Request timed out' });
+    }
+  }, timeoutMs);
+
+  res.on('finish', () => clearTimeout(timer));
+  res.on('close', () => clearTimeout(timer));
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -515,6 +555,80 @@ function verifyEnvironmentVariables() {
     console.error('   Server will continue but database may be unavailable');
   }
   
+  // ═══════════════════════════════════════════════════════════════
+  // HEALTH CHECK ENDPOINT - Must be registered early (before routes)
+  // ═══════════════════════════════════════════════════════════════
+  app.get('/api/health', async (_req, res) => {
+    try {
+      const { db } = await import('./db');
+      const { sql } = await import('drizzle-orm');
+      const dbStart = Date.now();
+      await db.execute(sql`SELECT 1`);
+      const dbMs = Date.now() - dbStart;
+
+      const memUsage = process.memoryUsage();
+      const heapStats = v8.getHeapStatistics();
+      const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+      const rssMB = Math.round(memUsage.rss / 1024 / 1024);
+      const heapPct = ((memUsage.heapUsed / heapStats.heap_size_limit) * 100).toFixed(1);
+      const uptimeMinutes = Math.round(process.uptime() / 60);
+
+      res.json({
+        status: 'healthy',
+        database: 'connected',
+        database_latency_ms: dbMs,
+        memory_mb: memMB,
+        rss_mb: rssMB,
+        heap_percent: parseFloat(heapPct),
+        uptime_minutes: uptimeMinutes,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      res.status(503).json({
+        status: 'unhealthy',
+        database: 'disconnected',
+        error: error.message,
+        memory_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        uptime_minutes: Math.round(process.uptime() / 60),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // WATCHDOG - Self-healing server monitor (every 60 seconds)
+  // ═══════════════════════════════════════════════════════════════
+  let watchdogFailCount = 0;
+  const WATCHDOG_MAX_FAILURES = 5;
+
+  setInterval(async () => {
+    try {
+      const { db } = await import('./db');
+      const { sql } = await import('drizzle-orm');
+      await db.execute(sql`SELECT 1`);
+
+      const memUsage = process.memoryUsage();
+      const heapStats = v8.getHeapStatistics();
+      const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+      const heapPct = ((memUsage.heapUsed / heapStats.heap_size_limit) * 100).toFixed(1);
+
+      if (watchdogFailCount > 0) {
+        console.log(`[WATCHDOG] Database connection recovered after ${watchdogFailCount} failures`);
+      }
+      watchdogFailCount = 0;
+
+      console.log(`[WATCHDOG] Healthy | Memory: ${memMB}MB (${heapPct}%) | Uptime: ${Math.round(process.uptime() / 60)}min | DB: OK`);
+    } catch (error: any) {
+      watchdogFailCount++;
+      console.error(`[WATCHDOG] Health check FAILED (${watchdogFailCount}/${WATCHDOG_MAX_FAILURES}): ${error.message}`);
+
+      if (watchdogFailCount >= WATCHDOG_MAX_FAILURES) {
+        console.error(`[WATCHDOG] ${WATCHDOG_MAX_FAILURES} consecutive failures. Restarting server...`);
+        process.exit(1);
+      }
+    }
+  }, 60000);
+
   // ═══════════════════════════════════════════════════════════════
   // STRIPE INITIALIZATION
   // ═══════════════════════════════════════════════════════════════
