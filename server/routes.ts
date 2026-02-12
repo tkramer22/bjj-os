@@ -13778,20 +13778,55 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
   });
 
   // Quick Metrics for Mobile (Compact)
+  // In-memory cache for quick metrics (survives DB outages)
+  let quickMetricsCache: any = null;
+  let quickMetricsCacheTime = 0;
+  const QUICK_METRICS_CACHE_TTL = 60000; // 1 minute cache
+
   app.get('/api/admin/quick-metrics', checkAdminAuth, async (req, res) => {
     console.log('[QUICK-METRICS] Starting quick metrics fetch...');
     const startTime = Date.now();
+
+    // Return cached data if fresh enough
+    if (quickMetricsCache && (Date.now() - quickMetricsCacheTime) < QUICK_METRICS_CACHE_TTL) {
+      console.log('[QUICK-METRICS] Returning cached data (age:', Math.round((Date.now() - quickMetricsCacheTime) / 1000), 's)');
+      return res.json({ ...quickMetricsCache, _cached: true, _cacheAge: Math.round((Date.now() - quickMetricsCacheTime) / 1000) });
+    }
+
+    // Default/fallback metrics (used when DB is unavailable)
+    const defaultMetrics = {
+      curationRunning: false,
+      curationStatus: 'offline',
+      targetReached: false,
+      minutesSinceRun: 999,
+      totalVideos: 0,
+      videosToday: 0,
+      totalUsers: 0,
+      signedUpToday: 0,
+      activeSubscriptions: 0,
+      mrr: '0',
+      geminiAnalyzed: 0,
+      curationEfficiency: {
+        discovered: 0, analyzed: 0, accepted: 0, rejected: 0,
+        skipped: 0, acceptanceRate: 0, status: 'unknown'
+      }
+    };
+
+    // Wrap DB queries with a 10-second timeout
+    const queryWithTimeout = <T>(promise: Promise<T>, timeoutMs = 10000): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error('DB_QUERY_TIMEOUT')), timeoutMs)
+        )
+      ]);
+    };
     
     try {
       const today = new Date().toISOString().split('T')[0];
-      
-      // Helper to safely get rows from db.execute result (handles both array and {rows} formats)
       const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
       
-      // OPTIMIZED: Use a single combined query for core metrics to reduce DB connections
-      // This consolidates what was 11+ queries into 2-3 queries
-      const [coreMetrics, curationMetrics] = await Promise.all([
-        // Combined query for videos, users, and subscriptions
+      const [coreMetrics, curationMetrics] = await queryWithTimeout(Promise.all([
         db.execute(sql`
           SELECT 
             (SELECT COUNT(*) FROM ai_video_knowledge WHERE status = 'active') as total_videos,
@@ -13816,7 +13851,6 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
             (SELECT COALESCE(setting_value, 'true') FROM system_settings 
              WHERE setting_key = 'auto_curation_enabled' LIMIT 1) as auto_curation_enabled
         `),
-        // Curation run metrics
         db.execute(sql`
           SELECT 
             (SELECT run_date FROM curation_runs ORDER BY run_date DESC LIMIT 1) as last_run_date,
@@ -13829,24 +13863,21 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
             (SELECT COALESCE(SUM(videos_rejected), 0) FROM curation_runs 
              WHERE DATE(run_date) = ${today} AND status IN ('completed', 'running')) as rejected
         `)
-      ]);
+      ]), 10000);
       
       const coreRows = getRows(coreMetrics);
       const curationRows = getRows(curationMetrics);
-      
       const core = coreRows[0] || {};
       const curation = curationRows[0] || {};
       
       console.log('[QUICK-METRICS] Queries completed in', Date.now() - startTime, 'ms');
       
-      // Calculate curation metrics
       const analyzed = Number(curation.analyzed || 0);
       const accepted = Number(curation.accepted || 0);
       const rejected = Number(curation.rejected || 0);
       const discovered = analyzed + rejected;
       const acceptanceRate = discovered > 0 ? parseFloat(((accepted / discovered) * 100).toFixed(1)) : 0;
       
-      // Efficiency status
       let efficiencyStatus = 'unknown';
       if (analyzed > 0) {
         if (acceptanceRate < 30) efficiencyStatus = 'too_strict';
@@ -13856,7 +13887,6 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
         else efficiencyStatus = 'too_loose';
       }
       
-      // Curation status
       const videoCount = Number(core.total_videos || 0);
       const TARGET_VIDEO_COUNT = 10000;
       const targetReached = videoCount >= TARGET_VIDEO_COUNT;
@@ -13872,7 +13902,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       else if (targetReached) curationStatus = 'paused_target_reached';
       else if (autoCurationEnabled) curationStatus = 'scheduled';
       
-      res.json({
+      const result = {
         curationRunning: curationRanToday,
         curationStatus,
         targetReached,
@@ -13890,15 +13920,39 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
           accepted,
           rejected,
           skipped: 0,
-          acceptanceRate: parseFloat(acceptanceRate),
+          acceptanceRate: parseFloat(String(acceptanceRate)),
           status: efficiencyStatus
         }
-      });
+      };
+      
+      // Cache successful result
+      quickMetricsCache = result;
+      quickMetricsCacheTime = Date.now();
+      
+      res.json(result);
       
     } catch (error: any) {
       console.error('[QUICK-METRICS] ERROR:', error.message);
-      console.error('[QUICK-METRICS] Stack:', error.stack);
-      res.status(500).json({ error: 'Failed to fetch quick metrics', details: error.message });
+      
+      // If we have cached data, return it with a warning flag
+      if (quickMetricsCache) {
+        console.log('[QUICK-METRICS] Returning stale cached data due to error');
+        return res.json({ 
+          ...quickMetricsCache, 
+          _cached: true, 
+          _stale: true, 
+          _error: error.message,
+          _cacheAge: Math.round((Date.now() - quickMetricsCacheTime) / 1000)
+        });
+      }
+      
+      // No cache available - return defaults with error info
+      console.error('[QUICK-METRICS] No cache available, returning defaults');
+      res.json({ 
+        ...defaultMetrics, 
+        _dbDown: true, 
+        _error: error.message 
+      });
     }
   });
 

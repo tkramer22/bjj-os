@@ -558,20 +558,27 @@ function verifyEnvironmentVariables() {
   // ═══════════════════════════════════════════════════════════════
   // HEALTH CHECK ENDPOINT - Must be registered early (before routes)
   // ═══════════════════════════════════════════════════════════════
+  const dbQueryWithTimeout = <T>(promise: Promise<T>, timeoutMs = 5000): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error('DB_QUERY_TIMEOUT')), timeoutMs))
+    ]);
+  };
+
   app.get('/api/health', async (_req, res) => {
+    const memUsage = process.memoryUsage();
+    const heapStats = v8.getHeapStatistics();
+    const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    const rssMB = Math.round(memUsage.rss / 1024 / 1024);
+    const heapPct = ((memUsage.heapUsed / heapStats.heap_size_limit) * 100).toFixed(1);
+    const uptimeMinutes = Math.round(process.uptime() / 60);
+
     try {
       const { db } = await import('./db');
       const { sql } = await import('drizzle-orm');
       const dbStart = Date.now();
-      await db.execute(sql`SELECT 1`);
+      await dbQueryWithTimeout(db.execute(sql`SELECT 1`), 5000);
       const dbMs = Date.now() - dbStart;
-
-      const memUsage = process.memoryUsage();
-      const heapStats = v8.getHeapStatistics();
-      const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-      const rssMB = Math.round(memUsage.rss / 1024 / 1024);
-      const heapPct = ((memUsage.heapUsed / heapStats.heap_size_limit) * 100).toFixed(1);
-      const uptimeMinutes = Math.round(process.uptime() / 60);
 
       res.json({
         status: 'healthy',
@@ -588,8 +595,10 @@ function verifyEnvironmentVariables() {
         status: 'unhealthy',
         database: 'disconnected',
         error: error.message,
-        memory_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-        uptime_minutes: Math.round(process.uptime() / 60),
+        memory_mb: memMB,
+        rss_mb: rssMB,
+        heap_percent: parseFloat(heapPct),
+        uptime_minutes: uptimeMinutes,
         timestamp: new Date().toISOString()
       });
     }
@@ -605,7 +614,7 @@ function verifyEnvironmentVariables() {
     try {
       const { db } = await import('./db');
       const { sql } = await import('drizzle-orm');
-      await db.execute(sql`SELECT 1`);
+      await dbQueryWithTimeout(db.execute(sql`SELECT 1`), 5000);
 
       const memUsage = process.memoryUsage();
       const heapStats = v8.getHeapStatistics();

@@ -346,45 +346,43 @@ function GeminiAnalysisCard({ metrics, onRefresh }: GeminiAnalysisCardProps) {
 export default function AdminDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  const { data: metrics, isLoading, isError, error, refetch, fetchStatus } = useQuery<QuickMetrics>({
+  const { data: metrics, isLoading, isError, error, refetch, fetchStatus } = useQuery<QuickMetrics & { _dbDown?: boolean; _cached?: boolean; _stale?: boolean; _error?: string }>({
     queryKey: ['/api/admin/quick-metrics'],
-    queryFn: async () => {
-      console.log('[DASHBOARD] Starting fetch for /api/admin/quick-metrics...');
+    queryFn: async ({ signal }) => {
       const token = getAdminToken();
-      console.log('[DASHBOARD] Token present:', token ? 'YES' : 'NO');
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
       
-      const res = await fetch('/api/admin/quick-metrics', {
-        credentials: 'include',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
-      });
-      
-      console.log('[DASHBOARD] Response status:', res.status);
-      
-      if (res.status === 401) {
-        console.log('[DASHBOARD] Got 401 - clearing auth and redirecting...');
-        clearAdminAuth();
-        throw new Error('Session expired - redirecting to login');
+      try {
+        const res = await fetch('/api/admin/quick-metrics', {
+          credentials: 'include',
+          signal: controller.signal,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+          },
+        });
+
+        if (res.status === 401) {
+          clearAdminAuth();
+          throw new Error('Session expired - redirecting to login');
+        }
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || `Failed to fetch metrics (${res.status})`);
+        }
+
+        return await res.json();
+      } finally {
+        clearTimeout(timeout);
       }
-      
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        console.log('[DASHBOARD] Non-OK response:', errorData);
-        throw new Error(errorData.error || `Failed to fetch metrics (${res.status})`);
-      }
-      
-      const data = await res.json();
-      console.log('[DASHBOARD] Metrics received successfully:', Object.keys(data));
-      return data;
     },
     refetchInterval: 30000,
     retry: (failureCount, error) => {
-      console.log('[DASHBOARD] Retry called, failureCount:', failureCount, 'error:', error?.message);
       if (error?.message?.includes('Session expired')) {
-        console.log('[DASHBOARD] Session expired - redirecting to /admin/login');
         window.location.href = '/admin/login';
         return false;
       }
@@ -392,8 +390,6 @@ export default function AdminDashboard() {
     },
     retryDelay: 1000
   });
-
-  console.log('[DASHBOARD] Render state:', { isLoading, isError, fetchStatus, hasMetrics: !!metrics, errorMsg: error?.message });
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -404,7 +400,7 @@ export default function AdminDashboard() {
     }
   };
 
-  if (isError) {
+  if (isError && !metrics) {
     return (
       <AdminLayout>
         <div className="text-center py-12 space-y-4">
@@ -429,9 +425,29 @@ export default function AdminDashboard() {
     );
   }
 
+  const isDbDegraded = metrics._dbDown || metrics._stale || metrics._cached;
+
   return (
     <AdminLayout>
       <div className="space-y-4 pb-24">
+        {isDbDegraded && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 flex items-center gap-3" data-testid="banner-db-degraded">
+            <span className="text-yellow-500 font-bold text-sm">DB</span>
+            <p className="text-sm text-yellow-600 dark:text-yellow-400">
+              {metrics._dbDown 
+                ? 'Database is currently unavailable. Showing default values.' 
+                : metrics._stale 
+                  ? 'Database temporarily slow. Showing cached data.' 
+                  : 'Showing cached data.'}
+              {metrics._error && <span className="ml-1 text-xs text-muted-foreground">({metrics._error})</span>}
+            </p>
+            <Button variant="outline" size="sm" onClick={handleRefresh} className="ml-auto" data-testid="button-retry-db">
+              <RefreshCw className={`w-3 h-3 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Retry
+            </Button>
+          </div>
+        )}
+
         {/* Header - Mobile Optimized */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

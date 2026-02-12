@@ -69,169 +69,149 @@ router.post('/test-email', requireAdmin, async (req, res) => {
 });
 
 // GET: Dashboard metrics and data
+// In-memory cache for dashboard data (survives DB outages)
+let dashboardCache: any = null;
+let dashboardCacheTime = 0;
+const DASHBOARD_CACHE_TTL = 60000; // 1 minute
+
 router.get('/dashboard', requireAdmin, async (req, res) => {
+  // Return cached data if fresh enough
+  if (dashboardCache && (Date.now() - dashboardCacheTime) < DASHBOARD_CACHE_TTL) {
+    console.log('[ADMIN DASHBOARD] Returning cached data (age:', Math.round((Date.now() - dashboardCacheTime) / 1000), 's)');
+    return res.json({ ...dashboardCache, _cached: true });
+  }
+
+  const defaultDashboard = {
+    today: { newSignups: 0, revenue: 0, trialConverted: 0, aiUsage: 0, trialsEndingCount: 0 },
+    allTime: { totalUsers: 0, mrr: '0.00', churnRate: 0, lifetimeRevenue: '0.00', activePaidUsers: 0, activeTrials: 0 },
+    live: { activeNow: 0 },
+    alerts: { failedPaymentsCount: 0, trialsEndingCount: 0, systemErrorsCount: 0 },
+    failedPayments: [], trialsEndingToday: [], recentActivity: [], topReferralCodes: [], recentSignups: []
+  };
+
+  const queryWithTimeout = <T>(promise: Promise<T>, timeoutMs = 10000): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error('DB_QUERY_TIMEOUT')), timeoutMs))
+    ]);
+  };
+
   try {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const getRows = (result: any): any[] => Array.isArray(result) ? result : (result?.rows || []);
     
-    // TODAY'S METRICS
-    const todayMetrics = await db.execute(sql`
-      SELECT
-        COUNT(*) FILTER (WHERE created_at >= ${today}) as new_signups_today,
-        COUNT(*) FILTER (WHERE subscription_type != 'free_trial' AND created_at >= ${today}) as new_paid_today,
-        COUNT(*) FILTER (WHERE subscription_status = 'trialing' AND trial_end_date::date = ${now.toISOString().split('T')[0]}) as trials_ending_today
-      FROM bjj_users
-    `);
-    
-    // AI usage today (from activity log)
-    const aiUsageToday = await db.execute(sql`
-      SELECT COUNT(*) as count
-      FROM activity_log
-      WHERE event_type = 'ai_conversation' AND created_at >= ${today}
-    `);
-    
-    // ALL-TIME METRICS
-    const allTimeMetrics = await db.execute(sql`
-      SELECT
-        COUNT(*) as total_users,
-        COUNT(*) FILTER (WHERE subscription_type != 'free_trial' AND subscription_status = 'active') as active_paid_users,
-        COUNT(*) FILTER (WHERE subscription_type = 'free_trial') as active_trials
-      FROM bjj_users
-    `);
-    
-    // postgres-js returns rows directly as array, not { rows: [...] }
-    const allTimeRows = Array.isArray(allTimeMetrics) ? allTimeMetrics : (allTimeMetrics.rows || []);
+    const [todayMetrics, aiUsageToday, allTimeMetrics, churnData, activeNow] = await queryWithTimeout(Promise.all([
+      db.execute(sql`
+        SELECT
+          COUNT(*) FILTER (WHERE created_at >= ${today}) as new_signups_today,
+          COUNT(*) FILTER (WHERE subscription_type != 'free_trial' AND created_at >= ${today}) as new_paid_today,
+          COUNT(*) FILTER (WHERE subscription_status = 'trialing' AND trial_end_date::date = ${now.toISOString().split('T')[0]}) as trials_ending_today
+        FROM bjj_users
+      `),
+      db.execute(sql`
+        SELECT COUNT(*) as count FROM activity_log
+        WHERE event_type = 'ai_conversation' AND created_at >= ${today}
+      `),
+      db.execute(sql`
+        SELECT
+          COUNT(*) as total_users,
+          COUNT(*) FILTER (WHERE subscription_type != 'free_trial' AND subscription_status = 'active') as active_paid_users,
+          COUNT(*) FILTER (WHERE subscription_type = 'free_trial') as active_trials
+        FROM bjj_users
+      `),
+      db.execute(sql`
+        SELECT
+          COUNT(*) FILTER (WHERE subscription_status = 'canceled' AND updated_at >= NOW() - INTERVAL '30 days') as churned,
+          COUNT(*) FILTER (WHERE created_at <= NOW() - INTERVAL '30 days' AND subscription_type != 'free_trial') as base
+        FROM bjj_users
+      `),
+      db.execute(sql`
+        SELECT COUNT(DISTINCT user_id) as count FROM activity_log
+        WHERE created_at >= NOW() - INTERVAL '30 minutes' AND user_id IS NOT NULL
+      `)
+    ]), 10000);
+
+    let failedPaymentRows: any[] = [];
+    let trialsEndingRows: any[] = [];
+    let recentActivity: any[] = [];
+    let topReferralRows: any[] = [];
+    let recentSignups: any[] = [];
+    let systemErrorRows: any[] = [];
+
+    try {
+      const [fp, te, ra, tr, rs, se] = await queryWithTimeout(Promise.all([
+        db.execute(sql`
+          SELECT u.id, u.email, u.username, al.description, al.metadata, al.created_at
+          FROM activity_log al JOIN bjj_users u ON al.user_id = u.id
+          WHERE al.event_type = 'payment_failed' AND al.created_at >= NOW() - INTERVAL '7 days'
+            AND u.subscription_status = 'past_due'
+          ORDER BY al.created_at DESC LIMIT 10
+        `),
+        db.execute(sql`
+          SELECT id, email, username, trial_end_date, created_at,
+            (SELECT COUNT(*) FROM activity_log WHERE user_id = bjj_users.id AND event_type = 'ai_conversation') as ai_chat_count,
+            updated_at as last_active
+          FROM bjj_users WHERE subscription_status = 'trialing'
+            AND trial_end_date::date = ${now.toISOString().split('T')[0]}
+          ORDER BY trial_end_date ASC
+        `),
+        db.select().from(activityLog).orderBy(desc(activityLog.createdAt)).limit(20),
+        db.execute(sql`
+          SELECT rc.code, rc.commission_rate as commission_percent, rc.total_signups as signup_count,
+            rc.active_subscribers as paid_count, COALESCE(rc.total_commissions_paid, 0) as revenue
+          FROM referral_codes rc WHERE rc.is_active = true ORDER BY rc.total_signups DESC LIMIT 5
+        `),
+        db.select({
+          id: bjjUsers.id, email: bjjUsers.email, username: bjjUsers.username,
+          subscriptionType: bjjUsers.subscriptionType, subscriptionStatus: bjjUsers.subscriptionStatus,
+          referralCode: bjjUsers.referralCode, createdAt: bjjUsers.createdAt,
+        }).from(bjjUsers).orderBy(desc(bjjUsers.createdAt)).limit(10),
+        db.execute(sql`
+          SELECT COUNT(*) as count FROM system_errors
+          WHERE resolved = false AND created_at >= NOW() - INTERVAL '24 hours'
+            AND severity IN ('high', 'critical')
+        `)
+      ]), 10000);
+      failedPaymentRows = getRows(fp);
+      trialsEndingRows = getRows(te);
+      recentActivity = ra;
+      topReferralRows = getRows(tr);
+      recentSignups = rs;
+      systemErrorRows = getRows(se);
+    } catch (innerError: any) {
+      console.warn('[ADMIN DASHBOARD] Secondary queries timed out, returning partial data:', innerError.message);
+    }
+
+    const allTimeRows = getRows(allTimeMetrics);
     const totalUsers = Number(allTimeRows[0]?.total_users || 0);
     const activePaidUsers = Number(allTimeRows[0]?.active_paid_users || 0);
     const activeTrials = Number(allTimeRows[0]?.active_trials || 0);
-    
-    // MRR (Monthly Recurring Revenue) - assuming $19.99/month
     const mrr = activePaidUsers * 19.99;
     
-    // Churn rate (cancelled in last 30 days / active 30 days ago)
-    const churnData = await db.execute(sql`
-      SELECT
-        COUNT(*) FILTER (WHERE subscription_status = 'canceled' AND updated_at >= NOW() - INTERVAL '30 days') as churned,
-        COUNT(*) FILTER (WHERE created_at <= NOW() - INTERVAL '30 days' AND subscription_type != 'free_trial') as base
-      FROM bjj_users
-    `);
-    const churnRows = Array.isArray(churnData) ? churnData : (churnData.rows || []);
+    const churnRows = getRows(churnData);
     const churnBase = Number(churnRows[0]?.base || 0);
     const churned = Number(churnRows[0]?.churned || 0);
     const churnRate = churnBase > 0 ? ((churned / churnBase) * 100).toFixed(1) : 0;
     
-    // CURRENT ACTIVE USERS (last 30 min)
-    const activeNow = await db.execute(sql`
-      SELECT COUNT(DISTINCT user_id) as count
-      FROM activity_log
-      WHERE created_at >= NOW() - INTERVAL '30 minutes' AND user_id IS NOT NULL
-    `);
+    const todayRows = getRows(todayMetrics);
+    const aiUsageRows = getRows(aiUsageToday);
+    const activeNowRows = getRows(activeNow);
     
-    // FAILED PAYMENTS
-    const failedPayments = await db.execute(sql`
-      SELECT 
-        u.id,
-        u.email,
-        u.username,
-        al.description,
-        al.metadata,
-        al.created_at
-      FROM activity_log al
-      JOIN bjj_users u ON al.user_id = u.id
-      WHERE al.event_type = 'payment_failed'
-        AND al.created_at >= NOW() - INTERVAL '7 days'
-        AND u.subscription_status = 'past_due'
-      ORDER BY al.created_at DESC
-      LIMIT 10
-    `);
-    
-    // TRIALS ENDING TODAY
-    const trialsEndingToday = await db.execute(sql`
-      SELECT
-        id,
-        email,
-        username,
-        trial_end_date,
-        created_at,
-        (SELECT COUNT(*) FROM activity_log WHERE user_id = bjj_users.id AND event_type = 'ai_conversation') as ai_chat_count,
-        updated_at as last_active
-      FROM bjj_users
-      WHERE subscription_status = 'trialing'
-        AND trial_end_date::date = ${now.toISOString().split('T')[0]}
-      ORDER BY trial_end_date ASC
-    `);
-    
-    // RECENT ACTIVITY (last 20 events)
-    const recentActivity = await db.select()
-      .from(activityLog)
-      .orderBy(desc(activityLog.createdAt))
-      .limit(20);
-    
-    // TOP REFERRAL CODES
-    const topReferralCodes = await db.execute(sql`
-      SELECT
-        rc.code,
-        rc.commission_rate as commission_percent,
-        rc.total_signups as signup_count,
-        rc.active_subscribers as paid_count,
-        COALESCE(rc.total_commissions_paid, 0) as revenue
-      FROM referral_codes rc
-      WHERE rc.is_active = true
-      ORDER BY rc.total_signups DESC
-      LIMIT 5
-    `);
-    
-    // RECENT SIGNUPS (last 10)
-    const recentSignups = await db.select({
-      id: bjjUsers.id,
-      email: bjjUsers.email,
-      username: bjjUsers.username,
-      subscriptionType: bjjUsers.subscriptionType,
-      subscriptionStatus: bjjUsers.subscriptionStatus,
-      referralCode: bjjUsers.referralCode,
-      createdAt: bjjUsers.createdAt,
-    })
-      .from(bjjUsers)
-      .orderBy(desc(bjjUsers.createdAt))
-      .limit(10);
-    
-    // SYSTEM ERRORS (unresolved)
-    const systemErrorsCount = await db.execute(sql`
-      SELECT COUNT(*) as count
-      FROM system_errors
-      WHERE resolved = false
-        AND created_at >= NOW() - INTERVAL '24 hours'
-        AND severity IN ('high', 'critical')
-    `);
-    
-    // postgres-js returns rows directly as array, not { rows: [...] }
-    const todayRows = Array.isArray(todayMetrics) ? todayMetrics : (todayMetrics.rows || []);
-    const aiUsageRows = Array.isArray(aiUsageToday) ? aiUsageToday : (aiUsageToday.rows || []);
-    const activeNowRows = Array.isArray(activeNow) ? activeNow : (activeNow.rows || []);
-    const failedPaymentRows = Array.isArray(failedPayments) ? failedPayments : (failedPayments.rows || []);
-    const trialsEndingRows = Array.isArray(trialsEndingToday) ? trialsEndingToday : (trialsEndingToday.rows || []);
-    const systemErrorRows = Array.isArray(systemErrorsCount) ? systemErrorsCount : (systemErrorsCount.rows || []);
-    const topReferralRows = Array.isArray(topReferralCodes) ? topReferralCodes : (topReferralCodes.rows || []);
-    
-    res.json({
+    const result = {
       today: {
         newSignups: parseInt(String(todayRows[0]?.new_signups_today || '0')),
-        revenue: 0, // TODO: Calculate from actual payments
+        revenue: 0,
         trialConverted: parseInt(String(todayRows[0]?.new_paid_today || '0')),
         aiUsage: parseInt(String(aiUsageRows[0]?.count || '0')),
         trialsEndingCount: parseInt(String(todayRows[0]?.trials_ending_today || '0'))
       },
       allTime: {
-        totalUsers,
-        mrr: mrr.toFixed(2),
+        totalUsers, mrr: mrr.toFixed(2),
         churnRate: parseFloat(churnRate.toString()),
-        lifetimeRevenue: '0.00', // TODO: Calculate from actual payments
-        activePaidUsers,
-        activeTrials
+        lifetimeRevenue: '0.00', activePaidUsers, activeTrials
       },
-      live: {
-        activeNow: parseInt(String(activeNowRows[0]?.count || '0'))
-      },
+      live: { activeNow: parseInt(String(activeNowRows[0]?.count || '0')) },
       alerts: {
         failedPaymentsCount: failedPaymentRows.length,
         trialsEndingCount: trialsEndingRows.length,
@@ -242,15 +222,21 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
       recentActivity,
       topReferralCodes: topReferralRows,
       recentSignups
-    });
+    };
+
+    dashboardCache = result;
+    dashboardCacheTime = Date.now();
+    res.json(result);
     
   } catch (error: any) {
-    console.error('[ADMIN DASHBOARD] Dashboard error:', error);
-    await logSystemError('admin_dashboard', error.message, {
-      endpoint: '/api/admin/dashboard',
-      stack: error.stack
-    }, 'medium');
-    res.status(500).json({ error: 'Failed to load dashboard' });
+    console.error('[ADMIN DASHBOARD] Dashboard error:', error.message);
+    
+    if (dashboardCache) {
+      console.log('[ADMIN DASHBOARD] Returning stale cached data due to error');
+      return res.json({ ...dashboardCache, _cached: true, _stale: true, _error: error.message });
+    }
+    
+    res.json({ ...defaultDashboard, _dbDown: true, _error: error.message });
   }
 });
 
