@@ -3,7 +3,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
-import { Search, Play, BookmarkCheck, Bookmark, Loader2, ChevronDown, RefreshCw, Brain, Share2 } from "lucide-react";
+import { Search, Play, BookmarkCheck, Bookmark, Loader2, ChevronDown, RefreshCw, Brain, Share2, ChevronLeft, ChevronRight, Layers } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { shareVideo } from "@/lib/share";
 import { useToast } from "@/hooks/use-toast";
@@ -11,7 +11,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { decodeHTML } from "@/lib/htmlDecode";
 import { reviewManager } from "@/services/reviewManager";
 
-console.log('✅ iOS LIBRARY loaded');
+console.log('iOS LIBRARY loaded');
 
 interface VideoApiResponse {
   id: number;
@@ -37,7 +37,23 @@ interface Video {
   hasAnalysis?: boolean;
 }
 
+interface TaxonomyNode {
+  id: number;
+  name: string;
+  slug: string;
+  parentId: number | null;
+  level: number;
+  displayOrder: number;
+  description: string | null;
+  videoCount: number;
+}
+
+type ViewMode = 'browse' | 'categories' | 'children' | 'taxonomy-videos';
+
 export default function IOSLibraryPage() {
+  const [viewMode, setViewMode] = useState<ViewMode>('browse');
+  const [selectedCategory, setSelectedCategory] = useState<TaxonomyNode | null>(null);
+  const [selectedChild, setSelectedChild] = useState<TaxonomyNode | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTechnique, setSelectedTechnique] = useState<string>("All");
   const [selectedProfessor, setSelectedProfessor] = useState<string>("All");
@@ -53,14 +69,30 @@ export default function IOSLibraryPage() {
     queryKey: ["/api/auth/me"],
   });
 
-  // Fetch techniques list from API (includes "Recently Added" as first option)
-  const { data: techniquesData } = useQuery<{ techniques: { name: string; count: number }[] }>({
-    queryKey: ["/api/ai/techniques"],
+  const { data: categoriesData } = useQuery<{ categories: TaxonomyNode[] }>({
+    queryKey: ['/api/taxonomy/categories'],
+  });
+  const hasTaxonomy = (categoriesData?.categories?.length || 0) > 0;
+
+  const { data: childrenData, isLoading: isChildrenLoading } = useQuery<{ parent: TaxonomyNode; children: TaxonomyNode[] }>({
+    queryKey: [`/api/taxonomy/children/${selectedCategory?.id}`],
+    enabled: !!selectedCategory?.id && viewMode === 'children',
   });
 
-  // Fetch videos - when "Recently Added" is selected, pass it to API for server-side filtering
+  const taxonomyIdForVideos = viewMode === 'taxonomy-videos' ? (selectedChild?.id || selectedCategory?.id) : null;
+  const { data: taxonomyVideosData, isLoading: isTaxonomyVideosLoading } = useQuery<{ videos: any[]; count: number }>({
+    queryKey: [`/api/taxonomy/videos/${taxonomyIdForVideos}?includeChildren=true`],
+    enabled: !!taxonomyIdForVideos,
+  });
+
+  const { data: techniquesData } = useQuery<{ techniques: { name: string; count: number }[] }>({
+    queryKey: ["/api/ai/techniques"],
+    enabled: viewMode === 'browse',
+  });
+
   const { data: videosData, isLoading } = useQuery<{ count: number; videos: VideoApiResponse[] }>({
     queryKey: ["/api/ai/videos", selectedTechnique === "Recently Added" ? "Recently Added" : null],
+    enabled: viewMode === 'browse',
     queryFn: async () => {
       const url = selectedTechnique === "Recently Added" 
         ? "/api/ai/videos?technique=Recently Added"
@@ -71,17 +103,16 @@ export default function IOSLibraryPage() {
     },
   });
 
-  // Pull-to-refresh handler
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     triggerHaptic('medium');
     await queryClient.invalidateQueries({ queryKey: ["/api/ai/videos"] });
     await queryClient.invalidateQueries({ queryKey: ["/api/ai/techniques"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/taxonomy/categories"] });
     await queryClient.invalidateQueries({ queryKey: [`/api/ai/saved-videos/${user?.id}`] });
     setTimeout(() => setIsRefreshing(false), 500);
   }, [queryClient, user?.id]);
 
-  // Transform API response to component format
   const videos: Video[] = (videosData?.videos || []).map(v => ({
     id: v.id,
     title: v.title,
@@ -101,7 +132,6 @@ export default function IOSLibraryPage() {
 
   const savedVideoIds = savedVideosData?.videos?.map(v => String(v.id)) || [];
 
-  // Save/unsave video mutations
   const saveVideoMutation = useMutation({
     mutationFn: async ({ videoId }: { videoId: number }) => {
       return apiRequest('POST', '/api/ai/saved-videos', { userId: user?.id, videoId });
@@ -110,7 +140,6 @@ export default function IOSLibraryPage() {
       queryClient.invalidateQueries({ queryKey: [`/api/ai/saved-videos/${user?.id}`] });
       toast({ title: "Saved!", description: "Video added to your library" });
       triggerHaptic('success');
-      // Track video save for review prompt
       reviewManager.trackVideoSaved().catch(console.error);
     },
     onError: () => {
@@ -135,16 +164,11 @@ export default function IOSLibraryPage() {
   });
 
   const handleToggleSave = (videoId: number) => {
-    // Prevent double-clicks while mutation is pending
-    if (saveVideoMutation.isPending || unsaveVideoMutation.isPending) {
-      return;
-    }
-    
+    if (saveVideoMutation.isPending || unsaveVideoMutation.isPending) return;
     if (!user?.id) {
       toast({ title: "Sign in required", description: "Please sign in to save videos", variant: "destructive" });
       return;
     }
-    
     if (isVideoSaved(videoId)) {
       unsaveVideoMutation.mutate({ videoId });
     } else {
@@ -152,35 +176,22 @@ export default function IOSLibraryPage() {
     }
   };
 
-  // CASCADING FILTERS: Filter videos by one selection to compute the other dropdown's options
-  
-  // Videos filtered by current professor selection (for technique dropdown)
   const videosFilteredByProfessor = useMemo(() => {
     if (selectedProfessor === "All") return videos;
     return videos.filter(v => v.instructor === selectedProfessor);
   }, [videos, selectedProfessor]);
 
-  // Videos filtered by current technique selection (for professor dropdown)
-  // "Recently Added" videos are already filtered by API, just use them directly
   const videosFilteredByTechnique = useMemo(() => {
     if (selectedTechnique === "All") return videos;
-    if (selectedTechnique === "Recently Added") return videos; // API already filtered
+    if (selectedTechnique === "Recently Added") return videos;
     return videos.filter(v => (v.technique || 'Other') === selectedTechnique);
   }, [videos, selectedTechnique]);
 
-  // Build techniques dropdown - uses API data with "Recently Added" first
-  // When a professor is selected, we still compute from filtered videos for dynamic counts
   const techniquesWithCounts = useMemo(() => {
-    // If we have API techniques and no professor filter, use API data (includes "Recently Added" first)
     if (techniquesData?.techniques && selectedProfessor === "All") {
       const allCount = videos.length;
-      return [
-        { name: 'All', count: allCount },
-        ...techniquesData.techniques // Already has "Recently Added" first from API
-      ];
+      return [{ name: 'All', count: allCount }, ...techniquesData.techniques];
     }
-    
-    // Fallback to computing from filtered videos when professor is selected
     const sourceVideos = videosFilteredByProfessor;
     const counts: Record<string, number> = {};
     sourceVideos.forEach(v => {
@@ -188,8 +199,6 @@ export default function IOSLibraryPage() {
       counts[tech] = (counts[tech] || 0) + 1;
     });
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    
-    // Always add "Recently Added" as first option after "All"
     return [
       { name: 'All', count: sourceVideos.length },
       { name: 'Recently Added', count: 100 },
@@ -197,7 +206,6 @@ export default function IOSLibraryPage() {
     ];
   }, [videosFilteredByProfessor, techniquesData, selectedProfessor, videos.length]);
 
-  // Build professors dropdown - shows only professors who teach selected technique
   const professorsWithCounts = useMemo(() => {
     const sourceVideos = videosFilteredByTechnique;
     const counts: Record<string, number> = {};
@@ -206,7 +214,6 @@ export default function IOSLibraryPage() {
       counts[prof] = (counts[prof] || 0) + 1;
     });
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    // "All" shows unique professor count, not video count
     const uniqueProfessorCount = Object.keys(counts).length;
     return [{ name: 'All', count: uniqueProfessorCount }, ...sorted.map(([name, count]) => ({ name, count }))];
   }, [videosFilteredByTechnique]);
@@ -216,25 +223,19 @@ export default function IOSLibraryPage() {
       const matchesSearch = !searchQuery || 
         video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         video.instructor.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      // "Recently Added" is handled server-side, so skip client-side technique filtering
       const matchesTechnique = selectedTechnique === "All" ||
-        selectedTechnique === "Recently Added" || // API already filtered these
+        selectedTechnique === "Recently Added" ||
         (video.technique || 'Other') === selectedTechnique;
-      
       const matchesProfessor = selectedProfessor === "All" ||
         video.instructor === selectedProfessor;
-      
       return matchesSearch && matchesTechnique && matchesProfessor;
     }) || [];
   }, [videos, searchQuery, selectedTechnique, selectedProfessor]);
 
-  // Reset visible count when filters change
   useEffect(() => {
     setVisibleCount(50);
   }, [searchQuery, selectedTechnique, selectedProfessor]);
 
-  // Paginated videos to render (for performance)
   const displayedVideos = useMemo(() => {
     return filteredVideos.slice(0, visibleCount);
   }, [filteredVideos, visibleCount]);
@@ -255,6 +256,209 @@ export default function IOSLibraryPage() {
     return savedVideoIds.includes(String(videoId));
   };
 
+  const navigateToCategory = (cat: TaxonomyNode) => {
+    triggerHaptic('light');
+    setSelectedCategory(cat);
+    setSelectedChild(null);
+    setViewMode('children');
+  };
+
+  const navigateToChild = (child: TaxonomyNode) => {
+    triggerHaptic('light');
+    setSelectedChild(child);
+    setViewMode('taxonomy-videos');
+  };
+
+  const navigateBack = () => {
+    triggerHaptic('light');
+    if (viewMode === 'taxonomy-videos' && selectedChild) {
+      setSelectedChild(null);
+      setViewMode('children');
+    } else if (viewMode === 'children' || viewMode === 'taxonomy-videos') {
+      setSelectedCategory(null);
+      setSelectedChild(null);
+      setViewMode('categories');
+    } else if (viewMode === 'categories') {
+      setViewMode('browse');
+    }
+  };
+
+  const headerTitle = viewMode === 'browse' ? 'Technique Library'
+    : viewMode === 'categories' ? 'Browse by Category'
+    : viewMode === 'children' ? selectedCategory?.name || 'Category'
+    : selectedChild?.name || selectedCategory?.name || 'Videos';
+
+  const taxonomyVideosList: Video[] = (taxonomyVideosData?.videos || []).map((v: any) => ({
+    id: v.id,
+    title: v.title || v.techniqueName,
+    instructor: v.instructorName || 'Unknown Instructor',
+    youtubeId: v.videoId,
+    thumbnail: v.thumbnailUrl || (v.videoId ? `https://img.youtube.com/vi/${v.videoId}/mqdefault.jpg` : undefined),
+    duration: v.duration,
+    technique: v.techniqueType,
+    position: v.positionCategory,
+    hasAnalysis: false,
+  }));
+
+  const renderVideoItem = (video: Video) => (
+    <button
+      key={video.id}
+      onClick={() => handleVideoPress(video)}
+      data-testid={`video-card-${video.id}`}
+      style={{
+        background: '#1A1A1D',
+        border: '1px solid #2A2A2E',
+        borderRadius: '12px',
+        padding: '12px',
+        display: 'flex',
+        gap: '12px',
+        cursor: 'pointer',
+        textAlign: 'left',
+        width: '100%',
+      }}
+    >
+      <div style={{
+        width: '120px',
+        height: '68px',
+        borderRadius: '8px',
+        background: '#2A2A2E',
+        flexShrink: 0,
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        {video.thumbnail || video.youtubeId ? (
+          <img
+            src={video.thumbnail || `https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`}
+            alt={video.title}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : null}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(0,0,0,0.3)',
+        }}>
+          <Play size={24} color="#FFFFFF" fill="#FFFFFF" />
+        </div>
+        {video.duration && (
+          <div style={{
+            position: 'absolute',
+            bottom: '4px',
+            right: '4px',
+            background: 'rgba(0,0,0,0.8)',
+            padding: '2px 6px',
+            borderRadius: '4px',
+            fontSize: '11px',
+            color: '#FFFFFF',
+          }}>
+            {video.duration}
+          </div>
+        )}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: '14px',
+          fontWeight: 600,
+          color: '#FFFFFF',
+          lineHeight: 1.3,
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}>
+          {decodeHTML(video.title)}
+        </div>
+        <div style={{ fontSize: '13px', color: '#8B5CF6', marginTop: '4px' }}>
+          {video.instructor}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+          {video.hasAnalysis && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerHaptic('light');
+                setAnalysisVideoId(video.id);
+              }}
+              data-testid={`button-view-analysis-${video.id}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '11px',
+                color: '#8B5CF6',
+                background: 'rgba(139, 92, 246, 0.15)',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <Brain size={12} />
+              Analysis
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleSave(video.id);
+            }}
+            disabled={saveVideoMutation.isPending || unsaveVideoMutation.isPending}
+            data-testid={`button-save-video-${video.id}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '11px',
+              color: isVideoSaved(video.id) ? '#22C55E' : '#71717A',
+              background: isVideoSaved(video.id) ? 'rgba(34, 197, 94, 0.15)' : 'rgba(39, 39, 42, 0.5)',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              border: 'none',
+              cursor: (saveVideoMutation.isPending || unsaveVideoMutation.isPending) ? 'not-allowed' : 'pointer',
+              opacity: (saveVideoMutation.isPending || unsaveVideoMutation.isPending) ? 0.5 : 1,
+            }}
+          >
+            {(saveVideoMutation.isPending || unsaveVideoMutation.isPending) ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : isVideoSaved(video.id) ? (
+              <BookmarkCheck size={12} />
+            ) : (
+              <Bookmark size={12} />
+            )}
+            {isVideoSaved(video.id) ? 'Saved' : 'Save'}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              triggerHaptic('light');
+              shareVideo(video.youtubeId, video.title, video.instructor);
+            }}
+            data-testid={`button-share-video-${video.id}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '11px',
+              color: '#71717A',
+              background: 'rgba(39, 39, 42, 0.5)',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <Share2 size={12} />
+            Share
+          </button>
+        </div>
+      </div>
+    </button>
+  );
+
   return (
     <div 
       className="ios-page"
@@ -265,7 +469,6 @@ export default function IOSLibraryPage() {
         paddingBottom: '100px',
       }}
     >
-      {/* Header */}
       <div style={{
         padding: '16px 20px',
         paddingTop: 'max(16px, env(safe-area-inset-top))',
@@ -276,410 +479,355 @@ export default function IOSLibraryPage() {
         zIndex: 10,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h1 style={{ 
-            fontSize: '28px', 
-            fontWeight: 700,
-            margin: 0,
-          }}>
-            Technique Library
-          </h1>
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            data-testid="button-refresh-library"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              padding: '8px',
-              cursor: 'pointer',
-              color: isRefreshing ? '#8B5CF6' : '#71717A',
-            }}
-          >
-            <RefreshCw 
-              size={22} 
-              className={isRefreshing ? 'animate-spin' : ''}
-            />
-          </button>
-        </div>
-
-        {/* Search Bar */}
-        <div style={{
-          position: 'relative',
-          marginBottom: '12px',
-        }}>
-          <Search 
-            size={20} 
-            color="#71717A"
-            style={{
-              position: 'absolute',
-              left: '12px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Search techniques or instructors..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            data-testid="input-search-library"
-            style={{
-              width: '100%',
-              background: '#1A1A1D',
-              border: '1px solid #2A2A2E',
-              borderRadius: '12px',
-              padding: '12px 12px 12px 44px',
-              color: '#FFFFFF',
-              fontSize: '15px',
-              outline: 'none',
-            }}
-          />
-        </div>
-
-        {/* Dropdown Filters */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '12px',
-        }}>
-          {/* Techniques Dropdown */}
-          <div style={{ position: 'relative' }}>
-            <label style={{
-              display: 'block',
-              fontSize: '12px',
-              color: '#71717A',
-              marginBottom: '6px',
-              fontWeight: 600,
-            }}>
-              Techniques
-            </label>
-            <div style={{ position: 'relative' }}>
-              <select
-                value={selectedTechnique}
-                onChange={(e) => {
-                  triggerHaptic('light');
-                  setSelectedTechnique(e.target.value);
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {viewMode !== 'browse' && (
+              <button
+                onClick={navigateBack}
+                data-testid="button-back"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '4px',
+                  cursor: 'pointer',
+                  color: '#8B5CF6',
+                  display: 'flex',
+                  alignItems: 'center',
                 }}
-                data-testid="select-technique-filter"
+              >
+                <ChevronLeft size={24} />
+              </button>
+            )}
+            <h1 style={{ 
+              fontSize: viewMode === 'browse' ? '28px' : '22px', 
+              fontWeight: 700,
+              margin: 0,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              {headerTitle}
+            </h1>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {hasTaxonomy && viewMode === 'browse' && (
+              <button
+                onClick={() => { triggerHaptic('light'); setViewMode('categories'); }}
+                data-testid="button-browse-categories"
+                style={{
+                  background: 'rgba(139, 92, 246, 0.15)',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                  borderRadius: '8px',
+                  padding: '8px',
+                  cursor: 'pointer',
+                  color: '#A78BFA',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <Layers size={20} />
+              </button>
+            )}
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              data-testid="button-refresh-library"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: '8px',
+                cursor: 'pointer',
+                color: isRefreshing ? '#8B5CF6' : '#71717A',
+              }}
+            >
+              <RefreshCw size={22} className={isRefreshing ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        {viewMode === 'browse' && (
+          <>
+            <div style={{ position: 'relative', marginBottom: '12px' }}>
+              <Search size={20} color="#71717A" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                type="text"
+                placeholder="Search techniques or instructors..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                data-testid="input-search-library"
                 style={{
                   width: '100%',
                   background: '#1A1A1D',
                   border: '1px solid #2A2A2E',
-                  borderRadius: '10px',
-                  padding: '12px 36px 12px 12px',
+                  borderRadius: '12px',
+                  padding: '12px 12px 12px 44px',
                   color: '#FFFFFF',
-                  fontSize: '14px',
+                  fontSize: '15px',
                   outline: 'none',
-                  appearance: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {techniquesWithCounts.map(({ name, count }) => (
-                  <option key={name} value={name} data-testid={`option-technique-${name.toLowerCase().replace(/\s+/g, '-')}`}>
-                    {name} ({count})
-                  </option>
-                ))}
-              </select>
-              <ChevronDown 
-                size={16} 
-                color="#71717A"
-                style={{
-                  position: 'absolute',
-                  right: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  pointerEvents: 'none',
                 }}
               />
             </div>
-          </div>
 
-          {/* Professors Dropdown */}
-          <div style={{ position: 'relative' }}>
-            <label style={{
-              display: 'block',
-              fontSize: '12px',
-              color: '#71717A',
-              marginBottom: '6px',
-              fontWeight: 600,
-            }}>
-              Professors
-            </label>
-            <div style={{ position: 'relative' }}>
-              <select
-                value={selectedProfessor}
-                onChange={(e) => {
-                  triggerHaptic('light');
-                  setSelectedProfessor(e.target.value);
-                }}
-                data-testid="select-professor-filter"
-                style={{
-                  width: '100%',
-                  background: '#1A1A1D',
-                  border: '1px solid #2A2A2E',
-                  borderRadius: '10px',
-                  padding: '12px 36px 12px 12px',
-                  color: '#FFFFFF',
-                  fontSize: '14px',
-                  outline: 'none',
-                  appearance: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {professorsWithCounts.map(({ name, count }) => (
-                  <option key={name} value={name} data-testid={`option-professor-${name.toLowerCase().replace(/\s+/g, '-')}`}>
-                    {name} ({count})
-                  </option>
-                ))}
-              </select>
-              <ChevronDown 
-                size={16} 
-                color="#71717A"
-                style={{
-                  position: 'absolute',
-                  right: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  pointerEvents: 'none',
-                }}
-              />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ position: 'relative' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#71717A', marginBottom: '6px', fontWeight: 600 }}>
+                  Techniques
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <select
+                    value={selectedTechnique}
+                    onChange={(e) => { triggerHaptic('light'); setSelectedTechnique(e.target.value); }}
+                    data-testid="select-technique-filter"
+                    style={{
+                      width: '100%',
+                      background: '#1A1A1D',
+                      border: '1px solid #2A2A2E',
+                      borderRadius: '10px',
+                      padding: '12px 36px 12px 12px',
+                      color: '#FFFFFF',
+                      fontSize: '14px',
+                      outline: 'none',
+                      appearance: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {techniquesWithCounts.map(({ name, count }) => (
+                      <option key={name} value={name}>{name} ({count})</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} color="#71717A" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                </div>
+              </div>
+
+              <div style={{ position: 'relative' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: '#71717A', marginBottom: '6px', fontWeight: 600 }}>
+                  Professors
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <select
+                    value={selectedProfessor}
+                    onChange={(e) => { triggerHaptic('light'); setSelectedProfessor(e.target.value); }}
+                    data-testid="select-professor-filter"
+                    style={{
+                      width: '100%',
+                      background: '#1A1A1D',
+                      border: '1px solid #2A2A2E',
+                      borderRadius: '10px',
+                      padding: '12px 36px 12px 12px',
+                      color: '#FFFFFF',
+                      fontSize: '14px',
+                      outline: 'none',
+                      appearance: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {professorsWithCounts.map(({ name, count }) => (
+                      <option key={name} value={name}>{name} ({count})</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} color="#71717A" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
-      {/* Video List */}
       <div style={{ padding: '16px 20px' }}>
-        {isLoading ? (
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            padding: '40px',
-          }}>
-            <Loader2 className="animate-spin" size={32} color="#8B5CF6" />
-          </div>
-        ) : filteredVideos?.length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            padding: '40px 20px',
-            color: '#71717A',
-          }}>
-            <p>No videos found</p>
-            <p style={{ fontSize: '14px', marginTop: '8px' }}>
-              Try a different search or filter
-            </p>
-          </div>
-        ) : (
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-          }}>
-            {displayedVideos.map((video) => (
+        {viewMode === 'categories' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            {categoriesData?.categories?.map(cat => (
               <button
-                key={video.id}
-                onClick={() => handleVideoPress(video)}
-                data-testid={`video-card-${video.id}`}
+                key={cat.id}
+                onClick={() => navigateToCategory(cat)}
+                data-testid={`category-card-${cat.id}`}
                 style={{
                   background: '#1A1A1D',
                   border: '1px solid #2A2A2E',
                   borderRadius: '12px',
-                  padding: '12px',
-                  display: 'flex',
-                  gap: '12px',
+                  padding: '16px',
                   cursor: 'pointer',
                   textAlign: 'left',
-                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  position: 'relative',
                 }}
               >
-                {/* Thumbnail */}
-                <div style={{
-                  width: '120px',
-                  height: '68px',
-                  borderRadius: '8px',
-                  background: '#2A2A2E',
-                  flexShrink: 0,
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}>
-                  {video.thumbnail || video.youtubeId ? (
-                    <img
-                      src={video.thumbnail || `https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`}
-                      alt={video.title}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                      }}
-                    />
-                  ) : null}
-                  <div style={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'rgba(0,0,0,0.3)',
-                  }}>
-                    <Play size={24} color="#FFFFFF" fill="#FFFFFF" />
-                  </div>
-                  {video.duration && (
-                    <div style={{
-                      position: 'absolute',
-                      bottom: '4px',
-                      right: '4px',
-                      background: 'rgba(0,0,0,0.8)',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      color: '#FFFFFF',
-                    }}>
-                      {video.duration}
-                    </div>
-                  )}
+                <div style={{ fontSize: '15px', fontWeight: 600, color: '#FFFFFF', paddingRight: '20px' }}>
+                  {cat.name}
                 </div>
-
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '13px', color: '#8B5CF6', fontWeight: 500 }}>
+                  {cat.videoCount || 0} videos
+                </div>
+                {cat.description && (
                   <div style={{
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    color: '#FFFFFF',
-                    lineHeight: 1.3,
+                    fontSize: '12px',
+                    color: '#71717A',
+                    lineHeight: 1.4,
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                   }}>
-                    {decodeHTML(video.title)}
+                    {cat.description}
                   </div>
-                  <div style={{
-                    fontSize: '13px',
-                    color: '#8B5CF6',
-                    marginTop: '4px',
-                  }}>
-                    {video.instructor}
-                  </div>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    marginTop: '8px',
-                  }}>
-                    {video.hasAnalysis && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        triggerHaptic('light');
-                        setAnalysisVideoId(video.id);
-                      }}
-                      data-testid={`button-view-analysis-${video.id}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '11px',
-                        color: '#8B5CF6',
-                        background: 'rgba(139, 92, 246, 0.15)',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        border: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Brain size={12} />
-                      Analysis
-                    </button>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleSave(video.id);
-                      }}
-                      disabled={saveVideoMutation.isPending || unsaveVideoMutation.isPending}
-                      data-testid={`button-save-video-${video.id}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '11px',
-                        color: isVideoSaved(video.id) ? '#22C55E' : '#71717A',
-                        background: isVideoSaved(video.id) ? 'rgba(34, 197, 94, 0.15)' : 'rgba(39, 39, 42, 0.5)',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        border: 'none',
-                        cursor: (saveVideoMutation.isPending || unsaveVideoMutation.isPending) ? 'not-allowed' : 'pointer',
-                        opacity: (saveVideoMutation.isPending || unsaveVideoMutation.isPending) ? 0.5 : 1,
-                      }}
-                    >
-                      {(saveVideoMutation.isPending || unsaveVideoMutation.isPending) ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : isVideoSaved(video.id) ? (
-                        <BookmarkCheck size={12} />
-                      ) : (
-                        <Bookmark size={12} />
-                      )}
-                      {(saveVideoMutation.isPending || unsaveVideoMutation.isPending) ? 'Saving...' : isVideoSaved(video.id) ? 'Saved' : 'Save'}
-                    </button>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        triggerHaptic('light');
-                        await shareVideo(decodeHTML(video.title), video.instructor, video.youtubeId);
-                      }}
-                      data-testid={`button-share-video-${video.id}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '11px',
-                        color: '#10B981',
-                        background: 'rgba(16, 185, 129, 0.15)',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        border: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Share2 size={12} />
-                      Share
-                    </button>
-                  </div>
-                </div>
+                )}
+                <ChevronRight size={16} color="#3F3F46" style={{ position: 'absolute', top: '16px', right: '12px' }} />
               </button>
             ))}
-            
-            {/* Load More Button */}
-            {hasMoreVideos && (
+
+            <button
+              onClick={() => setViewMode('browse')}
+              data-testid="button-view-all-flat"
+              style={{
+                background: 'rgba(139, 92, 246, 0.08)',
+                border: '1px solid rgba(139, 92, 246, 0.2)',
+                borderRadius: '12px',
+                padding: '16px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                gridColumn: '1 / -1',
+              }}
+            >
+              <div style={{ fontSize: '15px', fontWeight: 600, color: '#A78BFA' }}>
+                View All Videos
+              </div>
+              <div style={{ fontSize: '13px', color: '#71717A', marginTop: '4px' }}>
+                Browse with filters and search
+              </div>
+            </button>
+          </div>
+        )}
+
+        {viewMode === 'children' && selectedCategory && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            {selectedCategory.description && (
+              <div style={{ padding: '0 0 12px', color: '#A1A1AA', fontSize: '13px' }}>
+                {selectedCategory.description}
+              </div>
+            )}
+
+            <button
+              onClick={() => { setSelectedChild(null); setViewMode('taxonomy-videos'); }}
+              data-testid="button-view-all-category"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                width: '100%',
+                padding: '14px 0',
+                background: 'none',
+                border: 'none',
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                cursor: 'pointer',
+                textAlign: 'left',
+                color: '#A78BFA',
+              }}
+            >
+              <div style={{ flex: 1, fontSize: '15px', fontWeight: 600 }}>
+                All {selectedCategory.name}
+              </div>
+              <div style={{ fontSize: '13px', color: '#71717A' }}>{selectedCategory.videoCount || 0}</div>
+              <ChevronRight size={16} color="#3F3F46" />
+            </button>
+
+            {isChildrenLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+                <Loader2 className="animate-spin" size={32} color="#8B5CF6" />
+              </div>
+            ) : childrenData?.children?.map(child => (
               <button
-                onClick={() => {
-                  triggerHaptic('light');
-                  setVisibleCount(prev => prev + 50);
-                }}
-                data-testid="button-load-more"
+                key={child.id}
+                onClick={() => navigateToChild(child)}
+                data-testid={`child-item-${child.id}`}
                 style={{
-                  background: 'rgba(139, 92, 246, 0.15)',
-                  border: '1px solid rgba(139, 92, 246, 0.3)',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  color: '#8B5CF6',
-                  fontSize: '15px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
                   width: '100%',
-                  marginTop: '8px',
+                  padding: '14px 0',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  color: '#FFFFFF',
                 }}
               >
-                Load More ({remainingCount} remaining)
+                <div style={{ flex: 1, fontSize: '15px', fontWeight: 500 }}>
+                  {child.name}
+                </div>
+                <div style={{ fontSize: '13px', color: '#71717A' }}>{child.videoCount || 0}</div>
+                <ChevronRight size={16} color="#3F3F46" />
               </button>
-            )}
+            ))}
           </div>
+        )}
+
+        {viewMode === 'taxonomy-videos' && (
+          <>
+            {isTaxonomyVideosLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+                <Loader2 className="animate-spin" size={32} color="#8B5CF6" />
+              </div>
+            ) : taxonomyVideosList.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#71717A' }}>
+                <p>No videos in this category yet</p>
+                <p style={{ fontSize: '14px', marginTop: '8px' }}>Videos will appear here once mapped</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ fontSize: '14px', color: '#71717A', textAlign: 'center' }}>
+                  {taxonomyVideosList.length} videos
+                </div>
+                {taxonomyVideosList.map(renderVideoItem)}
+              </div>
+            )}
+          </>
+        )}
+
+        {viewMode === 'browse' && (
+          <>
+            {isLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+                <Loader2 className="animate-spin" size={32} color="#8B5CF6" />
+              </div>
+            ) : filteredVideos?.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#71717A' }}>
+                <p>No videos found</p>
+                <p style={{ fontSize: '14px', marginTop: '8px' }}>Try a different search or filter</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {displayedVideos.map(renderVideoItem)}
+
+                {hasMoreVideos && (
+                  <button
+                    onClick={() => setVisibleCount(prev => prev + 50)}
+                    data-testid="button-load-more"
+                    style={{
+                      background: 'rgba(139, 92, 246, 0.15)',
+                      border: '1px solid rgba(139, 92, 246, 0.3)',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      cursor: 'pointer',
+                      color: '#A78BFA',
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      textAlign: 'center',
+                    }}
+                  >
+                    Load More ({remainingCount} remaining)
+                  </button>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
       <IOSBottomNav />
 
-      {/* In-app Video Player Modal */}
       {currentVideo && (
         <VideoPlayer
           videoId={currentVideo.videoId}
@@ -689,7 +837,6 @@ export default function IOSLibraryPage() {
         />
       )}
 
-      {/* Video Analysis Modal */}
       {analysisVideoId && (
         <VideoAnalysisModal
           videoId={analysisVideoId}

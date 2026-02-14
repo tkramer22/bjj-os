@@ -4,6 +4,7 @@ import { db } from "./db";
 import { insertRecipientSchema, recipients, smsSchedules, smsHistory, insertSmsScheduleSchema, bjjUsers, referralCodes, aiVideoKnowledge, aiUserFeedbackSignals, aiUserContext, aiFeatureFlags, aiReasoningTraces, aiConfidenceTracking, aiProblemSolutionMap, aiTechniqueRelationships, userSavedVideos, aiConversationLearning, adminChatHistory, videoCurationLog, userVideoFeedback, userFeedbackStats, instructorCredibility, featuredInstructors, techniqueChains, userSavedChains, chainFeedback, pushSubscriptions, flaggedAccounts, authorizedDevices, loginEvents, shortUrls, activityLog, videoAnalysisLog, userActivity, magicLinks, profQueries, videoInteractions, devOsMessages, curationRuns, videos, systemSnapshots, commandLog, combatSportsNews, videoKnowledge } from "@shared/schema";
 import { logActivity, logSystemError } from "./activity-logger";
 import adminDashboardRouter from "./admin-dashboard-api";
+import taxonomyRouter from "./taxonomy-routes";
 import analyticsRouter from "./analytics";
 import { getProfessorOSFeedbackResponse, getAppreciationMessage, shouldShowAppreciation } from './professor-os-feedback-responses';
 import { eq, desc, sql as drizzleSql, sql, and, or, ilike, asc, count, isNotNull, gte, lte, lt, gt, inArray } from "drizzle-orm";
@@ -400,6 +401,11 @@ export function registerRoutes(app: Express): Server {
   // ADMIN DASHBOARD API
   // ============================================================================
   app.use('/api/admin', adminDashboardRouter);
+  
+  // ============================================================================
+  // TECHNIQUE TAXONOMY API
+  // ============================================================================
+  app.use('/api/taxonomy', taxonomyRouter);
   
   // ============================================================================
   // ANALYTICS API

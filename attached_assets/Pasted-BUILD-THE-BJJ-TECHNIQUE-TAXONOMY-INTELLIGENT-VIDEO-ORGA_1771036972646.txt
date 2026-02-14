@@ -1,0 +1,303 @@
+BUILD THE BJJ TECHNIQUE TAXONOMY — INTELLIGENT VIDEO ORGANIZATION
+
+Our technique library has 500+ unique labels that are messy, duplicated,
+and overwhelming. We need a clean hierarchical taxonomy that matches how
+BJJ practitioners actually think, then map every video to it.
+
+This is a 4-phase project. Do them in order.
+
+══════════════════════════════════════════════════════════════════════════
+PHASE 1: EXTRACT ALL CURRENT LABELS
+══════════════════════════════════════════════════════════════════════════
+
+First, show me what we’re working with.
+
+Query 1 — Every unique technique name and count:
+SELECT technique_name, COUNT(*) as video_count
+FROM video_knowledge
+WHERE technique_name IS NOT NULL
+GROUP BY technique_name
+ORDER BY video_count DESC;
+
+(If the table is curated_videos or ai_video_knowledge, use that instead.
+Check which table the Technique Library actually reads from.)
+
+Query 2 — Every unique technique_type/category:
+SELECT DISTINCT technique_type FROM curated_videos WHERE technique_type IS NOT NULL;
+
+Query 3 — Every unique position:
+SELECT DISTINCT positions_covered FROM curated_videos WHERE positions_covered IS NOT NULL;
+
+Query 4 — Total count:
+SELECT COUNT(DISTINCT technique_name) as unique_labels FROM video_knowledge;
+
+Show me all results. I need to see the full scope of the mess.
+
+══════════════════════════════════════════════════════════════════════════
+PHASE 2: CREATE THE MASTER TAXONOMY TABLE
+══════════════════════════════════════════════════════════════════════════
+
+Create this table:
+
+CREATE TABLE IF NOT EXISTS technique_taxonomy (
+id SERIAL PRIMARY KEY,
+name VARCHAR(100) NOT NULL,          – “Armbar”
+slug VARCHAR(100) NOT NULL UNIQUE,   – “armbar”
+parent_id INTEGER REFERENCES technique_taxonomy(id),
+level INTEGER NOT NULL,              – 1=category, 2=position, 3=technique, 4=variation
+display_order INTEGER DEFAULT 0,     – controls sort order in UI
+description TEXT,                     – brief description for UI tooltips
+icon VARCHAR(50),                    – optional emoji or icon name
+created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_taxonomy_parent ON technique_taxonomy(parent_id);
+CREATE INDEX idx_taxonomy_slug ON technique_taxonomy(slug);
+CREATE INDEX idx_taxonomy_level ON technique_taxonomy(level);
+
+The hierarchy follows how BJJ practitioners think:
+
+LEVEL 1 — CATEGORIES (what are you trying to do?)
+├── Guard Play          – playing from bottom guard positions
+├── Passing             – getting past opponent’s guard  
+├── Submissions         – finishing techniques
+├── Escapes             – getting out of bad positions
+├── Takedowns           – getting the fight to the ground
+├── Sweeps              – reversing from bottom to top
+├── Back Attacks        – attacks from back control
+├── Transitions         – moving between positions
+├── Guard Retention     – keeping and recovering guard
+├── Top Control         – maintaining dominant positions
+├── Leg Locks           – lower body submissions (separate because it’s its own game)
+├── Fundamentals        – basic concepts, movements, posture
+├── Competition         – strategy, game planning, mental game
+└── Drills & Movement   – solo drills, warm-ups, mobility
+
+LEVEL 2 — POSITIONS (where are you?)
+Example under “Guard Play”:
+├── Closed Guard
+├── Half Guard  
+├── Open Guard
+├── Butterfly Guard
+├── De La Riva
+├── Spider Guard
+├── Lasso Guard
+├── X Guard / Single Leg X
+├── Rubber Guard
+├── Worm Guard / Lapel Guards
+└── Z Guard / Knee Shield
+
+LEVEL 3 — TECHNIQUES (what specific move?)
+Example under “Closed Guard”:
+├── Triangle Choke
+├── Armbar
+├── Kimura
+├── Omoplata
+├── Guillotine
+├── Hip Bump Sweep
+├── Scissor Sweep
+├── Flower Sweep
+└── Cross Collar Choke
+
+LEVEL 4 — VARIATIONS (optional, for specific setups)
+Example under “Triangle Choke”:
+├── Standard Setup
+├── Off Failed Armbar
+├── From Overhook
+└── Mounted Triangle
+
+══════════════════════════════════════════════════════════════════════════
+PHASE 2B: POPULATE THE TAXONOMY USING CLAUDE
+══════════════════════════════════════════════════════════════════════════
+
+Use Claude Sonnet 4.5 to generate the full taxonomy. Send it ALL the
+unique technique labels from Phase 1 and this prompt:
+
+-----
+
+You are an expert BJJ black belt instructor building a technique library
+for a BJJ coaching app. Below is a list of every technique label currently
+in our database with video counts.
+
+Your job: Create a complete hierarchical taxonomy that organizes ALL of
+these into a clean structure.
+
+Rules:
+
+1. Level 1: 12-15 broad categories (Guard Play, Passing, Submissions, etc.)
+1. Level 2: Positions within each category (Closed Guard, Half Guard, etc.)
+1. Level 3: Specific techniques (Armbar, Triangle, Kimura, etc.)
+1. Every current label must map to at least one Level 2 or Level 3 node
+1. Merge duplicates: “Armbar from Mount” and “armbar from mount” are the same
+1. Merge near-duplicates: “Armbar from Mount Position” = “Armbar from Mount”
+1. A technique can appear under multiple positions (Armbar exists under
+   Closed Guard, Mount, and Side Control)
+1. Use standard BJJ terminology that any blue belt would recognize
+1. Include gi-specific and no-gi-specific subcategories where relevant
+
+Return as JSON array:
+[
+{
+“name”: “Guard Play”,
+“slug”: “guard-play”,
+“level”: 1,
+“display_order”: 1,
+“description”: “Techniques from bottom guard positions”,
+“children”: [
+{
+“name”: “Closed Guard”,
+“slug”: “closed-guard”,
+“level”: 2,
+“display_order”: 1,
+“children”: [
+{
+“name”: “Triangle Choke”,
+“slug”: “triangle-choke-closed-guard”,
+“level”: 3,
+“display_order”: 1
+}
+]
+}
+]
+}
+]
+
+## Here are all current technique labels:
+[INSERT ALL LABELS FROM PHASE 1]
+
+Parse Claude’s response and INSERT all nodes into technique_taxonomy
+with correct parent_id relationships.
+
+Show me the final taxonomy tree with counts at each level.
+
+══════════════════════════════════════════════════════════════════════════
+PHASE 3: MAP EVERY VIDEO TO THE TAXONOMY
+══════════════════════════════════════════════════════════════════════════
+
+Create the junction table:
+
+CREATE TABLE IF NOT EXISTS video_technique_tags (
+id SERIAL PRIMARY KEY,
+video_id INTEGER NOT NULL,           – references curated_videos.id
+taxonomy_id INTEGER NOT NULL REFERENCES technique_taxonomy(id),
+relevance VARCHAR(20) DEFAULT ‘primary’,  – ‘primary’ or ‘secondary’
+created_at TIMESTAMP DEFAULT NOW(),
+UNIQUE(video_id, taxonomy_id)
+);
+
+CREATE INDEX idx_video_tags_video ON video_technique_tags(video_id);
+CREATE INDEX idx_video_tags_taxonomy ON video_technique_tags(taxonomy_id);
+
+Now map each video. For each video, read its existing analysis data
+(technique_name, primary_techniques, positions_covered, gemini_analysis)
+and determine which taxonomy nodes it belongs to.
+
+Do this in batches of 50 using Claude Sonnet 4.5:
+
+-----
+
+You are mapping BJJ videos to a technique taxonomy. For each video below,
+determine which taxonomy nodes (by slug) it should be tagged with.
+
+Rules:
+
+1. Every video gets at least one primary tag
+1. Videos covering multiple techniques get multiple tags
+1. Use ‘primary’ for the main technique and ‘secondary’ for related ones
+1. Match based on the video’s technique name, position, and analysis
+
+Taxonomy nodes available: [INSERT ALL SLUGS]
+
+Videos to map:
+[INSERT BATCH OF 50 VIDEOS WITH THEIR ANALYSIS DATA]
+
+## Return JSON:
+[
+{“video_id”: 123, “tags”: [
+{“slug”: “armbar-closed-guard”, “relevance”: “primary”},
+{“slug”: “triangle-choke-closed-guard”, “relevance”: “secondary”}
+]}
+]
+
+Process ALL videos in batches. Log progress:
+console.log(`[TAXONOMY] Mapped batch ${i}: ${batch.length} videos`);
+
+After all videos are mapped, show me:
+
+- Total videos mapped
+- Videos with 0 tags (need manual review)
+- Average tags per video
+- Top 10 taxonomy nodes by video count
+
+══════════════════════════════════════════════════════════════════════════
+PHASE 4: UPDATE THE LIBRARY UI
+══════════════════════════════════════════════════════════════════════════
+
+Replace the current flat dropdown with a hierarchical browser.
+
+The user experience:
+
+SCREEN 1 — Category Grid (Level 1)
+Show 12-15 cards in a grid:
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  Guard Play  │  │   Passing    │  │ Submissions  │
+│   (245)      │  │   (187)      │  │   (312)      │
+└──────────────┘  └──────────────┘  └──────────────┘
+
+Each card shows the category name and total video count.
+Tap a card → drill into Level 2.
+
+SCREEN 2 — Positions (Level 2)
+Header: “Guard Play” with back arrow
+List of positions:
+Closed Guard (42 videos)
+Half Guard (38 videos)
+Open Guard (28 videos)
+Butterfly Guard (22 videos)
+…
+
+Tap a position → show videos filtered to that position.
+OR tap a specific technique within (Level 3) if shown.
+
+SCREEN 3 — Videos
+Shows all videos tagged with that taxonomy node.
+Same video cards as current library (thumbnail, title, instructor,
+Analysis button, Save button).
+
+ALSO ADD: A search bar at the top of the library that searches
+across all taxonomy names AND video titles. So if someone types
+“kimura” they see the Kimura technique node AND all kimura videos.
+
+══════════════════════════════════════════════════════════════════════════
+IMPORTANT DETAILS
+══════════════════════════════════════════════════════════════════════════
+
+1. Keep the old technique_name column — don’t delete or modify it
+1. The taxonomy is ADDITIVE — existing data stays, new layer on top
+1. Professor OS should use the taxonomy for smarter recommendations:
+- User asks about “guard” → knows to look at all Guard Play subtree
+- User struggling with armbars → can recommend across all positions
+1. The taxonomy table can be edited by admin later to add/remove/rename
+1. Videos can have multiple tags — this is by design
+
+══════════════════════════════════════════════════════════════════════════
+DO NOT
+══════════════════════════════════════════════════════════════════════════
+
+- Do NOT delete any existing columns or data
+- Do NOT modify gemini_analysis content
+- Do NOT change how Professor OS chat works (taxonomy enhances, not replaces)
+- Do NOT change video card rendering
+- Do NOT process all videos at once — use batches of 50
+
+══════════════════════════════════════════════════════════════════════════
+SHOW ME AFTER EACH PHASE
+══════════════════════════════════════════════════════════════════════════
+
+Phase 1: All unique labels and counts
+Phase 2: The full taxonomy tree with node counts per level
+Phase 3: Mapping stats (total mapped, avg tags per video, top nodes)
+Phase 4: The new Library UI working in preview
+
+Stop after Phase 2 and show me the taxonomy for approval before
+mapping videos in Phase 3. I want to review the tree first.

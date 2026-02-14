@@ -6476,3 +6476,50 @@ export const insertBreakthroughTrackingSchema = createInsertSchema(breakthroughT
 export type InsertBreakthroughTracking = z.infer<typeof insertBreakthroughTrackingSchema>;
 export type BreakthroughTracking = typeof breakthroughTracking.$inferSelect;
 
+export const techniqueTaxonomyV2 = pgTable("technique_taxonomy_v2", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  parentId: integer("parent_id"),
+  level: integer("level").notNull(),
+  displayOrder: integer("display_order").default(0),
+  description: text("description"),
+  icon: varchar("icon", { length: 50 }),
+  videoCount: integer("video_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  parentIdx: index("idx_taxonomy_v2_parent").on(table.parentId),
+  slugIdx: index("idx_taxonomy_v2_slug").on(table.slug),
+  levelIdx: index("idx_taxonomy_v2_level").on(table.level),
+  levelOrderIdx: index("idx_taxonomy_v2_level_order").on(table.level, table.displayOrder),
+}));
+
+export const insertTechniqueTaxonomyV2Schema = createInsertSchema(techniqueTaxonomyV2).omit({
+  id: true,
+  createdAt: true,
+  videoCount: true,
+});
+
+export type InsertTechniqueTaxonomyV2 = z.infer<typeof insertTechniqueTaxonomyV2Schema>;
+export type TechniqueTaxonomyV2 = typeof techniqueTaxonomyV2.$inferSelect;
+
+export const videoTechniqueTags = pgTable("video_technique_tags", {
+  id: serial("id").primaryKey(),
+  videoId: integer("video_id").notNull(),
+  taxonomyId: integer("taxonomy_id").notNull().references(() => techniqueTaxonomyV2.id, { onDelete: 'cascade' }),
+  relevance: varchar("relevance", { length: 20 }).default("primary"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  videoIdx: index("idx_video_tags_video").on(table.videoId),
+  taxonomyIdx: index("idx_video_tags_taxonomy").on(table.taxonomyId),
+  uniqueTag: unique("unique_video_taxonomy").on(table.videoId, table.taxonomyId),
+}));
+
+export const insertVideoTechniqueTagSchema = createInsertSchema(videoTechniqueTags).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertVideoTechniqueTag = z.infer<typeof insertVideoTechniqueTagSchema>;
+export type VideoTechniqueTag = typeof videoTechniqueTags.$inferSelect;
+
