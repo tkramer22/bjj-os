@@ -47,6 +47,7 @@ export default function LibraryPage() {
   const [selectedChild, setSelectedChild] = useState<TaxonomyNode | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [sortByRecent, setSortByRecent] = useState(false);
   const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string } | null>(null);
   const [savedVideoIds, setSavedVideoIds] = useState<Set<number>>(new Set());
   const { toast } = useToast();
@@ -202,6 +203,7 @@ export default function LibraryPage() {
     setSelectedChild(null);
     setSearchQuery('');
     setIsSearching(false);
+    setSortByRecent(false);
   };
 
   if (isLoadingUser) {
@@ -360,6 +362,7 @@ export default function LibraryPage() {
                     setSelectedChild(null);
                     setSearchQuery('');
                     setIsSearching(false);
+                    setSortByRecent(true);
                   }}
                 >
                   <div className="category-name">Recently Added</div>
@@ -473,7 +476,14 @@ export default function LibraryPage() {
                   {allVideosData?.videos?.length || 0} videos
                 </div>
                 <div className="video-grid">
-                  {(allVideosData?.videos || []).map((video: any) => (
+                  {(sortByRecent
+                    ? [...(allVideosData?.videos || [])].sort((a: any, b: any) => {
+                        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                        return dateB - dateA;
+                      })
+                    : (allVideosData?.videos || [])
+                  ).map((video: any) => (
                     <VideoCard
                       key={video.id}
                       video={video}

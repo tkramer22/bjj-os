@@ -35,6 +35,7 @@ interface Video {
   technique?: string;
   position?: string;
   hasAnalysis?: boolean;
+  createdAt?: string;
 }
 
 interface TaxonomyNode {
@@ -90,9 +91,7 @@ export default function IOSLibraryPage() {
     enabled: viewMode === 'browse',
   });
 
-  const videosQueryKey = selectedTechnique === "Recently Added" 
-    ? "/api/ai/videos?technique=Recently Added"
-    : "/api/ai/videos";
+  const videosQueryKey = "/api/ai/videos";
   const { data: videosData, isLoading } = useQuery<{ count: number; videos: VideoApiResponse[] }>({
     queryKey: [videosQueryKey],
     enabled: viewMode === 'browse',
@@ -118,6 +117,7 @@ export default function IOSLibraryPage() {
     technique: v.techniqueType,
     position: v.positionCategory,
     hasAnalysis: v.hasAnalysis,
+    createdAt: (v as any).createdAt,
   }));
 
   const { data: savedVideosData } = useQuery<{ videos: { id: string | number }[] }>({
@@ -214,7 +214,7 @@ export default function IOSLibraryPage() {
   }, [videosFilteredByTechnique]);
 
   const filteredVideos = useMemo(() => {
-    return videos?.filter((video) => {
+    const filtered = videos?.filter((video) => {
       const matchesSearch = !searchQuery || 
         video.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         video.instructor.toLowerCase().includes(searchQuery.toLowerCase());
@@ -225,6 +225,14 @@ export default function IOSLibraryPage() {
         video.instructor === selectedProfessor;
       return matchesSearch && matchesTechnique && matchesProfessor;
     }) || [];
+    if (selectedTechnique === "Recently Added") {
+      return [...filtered].sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+    }
+    return filtered;
   }, [videos, searchQuery, selectedTechnique, selectedProfessor]);
 
   useEffect(() => {
