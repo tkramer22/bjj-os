@@ -300,7 +300,7 @@ export default function IOSLibraryPage() {
     duration: v.duration,
     technique: v.techniqueType,
     position: v.positionCategory,
-    hasAnalysis: false,
+    hasAnalysis: !!v.hasAnalysis,
   }));
 
   const renderVideoItem = (video: Video) => (

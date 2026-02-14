@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Heart, ChevronLeft, ChevronRight, Layers, Grid3X3 } from "lucide-react";
+import { Search, Heart, ChevronLeft, ChevronRight, Layers, Grid3X3, Brain, Share2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { VideoAnalysisModal } from "@/components/VideoAnalysisModal";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import UserLayout from "@/components/layouts/UserLayout";
@@ -10,6 +11,7 @@ import { ThumbnailImage } from "@/components/ThumbnailImage";
 import { useLocation } from "wouter";
 import { IOSSpinner } from "@/components/ios-spinner";
 import { triggerHaptic } from "@/lib/haptics";
+import { shareVideo } from "@/lib/share";
 
 interface Video {
   id: number;
@@ -25,6 +27,7 @@ interface Video {
   videoId?: string;
   thumbnailUrl?: string;
   createdAt?: string;
+  hasAnalysis?: boolean;
 }
 
 interface TaxonomyNode {
@@ -48,6 +51,7 @@ export default function LibraryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [sortByRecent, setSortByRecent] = useState(false);
+  const [analysisVideoId, setAnalysisVideoId] = useState<number | null>(null);
   const [currentVideo, setCurrentVideo] = useState<{ videoId: string; title: string; instructor: string } | null>(null);
   const [savedVideoIds, setSavedVideoIds] = useState<Set<number>>(new Set());
   const { toast } = useToast();
@@ -321,6 +325,7 @@ export default function LibraryPage() {
                           isSaved={savedVideoIds.has(video.id)}
                           onToggleSave={toggleSaveVideo}
                           onPlay={playVideo}
+                          onAnalysis={setAnalysisVideoId}
                         />
                       ))}
                     </div>
@@ -452,6 +457,7 @@ export default function LibraryPage() {
                       isSaved={savedVideoIds.has(video.id)}
                       onToggleSave={toggleSaveVideo}
                       onPlay={playVideo}
+                      onAnalysis={setAnalysisVideoId}
                     />
                   ))}
                   {(!taxonomyVideosData?.videos || taxonomyVideosData.videos.length === 0) && (
@@ -490,6 +496,7 @@ export default function LibraryPage() {
                       isSaved={savedVideoIds.has(video.id)}
                       onToggleSave={toggleSaveVideo}
                       onPlay={playVideo}
+                      onAnalysis={setAnalysisVideoId}
                     />
                   ))}
                 </div>
@@ -925,6 +932,34 @@ export default function LibraryPage() {
             margin: 0 0 8px 0;
           }
 
+          .video-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+          }
+
+          .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+          }
+
+          .analysis-btn {
+            color: #8B5CF6;
+            background: rgba(139, 92, 246, 0.15);
+          }
+
+          .share-btn {
+            color: #3B82F6;
+            background: rgba(59, 130, 246, 0.15);
+          }
+
           .video-metadata {
             display: flex;
             flex-wrap: wrap;
@@ -1003,15 +1038,23 @@ export default function LibraryPage() {
           onClose={() => setCurrentVideo(null)}
         />
       )}
+
+      {analysisVideoId && (
+        <VideoAnalysisModal
+          videoId={analysisVideoId}
+          onClose={() => setAnalysisVideoId(null)}
+        />
+      )}
     </UserLayout>
   );
 }
 
-function VideoCard({ video, isSaved, onToggleSave, onPlay }: {
+function VideoCard({ video, isSaved, onToggleSave, onPlay, onAnalysis }: {
   video: Video;
   isSaved: boolean;
   onToggleSave: (id: number, e: React.MouseEvent) => void;
   onPlay: (videoId: string, title: string, instructor: string) => void;
+  onAnalysis?: (id: number) => void;
 }) {
   return (
     <div
@@ -1048,6 +1091,26 @@ function VideoCard({ video, isSaved, onToggleSave, onPlay }: {
       <div className="video-info">
         <h3 className="video-title">{video.techniqueName || video.title}</h3>
         <p className="video-instructor">{video.instructorName}</p>
+        <div className="video-actions">
+          {video.hasAnalysis && onAnalysis && (
+            <button
+              className="action-btn analysis-btn"
+              data-testid={`button-view-analysis-${video.id}`}
+              onClick={(e) => { e.stopPropagation(); triggerHaptic('light'); onAnalysis(video.id); }}
+            >
+              <Brain size={12} />
+              Analysis
+            </button>
+          )}
+          <button
+            className="action-btn share-btn"
+            data-testid={`button-share-${video.id}`}
+            onClick={(e) => { e.stopPropagation(); shareVideo(video.videoId || '', video.techniqueName || video.title, video.instructorName); }}
+          >
+            <Share2 size={12} />
+            Share
+          </button>
+        </div>
         <div className="video-metadata">
           {video.giOrNogi && (
             <span className="metadata-badge gi-badge" data-testid={`badge-gi-${video.id}`}>

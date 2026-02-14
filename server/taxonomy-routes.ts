@@ -695,6 +695,7 @@ router.get('/videos/:taxonomyId', async (req, res) => {
       viewCount: aiVideoKnowledge.viewCount,
       duration: aiVideoKnowledge.duration,
       createdAt: aiVideoKnowledge.createdAt,
+      hasAnalysis: sql<boolean>`EXISTS (SELECT 1 FROM video_knowledge WHERE video_knowledge.video_id = ${aiVideoKnowledge.id} AND technique_name IS NOT NULL AND technique_name != '' AND (key_concepts IS NOT NULL OR full_summary IS NOT NULL))`,
     })
     .from(aiVideoKnowledge)
     .where(and(
@@ -720,6 +721,7 @@ router.get('/videos/:taxonomyId', async (req, res) => {
       viewCount: Number(video.viewCount ?? 0),
       duration: formatDuration(video.duration),
       createdAt: video.createdAt,
+      hasAnalysis: !!video.hasAnalysis,
     }));
 
     res.json({ videos: transformedVideos, count: transformedVideos.length });
