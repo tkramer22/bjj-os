@@ -11,7 +11,30 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
 });
 
-router.post('/migrate', async (_req, res) => {
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const JWT_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET;
+  const adminSession = req.cookies?.admin_session;
+  const authHeader = req.headers.authorization;
+  const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const token = adminSession || headerToken;
+
+  if (!token) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET!) as any;
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    (req as any).adminUser = decoded;
+    next();
+  } catch {
+    return res.status(401).json({ error: "Invalid session" });
+  }
+}
+
+router.post('/migrate', requireAdmin, async (_req, res) => {
   try {
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS technique_taxonomy_v2 (
@@ -49,29 +72,6 @@ router.post('/migrate', async (_req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const JWT_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET;
-  const adminSession = req.cookies?.admin_session;
-  const authHeader = req.headers.authorization;
-  const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  const token = adminSession || headerToken;
-
-  if (!token) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET!) as any;
-    if (decoded.role !== 'admin') {
-      return res.status(403).json({ error: "Forbidden" });
-    }
-    (req as any).adminUser = decoded;
-    next();
-  } catch {
-    return res.status(401).json({ error: "Invalid session" });
-  }
-}
 
 function slugify(text: string): string {
   return text

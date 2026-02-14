@@ -90,17 +90,12 @@ export default function IOSLibraryPage() {
     enabled: viewMode === 'browse',
   });
 
+  const videosQueryKey = selectedTechnique === "Recently Added" 
+    ? "/api/ai/videos?technique=Recently Added"
+    : "/api/ai/videos";
   const { data: videosData, isLoading } = useQuery<{ count: number; videos: VideoApiResponse[] }>({
-    queryKey: ["/api/ai/videos", selectedTechnique === "Recently Added" ? "Recently Added" : null],
+    queryKey: [videosQueryKey],
     enabled: viewMode === 'browse',
-    queryFn: async () => {
-      const url = selectedTechnique === "Recently Added" 
-        ? "/api/ai/videos?technique=Recently Added"
-        : "/api/ai/videos";
-      const res = await fetch(url, { credentials: 'include' });
-      if (!res.ok) throw new Error('Failed to fetch videos');
-      return res.json();
-    },
   });
 
   const handleRefresh = useCallback(async () => {
