@@ -428,9 +428,10 @@ app.use(express.urlencoded({ extended: false }));
 // ═══════════════════════════════════════════════════════════════
 app.use((req: Request, res: Response, next: NextFunction) => {
   const isAIChat = req.path.includes('/chat') || req.path.includes('/ai') || req.path.includes('/professor');
+  const isTaxonomy = req.path.includes('/taxonomy');
   const isAdmin = req.path.includes('/admin');
   const isSSE = req.headers.accept === 'text/event-stream';
-  const timeoutMs = isSSE ? 120000 : isAIChat ? 90000 : isAdmin ? 60000 : 30000;
+  const timeoutMs = isSSE ? 120000 : isTaxonomy ? 120000 : isAIChat ? 90000 : isAdmin ? 60000 : 30000;
 
   const timer = setTimeout(() => {
     if (!res.headersSent) {
