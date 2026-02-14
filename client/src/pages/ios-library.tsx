@@ -51,7 +51,7 @@ interface TaxonomyNode {
 type ViewMode = 'browse' | 'categories' | 'children' | 'taxonomy-videos';
 
 export default function IOSLibraryPage() {
-  const [viewMode, setViewMode] = useState<ViewMode>('browse');
+  const [viewMode, setViewMode] = useState<ViewMode>('categories');
   const [selectedCategory, setSelectedCategory] = useState<TaxonomyNode | null>(null);
   const [selectedChild, setSelectedChild] = useState<TaxonomyNode | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -273,13 +273,13 @@ export default function IOSLibraryPage() {
       setSelectedCategory(null);
       setSelectedChild(null);
       setViewMode('categories');
-    } else if (viewMode === 'categories') {
-      setViewMode('browse');
+    } else if (viewMode === 'browse') {
+      setViewMode('categories');
     }
   };
 
-  const headerTitle = viewMode === 'browse' ? 'Technique Library'
-    : viewMode === 'categories' ? 'Browse by Category'
+  const headerTitle = viewMode === 'categories' ? 'Technique Library'
+    : viewMode === 'browse' ? 'All Videos'
     : viewMode === 'children' ? selectedCategory?.name || 'Category'
     : selectedChild?.name || selectedCategory?.name || 'Videos';
 
@@ -475,7 +475,7 @@ export default function IOSLibraryPage() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {viewMode !== 'browse' && (
+            {viewMode !== 'categories' && (
               <button
                 onClick={navigateBack}
                 data-testid="button-back"
@@ -504,24 +504,7 @@ export default function IOSLibraryPage() {
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            {hasTaxonomy && viewMode === 'browse' && (
-              <button
-                onClick={() => { triggerHaptic('light'); setViewMode('categories'); }}
-                data-testid="button-browse-categories"
-                style={{
-                  background: 'rgba(139, 92, 246, 0.15)',
-                  border: '1px solid rgba(139, 92, 246, 0.3)',
-                  borderRadius: '8px',
-                  padding: '8px',
-                  cursor: 'pointer',
-                  color: '#A78BFA',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                <Layers size={20} />
-              </button>
-            )}
+            
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
@@ -539,13 +522,13 @@ export default function IOSLibraryPage() {
           </div>
         </div>
 
-        {viewMode === 'browse' && (
+        {(viewMode === 'categories' || viewMode === 'browse') && (
           <>
-            <div style={{ position: 'relative', marginBottom: '12px' }}>
+            <div style={{ position: 'relative', marginBottom: viewMode === 'browse' ? '12px' : '0' }}>
               <Search size={20} color="#71717A" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="text"
-                placeholder="Search techniques or instructors..."
+                placeholder="Search techniques, videos, instructors..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 data-testid="input-search-library"
@@ -562,67 +545,69 @@ export default function IOSLibraryPage() {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div style={{ position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#71717A', marginBottom: '6px', fontWeight: 600 }}>
-                  Techniques
-                </label>
+            {viewMode === 'browse' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div style={{ position: 'relative' }}>
-                  <select
-                    value={selectedTechnique}
-                    onChange={(e) => { triggerHaptic('light'); setSelectedTechnique(e.target.value); }}
-                    data-testid="select-technique-filter"
-                    style={{
-                      width: '100%',
-                      background: '#1A1A1D',
-                      border: '1px solid #2A2A2E',
-                      borderRadius: '10px',
-                      padding: '12px 36px 12px 12px',
-                      color: '#FFFFFF',
-                      fontSize: '14px',
-                      outline: 'none',
-                      appearance: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {techniquesWithCounts.map(({ name, count }) => (
-                      <option key={name} value={name}>{name} ({count})</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} color="#71717A" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                  <label style={{ display: 'block', fontSize: '12px', color: '#71717A', marginBottom: '6px', fontWeight: 600 }}>
+                    Techniques
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <select
+                      value={selectedTechnique}
+                      onChange={(e) => { triggerHaptic('light'); setSelectedTechnique(e.target.value); }}
+                      data-testid="select-technique-filter"
+                      style={{
+                        width: '100%',
+                        background: '#1A1A1D',
+                        border: '1px solid #2A2A2E',
+                        borderRadius: '10px',
+                        padding: '12px 36px 12px 12px',
+                        color: '#FFFFFF',
+                        fontSize: '14px',
+                        outline: 'none',
+                        appearance: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {techniquesWithCounts.map(({ name, count }) => (
+                        <option key={name} value={name}>{name} ({count})</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} color="#71717A" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                  </div>
                 </div>
-              </div>
 
-              <div style={{ position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#71717A', marginBottom: '6px', fontWeight: 600 }}>
-                  Professors
-                </label>
                 <div style={{ position: 'relative' }}>
-                  <select
-                    value={selectedProfessor}
-                    onChange={(e) => { triggerHaptic('light'); setSelectedProfessor(e.target.value); }}
-                    data-testid="select-professor-filter"
-                    style={{
-                      width: '100%',
-                      background: '#1A1A1D',
-                      border: '1px solid #2A2A2E',
-                      borderRadius: '10px',
-                      padding: '12px 36px 12px 12px',
-                      color: '#FFFFFF',
-                      fontSize: '14px',
-                      outline: 'none',
-                      appearance: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {professorsWithCounts.map(({ name, count }) => (
-                      <option key={name} value={name}>{name} ({count})</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} color="#71717A" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                  <label style={{ display: 'block', fontSize: '12px', color: '#71717A', marginBottom: '6px', fontWeight: 600 }}>
+                    Professors
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <select
+                      value={selectedProfessor}
+                      onChange={(e) => { triggerHaptic('light'); setSelectedProfessor(e.target.value); }}
+                      data-testid="select-professor-filter"
+                      style={{
+                        width: '100%',
+                        background: '#1A1A1D',
+                        border: '1px solid #2A2A2E',
+                        borderRadius: '10px',
+                        padding: '12px 36px 12px 12px',
+                        color: '#FFFFFF',
+                        fontSize: '14px',
+                        outline: 'none',
+                        appearance: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {professorsWithCounts.map(({ name, count }) => (
+                        <option key={name} value={name}>{name} ({count})</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} color="#71717A" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>
@@ -630,6 +615,55 @@ export default function IOSLibraryPage() {
       <div style={{ padding: '16px 20px' }}>
         {viewMode === 'categories' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <button
+              onClick={() => { triggerHaptic('light'); setViewMode('browse'); }}
+              data-testid="button-all-videos"
+              style={{
+                background: 'rgba(139, 92, 246, 0.08)',
+                border: '1px solid rgba(139, 92, 246, 0.2)',
+                borderRadius: '12px',
+                padding: '16px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                position: 'relative',
+              }}
+            >
+              <div style={{ fontSize: '15px', fontWeight: 600, color: '#A78BFA', paddingRight: '20px' }}>
+                All Videos
+              </div>
+              <div style={{ fontSize: '13px', color: '#71717A', fontWeight: 500 }}>
+                Browse everything
+              </div>
+              <ChevronRight size={16} color="#6D28D9" style={{ position: 'absolute', top: '16px', right: '12px' }} />
+            </button>
+            <button
+              onClick={() => { triggerHaptic('light'); setSelectedTechnique('Recently Added'); setViewMode('browse'); }}
+              data-testid="button-recently-added"
+              style={{
+                background: 'rgba(139, 92, 246, 0.08)',
+                border: '1px solid rgba(139, 92, 246, 0.2)',
+                borderRadius: '12px',
+                padding: '16px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                position: 'relative',
+              }}
+            >
+              <div style={{ fontSize: '15px', fontWeight: 600, color: '#A78BFA', paddingRight: '20px' }}>
+                Recently Added
+              </div>
+              <div style={{ fontSize: '13px', color: '#71717A', fontWeight: 500 }}>
+                Latest videos
+              </div>
+              <ChevronRight size={16} color="#6D28D9" style={{ position: 'absolute', top: '16px', right: '12px' }} />
+            </button>
+
             {categoriesData?.categories?.map(cat => (
               <button
                 key={cat.id}
@@ -670,27 +704,6 @@ export default function IOSLibraryPage() {
                 <ChevronRight size={16} color="#3F3F46" style={{ position: 'absolute', top: '16px', right: '12px' }} />
               </button>
             ))}
-
-            <button
-              onClick={() => setViewMode('browse')}
-              data-testid="button-view-all-flat"
-              style={{
-                background: 'rgba(139, 92, 246, 0.08)',
-                border: '1px solid rgba(139, 92, 246, 0.2)',
-                borderRadius: '12px',
-                padding: '16px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                gridColumn: '1 / -1',
-              }}
-            >
-              <div style={{ fontSize: '15px', fontWeight: 600, color: '#A78BFA' }}>
-                View All Videos
-              </div>
-              <div style={{ fontSize: '13px', color: '#71717A', marginTop: '4px' }}>
-                Browse with filters and search
-              </div>
-            </button>
           </div>
         )}
 

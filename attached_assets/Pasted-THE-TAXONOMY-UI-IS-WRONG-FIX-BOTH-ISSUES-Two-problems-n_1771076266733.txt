@@ -1,0 +1,114 @@
+THE TAXONOMY UI IS WRONG — FIX BOTH ISSUES
+
+Two problems need fixing:
+
+══════════════════════════════════════════════════════════════════════════
+PROBLEM 1: THE UI IS STILL A FLAT DROPDOWN
+══════════════════════════════════════════════════════════════════════════
+
+The Library is showing taxonomy categories in a DROPDOWN LIST. That’s
+not what we designed. It should be a VISUAL CARD GRID that users tap
+to drill down.
+
+Replace the dropdown with this layout:
+
+SCREEN 1 — CATEGORY GRID (Level 1 only — 12 categories)
+Show a grid of tappable cards, 2 columns:
+
+┌──────────────────┐  ┌──────────────────┐
+│   🥋 Guard Play  │  │  ⚔️ Submissions  │
+│    395 videos    │  │    318 videos    │
+└──────────────────┘  └──────────────────┘
+┌──────────────────┐  ┌──────────────────┐
+│   🏃 Passing     │  │  🛡️ Defense      │
+│    303 videos    │  │    340 videos    │
+└──────────────────┘  └──────────────────┘
+… etc for all 12 categories
+
+Style: Dark cards matching our existing dark theme. Rounded corners.
+Category name prominent. Video count smaller below. No emojis needed
+if they don’t fit the design — clean text is fine.
+
+Keep the search bar at the top — searching should work across
+everything.
+
+SCREEN 2 — When user taps a category, show POSITIONS (Level 2)
+Header: “Guard Play” with a back arrow
+List or grid of positions:
+Closed Guard (42)
+Half Guard (38)
+Open Guard (28)
+Butterfly Guard (22)
+…
+
+SCREEN 3 — When user taps a position, show TECHNIQUES (Level 3)
+OR go straight to videos if there are no Level 3 children.
+
+SCREEN 4 — Videos filtered by the selected taxonomy node.
+Same video cards we already have (thumbnail, title, instructor,
+Save, Share, Analysis).
+
+ALSO keep an “All Videos” option and “Recently Added” at the top
+of the category grid for users who want to browse everything.
+
+══════════════════════════════════════════════════════════════════════════
+PROBLEM 2: JUNK CATEGORIES IN THE TAXONOMY
+══════════════════════════════════════════════════════════════════════════
+
+There are messy combo categories that should not exist:
+
+- “sweep/transition”
+- “defense/sweep combination”
+- “escape/transition/submission”
+- “multiple (strikes, transitions, defensive tactics)”
+- “pass/submission combo”
+- “takedown, transition, submission”
+- “control/transition”
+- “multiple ground techniques”
+- “submission, sweep”
+- Any other slash/comma separated combination
+
+These are NOT real BJJ categories. They exist because the AI labeled
+some videos with multiple types and those got stored as combo strings.
+
+FIX:
+
+1. Find all taxonomy nodes that contain “/” or “,” or “multiple”
+   or “combo” in the name
+1. For each one, find the videos tagged to it
+1. Re-tag those videos to the INDIVIDUAL correct categories:
+- “sweep/transition” → tag the video under BOTH “sweep” AND “transition”
+- “escape/transition/submission” → tag under “escape” AND “transition” AND “submission”
+1. Delete the junk taxonomy node after re-tagging its videos
+1. Only keep clean, single-concept categories
+
+The final Level 1 should be EXACTLY these 12 categories (or close):
+
+1. Guard Play
+1. Submissions
+1. Passing
+1. Sweeps
+1. Escapes
+1. Takedowns
+1. Back Attacks
+1. Transitions
+1. Guard Retention
+1. Top Control
+1. Leg Locks
+1. Fundamentals & Concepts
+
+Nothing else at Level 1. No combos, no “other”, no “multiple”.
+
+══════════════════════════════════════════════════════════════════════════
+AFTER FIXING
+══════════════════════════════════════════════════════════════════════════
+
+1. Show me the final Level 1 categories with video counts
+1. Confirm zero junk/combo categories remain
+1. Show me the Library UI in preview — should be a card grid
+1. Tap into “Guard Play” — should show positions
+1. Tap into “Closed Guard” — should show videos
+1. Search “armbar” — should show results
+1. Build passes, server runs clean
+
+DO NOT publish until I confirm the UI looks right.

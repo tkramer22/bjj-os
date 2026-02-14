@@ -341,21 +341,47 @@ export default function LibraryPage() {
             {isCategoriesLoading ? (
               <div className="loading-state"><IOSSpinner size="md" className="text-purple-400" /></div>
             ) : (
-              categories.map(category => (
+              <>
                 <button
-                  key={category.id}
-                  className="category-card"
-                  data-testid={`category-card-${category.id}`}
-                  onClick={() => navigateToCategory(category)}
+                  className="category-card special-card"
+                  data-testid="button-all-videos"
+                  onClick={showAllVideos}
                 >
-                  <div className="category-name">{category.name}</div>
-                  <div className="category-count">{category.videoCount || 0} videos</div>
-                  {category.description && (
-                    <div className="category-description">{category.description}</div>
-                  )}
+                  <div className="category-name">All Videos</div>
+                  <div className="category-count">Browse everything</div>
                   <ChevronRight className="category-arrow" size={20} />
                 </button>
-              ))
+                <button
+                  className="category-card special-card"
+                  data-testid="button-recently-added"
+                  onClick={() => {
+                    setViewMode('all');
+                    setSelectedCategory(null);
+                    setSelectedChild(null);
+                    setSearchQuery('');
+                    setIsSearching(false);
+                  }}
+                >
+                  <div className="category-name">Recently Added</div>
+                  <div className="category-count">Latest videos</div>
+                  <ChevronRight className="category-arrow" size={20} />
+                </button>
+                {categories.map(category => (
+                  <button
+                    key={category.id}
+                    className="category-card"
+                    data-testid={`category-card-${category.id}`}
+                    onClick={() => navigateToCategory(category)}
+                  >
+                    <div className="category-name">{category.name}</div>
+                    <div className="category-count">{category.videoCount || 0} videos</div>
+                    {category.description && (
+                      <div className="category-description">{category.description}</div>
+                    )}
+                    <ChevronRight className="category-arrow" size={20} />
+                  </button>
+                ))}
+              </>
             )}
           </div>
         )}
@@ -600,6 +626,16 @@ export default function LibraryPage() {
           .category-card:hover {
             border-color: rgba(139, 92, 246, 0.4);
             background: #111;
+          }
+
+          .category-card.special-card {
+            background: rgba(139, 92, 246, 0.08);
+            border-color: rgba(139, 92, 246, 0.2);
+          }
+
+          .category-card.special-card:hover {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: rgba(139, 92, 246, 0.4);
           }
 
           .category-name {
