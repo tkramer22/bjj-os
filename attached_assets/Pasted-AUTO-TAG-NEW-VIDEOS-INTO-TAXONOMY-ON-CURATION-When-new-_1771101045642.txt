@@ -1,0 +1,112 @@
+AUTO-TAG NEW VIDEOS INTO TAXONOMY ON CURATION
+
+When new videos are discovered and analyzed by the curation pipeline,
+they need to be automatically tagged into the technique taxonomy.
+Right now new videos get analyzed but don’t get taxonomy tags, so
+they won’t appear in the category grid.
+
+══════════════════════════════════════════════════════════════════════════
+THE FIX
+══════════════════════════════════════════════════════════════════════════
+
+After a video is analyzed by Gemini 2.5 and saved to the database,
+IMMEDIATELY tag it into the taxonomy.
+
+Find the video processing pipeline — the code that runs after Gemini
+analysis completes and stores the result. Add a step AFTER the analysis
+is saved:
+
+```javascript
+// After saving Gemini analysis to the video record...
+
+// Auto-tag into taxonomy
+await autoTagVideo(videoId, analysisResult);
+```
+
+The autoTagVideo function should:
+
+1. Read the video’s analysis data (primary_techniques, positions_covered,
+   technique_type, skill_level, gemini_analysis)
+1. Match against existing taxonomy nodes by:
+- technique_type → maps to Level 1 category
+  (e.g., “submission” → Submissions, “sweep” → Sweeps)
+- positions_covered → maps to Level 2 position
+  (e.g., “closed_guard” → Closed Guard under the matched category)
+- primary_techniques → maps to Level 3 technique
+  (e.g., “armbar” → Armbar under the matched position)
+1. Use FUZZY MATCHING for technique names since Gemini output may not
+   exactly match taxonomy node names:
+- Lowercase comparison
+- Strip common words (“from”, “the”, “a”, “basic”, “advanced”)
+- Check for contains/partial match
+- “armbar from closed guard” should match taxonomy node “Armbar”
+  under parent “Closed Guard”
+1. If no match found at Level 3, tag at Level 2 (position)
+   If no match at Level 2, tag at Level 1 (category)
+   Every video MUST get at least one Level 1 tag
+1. A video can have MULTIPLE tags (a video covering armbars from
+   both mount and closed guard gets tagged to both)
+1. Insert into video_technique_tags:
+   INSERT INTO video_technique_tags (video_id, taxonomy_id, relevance)
+   VALUES ($1, $2, ‘primary’)
+   ON CONFLICT (video_id, taxonomy_id) DO NOTHING;
+
+══════════════════════════════════════════════════════════════════════════
+MAPPING RULES
+══════════════════════════════════════════════════════════════════════════
+
+technique_type to Level 1 category mapping:
+
+technique    → Fundamentals
+attack       → Submissions (or Guard Play depending on context)
+submission   → Submissions
+defense      → Escapes
+pass         → Passing
+position     → Top Control
+sweep        → Sweeps
+concept      → Fundamentals
+transition   → Transitions
+escape       → Escapes
+guard        → Guard Play
+takedown     → Takedowns
+drill        → Fundamentals
+control      → Top Control
+guard_pass   → Passing
+guard_retention → Guard Retention
+
+If technique_type contains multiple values separated by “/” or “,”,
+tag into ALL matching categories.
+
+══════════════════════════════════════════════════════════════════════════
+TEST
+══════════════════════════════════════════════════════════════════════════
+
+1. Trigger the curation pipeline to process one new video
+1. Check that the video appears in the curated_videos table with analysis
+1. Check that the video has entries in video_technique_tags
+1. Check that the video appears in the correct taxonomy category in
+   the Library UI
+1. Verify the video shows up when browsing the grid
+
+Also: Run the auto-tagger on any existing videos that have analysis
+but are NOT yet in video_technique_tags. This catches videos that were
+analyzed before the taxonomy was built.
+
+SELECT COUNT(*) FROM curated_videos cv
+WHERE cv.status = ‘active’
+AND cv.gemini_analysis IS NOT NULL
+AND NOT EXISTS (
+SELECT 1 FROM video_technique_tags vt WHERE vt.video_id = cv.id
+);
+
+If this count is > 0, run the auto-tagger on all of them.
+
+══════════════════════════════════════════════════════════════════════════
+SHOW ME
+══════════════════════════════════════════════════════════════════════════
+
+1. Where in the pipeline the auto-tag step was added
+1. The mapping logic
+1. Count of untagged videos before and after
+1. One example video: analysis data → taxonomy tags assigned
+1. Confirm new videos will auto-appear in the grid going forward

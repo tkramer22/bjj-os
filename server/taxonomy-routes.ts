@@ -555,6 +555,52 @@ async function updateVideoCounts() {
   }
 }
 
+router.post('/auto-tag-backfill', requireAdmin, async (_req, res) => {
+  try {
+    const { backfillUntaggedVideos } = await import('./auto-taxonomy-tagger');
+
+    const beforeCount = await db.execute(sql`SELECT COUNT(*) as count FROM video_technique_tags`);
+    const beforeRows: any[] = Array.isArray(beforeCount) ? beforeCount : (beforeCount as any).rows || [];
+    const tagsBefore = Number(beforeRows[0]?.count) || 0;
+
+    const untaggedCount = await db.execute(sql`
+      SELECT COUNT(*) as count FROM ai_video_knowledge v
+      WHERE v.status = 'active'
+      AND v.technique_name IS NOT NULL
+      AND v.technique_name != ''
+      AND NOT EXISTS (
+        SELECT 1 FROM video_technique_tags vt WHERE vt.video_id = v.id
+      )
+    `);
+    const untaggedRows: any[] = Array.isArray(untaggedCount) ? untaggedCount : (untaggedCount as any).rows || [];
+    const videosToTag = Number(untaggedRows[0]?.count) || 0;
+
+    console.log(`[AUTO-TAG] Starting backfill: ${videosToTag} untagged videos, ${tagsBefore} existing tags`);
+
+    res.json({
+      success: true,
+      message: `Backfill started for ${videosToTag} untagged videos (${tagsBefore} existing tags). Check server logs for progress.`,
+      tagsBefore,
+      totalUntaggedBefore: videosToTag,
+    });
+
+    backfillUntaggedVideos().then(async (result) => {
+      const afterCount = await db.execute(sql`SELECT COUNT(*) as count FROM video_technique_tags`);
+      const afterRows: any[] = Array.isArray(afterCount) ? afterCount : (afterCount as any).rows || [];
+      const tagsAfter = Number(afterRows[0]?.count) || 0;
+
+      await updateVideoCounts();
+
+      console.log(`[AUTO-TAG] ✅ Backfill COMPLETE: ${result.processed} videos processed, ${tagsAfter - tagsBefore} new tags added (total: ${tagsAfter}), ${result.errors} errors`);
+    }).catch((err) => {
+      console.error(`[AUTO-TAG] ❌ Backfill failed:`, err.message);
+    });
+  } catch (error: any) {
+    console.error('[AUTO-TAG] Backfill error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/update-counts', requireAdmin, async (_req, res) => {
   try {
     await updateVideoCounts();

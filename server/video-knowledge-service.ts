@@ -631,6 +631,17 @@ export async function processVideoKnowledge(videoId: number): Promise<{ success:
     
     console.log(`[PROCESS] Successfully processed video ${video.id}: ${extractionResult.techniques!.length} techniques`);
     
+    // Auto-tag into taxonomy after analysis is saved
+    try {
+      const { autoTagVideo } = await import('./auto-taxonomy-tagger');
+      const tagResult = await autoTagVideo(video.id);
+      if (tagResult.success && tagResult.tagsAdded > 0) {
+        console.log(`[PROCESS] Auto-tagged video ${video.id} with ${tagResult.tagsAdded} taxonomy tags: ${tagResult.tags.join(', ')}`);
+      }
+    } catch (e) {
+      // Non-critical - don't fail video processing if auto-tagging fails
+    }
+    
     // Self-expanding instructor discovery - check if a new instructor should be added to the pool
     if (video.instructorName) {
       try {
