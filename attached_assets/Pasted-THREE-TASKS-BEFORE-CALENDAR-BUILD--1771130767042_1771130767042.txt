@@ -1,0 +1,150 @@
+THREE TASKS BEFORE CALENDAR BUILD
+
+══════════════════════════════════════════════════════════════════════════
+TASK 1: ADMIN DASHBOARD TAXONOMY INTEGRATION
+══════════════════════════════════════════════════════════════════════════
+
+The app’s Technique Library now uses a beautiful taxonomy grid with
+12 categories, positions, and techniques. But the Admin Dashboard at
+bjjos.app/admin/videos still uses the OLD flat filters (All Instructors,
+All Techniques, All Status dropdowns).
+
+UPDATE the Admin Dashboard to match the app’s taxonomy:
+
+1. Replace the “All Techniques…” dropdown with taxonomy navigation:
+- First dropdown: Category (Guard Play, Submissions, Passing, etc.)
+- Second dropdown: Position (appears after category is selected)
+- Third dropdown: Technique (appears after position is selected)
+- Each level filters the video grid below
+1. Add a “Taxonomy” column to the video cards/grid showing which
+   taxonomy node(s) each video is tagged to. If a video has NO
+   taxonomy tags, show a warning badge “⚠️ Untagged”
+1. Add a “Taxonomy” section in the admin sidebar (if there is one)
+   or as a new tab that shows:
+- All 12 categories with video counts
+- Drill down into each to see positions and their counts
+- Ability to see which videos are in each node
+- Count of UNTAGGED videos (videos with no taxonomy assignment)
+1. Add a bulk action: “Auto-tag untagged videos” button that runs
+   the auto-tagger on all videos missing taxonomy tags
+1. Show taxonomy stats on the dashboard overview:
+- Total tagged videos vs total videos
+- Coverage percentage
+- Categories with most/least videos
+
+══════════════════════════════════════════════════════════════════════════
+TASK 2: VERIFY NEW VIDEOS AUTO-TAG INTO TAXONOMY
+══════════════════════════════════════════════════════════════════════════
+
+When new videos are analyzed by the curation pipeline (Gemini 2.5),
+they MUST automatically get tagged into the taxonomy grid so they
+appear in the app’s Technique Library.
+
+CHECK AND FIX:
+
+1. Find the video processing pipeline — the code that runs after
+   Gemini analysis completes and saves results to the database.
+1. Verify there is a step AFTER analysis that maps the video to
+   taxonomy nodes. If this step does NOT exist, add it:
+   
+   After analysis is saved:
+   a) Read the video’s technique_type, positions_covered,
+   primary_techniques from the analysis
+   b) Match against taxonomy nodes (fuzzy matching on names)
+   c) Insert into video_technique_tags table
+   d) Log the mapping for monitoring
+1. Run a count check RIGHT NOW:
+   
+   – How many active videos have NO taxonomy tags?
+   SELECT COUNT(*) FROM curated_videos cv
+   WHERE cv.status = ‘active’
+   AND NOT EXISTS (
+   SELECT 1 FROM video_technique_tags vt WHERE vt.video_id = cv.id
+   );
+   
+   If this number is significant (more than 100), run the auto-tagger
+   on all untagged videos.
+1. Process the 36 pending videos shown in the admin dashboard
+   (“Process All Pending (36)”) and verify they get taxonomy tags
+   after processing.
+1. TEST the full pipeline:
+   □ Trigger curation to find and analyze one new video
+   □ Verify it gets Gemini analysis
+   □ Verify it gets taxonomy tags
+   □ Verify it appears in the correct category in the app’s
+   Technique Library
+   □ Verify it appears in the Admin Dashboard with taxonomy info
+
+══════════════════════════════════════════════════════════════════════════
+TASK 3: APP STORE REVIEW PROMPT (SKStoreReviewController)
+══════════════════════════════════════════════════════════════════════════
+
+We need to confirm that the App Store review prompt is implemented
+in the iOS app. This is Apple’s native “Rate this app” dialog that
+helps get App Store ratings organically.
+
+CHECK if SKStoreReviewController (or the Capacitor equivalent) is
+already implemented. If not, add it.
+
+IMPLEMENTATION:
+
+1. Install the Capacitor plugin (if not already installed):
+   npm install @capacitor-community/in-app-review
+   npx cap sync
+1. Trigger the review prompt at the RIGHT moments — not randomly.
+   Apple’s guidelines say to ask at a moment of delight. Good triggers:
+   
+   a) After the user’s 5th chat message with Professor OS
+   (they’ve gotten value, they’re engaged)
+   b) After they save their 3rd video
+   (they’re finding content they like)
+   c) After they’ve used the app for 7+ days
+   (they’re a retained user)
+   
+   BAD triggers (don’t do these):
+- On first launch
+- After an error
+- During onboarding
+- Every time they open the app
+1. Rate limiting — Apple only shows the prompt 3 times per year per
+   user. But we should limit on our side too:
+- Track if we’ve already triggered it for this user
+- Don’t trigger more than once per 30 days
+- Don’t trigger if user has already rated (if detectable)
+1. The code should look something like:
+   
+   import { InAppReview } from ‘@capacitor-community/in-app-review’;
+   
+   // Check conditions
+   const shouldAsk = userMessageCount >= 5
+   && daysSinceInstall >= 7
+   && !hasBeenAskedRecently;
+   
+   if (shouldAsk) {
+   await InAppReview.requestReview();
+   // Record that we asked
+   localStorage.setItem(‘lastReviewPrompt’, Date.now().toString());
+   }
+1. Add a tracking flag in the user’s local storage or database:
+- last_review_prompt_date
+- review_prompt_count
+1. VERIFY it works:
+   □ Check that @capacitor-community/in-app-review is in package.json
+   □ Check that the trigger logic exists in the frontend code
+   □ Check that it fires at the right moment (after 5th message
+   or 3rd save or 7 days)
+   □ Check that it doesn’t fire repeatedly
+   □ If possible, test in Xcode simulator (note: the actual dialog
+   only shows on real devices, simulator shows nothing but shouldn’t
+   crash)
+
+══════════════════════════════════════════════════════════════════════════
+ORDER OF OPERATIONS
+══════════════════════════════════════════════════════════════════════════
+
+1. Task 2 first (verify auto-tagging — most critical for users)
+1. Task 1 second (admin taxonomy — important for you as admin)
+1. Task 3 third (review prompt — growth optimization)
+
+Show me results for each task before moving to the next.
+Do NOT publish until all three are verified working.
