@@ -101,6 +101,7 @@ import IOSSettingsPage from "@/pages/ios-settings";
 import IOSTermsPage from "@/pages/ios-terms";
 import IOSPrivacyPage from "@/pages/ios-privacy";
 import IOSHelpPage from "@/pages/ios-help";
+import { IOSTabContainer } from "@/components/ios-tab-container";
 
 // Apple App Store Legal Pages (web-accessible for App Store links)
 import ApplePrivacy from "@/pages/apple/privacy";
@@ -138,6 +139,32 @@ function NativeAwareHome({ isAuthenticated, authRestored }: { isAuthenticated: b
   }
   
   return <Landing />;
+}
+
+const IOS_TAB_PATHS = ['/ios-chat', '/ios-library', '/ios-saved', '/ios-profile'];
+
+function PersistentIOSTabContainer() {
+  const [location] = useLocation();
+  const isActive = IOS_TAB_PATHS.includes(location);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (isActive && !mounted) setMounted(true);
+  }, [isActive, mounted]);
+
+  if (!mounted) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: isActive ? 9998 : -1,
+      visibility: isActive ? 'visible' : 'hidden',
+      pointerEvents: isActive ? 'auto' : 'none',
+    }}>
+      <IOSTabContainer />
+    </div>
+  );
 }
 
 export default function App() {
@@ -246,6 +273,7 @@ export default function App() {
         <BackgroundProcessingNotification />
         <TooltipProvider>
           <ThemeProvider defaultTheme="dark">
+            <PersistentIOSTabContainer />
             <Switch>
             {/* Public pages - Native app skips landing page */}
             <Route path="/">
@@ -273,10 +301,11 @@ export default function App() {
             
             {/* iOS Native App Routes */}
             <Route path="/ios-home" component={IOSHomePage} />
-            <Route path="/ios-chat" component={IOSChatPage} />
-            <Route path="/ios-library" component={IOSLibraryPage} />
-            <Route path="/ios-saved" component={IOSSavedPage} />
-            <Route path="/ios-profile" component={IOSProfilePage} />
+            {/* iOS tab routes render nothing - handled by PersistentIOSTabContainer outside Switch */}
+            <Route path="/ios-chat">{() => null}</Route>
+            <Route path="/ios-library">{() => null}</Route>
+            <Route path="/ios-saved">{() => null}</Route>
+            <Route path="/ios-profile">{() => null}</Route>
             <Route path="/ios-settings" component={IOSSettingsPage} />
             <Route path="/ios-terms" component={IOSTermsPage} />
             <Route path="/ios-privacy" component={IOSPrivacyPage} />

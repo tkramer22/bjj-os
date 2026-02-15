@@ -51,7 +51,7 @@ interface TaxonomyNode {
 
 type ViewMode = 'browse' | 'categories' | 'children' | 'taxonomy-videos';
 
-export default function IOSLibraryPage() {
+export default function IOSLibraryPage({ hideBottomNav }: { hideBottomNav?: boolean } = {}) {
   const [viewMode, setViewMode] = useState<ViewMode>('categories');
   const [selectedCategory, setSelectedCategory] = useState<TaxonomyNode | null>(null);
   const [selectedChild, setSelectedChild] = useState<TaxonomyNode | null>(null);
@@ -842,7 +842,7 @@ export default function IOSLibraryPage() {
         )}
       </div>
 
-      <IOSBottomNav />
+      {!hideBottomNav && <IOSBottomNav />}
 
       {currentVideo && (
         <VideoPlayer

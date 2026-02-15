@@ -25,7 +25,7 @@ interface SavedVideo {
   hasGeminiAnalysis?: boolean;
 }
 
-export default function IOSSavedPage() {
+export default function IOSSavedPage({ hideBottomNav }: { hideBottomNav?: boolean } = {}) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTechnique, setSelectedTechnique] = useState<string>("All");
   const [selectedProfessor, setSelectedProfessor] = useState<string>("All");
@@ -170,7 +170,7 @@ export default function IOSSavedPage() {
         }}
       >
         <Loader2 className="animate-spin" size={32} color="#8B5CF6" />
-        <IOSBottomNav />
+        {!hideBottomNav && <IOSBottomNav />}
       </div>
     );
   }
@@ -611,7 +611,7 @@ export default function IOSSavedPage() {
         )}
       </div>
 
-      <IOSBottomNav />
+      {!hideBottomNav && <IOSBottomNav />}
 
       {/* In-app Video Player Modal */}
       {currentVideo && (

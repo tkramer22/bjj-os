@@ -44,7 +44,7 @@ for (let feet = 4; feet <= 7; feet++) {
 }
 const HEIGHT_OPTIONS_METRIC = Array.from({ length: 96 }, (_, i) => 120 + i); // 120-215 cm
 
-export default function IOSProfilePage() {
+export default function IOSProfilePage({ hideBottomNav }: { hideBottomNav?: boolean } = {}) {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const [editingField, setEditingField] = useState<EditableField>(null);
@@ -1346,7 +1346,7 @@ export default function IOSProfilePage() {
         </div>
       )}
 
-      <IOSBottomNav />
+      {!hideBottomNav && <IOSBottomNav />}
     </div>
   );
 }
