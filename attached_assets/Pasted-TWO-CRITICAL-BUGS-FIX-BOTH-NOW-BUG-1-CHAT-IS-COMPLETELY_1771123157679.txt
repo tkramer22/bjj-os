@@ -1,0 +1,75 @@
+TWO CRITICAL BUGS — FIX BOTH NOW
+
+BUG 1: CHAT IS COMPLETELY DOWN
+Every message returns “Sorry, I’m having trouble right now.”
+This is the #1 priority. Users cannot use the app.
+
+BUG 2: DUPLICATE SAVED VIDEOS
+The same video appears twice in Saved Videos. The UNIQUE constraint
+on (user_id, video_id) is either missing or not working.
+
+══════════════════════════════════════════════════════════════════════════
+FIX BUG 1 FIRST — CHAT
+══════════════════════════════════════════════════════════════════════════
+
+1. Check server logs RIGHT NOW for the exact error on chat messages.
+   Show me the full error.
+1. Most likely cause: the model string or prompt caching format change.
+   
+   Quick test — temporarily change the Claude call back to simple format:
+   
+   model: ‘claude-sonnet-4-5-20250929’
+   system: aiPrompt  // simple string, no array, no cache_control
+   
+   If that works, the issue is the cache_control format.
+   If that doesn’t work, try the old model:
+   
+   model: ‘claude-sonnet-4-20250514’
+   
+   If THAT works, the issue is the model string.
+1. Get chat responding before doing anything else.
+
+══════════════════════════════════════════════════════════════════════════
+FIX BUG 2 — DUPLICATE SAVES
+══════════════════════════════════════════════════════════════════════════
+
+After chat is working:
+
+1. Check if the UNIQUE constraint exists on saved_videos:
+   SELECT constraint_name, constraint_type
+   FROM information_schema.table_constraints
+   WHERE table_name = ‘saved_videos’;
+1. If NO unique constraint:
+   – First remove existing duplicates (keep the earliest save)
+   DELETE FROM saved_videos a USING saved_videos b
+   WHERE a.id > b.id
+   AND a.user_id = b.user_id
+   AND a.video_id = b.video_id;
+   
+   – Then add the constraint
+   ALTER TABLE saved_videos
+   ADD CONSTRAINT unique_user_video UNIQUE (user_id, video_id);
+1. Update the save endpoint to use INSERT ON CONFLICT:
+   INSERT INTO saved_videos (user_id, video_id)
+   VALUES ($1, $2)
+   ON CONFLICT (user_id, video_id) DO NOTHING;
+1. Update the frontend Save button:
+- Check if video is already saved before showing “Save” vs “Saved”
+- If already saved, show “Saved” (green) and don’t allow re-saving
+- Load saved video IDs on page load for instant button state
+1. Test:
+   □ Save a video → appears once in Saved
+   □ Try saving same video again → does NOT create duplicate
+   □ Button shows “Saved” for already-saved videos
+
+══════════════════════════════════════════════════════════════════════════
+VERIFY BOTH FIXES
+══════════════════════════════════════════════════════════════════════════
+
+□ Send “hello” in chat → get real response (not error)
+□ Send “show me armbar techniques” → get response with videos
+□ Save a video → appears once
+□ Save same video → no duplicate
+□ Server logs clean, no errors
+
+These are production bugs affecting real users. Fix now.
