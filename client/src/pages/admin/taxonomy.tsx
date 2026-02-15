@@ -72,7 +72,7 @@ function TaxonomyTreeNode({ node, depth = 0 }: { node: TaxonomyNode; depth?: num
   return (
     <div>
       <div
-        className={`flex items-center gap-2 py-2 px-3 rounded-md cursor-pointer hover-elevate transition-colors ${depth > 0 ? 'ml-' + (depth * 4) : ''}`}
+        className="flex items-center gap-2 py-2 px-3 rounded-md cursor-pointer hover-elevate transition-colors"
         style={{ marginLeft: depth * 16 }}
         onClick={() => hasChildren && setExpanded(!expanded)}
         data-testid={`tree-node-${node.id}`}
@@ -205,7 +205,7 @@ export default function AdminTaxonomy() {
             <Button
               onClick={() => backfillMutation.mutate()}
               disabled={backfillMutation.isPending}
-              className="bg-purple-600 hover:bg-purple-700 text-white"
+              variant="default"
               data-testid="button-backfill"
             >
               {backfillMutation.isPending ? (

@@ -112,7 +112,6 @@ export default function AdminVideos() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedInstructor, setSelectedInstructor] = useState<string>("all");
-  const [selectedTechnique, setSelectedTechnique] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedPosition, setSelectedPosition] = useState<string>("all");
   const [selectedTaxonomyTechnique, setSelectedTaxonomyTechnique] = useState<string>("all");
@@ -198,12 +197,11 @@ export default function AdminVideos() {
   }, [selectedPosition, taxonomyPositions]);
 
   const { data: videosData, isLoading, error: videosError } = useQuery<{ videos: Video[]; total: number }>({
-    queryKey: ['/api/admin/videos/list', debouncedSearch, selectedInstructor, selectedTechnique, knowledgeFilter],
+    queryKey: ['/api/admin/videos/list', debouncedSearch, selectedInstructor, knowledgeFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (debouncedSearch) params.append('q', debouncedSearch);
       if (selectedInstructor && selectedInstructor !== 'all') params.append('instructor', selectedInstructor);
-      if (selectedTechnique && selectedTechnique !== 'all') params.append('technique', selectedTechnique);
       if (knowledgeFilter && knowledgeFilter !== 'all') params.append('knowledgeFilter', knowledgeFilter);
       params.append('limit', '50');
       return fetchWithAuth(`/api/admin/videos/list?${params.toString()}`);
@@ -242,85 +240,27 @@ export default function AdminVideos() {
     },
   });
 
-  const { instructorToTechniques, techniqueToInstructors, allInstructors, allTechniques } = useMemo(() => {
+  const { allInstructors } = useMemo(() => {
     const allVideos = allVideosData?.videos || [];
-    
-    const instructorToTechniques = new Map<string, Set<string>>();
-    const techniqueToInstructors = new Map<string, Set<string>>();
     const instructorSet = new Set<string>();
-    const techniqueSet = new Set<string>();
     
     for (const video of allVideos) {
-      const instructor = video.instructor_name;
-      const technique = video.technique_name;
-      
-      if (instructor) {
-        instructorSet.add(instructor);
-        if (!instructorToTechniques.has(instructor)) {
-          instructorToTechniques.set(instructor, new Set());
-        }
-        if (technique) {
-          instructorToTechniques.get(instructor)!.add(technique);
-        }
-      }
-      
-      if (technique) {
-        techniqueSet.add(technique);
-        if (!techniqueToInstructors.has(technique)) {
-          techniqueToInstructors.set(technique, new Set());
-        }
-        if (instructor) {
-          techniqueToInstructors.get(technique)!.add(instructor);
-        }
+      if (video.instructor_name) {
+        instructorSet.add(video.instructor_name);
       }
     }
     
     return {
-      instructorToTechniques,
-      techniqueToInstructors,
       allInstructors: Array.from(instructorSet).sort((a, b) => a.localeCompare(b)),
-      allTechniques: Array.from(techniqueSet).sort((a, b) => a.localeCompare(b)),
     };
   }, [allVideosData]);
 
   const filteredInstructors = useMemo(() => {
-    if (selectedTechnique === 'all') {
-      return allInstructors;
-    }
-    const instructorsForTechnique = techniqueToInstructors.get(selectedTechnique);
-    if (!instructorsForTechnique) return allInstructors;
-    return allInstructors.filter(i => instructorsForTechnique.has(i));
-  }, [selectedTechnique, allInstructors, techniqueToInstructors]);
-
-  const filteredTechniques = useMemo(() => {
-    if (selectedInstructor === 'all') {
-      return allTechniques;
-    }
-    const techniquesForInstructor = instructorToTechniques.get(selectedInstructor);
-    if (!techniquesForInstructor) return allTechniques;
-    return allTechniques.filter(t => techniquesForInstructor.has(t));
-  }, [selectedInstructor, allTechniques, instructorToTechniques]);
+    return allInstructors;
+  }, [allInstructors]);
 
   const handleInstructorChange = (newInstructor: string) => {
     setSelectedInstructor(newInstructor);
-    
-    if (newInstructor !== 'all' && selectedTechnique !== 'all') {
-      const techniquesForInstructor = instructorToTechniques.get(newInstructor);
-      if (!techniquesForInstructor || !techniquesForInstructor.has(selectedTechnique)) {
-        setSelectedTechnique('all');
-      }
-    }
-  };
-
-  const handleTechniqueChange = (newTechnique: string) => {
-    setSelectedTechnique(newTechnique);
-    
-    if (newTechnique !== 'all' && selectedInstructor !== 'all') {
-      const instructorsForTechnique = techniqueToInstructors.get(newTechnique);
-      if (!instructorsForTechnique || !instructorsForTechnique.has(selectedInstructor)) {
-        setSelectedInstructor('all');
-      }
-    }
   };
 
   const handleViewKnowledge = async (video: Video) => {
@@ -405,21 +345,8 @@ export default function AdminVideos() {
   };
 
   const getInstructorVideoCount = (instructor: string): number => {
-    if (selectedTechnique === 'all') {
-      const allVideos = allVideosData?.videos || [];
-      return allVideos.filter(v => v.instructor_name === instructor).length;
-    }
     const allVideos = allVideosData?.videos || [];
-    return allVideos.filter(v => v.instructor_name === instructor && v.technique_name === selectedTechnique).length;
-  };
-
-  const getTechniqueVideoCount = (technique: string): number => {
-    if (selectedInstructor === 'all') {
-      const allVideos = allVideosData?.videos || [];
-      return allVideos.filter(v => v.technique_name === technique).length;
-    }
-    const allVideos = allVideosData?.videos || [];
-    return allVideos.filter(v => v.technique_name === technique && v.instructor_name === selectedInstructor).length;
+    return allVideos.filter(v => v.instructor_name === instructor).length;
   };
 
   const getStatusIcon = (status?: string) => {
