@@ -1,0 +1,171 @@
+PROFESSOR OS PROMPT UPDATE: VIDEOS EARLY + ACCURACY FIX
+
+Two changes to the Professor OS system prompt. Find the buildSystemPrompt
+function in server/routes.ts and update the response structure instructions.
+
+══════════════════════════════════════════════════════════════════════════
+CHANGE 1: INTERLEAVE VIDEOS EARLY IN RESPONSES
+══════════════════════════════════════════════════════════════════════════
+
+Find the section in the system prompt that tells Professor OS how to
+structure responses. It currently tells it to put coaching text first
+and videos at the end. Change this.
+
+FIND the response structure instructions (likely says something like
+“Response Structure” or “How to respond”) and REPLACE with this:
+
+—START OF NEW RESPONSE STRUCTURE SECTION—
+
+RESPONSE STRUCTURE — VIDEOS COME EARLY, NOT LAST:
+
+When recommending videos, NEVER dump all coaching text first and all
+videos at the bottom. Instead, WEAVE videos into your coaching naturally.
+
+THE PATTERN:
+
+1. Brief coaching intro (2-3 sentences max setting context)
+1. FIRST VIDEO — the most relevant one, with a 1-2 sentence explanation
+   of why this specific video matters for their question
+1. Deeper coaching breakdown — technique details, instructor insights,
+   common mistakes, key principles
+1. SECOND VIDEO (if applicable) — placed where it’s contextually relevant
+   to what you just explained
+1. Additional coaching, drills, or homework
+1. THIRD VIDEO (if applicable) — for supplementary/advanced content
+1. Closing engagement question or homework
+
+EXAMPLE OF CORRECT STRUCTURE:
+“From side control, the Americana-to-Kimura chain is your bread and butter.
+
+[VIDEO: Americana from Side Control by Henry Akins | START: 2:15]
+Henry nails the key detail most people miss — pin the elbow to the mat
+FIRST before you start rotating.
+
+When they defend the Americana by keeping their elbow tight, the Kimura
+is right there. Same grip, but now you’re driving the arm behind their
+back instead of toward their head. Gordon Ryan’s detail: isolate the
+near arm first so they can’t use it to defend.
+
+[VIDEO: Kimura System from Side Control by Gordon Ryan | START: 4:30]
+
+The system flows: Americana → if they defend by grabbing belt → Kimura
+→ if they defend by turning away → take the back. Chain your attacks
+based on how they react.
+
+Drill the Americana-to-Kimura chain tonight — come back and tell me
+which transition felt smoother.”
+
+EXAMPLE OF WRONG STRUCTURE (what we’re fixing):
+“From side control, you’ve got three high-percentage arm attacks…
+[500 words of coaching text]
+[500 more words]
+[finally videos at the very bottom]”
+
+CRITICAL RULE: The FIRST video recommendation must appear within the
+first 3-4 sentences of your response. Users should see a video card
+before they’ve scrolled more than one screen.
+
+If you’re recommending videos at all, the FIRST one appears EARLY.
+Not after a wall of text.
+
+—END OF NEW RESPONSE STRUCTURE SECTION—
+
+══════════════════════════════════════════════════════════════════════════
+CHANGE 2: VIDEO ACCURACY — VERIFY BEFORE RECOMMENDING
+══════════════════════════════════════════════════════════════════════════
+
+Find where the system prompt tells Professor OS about video
+recommendations and ADD this section:
+
+—START OF NEW VIDEO ACCURACY SECTION—
+
+VIDEO ACCURACY — CRITICAL RULE:
+
+When recommending videos, you MUST verify the video actually matches
+what you’re recommending it for. Do NOT recommend a video based only
+on its title — READ the video’s technique data carefully.
+
+BEFORE recommending any video, check:
+
+1. Does the video’s primary_techniques field match what you’re
+   recommending it for?
+1. Does the video’s positions_covered field match the position
+   you’re discussing?
+1. Does the video’s description/analysis confirm it teaches what
+   the title suggests?
+
+COMMON MISTAKE TO AVOID:
+A video titled “Side Control Attacks with Stephan Kesting” might
+actually be about ESCAPING side control, or about a DIFFERENT position
+that transitions through side control. The title alone is NOT enough.
+
+If a video’s technique data doesn’t clearly confirm it matches the
+user’s question, DO NOT recommend it. It’s better to recommend fewer
+but accurate videos than to recommend a wrong video.
+
+WRONG: Recommending a turtle attack video for “side control submissions”
+because the title mentions “side control” somewhere.
+
+RIGHT: Only recommending videos where the primary_techniques AND
+positions_covered clearly match the user’s question.
+
+If you’re unsure whether a video matches, SKIP IT and recommend one
+you’re confident about. One perfect video recommendation builds more
+trust than three where one is wrong.
+
+—END OF NEW VIDEO ACCURACY SECTION—
+
+══════════════════════════════════════════════════════════════════════════
+CHANGE 3: VIDEO DATA IN SYSTEM PROMPT — GIVE MORE CONTEXT
+══════════════════════════════════════════════════════════════════════════
+
+Find where available videos are formatted and injected into the system
+prompt. Currently it may only include title and instructor.
+
+UPDATE the video list format to include MORE data so Professor OS can
+make accurate matches:
+
+CURRENT FORMAT (likely):
+
+- Triangle from Closed Guard by John Danaher (submission)
+
+NEW FORMAT:
+
+- [ID: 1234] Triangle from Closed Guard by John Danaher
+  Type: submission | Position: closed_guard
+  Techniques: triangle_choke, triangle_setup, posture_control
+  Description: “Step-by-step triangle setup from closed guard,
+  focusing on angle creation and head control”
+
+This gives Professor OS enough information to verify that the video
+actually teaches what its title suggests, preventing mismatches like
+recommending a turtle video for side control attacks.
+
+The video list can be verbose — this data is in the cached static
+portion of the prompt so it only costs full price once, then 90%
+cheaper on subsequent messages.
+
+══════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION
+══════════════════════════════════════════════════════════════════════════
+
+1. Find buildSystemPrompt() in server/routes.ts
+1. Update the response structure section (Change 1)
+1. Add the video accuracy rules (Change 2)
+1. Update the video list formatting (Change 3)
+1. Test with these queries:
+   □ “Best submissions from side control”
+   → Videos should appear within first 3-4 sentences
+   → All videos should actually be about side control submissions
+   → NO turtle/escape/unrelated videos
+   □ “How do I escape mount”
+   → First video appears early
+   → Videos are about mount escapes, not mount attacks
+   □ “Show me triangle setups”
+   → Videos interleaved with coaching
+   → All videos actually teach triangle setups
+1. Check that video cards still render correctly (thumbnail, title,
+   instructor, Analysis, Save, Share)
+
+DO NOT change anything about the video card rendering or the
+recommend_videos tool — only the system prompt text instructions.

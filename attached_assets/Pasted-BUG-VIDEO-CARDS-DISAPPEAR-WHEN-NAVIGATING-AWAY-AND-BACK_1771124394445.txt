@@ -1,0 +1,109 @@
+BUG: VIDEO CARDS DISAPPEAR WHEN NAVIGATING AWAY AND BACK
+
+When the user is in Chat and sees video cards in Professor OS responses,
+then taps to another tab (Saved, Videos, Profile) and comes back to Chat,
+the video cards are GONE. The text remains but the video recommendations
+vanish.
+
+This is a critical UX bug — users lose their video recommendations.
+
+══════════════════════════════════════════════════════════════════════════
+ROOT CAUSE
+══════════════════════════════════════════════════════════════════════════
+
+Most likely: The chat component unmounts when navigating away, and when
+it remounts, it reloads conversation history from the database. The
+video card data (video_id, title, instructor, thumbnail, timestamps)
+is either:
+
+A) Not being saved to the database with the message — only the text
+portion of the AI response is stored, not the structured video data
+
+B) Being saved but not parsed/rendered when loading history — the
+component loads the text but doesn’t reconstruct the video cards
+
+C) The video cards are stored in React state only (not persisted) and
+state is lost when the component unmounts
+
+══════════════════════════════════════════════════════════════════════════
+THE FIX
+══════════════════════════════════════════════════════════════════════════
+
+1. SAVE VIDEO RECOMMENDATIONS WITH MESSAGES:
+   When Professor OS responds with video recommendations (via the
+   recommend_videos tool), the video data MUST be saved alongside
+   the message text in the database.
+   
+   The ai_conversation_learning table (or whatever stores messages)
+   needs to persist the video card data. Options:
+   
+   a) Add a ‘video_recommendations’ JSONB column to the message record
+   b) Or store the full structured response (text + video data) in
+   the existing message field as JSON
+   
+   The saved data should include for each video:
+- video_id
+- title
+- instructor
+- thumbnail_url
+- start_time (if applicable)
+- why (the contextual explanation)
+1. LOAD AND RENDER ON HISTORY RELOAD:
+   When the Chat component mounts and loads conversation history,
+   it must:
+   a) Load the message text
+   b) Load the associated video_recommendations data
+   c) Render both — text AND video cards in the correct positions
+1. MAINTAIN CARD POSITION:
+   Videos should appear in the same position within the message as
+   they were originally shown. If a video card appeared between two
+   paragraphs, it should appear there again on reload.
+   
+   The easiest way: Store the full rendered message structure as a
+   JSON array of blocks:
+   [
+   { type: “text”, content: “From side control, the Americana…” },
+   { type: “video”, video_id: 1234, title: “…”, instructor: “…” },
+   { type: “text”, content: “When they defend the Americana…” },
+   { type: “video”, video_id: 5678, title: “…”, instructor: “…” },
+   { type: “text”, content: “Drill the Americana-to-Kimura chain…” }
+   ]
+   
+   This preserves the exact interleaved layout.
+
+══════════════════════════════════════════════════════════════════════════
+ALSO CHECK: DO NOT UNMOUNT CHAT
+══════════════════════════════════════════════════════════════════════════
+
+Alternative/additional fix: Consider NOT unmounting the Chat component
+when navigating to other tabs. Instead, hide it with CSS:
+
+- display: none when on other tabs
+- display: flex when on Chat tab
+
+This preserves all React state including video cards without needing
+to reload from the database. Many chat apps work this way to avoid
+losing scroll position and rendered content.
+
+If this approach is simpler, do this FIRST as a quick fix, then add
+proper database persistence as the permanent fix.
+
+══════════════════════════════════════════════════════════════════════════
+TEST
+══════════════════════════════════════════════════════════════════════════
+
+1. Send “best arm attacks from side control” in chat
+1. Wait for full response with video cards
+1. Tap “Saved” tab
+1. Tap back to “Chat” tab
+1. VERIFY: Video cards are still visible in the conversation
+1. Tap “Videos” tab
+1. Tap back to “Chat” tab
+1. VERIFY: Video cards still there
+1. Tap “Profile” tab
+1. Tap back to “Chat”
+1. VERIFY: Video cards still there
+1. Close the app completely and reopen
+1. VERIFY: Video cards appear in conversation history
+
+All 4 tests must pass.
