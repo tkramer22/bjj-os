@@ -113,6 +113,9 @@ export default function AdminVideos() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedInstructor, setSelectedInstructor] = useState<string>("all");
   const [selectedTechnique, setSelectedTechnique] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedPosition, setSelectedPosition] = useState<string>("all");
+  const [selectedTaxonomyTechnique, setSelectedTaxonomyTechnique] = useState<string>("all");
   const [knowledgeFilter, setKnowledgeFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "quality">("newest");
   const [authError, setAuthError] = useState(false);
@@ -157,6 +160,42 @@ export default function AdminVideos() {
     retry: false,
     enabled: !authError,
   });
+
+  const { data: taxonomyTreeData } = useQuery<{ taxonomy: any[]; totalNodes: number }>({
+    queryKey: ['/api/taxonomy/tree'],
+    queryFn: () => fetch('/api/taxonomy/tree').then(r => r.json()),
+    staleTime: 120000,
+  });
+
+  const activeTaxonomyId = useMemo(() => {
+    if (selectedTaxonomyTechnique !== 'all') return selectedTaxonomyTechnique;
+    if (selectedPosition !== 'all') return selectedPosition;
+    if (selectedCategory !== 'all') return selectedCategory;
+    return null;
+  }, [selectedCategory, selectedPosition, selectedTaxonomyTechnique]);
+
+  const { data: taxonomyVideosData, isLoading: taxonomyLoading } = useQuery<{ videos: any[]; count: number }>({
+    queryKey: ['/api/taxonomy/videos', activeTaxonomyId],
+    queryFn: () => fetch(`/api/taxonomy/videos/${activeTaxonomyId}?includeChildren=true`).then(r => r.json()),
+    staleTime: 30000,
+    enabled: !!activeTaxonomyId,
+  });
+
+  const taxonomyCategories = useMemo(() => {
+    return taxonomyTreeData?.taxonomy || [];
+  }, [taxonomyTreeData]);
+
+  const taxonomyPositions = useMemo(() => {
+    if (selectedCategory === 'all') return [];
+    const cat = taxonomyCategories.find((c: any) => String(c.id) === selectedCategory);
+    return cat?.children || [];
+  }, [selectedCategory, taxonomyCategories]);
+
+  const taxonomyTechniques = useMemo(() => {
+    if (selectedPosition === 'all') return [];
+    const pos = taxonomyPositions.find((p: any) => String(p.id) === selectedPosition);
+    return pos?.children || [];
+  }, [selectedPosition, taxonomyPositions]);
 
   const { data: videosData, isLoading, error: videosError } = useQuery<{ videos: Video[]; total: number }>({
     queryKey: ['/api/admin/videos/list', debouncedSearch, selectedInstructor, selectedTechnique, knowledgeFilter],
@@ -316,7 +355,25 @@ export default function AdminVideos() {
   }
 
   const stats = statsData || { total_videos: 0, unique_instructors: 0, unique_techniques: 0, avg_quality: 0 };
-  const rawVideos = videosData?.videos || [];
+  
+  const rawVideos = useMemo(() => {
+    if (activeTaxonomyId && taxonomyVideosData?.videos) {
+      return taxonomyVideosData.videos.map((v: any) => ({
+        id: v.id,
+        youtube_id: v.videoId || v.youtubeId || '',
+        title: v.title || '',
+        instructor_name: v.instructorName || 'Unknown',
+        technique_name: v.techniqueName || '',
+        thumbnail_url: v.thumbnailUrl || '',
+        quality_score: v.qualityScore || 0,
+        duration: typeof v.duration === 'string' ? parseInt(v.duration) || 0 : v.duration || 0,
+        created_at: v.createdAt || '',
+        knowledge_status: undefined,
+        techniques_count: 0,
+      })) as Video[];
+    }
+    return videosData?.videos || [];
+  }, [activeTaxonomyId, taxonomyVideosData, videosData]);
   
   // Apply sorting to videos
   const videos = useMemo(() => {
@@ -550,19 +607,58 @@ export default function AdminVideos() {
                 </SelectContent>
               </Select>
 
-              <Select value={selectedTechnique} onValueChange={handleTechniqueChange}>
-                <SelectTrigger className="w-[200px]" data-testid="select-technique">
-                  <SelectValue placeholder="All Techniques" />
+              <Select value={selectedCategory} onValueChange={(val) => {
+                setSelectedCategory(val);
+                setSelectedPosition('all');
+                setSelectedTaxonomyTechnique('all');
+              }}>
+                <SelectTrigger className="w-[180px]" data-testid="select-taxonomy-category">
+                  <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Techniques ({filteredTechniques.length})</SelectItem>
-                  {filteredTechniques.map((technique) => (
-                    <SelectItem key={technique} value={technique}>
-                      {technique} ({getTechniqueVideoCount(technique)})
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {taxonomyCategories.map((cat: any) => (
+                    <SelectItem key={cat.id} value={String(cat.id)}>
+                      {cat.name} ({cat.videoCount || 0})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+
+              {selectedCategory !== 'all' && taxonomyPositions.length > 0 && (
+                <Select value={selectedPosition} onValueChange={(val) => {
+                  setSelectedPosition(val);
+                  setSelectedTaxonomyTechnique('all');
+                }}>
+                  <SelectTrigger className="w-[180px]" data-testid="select-taxonomy-position">
+                    <SelectValue placeholder="Position" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Positions</SelectItem>
+                    {taxonomyPositions.map((pos: any) => (
+                      <SelectItem key={pos.id} value={String(pos.id)}>
+                        {pos.name} ({pos.videoCount || 0})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {selectedPosition !== 'all' && taxonomyTechniques.length > 0 && (
+                <Select value={selectedTaxonomyTechnique} onValueChange={setSelectedTaxonomyTechnique}>
+                  <SelectTrigger className="w-[180px]" data-testid="select-taxonomy-technique">
+                    <SelectValue placeholder="Technique" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Techniques</SelectItem>
+                    {taxonomyTechniques.map((tech: any) => (
+                      <SelectItem key={tech.id} value={String(tech.id)}>
+                        {tech.name} ({tech.videoCount || 0})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
 
               <Select value={knowledgeFilter} onValueChange={setKnowledgeFilter}>
                 <SelectTrigger className="w-[160px]" data-testid="select-knowledge-filter">
@@ -606,7 +702,7 @@ export default function AdminVideos() {
         </Card>
 
         <div>
-          {isLoading ? (
+          {(isLoading || (activeTaxonomyId && taxonomyLoading)) ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
               <p className="text-muted-foreground">Loading videos...</p>

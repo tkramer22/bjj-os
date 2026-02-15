@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Gift, Star, 
   FileText, LogOut, Menu, X, MessageSquare,
   ThumbsUp, Award, Video, Link2, Shield, Calculator, RefreshCw, BarChart, Zap,
-  ChevronDown, ChevronRight, Play, Smartphone, Globe, Brain
+  ChevronDown, ChevronRight, Play, Smartphone, Globe, Brain, FolderTree
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -91,6 +91,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <NavLink href="/admin/feedback" icon={<ThumbsUp />} label="Feedback" onClick={closeMenu} />
             <NavLink href="/admin/chat" icon={<MessageSquare />} label="Chat" onClick={closeMenu} />
             <NavLink href="/admin/techniques" icon={<Award />} label="Techniques" onClick={closeMenu} />
+            <NavLink href="/admin/taxonomy" icon={<FolderTree />} label="Taxonomy" onClick={closeMenu} />
             <NavLink href="/admin/chains" icon={<Link2 />} label="Chains" onClick={closeMenu} />
             <NavLink href="/admin/instructors" icon={<Users />} label="Instructors" onClick={closeMenu} />
             <NavLink href="/admin/partnerships" icon={<Calculator />} label="Partnerships" onClick={closeMenu} />

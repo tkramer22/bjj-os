@@ -56,6 +56,7 @@ import AdminAnalytics from "@/pages/admin/analytics";
 import AdminChat from "@/pages/admin/chat";
 import AdminCommandCenter from "@/pages/admin/command-center";
 import AdminBatchAnalysis from "@/pages/admin/batch-analysis";
+import AdminTaxonomy from "@/pages/admin/taxonomy";
 import AdminUsersDashboard from "@/pages/admin-users";
 import AdminEmails from "@/pages/admin-emails";
 import AddFreeUser from "@/pages/add-free-user";
@@ -417,6 +418,7 @@ export default function App() {
             <Route path="/admin/curation" component={AdminCuration} />
             <Route path="/admin/dev-os" component={AdminDevOS} />
             <Route path="/admin/batch-analysis" component={AdminBatchAnalysis} />
+            <Route path="/admin/taxonomy" component={AdminTaxonomy} />
             <Route path="/admin/analytics" component={AdminAnalytics} />
             <Route path="/admin/emails" component={AdminEmails} />
             
