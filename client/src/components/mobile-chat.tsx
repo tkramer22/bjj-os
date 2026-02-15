@@ -11,6 +11,7 @@ import { triggerHaptic } from "@/lib/haptics";
 import { getApiUrl, isNativeApp, getAuthToken } from "@/lib/capacitorAuth";
 import { useChatContext } from "@/contexts/ChatContext";
 import { Capacitor } from "@capacitor/core";
+import { reviewManager } from "@/services/reviewManager";
 
 interface Message {
   id: string;
@@ -507,6 +508,7 @@ What are you working on right now?`,
     
     setShouldAutoScroll(true);
     triggerHaptic('light');
+    reviewManager.trackMessageSent();
 
     // Create user message and add to context
     const userMessageId = Date.now().toString();
@@ -596,6 +598,7 @@ What are you working on right now?`,
                 setIsTyping(false);
                 chatContext.setBackgroundProcessing(false);
                 triggerHaptic('light');
+                reviewManager.maybeRequestReview().catch(console.error);
                 break;
               }
 

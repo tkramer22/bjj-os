@@ -2,19 +2,9 @@ import { Capacitor } from '@capacitor/core';
 import { InAppReview } from '@capacitor-community/in-app-review';
 
 const STORAGE_KEYS = {
-  VIDEOS_SAVED: 'review_videos_saved',
-  CHAT_MESSAGES: 'review_chat_messages',
-  DAYS_ACTIVE: 'review_days_active',
-  LAST_ACTIVE_DATE: 'review_last_active_date',
-  LAST_PROMPT_DATE: 'review_last_prompt_date',
-  HAS_PROMPTED: 'review_has_prompted',
-};
-
-const TRIGGERS = {
-  VIDEOS_SAVED: 5,
-  CHAT_MESSAGES: 10,
-  DAYS_ACTIVE: 7,
-  MIN_DAYS_BETWEEN_PROMPTS: 180,
+  MESSAGE_COUNT: 'chat_message_count',
+  APP_OPEN_COUNT: 'app_open_count',
+  LAST_REVIEW_PROMPT: 'last_review_prompt',
 };
 
 class ReviewManager {
@@ -41,46 +31,37 @@ class ReviewManager {
     }
   }
 
-  private daysSinceLastPrompt(): number {
-    const lastPromptDate = localStorage.getItem(STORAGE_KEYS.LAST_PROMPT_DATE);
-    if (!lastPromptDate) return Infinity;
-    
-    const last = new Date(lastPromptDate);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - last.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+  trackAppOpen(): void {
+    const count = this.getStorageValue(STORAGE_KEYS.APP_OPEN_COUNT) + 1;
+    this.setStorageValue(STORAGE_KEYS.APP_OPEN_COUNT, count);
+    console.log(`[ReviewManager] App opens: ${count}`);
   }
 
-  private canPrompt(): boolean {
-    if (!this.isNativeIOS) {
-      console.log('[ReviewManager] Not on native iOS, skipping review prompt');
-      return false;
-    }
-
-    const daysSince = this.daysSinceLastPrompt();
-    if (daysSince < TRIGGERS.MIN_DAYS_BETWEEN_PROMPTS) {
-      console.log(`[ReviewManager] Only ${daysSince} days since last prompt, need ${TRIGGERS.MIN_DAYS_BETWEEN_PROMPTS}`);
-      return false;
-    }
-
-    return true;
+  trackMessageSent(): void {
+    const count = this.getStorageValue(STORAGE_KEYS.MESSAGE_COUNT) + 1;
+    this.setStorageValue(STORAGE_KEYS.MESSAGE_COUNT, count);
+    console.log(`[ReviewManager] Messages sent: ${count}`);
   }
 
-  async requestReview(): Promise<boolean> {
-    if (!this.canPrompt()) {
+  async maybeRequestReview(): Promise<boolean> {
+    if (!this.isNativeIOS) return false;
+
+    const messageCount = this.getStorageValue(STORAGE_KEYS.MESSAGE_COUNT);
+    const appOpenCount = this.getStorageValue(STORAGE_KEYS.APP_OPEN_COUNT);
+    const lastPrompt = this.getStorageValue(STORAGE_KEYS.LAST_REVIEW_PROMPT);
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+
+    console.log(`[ReviewManager] Check: messages=${messageCount}/3, appOpens=${appOpenCount}/2, lastPrompt=${lastPrompt ? new Date(lastPrompt).toISOString() : 'never'}`);
+
+    if (messageCount < 3 || appOpenCount < 2 || lastPrompt > thirtyDaysAgo) {
       return false;
     }
 
     try {
-      console.log('[ReviewManager] Requesting native app store review via SKStoreReviewController...');
-      
+      console.log('[ReviewManager] Requesting native app store review...');
       await InAppReview.requestReview();
+      this.setStorageValue(STORAGE_KEYS.LAST_REVIEW_PROMPT, Date.now());
       console.log('[ReviewManager] Review prompt shown successfully');
-      
-      this.setStorageValue(STORAGE_KEYS.LAST_PROMPT_DATE, new Date().toISOString());
-      this.setStorageValue(STORAGE_KEYS.HAS_PROMPTED, 1);
-      
       return true;
     } catch (error) {
       console.error('[ReviewManager] Failed to request review:', error);
@@ -88,65 +69,12 @@ class ReviewManager {
     }
   }
 
-  async trackVideoSaved(): Promise<void> {
-    const count = this.getStorageValue(STORAGE_KEYS.VIDEOS_SAVED) + 1;
-    this.setStorageValue(STORAGE_KEYS.VIDEOS_SAVED, count);
-    
-    console.log(`[ReviewManager] Videos saved: ${count}/${TRIGGERS.VIDEOS_SAVED}`);
-    
-    if (count === TRIGGERS.VIDEOS_SAVED) {
-      console.log('[ReviewManager] Trigger: 5 videos saved!');
-      await this.requestReview();
-    }
-  }
-
-  async trackChatMessage(): Promise<void> {
-    const count = this.getStorageValue(STORAGE_KEYS.CHAT_MESSAGES) + 1;
-    this.setStorageValue(STORAGE_KEYS.CHAT_MESSAGES, count);
-    
-    console.log(`[ReviewManager] Chat messages: ${count}/${TRIGGERS.CHAT_MESSAGES}`);
-    
-    if (count === TRIGGERS.CHAT_MESSAGES) {
-      console.log('[ReviewManager] Trigger: 10 meaningful chat exchanges!');
-      await this.requestReview();
-    }
-  }
-
-  async trackDayActive(): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
-    const lastActiveDate = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE_DATE);
-    
-    if (lastActiveDate === today) {
-      return;
-    }
-    
-    this.setStorageValue(STORAGE_KEYS.LAST_ACTIVE_DATE, today);
-    
-    const count = this.getStorageValue(STORAGE_KEYS.DAYS_ACTIVE) + 1;
-    this.setStorageValue(STORAGE_KEYS.DAYS_ACTIVE, count);
-    
-    console.log(`[ReviewManager] Days active: ${count}/${TRIGGERS.DAYS_ACTIVE}`);
-    
-    if (count === TRIGGERS.DAYS_ACTIVE) {
-      console.log('[ReviewManager] Trigger: 7 days active!');
-      await this.requestReview();
-    }
-  }
-
-  getStats(): { videosSaved: number; chatMessages: number; daysActive: number; lastPromptDate: string | null } {
+  getStats(): { messageCount: number; appOpenCount: number; lastPrompt: number } {
     return {
-      videosSaved: this.getStorageValue(STORAGE_KEYS.VIDEOS_SAVED),
-      chatMessages: this.getStorageValue(STORAGE_KEYS.CHAT_MESSAGES),
-      daysActive: this.getStorageValue(STORAGE_KEYS.DAYS_ACTIVE),
-      lastPromptDate: localStorage.getItem(STORAGE_KEYS.LAST_PROMPT_DATE),
+      messageCount: this.getStorageValue(STORAGE_KEYS.MESSAGE_COUNT),
+      appOpenCount: this.getStorageValue(STORAGE_KEYS.APP_OPEN_COUNT),
+      lastPrompt: this.getStorageValue(STORAGE_KEYS.LAST_REVIEW_PROMPT),
     };
-  }
-
-  resetStats(): void {
-    Object.values(STORAGE_KEYS).forEach(key => {
-      localStorage.removeItem(key);
-    });
-    console.log('[ReviewManager] Stats reset');
   }
 }
 

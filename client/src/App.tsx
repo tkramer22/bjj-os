@@ -214,8 +214,7 @@ export default function App() {
         
         setAuthRestored(true);
         
-        // Track daily active usage for review prompt (only on native iOS)
-        reviewManager.trackDayActive().catch(console.error);
+        reviewManager.trackAppOpen();
       }
     }
     initAuth();

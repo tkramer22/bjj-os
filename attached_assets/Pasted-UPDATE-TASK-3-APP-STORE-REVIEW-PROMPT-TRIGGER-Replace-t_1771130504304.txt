@@ -1,0 +1,76 @@
+UPDATE TASK 3 — APP STORE REVIEW PROMPT TRIGGER
+
+Replace the review prompt trigger logic with this:
+
+TRIGGER CONDITIONS (ALL must be true):
+
+1. User has sent 3+ messages to Professor OS (across any sessions)
+1. User has opened the app 2+ separate times
+1. User has NOT been prompted in the last 30 days
+1. Platform is iOS (don’t show on web)
+
+WHEN TO FIRE:
+Immediately after Professor OS responds to the user’s 3rd message
+(or any message after that if conditions weren’t met before).
+The response comes in, user reads it, review prompt appears.
+
+This catches users at peak enthusiasm — they’ve just had a real
+coaching exchange and Professor OS has shown its value.
+
+TRACKING:
+
+- Store message_count in the user’s local storage (increment on
+  each sent message)
+- Store app_open_count in local storage (increment on each app launch)
+- Store last_review_prompt_date in local storage
+
+CODE LOGIC:
+
+```javascript
+import { InAppReview } from '@capacitor-community/in-app-review';
+import { Capacitor } from '@capacitor/core';
+
+async function maybeRequestReview() {
+  // Only on iOS
+  if (Capacitor.getPlatform() !== 'ios') return;
+  
+  const messageCount = parseInt(localStorage.getItem('chat_message_count') || '0');
+  const appOpenCount = parseInt(localStorage.getItem('app_open_count') || '0');
+  const lastPrompt = parseInt(localStorage.getItem('last_review_prompt') || '0');
+  const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+  
+  if (messageCount >= 3 && appOpenCount >= 2 && lastPrompt < thirtyDaysAgo) {
+    await InAppReview.requestReview();
+    localStorage.setItem('last_review_prompt', Date.now().toString());
+  }
+}
+
+// Call this AFTER Professor OS responds to a message
+// In the chat component, after AI response is displayed:
+await maybeRequestReview();
+```
+
+ON EVERY APP LAUNCH (in App.tsx or main component):
+
+```javascript
+const currentCount = parseInt(localStorage.getItem('app_open_count') || '0');
+localStorage.setItem('app_open_count', (currentCount + 1).toString());
+```
+
+ON EVERY USER MESSAGE SENT (in chat component):
+
+```javascript
+const currentCount = parseInt(localStorage.getItem('chat_message_count') || '0');
+localStorage.setItem('chat_message_count', (currentCount + 1).toString());
+```
+
+DO NOT prompt:
+
+- On first launch
+- During onboarding
+- After errors
+- On web (only iOS)
+- More than once per 30 days
+
+This replaces the previous trigger of “5th message + 7 days + 3 saves.”
+Everything else in the pre-calendar tasks spec remains the same.

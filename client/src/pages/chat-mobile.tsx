@@ -174,8 +174,8 @@ export default function ChatPage() {
       setIsTyping(false);
       queryClient.invalidateQueries({ queryKey: ['/api/ai/chat/history', userId] });
       
-      // Track successful AI chat exchange for review prompt
-      reviewManager.trackChatMessage().catch(console.error);
+      reviewManager.trackMessageSent();
+      reviewManager.maybeRequestReview().catch(console.error);
 
     } catch (error: any) {
       setIsTyping(false);
