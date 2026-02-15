@@ -81,7 +81,39 @@ export async function synthesizeKnowledgeByTopic(
   
   // Fetch extracted knowledge for matched videos
   const videoIds = matchedVideos.map(v => v.id);
-  const knowledgeRows = await db.select()
+  const knowledgeRows = await db.select({
+      id: videoKnowledge.id,
+      videoId: videoKnowledge.videoId,
+      techniqueName: videoKnowledge.techniqueName,
+      positionContext: videoKnowledge.positionContext,
+      keyConcepts: videoKnowledge.keyConcepts,
+      instructorTips: videoKnowledge.instructorTips,
+      commonMistakes: videoKnowledge.commonMistakes,
+      timestampStart: videoKnowledge.timestampStart,
+      fullSummary: videoKnowledge.fullSummary,
+      techniqueType: videoKnowledge.techniqueType,
+      giOrNogi: videoKnowledge.giOrNogi,
+      skillLevel: videoKnowledge.skillLevel,
+      competitionLegal: videoKnowledge.competitionLegal,
+      detailType: videoKnowledge.detailType,
+      detailDescription: videoKnowledge.detailDescription,
+      instructorQuote: videoKnowledge.instructorQuote,
+      whyItMatters: videoKnowledge.whyItMatters,
+      problemSolved: videoKnowledge.problemSolved,
+      setupsFrom: videoKnowledge.setupsFrom,
+      chainsTo: videoKnowledge.chainsTo,
+      counters: videoKnowledge.counters,
+      counterTo: videoKnowledge.counterTo,
+      bodyTypeNotes: videoKnowledge.bodyTypeNotes,
+      strengthRequired: videoKnowledge.strengthRequired,
+      flexibilityRequired: videoKnowledge.flexibilityRequired,
+      athleticDemand: videoKnowledge.athleticDemand,
+      instructorName: videoKnowledge.instructorName,
+      instructorCredentials: videoKnowledge.instructorCredentials,
+      prerequisites: videoKnowledge.prerequisites,
+      nextToLearn: videoKnowledge.nextToLearn,
+      bestFor: videoKnowledge.bestFor,
+    })
     .from(videoKnowledge)
     .where(sql`${videoKnowledge.videoId} = ANY(ARRAY[${sql.join(videoIds, sql`, `)}]::integer[])`);
   

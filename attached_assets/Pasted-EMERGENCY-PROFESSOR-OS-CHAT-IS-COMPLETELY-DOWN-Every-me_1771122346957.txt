@@ -1,0 +1,64 @@
+EMERGENCY: PROFESSOR OS CHAT IS COMPLETELY DOWN
+
+Every message returns “Sorry, I’m having trouble right now. Please try again!”
+This is happening on the live app for real users. Fix immediately.
+
+══════════════════════════════════════════════════════════════════════════
+DIAGNOSE NOW
+══════════════════════════════════════════════════════════════════════════
+
+1. Check server logs for the EXACT error when a chat message is sent:
+- Is it a Claude API error? (401 unauthorized, 429 rate limit, 500?)
+- Is it a database error?
+- Is it a timeout?
+- Show me the full error stack trace
+1. Check if the Claude API key is valid:
+- Is ANTHROPIC_API_KEY set in environment/secrets?
+- Has it been accidentally deleted or overwritten during today’s changes?
+- Try a direct test call to Claude API from the server
+1. Check if the model string is correct:
+- We changed to claude-sonnet-4-5-20250929 today
+- Is that model string valid and accessible with your API key?
+- Try the old model string as a test: claude-sonnet-4-20250514
+1. Check if the prompt caching changes broke the API call:
+- The system prompt was changed from a string to an array format
+- Is the array format correct?
+- Try temporarily reverting to the old string format to test
+1. Check the /api/health endpoint — is the server even healthy?
+
+══════════════════════════════════════════════════════════════════════════
+MOST LIKELY CAUSES
+══════════════════════════════════════════════════════════════════════════
+
+In order of probability:
+
+A) Model string ‘claude-sonnet-4-5-20250929’ may not be accessible
+on your API tier — try reverting to ‘claude-sonnet-4-20250514’
+
+B) Prompt caching format change broke the system prompt — the array
+format with cache_control may have a syntax error
+
+C) API key was accidentally removed during today’s many changes
+
+D) Rate limiting from the batch video re-analysis eating up your quota
+
+E) The auto-tag pipeline or video processing is consuming all server
+resources and chat requests are timing out
+
+══════════════════════════════════════════════════════════════════════════
+FIX PRIORITY
+══════════════════════════════════════════════════════════════════════════
+
+Get chat working FIRST. If you need to temporarily revert changes to
+restore chat, DO IT. We can re-apply optimizations after chat is live.
+
+Order of operations:
+
+1. Find the exact error in logs
+1. Fix it
+1. Test — send “hello” and get a real response
+1. Test — send “what’s a good guard for beginners” and get a response
+   with video recommendations
+1. Only after chat is confirmed working, re-apply any reverted changes
+
+DO NOT work on anything else until chat is responding.
