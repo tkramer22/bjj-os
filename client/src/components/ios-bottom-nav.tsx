@@ -1,15 +1,14 @@
 import { Link, useLocation } from "wouter";
-import { MessageCircle, BookOpen, User, Bookmark } from "lucide-react";
+import { MessageCircle, BookOpen, User, Dumbbell } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 
 export function IOSBottomNav() {
   const [location] = useLocation();
 
-  // iOS app uses iOS-specific routes for consistent navigation experience
   const navItems = [
     { path: "/ios-chat", icon: MessageCircle, label: "Chat" },
     { path: "/ios-library", icon: BookOpen, label: "Videos" },
-    { path: "/ios-saved", icon: Bookmark, label: "Saved" },
+    { path: "/ios-training", icon: Dumbbell, label: "Training" },
     { path: "/ios-profile", icon: User, label: "Profile" },
   ];
 

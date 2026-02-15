@@ -5,6 +5,7 @@ import { insertRecipientSchema, recipients, smsSchedules, smsHistory, insertSmsS
 import { logActivity, logSystemError } from "./activity-logger";
 import adminDashboardRouter from "./admin-dashboard-api";
 import taxonomyRouter from "./taxonomy-routes";
+import trainingRouter from "./training-routes";
 import analyticsRouter from "./analytics";
 import { getProfessorOSFeedbackResponse, getAppreciationMessage, shouldShowAppreciation } from './professor-os-feedback-responses';
 import { eq, desc, sql as drizzleSql, sql, and, or, ilike, asc, count, isNotNull, gte, lte, lt, gt, inArray } from "drizzle-orm";
@@ -313,6 +314,63 @@ KEY RULES:
 Now respond with the energy, diagnostic intelligence, and instructor knowledge of an elite black belt who genuinely wants ${displayName} to succeed. 🥋`;
 }
 
+async function getTrainingContext(userId: string): Promise<string> {
+  try {
+    const { trainingSessions: ts, trainingSessionTechniques: tst } = await import('@shared/schema');
+    const { eq, desc, gte, count, sql: sqlTag } = await import('drizzle-orm');
+
+    const allSessions = await db
+      .select({ sessionDate: ts.sessionDate, mood: ts.mood, sessionType: ts.sessionType })
+      .from(ts)
+      .where(eq(ts.userId, String(userId)))
+      .orderBy(desc(ts.sessionDate))
+      .limit(30);
+
+    if (allSessions.length === 0) return '';
+
+    const dates = allSessions.map(s => new Date(s.sessionDate + 'T00:00:00'));
+    const today = new Date(); today.setHours(0,0,0,0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
+
+    let currentStreak = 0;
+    if (dates.length > 0) {
+      const latest = new Date(dates[0]); latest.setHours(0,0,0,0);
+      if (latest.getTime() === today.getTime() || latest.getTime() === yesterday.getTime()) {
+        currentStreak = 1;
+        for (let i = 1; i < dates.length; i++) {
+          const diff = Math.round((dates[i-1].getTime() - dates[i].getTime()) / (1000*60*60*24));
+          if (diff === 1) currentStreak++;
+          else break;
+        }
+      }
+    }
+
+    const recentTechs = await db.execute(sqlTag`
+      SELECT DISTINCT ttv2.name
+      FROM training_session_techniques tst2
+      JOIN training_sessions ts2 ON tst2.session_id = ts2.id
+      LEFT JOIN technique_taxonomy_v2 ttv2 ON tst2.taxonomy_id = ttv2.id
+      WHERE ts2.user_id = ${String(userId)}
+      ORDER BY ttv2.name
+      LIMIT 10
+    `);
+    const techNames = (Array.isArray(recentTechs) ? recentTechs : (recentTechs as any).rows || [])
+      .map((r: any) => r.name).filter(Boolean);
+
+    const recentMoods = allSessions.slice(0, 5).map(s => s.mood).filter(Boolean);
+
+    let context = `\n\nTRAINING LOG CONTEXT:\n`;
+    context += `- Current streak: ${currentStreak} day${currentStreak !== 1 ? 's' : ''}\n`;
+    context += `- Recent sessions: ${allSessions.length} logged (last 30)\n`;
+    if (recentMoods.length > 0) context += `- Recent moods: ${recentMoods.join(', ')}\n`;
+    if (techNames.length > 0) context += `- Recently trained: ${techNames.join(', ')}\n`;
+    context += `Use this training data to personalize coaching. Reference their streak, celebrate consistency, and tailor advice to what they've been working on.`;
+    return context;
+  } catch (e) {
+    return '';
+  }
+}
+
 // In-memory rate limiting (simple implementation - consider Redis for production)
 const verificationAttempts = new Map<string, { count: number; lastAttempt: number; blockedUntil?: number }>();
 
@@ -406,6 +464,11 @@ export function registerRoutes(app: Express): Server {
   // TECHNIQUE TAXONOMY API
   // ============================================================================
   app.use('/api/taxonomy', taxonomyRouter);
+  
+  // ============================================================================
+  // TRAINING LOG API
+  // ============================================================================
+  app.use('/api/training', trainingRouter);
   
   // ============================================================================
   // ANALYTICS API

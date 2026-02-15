@@ -5,10 +5,10 @@ import { clearAuth } from "@/lib/capacitorAuth";
 import { useState, useEffect, lazy, Suspense } from "react";
 
 const IOSLibraryPage = lazy(() => import("@/pages/ios-library"));
-const IOSSavedPage = lazy(() => import("@/pages/ios-saved"));
+const IOSTrainingPage = lazy(() => import("@/pages/ios-training"));
 const IOSProfilePage = lazy(() => import("@/pages/ios-profile"));
 
-const tabPaths = ["/ios-chat", "/ios-library", "/ios-saved", "/ios-profile"] as const;
+const tabPaths = ["/ios-chat", "/ios-library", "/ios-training", "/ios-profile"] as const;
 type TabPath = typeof tabPaths[number];
 
 function LoadingFallback() {
@@ -103,15 +103,15 @@ export function IOSTabContainer() {
 
         <div
           style={{
-            display: activeTab === '/ios-saved' ? 'block' : 'none',
+            display: activeTab === '/ios-training' ? 'block' : 'none',
             height: '100%',
             overflow: 'auto',
           }}
-          data-testid="tab-panel-saved"
+          data-testid="tab-panel-training"
         >
-          {mountedTabs.has('/ios-saved') && (
+          {mountedTabs.has('/ios-training') && (
             <Suspense fallback={<LoadingFallback />}>
-              <IOSSavedPage hideBottomNav />
+              <IOSTrainingPage />
             </Suspense>
           )}
         </div>

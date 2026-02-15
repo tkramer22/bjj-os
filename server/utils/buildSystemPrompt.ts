@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { eq, desc, sql, inArray, exists, and } from 'drizzle-orm';
-import { bjjUsers, aiVideoKnowledge, videoKnowledge } from '../../shared/schema';
+import { bjjUsers, aiVideoKnowledge, videoKnowledge, trainingSessions, trainingSessionTechniques } from '../../shared/schema';
 import { getCredentialsForInstructors, buildCredentialsSection } from './verified-credentials';
 
 /**
@@ -1478,6 +1478,55 @@ ${newsList}
 
 When discussing news/competitors, always connect it back to their training: "Gordon's pressure passing is worth studying if you want to improve your top game."`;
     }
+  }
+
+  try {
+    const userTrainingSessions = await db
+      .select({ sessionDate: trainingSessions.sessionDate, mood: trainingSessions.mood, sessionType: trainingSessions.sessionType })
+      .from(trainingSessions)
+      .where(eq(trainingSessions.userId, String(userId)))
+      .orderBy(desc(trainingSessions.sessionDate))
+      .limit(20);
+
+    if (userTrainingSessions.length > 0) {
+      const dates = userTrainingSessions.map(s => new Date(s.sessionDate + 'T00:00:00'));
+      const today = new Date(); today.setHours(0,0,0,0);
+      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
+      let streak = 0;
+      if (dates.length > 0) {
+        const latest = new Date(dates[0]); latest.setHours(0,0,0,0);
+        if (latest.getTime() === today.getTime() || latest.getTime() === yesterday.getTime()) {
+          streak = 1;
+          for (let i = 1; i < dates.length; i++) {
+            const diff = Math.round((dates[i-1].getTime() - dates[i].getTime()) / (1000*60*60*24));
+            if (diff === 1) streak++; else break;
+          }
+        }
+      }
+
+      const recentTechResult = await db.execute(sql`
+        SELECT DISTINCT ttv2.name FROM training_session_techniques tst2
+        JOIN training_sessions ts2 ON tst2.session_id = ts2.id
+        LEFT JOIN technique_taxonomy_v2 ttv2 ON tst2.taxonomy_id = ttv2.id
+        WHERE ts2.user_id = ${String(userId)} ORDER BY ttv2.name LIMIT 10
+      `);
+      const techNames = (Array.isArray(recentTechResult) ? recentTechResult : (recentTechResult as any).rows || [])
+        .map((r: any) => r.name).filter(Boolean);
+
+      const recentMoods = userTrainingSessions.slice(0, 5).map(s => s.mood).filter(Boolean);
+
+      fullPrompt += `\n\n═══════════════════════════════════════════════════════════════════════════════
+TRAINING LOG DATA
+═══════════════════════════════════════════════════════════════════════════════
+
+Current streak: ${streak} day${streak !== 1 ? 's' : ''} | Total logged: ${userTrainingSessions.length} sessions
+${recentMoods.length > 0 ? `Recent moods: ${recentMoods.join(', ')}` : ''}
+${techNames.length > 0 ? `Recently trained: ${techNames.join(', ')}` : ''}
+
+Reference their training log naturally. Celebrate consistency ("${streak} days in a row - that's how champions are built"). Connect techniques they've been drilling to coaching advice. If mood trends rough, be supportive.`;
+    }
+  } catch (e) {
+    // Training data not available - skip
   }
 
   // CRITICAL: Add FINAL CHECK at the END of prompt (LLMs pay attention to start AND end)

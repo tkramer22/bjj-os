@@ -142,7 +142,7 @@ function NativeAwareHome({ isAuthenticated, authRestored }: { isAuthenticated: b
   return <Landing />;
 }
 
-const IOS_TAB_PATHS = ['/ios-chat', '/ios-library', '/ios-saved', '/ios-profile'];
+const IOS_TAB_PATHS = ['/ios-chat', '/ios-library', '/ios-training', '/ios-profile'];
 
 function PersistentIOSTabContainer() {
   const [location] = useLocation();
@@ -304,7 +304,7 @@ export default function App() {
             {/* iOS tab routes render nothing - handled by PersistentIOSTabContainer outside Switch */}
             <Route path="/ios-chat">{() => null}</Route>
             <Route path="/ios-library">{() => null}</Route>
-            <Route path="/ios-saved">{() => null}</Route>
+            <Route path="/ios-training">{() => null}</Route>
             <Route path="/ios-profile">{() => null}</Route>
             <Route path="/ios-settings" component={IOSSettingsPage} />
             <Route path="/ios-terms" component={IOSTermsPage} />

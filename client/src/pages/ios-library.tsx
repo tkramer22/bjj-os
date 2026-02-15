@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { IOSBottomNav } from "@/components/ios-bottom-nav";
 import { VideoPlayer } from "@/components/VideoPlayer";
@@ -9,6 +9,8 @@ import { shareVideo } from "@/lib/share";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { decodeHTML } from "@/lib/htmlDecode";
+
+const IOSSavedPage = lazy(() => import("@/pages/ios-saved"));
 
 console.log('iOS LIBRARY loaded');
 
@@ -51,6 +53,7 @@ interface TaxonomyNode {
 type ViewMode = 'browse' | 'categories' | 'children' | 'taxonomy-videos';
 
 export default function IOSLibraryPage({ hideBottomNav }: { hideBottomNav?: boolean } = {}) {
+  const [subtab, setSubtab] = useState<'library' | 'saved'>('library');
   const [viewMode, setViewMode] = useState<ViewMode>('categories');
   const [selectedCategory, setSelectedCategory] = useState<TaxonomyNode | null>(null);
   const [selectedChild, setSelectedChild] = useState<TaxonomyNode | null>(null);
@@ -479,7 +482,31 @@ export default function IOSLibraryPage({ hideBottomNav }: { hideBottomNav?: bool
         background: '#0A0A0B',
         zIndex: 10,
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '0', marginBottom: '12px' }}>
+          {(['library', 'saved'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => { setSubtab(tab); triggerHaptic('light'); }}
+              data-testid={`subtab-${tab}`}
+              style={{
+                flex: 1,
+                padding: '8px 0',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: subtab === tab ? '2px solid #8B5CF6' : '2px solid transparent',
+                color: subtab === tab ? '#FFFFFF' : '#71717A',
+                fontSize: '14px',
+                fontWeight: subtab === tab ? 600 : 400,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              {tab === 'library' ? 'Library' : 'Saved'}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: subtab === 'library' ? 'flex' : 'none', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {viewMode !== 'categories' && (
               <button
@@ -618,7 +645,17 @@ export default function IOSLibraryPage({ hideBottomNav }: { hideBottomNav?: bool
         )}
       </div>
 
-      <div style={{ padding: '16px 20px' }}>
+      {subtab === 'saved' && (
+        <Suspense fallback={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0' }}>
+            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          <IOSSavedPage hideBottomNav />
+        </Suspense>
+      )}
+
+      <div style={{ padding: '16px 20px', display: subtab === 'library' ? 'block' : 'none' }}>
         {viewMode === 'categories' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <button
