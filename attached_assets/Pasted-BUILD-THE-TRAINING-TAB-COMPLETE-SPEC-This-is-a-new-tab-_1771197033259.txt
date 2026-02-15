@@ -1,0 +1,532 @@
+BUILD THE TRAINING TAB — COMPLETE SPEC
+
+This is a new tab in the BJJ OS app. It replaces the current “Saved”
+tab position. Saved Videos moves inside the Videos tab as a sub-tab.
+
+CRITICAL: This must look like it was always part of the app. Same dark
+theme, same purple accents, same JetBrains Mono typography, same card
+styling, same spacing system. If it looks different from Chat or Videos
+in ANY way, it’s wrong.
+
+══════════════════════════════════════════════════════════════════════════
+PART 1: TAB BAR CHANGES
+══════════════════════════════════════════════════════════════════════════
+
+CURRENT TABS: Chat | Videos | Saved | Profile
+NEW TABS:     Chat | Videos | Training | Profile
+
+1. Remove “Saved” from the bottom tab bar
+1. Add “Training” in the third position with a calendar icon
+1. The calendar icon should match the weight and style of the other
+   tab icons (Chat bubble, Book/Video icon, Person icon)
+1. Active state: purple icon + purple label (same as other tabs)
+1. Inactive state: gray icon + gray label (same as other tabs)
+
+MOVE SAVED VIDEOS INTO VIDEOS TAB:
+
+1. Videos tab now has two sub-tabs at the top: “Library” and “Saved”
+1. “Library” shows the taxonomy grid (what’s currently there)
+1. “Saved” shows the saved videos list (what was on the Saved tab)
+1. Default to “Library” when opening Videos tab
+1. Sub-tabs styled as a simple toggle/segmented control at the top
+   matching the app’s existing design language
+
+══════════════════════════════════════════════════════════════════════════
+PART 2: DATABASE SCHEMA
+══════════════════════════════════════════════════════════════════════════
+
+Create these tables:
+
+TABLE: training_sessions
+
+- id: serial PRIMARY KEY
+- user_id: varchar NOT NULL (references bjj_users)
+- session_date: date NOT NULL
+- mood: varchar (enum: ‘great’, ‘good’, ‘tough’, ‘rough’)
+- session_type: varchar (enum: ‘class’, ‘sparring’, ‘open_mat’, ‘competition’)
+- duration_minutes: integer (nullable)
+- is_gi: boolean (default true)
+- notes: text (nullable)
+- rolls: integer (default 0)
+- submissions: integer (default 0)
+- taps: integer (default 0)
+- created_at: timestamp DEFAULT now()
+- updated_at: timestamp DEFAULT now()
+
+UNIQUE CONSTRAINT on (user_id, session_date) — one log per day
+
+TABLE: training_session_techniques
+
+- id: serial PRIMARY KEY
+- session_id: integer REFERENCES training_sessions(id) ON DELETE CASCADE
+- taxonomy_id: integer REFERENCES technique_taxonomy_v2(id)
+- category: varchar (enum: ‘win’, ‘working_on’)
+- created_at: timestamp DEFAULT now()
+
+This links each logged technique to a taxonomy node, so everything
+connects to the video library and Professor OS intelligence.
+
+API ENDPOINTS:
+
+- GET /api/training/sessions?userId=X&month=2&year=2026
+  Returns all sessions for a given month
+- GET /api/training/sessions?userId=X&startDate=X&endDate=X
+  Returns sessions in a date range
+- POST /api/training/sessions
+  Create a new training session
+- PUT /api/training/sessions/:id
+  Update an existing session
+- DELETE /api/training/sessions/:id
+  Delete a session
+- GET /api/training/stats?userId=X
+  Returns streak, total sessions, monthly count, etc.
+- GET /api/training/recent-techniques?userId=X&limit=8
+  Returns the user’s most recently logged techniques for quick-select
+
+══════════════════════════════════════════════════════════════════════════
+PART 3: TRAINING TAB — MAIN SCREEN
+══════════════════════════════════════════════════════════════════════════
+
+The Training tab has three visual sections stacked vertically:
+
+SECTION A — STREAK & STATS BAR (top, fixed height)
+Background: same as app background (#0F1419 or whatever the app uses)
+Show one line:
+
+🔥 12 day streak · 18 sessions this month
+
+- Streak uses a flame emoji (or a small flame icon in purple/orange)
+- Numbers in bold white
+- Labels in secondary gray text
+- If streak is 0, show: “Start your streak today”
+- If streak is 7+, add a subtle glow or shimmer to the flame
+
+SECTION B — MONTHLY CALENDAR GRID (middle, ~45% of screen)
+Background: slightly elevated surface card (same as video cards)
+Rounded corners matching existing card radius in the app
+
+Header row:
+
+- Month name + year on the left (“February 2026”)
+- Left/right chevron arrows to navigate months
+- Swipe left/right also works to change months
+
+Day headers row:
+
+- S  M  T  W  T  F  S
+- Secondary gray text, small font
+
+Calendar grid:
+
+- 5-6 rows of 7 date circles
+- Each date is a number inside a circle area
+- UNTRAINED days: just the number in gray, no circle (do NOT show
+  empty circles — we celebrate presence, not highlight absence)
+- TRAINED days: number inside a FILLED PURPLE CIRCLE
+  The purple should match the app’s accent purple exactly
+  Add a very subtle glow/shadow behind trained day circles
+- TODAY: if trained, filled purple circle with a white ring around it
+  if not trained, number with a subtle purple ring (unfilled)
+  This ring is the gentle nudge — not aggressive, just visible
+- FUTURE days: dimmed/lower opacity numbers
+- PAST months’ days (overflow): hidden or very faint
+
+Tapping any date:
+
+- If today or past date: opens the quick log bottom sheet
+- If future date: nothing happens (no logging future sessions)
+
+Animation:
+
+- When swiping between months, smooth horizontal slide transition
+- When a new session is logged, the purple dot should animate in
+  with a subtle scale-up + fade (not bouncy, just smooth)
+
+SECTION C — TODAY’S STATUS + RECENT SESSIONS (below calendar, scrollable)
+
+If today is NOT logged yet (and it’s after 12pm):
+Show a card:
+┌─────────────────────────────────────────────┐
+│                                             │
+│   Did you train today?                      │
+│                                             │
+│   ┌──────────────────────────┐              │
+│   │   Log Today’s Session    │  ← purple bg │
+│   └──────────────────────────┘              │
+│                                             │
+└─────────────────────────────────────────────┘
+
+If today IS logged:
+Show today’s session card:
+┌─────────────────────────────────────────────┐
+│  Today · 🔥 Great · Class                   │
+│  Armbar  Half Guard Sweeps  Back Takes      │
+│  “Hit the kimura chain twice in sparring”   │
+│                                     Edit ›  │
+└─────────────────────────────────────────────┘
+
+Below today, show RECENT SESSIONS (last 5):
+Each as a compact card:
+┌─────────────────────────────────────────────┐
+│  Feb 14 · 👍 Good · Open Mat · 1.5hr · Gi  │
+│  De La Riva Sweeps  Triangle                │
+└─────────────────────────────────────────────┘
+
+Cards styled exactly like other cards in the app — dark surface
+color, rounded corners, same padding, same font sizes.
+
+SECTION D — PROFESSOR OS INSIGHT CARD (at bottom of scroll)
+A special card with the Professor OS avatar/icon:
+┌─────────────────────────────────────────────┐
+│  🟣 OS                                       │
+│                                             │
+│  “You’ve trained 4x this week. Your         │
+│   consistency is up from last month.         │
+│   Keep pushing — your guard game is          │
+│   building momentum.”                        │
+│                                             │
+└─────────────────────────────────────────────┘
+
+This card generates a short insight based on:
+
+- Sessions this week vs last week
+- Most trained techniques recently
+- Current streak
+- Rest days (if they haven’t trained in 2+ days:
+  “Rest day? Recovery is part of the process.”)
+
+This is a simple server-side generation — NOT a full Professor OS
+chat call. Use a lightweight template system:
+
+If (sessionsThisWeek > sessionsLastWeek):
+“You’re training more this week than last. Momentum is building.”
+If (streak > 7):
+“🔥 {streak} day streak. That’s elite consistency.”
+If (daysSinceLastSession > 2):
+“Rest day? Good. Recovery builds strength.”
+If (mostLoggedTechnique):
+“You’ve been drilling {technique} a lot. That focus pays off.”
+
+Keep it simple for v1. We can connect it to the real Professor OS
+AI later for deeper insights.
+
+══════════════════════════════════════════════════════════════════════════
+PART 4: QUICK LOG BOTTOM SHEET
+══════════════════════════════════════════════════════════════════════════
+
+When the user taps a date or “Log Today’s Session”, a bottom sheet
+slides up from the bottom. The calendar remains visible but dimmed
+behind it. This is NOT a full page navigation.
+
+The bottom sheet has a drag handle at the top (small gray bar) and
+can be swiped down to dismiss.
+
+Background: app’s elevated surface color (darker card color)
+Rounded top corners (16px radius or matching existing modals)
+
+LAYOUT OF THE BOTTOM SHEET (top to bottom):
+
+1. DATE HEADER
+   “Saturday, February 15” — white text, medium weight
+   If editing a past date, show that date instead of today
+1. SESSION TYPE (one row of 4 tappable chips)
+   🥋 Class   🤼 Sparring   📚 Open Mat   🏆 Comp
+- Default: none selected
+- Tapping one highlights it with purple background
+- Only one can be selected
+- Chips styled same as technique chips in the library
+- These are optional — user can skip
+1. MOOD (one row of 4 tappable options)
+   🔥 Great    👍 Good    😤 Tough    💀 Rough
+- Tapping one highlights with a subtle colored background:
+  Great = warm purple/gold glow
+  Good = standard purple
+  Tough = muted purple
+  Rough = dim purple
+- Only one can be selected
+- Haptic feedback: light tap on selection (UIImpactFeedbackGenerator light)
+1. TECHNIQUES (the key section)
+   
+   Header: “What did you work on?” — secondary gray text
+   
+   TWO SUB-SECTIONS with small toggle:
+   ✅ Wins    🔄 Working On
+   Default to “Wins” selected. User can tap “Working On” to switch.
+   This determines the ‘category’ field in training_session_techniques.
+   
+   RECENT TECHNIQUES ROW:
+   Show the user’s last 6-8 logged techniques as pre-built chips.
+   These pull from GET /api/training/recent-techniques
+   User taps a chip, it turns purple (selected). Tap again to deselect.
+   Multiple can be selected.
+   
+   If no recent techniques yet (first time), show popular techniques
+   from the taxonomy instead: “Armbar”, “Triangle”, “Guard Pass”,
+   “Sweep”, “Back Take”, “Escape”
+   
+   SEARCH/AUTOCOMPLETE FIELD:
+   Below the recent chips, a text input:
+   Placeholder: “Search techniques…”
+   As they type, dropdown shows matches from the taxonomy:
+- “arm” → Armbar, Americana, Arm Triangle, Arm Drag
+- “half” → Half Guard Sweeps, Half Guard Passes, Half Guard Retention
+  Tapping a suggestion adds it as a selected chip above the input
+  Selected chips show as purple tags with an X to remove
+   
+   Voice icon on the right side of the input (microphone) for
+   speech-to-text input
+   
+   Chips styling: same as taxonomy technique tags in the Library
+1. OPTIONAL NOTES
+   Single-line text input that expands to multiline if needed
+   Placeholder: “Add a note…” (secondary gray)
+   Small font, not prominent — this is optional
+1. EXPANDABLE DETAILS SECTION
+   A small “Add details ›” text link below the notes field
+   Tapping it expands to reveal:
+- Gi / No-Gi toggle (default Gi on, styled as a simple switch)
+- Duration picker: 30m | 1hr | 1.5hr | 2hr | 2.5hr | 3hr
+  (horizontal scrollable chips, tap to select)
+- Rolls: number with - and + buttons (default 0)
+- Submissions: number with - and + buttons (default 0)
+- Taps: number with - and + buttons (default 0)
+   
+   These are all OPTIONAL. The section is collapsed by default.
+   Only serious loggers will open it. Keeps the main flow fast.
+   
+   Number steppers styled simply:
+   [ - ]  3  [ + ]
+   Buttons are small circles, number in the middle
+   Haptic feedback: light tap on each increment
+1. SAVE BUTTON (bottom of sheet, full width)
+   Large purple button: “Save Session”
+   Matches the app’s existing CTA button styling
+   
+   ON SAVE:
+   a) Haptic feedback: medium impact (UIImpactFeedbackGenerator medium)
+   b) Bottom sheet dismisses with smooth slide-down animation
+   c) Purple dot animates onto the calendar for that date
+   (scale from 0 → 1 with a subtle bounce, 300ms)
+   d) Streak counter updates immediately
+   e) If this completes a new milestone (7 days, 14 days, 30 days),
+   show a brief toast/banner: “🔥 14 day streak!”
+   (fades in at top, auto-dismisses after 2 seconds)
+   f) The session card appears in the “Recent Sessions” section below
+
+EDITING AN EXISTING SESSION:
+If they tap a date that already has a session logged, the bottom
+sheet opens in EDIT mode — pre-filled with all their data. They can
+modify anything and hit “Update Session”. Also show a “Delete” text
+link in red at the bottom for removing the session.
+
+══════════════════════════════════════════════════════════════════════════
+PART 5: EMPTY STATE (FIRST VISIT)
+══════════════════════════════════════════════════════════════════════════
+
+When the user first opens the Training tab with zero sessions logged:
+
+The calendar grid is visible but empty (no purple dots).
+The streak shows: “Start your streak today”
+
+In the SECTION C area (below calendar), instead of recent sessions,
+show:
+
+┌─────────────────────────────────────────────┐
+│                                             │
+│        Track Your Training                  │
+│                                             │
+│   Log sessions, build streaks, and watch    │
+│   Professor OS learn your game.             │
+│                                             │
+│   ┌──────────────────────────┐              │
+│   │   Log Your First Session │  ← purple    │
+│   └──────────────────────────┘              │
+│                                             │
+└─────────────────────────────────────────────┘
+
+- “Track Your Training” in bold white, prominent
+- Subtitle in secondary gray
+- Large purple CTA button
+- Clean, not cluttered, matches the app’s aesthetic
+- NO illustrations, NO icons, NO emojis in the empty state
+  (keep it minimal and premium)
+
+After they log their first session, this empty state disappears
+forever and the normal view takes over.
+
+══════════════════════════════════════════════════════════════════════════
+PART 6: PROFESSOR OS INTEGRATION
+══════════════════════════════════════════════════════════════════════════
+
+The training data needs to be accessible to Professor OS so it can
+give smarter coaching.
+
+1. UPDATE the buildSystemPrompt() function to include training data:
+   
+   When building the Professor OS system prompt, add a new section:
+   
+   TRAINING LOG DATA:
+- Current streak: {streak} days
+- Sessions this week: {count}
+- Sessions this month: {count}
+- Last 5 sessions: {date, mood, techniques, notes for each}
+- Most trained techniques (last 30 days): {ranked list}
+- Wins vs Working On breakdown
+   
+   This goes in the DYNAMIC section of the prompt (not cached).
+1. Professor OS can now reference training data naturally:
+   
+   User: “What should I work on tonight?”
+   Professor OS: “Looking at your last 5 sessions, you’ve been
+   drilling half guard sweeps and armbars consistently. But your
+   guard retention hasn’t come up in 2 weeks — that might be a
+   gap worth filling tonight.”
+   
+   User: “I keep getting passed”
+   Professor OS: “You logged guard passing as ‘Working On’ in 3
+   of your last 5 sessions. That tells me it’s a real pattern,
+   not just a bad day. Let’s fix the root cause…”
+1. DO NOT make Professor OS reference training data unless it’s
+   genuinely relevant. If they ask “what’s a good triangle setup”
+   don’t force in “by the way you trained 4 times this week.”
+   Natural references only.
+
+══════════════════════════════════════════════════════════════════════════
+PART 7: HAPTIC FEEDBACK (iOS ONLY)
+══════════════════════════════════════════════════════════════════════════
+
+Use Capacitor’s Haptics plugin:
+import { Haptics, ImpactStyle } from ‘@capacitor/haptics’;
+
+Trigger haptics at these moments:
+
+1. Selecting mood → Haptics.impact({ style: ImpactStyle.Light })
+1. Selecting/deselecting technique chip → Haptics.impact({ style: ImpactStyle.Light })
+1. Tapping +/- on number steppers → Haptics.impact({ style: ImpactStyle.Light })
+1. Saving a session → Haptics.impact({ style: ImpactStyle.Medium })
+1. Streak milestone toast → Haptics.notification({ type: ‘success’ })
+1. Swiping between months → no haptic (would be annoying)
+
+Only trigger on iOS (Capacitor.getPlatform() === ‘ios’).
+No haptics on web.
+
+══════════════════════════════════════════════════════════════════════════
+PART 8: DESIGN SPECIFICATIONS
+══════════════════════════════════════════════════════════════════════════
+
+ALL of these must match the EXISTING app exactly:
+
+COLORS (pull from existing CSS variables):
+
+- Background: same as app background
+- Card surface: same as video card backgrounds
+- Text primary: white (#FFFFFF)
+- Text secondary: gray (same gray used in instructor names)
+- Accent: purple (same purple used in active tab, buttons, etc.)
+- Mood great: warm tone (subtle, not bright)
+- Mood rough: muted tone
+- Delete/destructive: red (same red used elsewhere in app)
+
+TYPOGRAPHY:
+
+- Same font family as the rest of the app
+- Same font sizes for headers, body, labels
+- Same font weights
+- NO new fonts, NO different sizes
+
+SPACING:
+
+- Same padding inside cards
+- Same margins between cards
+- Same border radius on cards and buttons
+- 8px grid system (all spacing multiples of 8)
+
+COMPONENTS:
+
+- Chips: same style as taxonomy technique chips
+- Buttons: same style as Save/Share buttons on video cards
+- Input fields: same style as search bar in Library
+- Toggle/switch: same style if one exists elsewhere in app
+- Bottom sheet: if the app has any existing bottom sheets or modals,
+  match that style exactly
+
+ANIMATIONS:
+
+- Keep them subtle and fast (200-300ms)
+- ease-out or ease-in-out timing
+- No bounces, no spring physics, no playful animations
+- This is a premium tool, not a game
+
+══════════════════════════════════════════════════════════════════════════
+PART 9: TESTING CHECKLIST
+══════════════════════════════════════════════════════════════════════════
+
+FUNCTIONALITY:
+□ Tab bar shows Chat, Videos, Training, Profile
+□ Saved Videos accessible inside Videos tab → “Saved” sub-tab
+□ All existing Saved Videos data still works
+□ Training tab shows calendar grid for current month
+□ Swiping left/right changes months
+□ Tapping today opens bottom sheet
+□ Logging a session: mood + technique chips + save works
+□ Purple dot appears on calendar after save
+□ Streak counter updates after save
+□ Technique autocomplete pulls from taxonomy
+□ Recent techniques show previously logged techniques
+□ “Add details” expands to show duration, rolls, subs, taps, gi/nogi
+□ Editing an existing session pre-fills all data
+□ Deleting a session removes the dot and updates streak
+□ Past months show historical sessions
+□ Empty state shows on first visit with no sessions
+□ Professor OS insight card shows at bottom
+
+VISUAL:
+□ Dark theme matches rest of app EXACTLY
+□ Purple accent color is identical to other tabs
+□ Card styling matches video cards
+□ Font sizes and weights match existing screens
+□ Spacing and padding consistent with rest of app
+□ Bottom sheet looks like it belongs in this app
+□ Calendar grid is clean and readable
+□ Trained day dots are clearly visible
+□ No visual inconsistencies between Training and other tabs
+
+HAPTICS (test on real iPhone):
+□ Mood selection: light tap
+□ Technique chip selection: light tap
+□ Number stepper: light tap
+□ Save session: medium impact
+□ Streak milestone: success notification
+
+PERFORMANCE:
+□ Training tab loads instantly (no spinner)
+□ Calendar data cached
+□ Swiping between months is smooth
+□ Bottom sheet animation is smooth
+□ No jank or layout shifts
+
+PROFESSOR OS:
+□ Training data injected into system prompt
+□ Professor OS can reference recent sessions naturally
+□ Ask “what should I work on” and get training-aware response
+
+══════════════════════════════════════════════════════════════════════════
+BUILD ORDER
+══════════════════════════════════════════════════════════════════════════
+
+1. Database tables + API endpoints
+1. Tab bar changes (add Training, merge Saved into Videos)
+1. Calendar grid UI
+1. Bottom sheet for logging
+1. Technique autocomplete from taxonomy
+1. Streak counter + stats
+1. Empty state
+1. Recent sessions list
+1. Professor OS insight card
+1. Haptic feedback
+1. Professor OS system prompt integration
+1. Full testing
+
+DO NOT publish until I’ve seen the Training tab and confirmed it
+matches the rest of the app visually. Show me screenshots before
+deploying.

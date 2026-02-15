@@ -6523,3 +6523,51 @@ export const insertVideoTechniqueTagSchema = createInsertSchema(videoTechniqueTa
 export type InsertVideoTechniqueTag = z.infer<typeof insertVideoTechniqueTagSchema>;
 export type VideoTechniqueTag = typeof videoTechniqueTags.$inferSelect;
 
+export const trainingSessions = pgTable("training_sessions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  sessionDate: date("session_date").notNull(),
+  mood: varchar("mood", { length: 20 }),
+  sessionType: varchar("session_type", { length: 20 }),
+  durationMinutes: integer("duration_minutes"),
+  isGi: boolean("is_gi").default(true),
+  notes: text("notes"),
+  rolls: integer("rolls").default(0),
+  submissions: integer("submissions").default(0),
+  taps: integer("taps").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  userDateUnique: unique("unique_user_session_date").on(table.userId, table.sessionDate),
+  userIdx: index("idx_training_sessions_user").on(table.userId),
+  dateIdx: index("idx_training_sessions_date").on(table.sessionDate),
+}));
+
+export const insertTrainingSessionSchema = createInsertSchema(trainingSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertTrainingSession = z.infer<typeof insertTrainingSessionSchema>;
+export type TrainingSession = typeof trainingSessions.$inferSelect;
+
+export const trainingSessionTechniques = pgTable("training_session_techniques", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull(),
+  taxonomyId: integer("taxonomy_id").notNull(),
+  category: varchar("category", { length: 20 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  sessionIdx: index("idx_training_techniques_session").on(table.sessionId),
+  taxonomyIdx: index("idx_training_techniques_taxonomy").on(table.taxonomyId),
+}));
+
+export const insertTrainingSessionTechniqueSchema = createInsertSchema(trainingSessionTechniques).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTrainingSessionTechnique = z.infer<typeof insertTrainingSessionTechniqueSchema>;
+export type TrainingSessionTechnique = typeof trainingSessionTechniques.$inferSelect;
+
