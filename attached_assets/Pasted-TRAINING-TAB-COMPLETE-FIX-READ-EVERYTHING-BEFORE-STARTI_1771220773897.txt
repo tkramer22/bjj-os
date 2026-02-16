@@ -1,0 +1,289 @@
+TRAINING TAB — COMPLETE FIX. READ EVERYTHING BEFORE STARTING.
+
+This is ONE prompt. Do ALL of it. Do NOT skip steps.
+Do NOT add haptics anywhere. Zero haptic code in the entire app.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 1: REMOVE ALL HAPTICS FROM THE ENTIRE APP
+══════════════════════════════════════════════════════════════════════════
+
+Run: grep -rn “Haptics|@capacitor/haptics|ImpactStyle|NotificationType|safeHaptic|safeNotification” client/src/ –include=”*.tsx” –include=”*.ts”
+
+Remove the import and every call from EVERY file returned. Not just
+the Training tab. Every file in the entire app. Chat, library,
+profile, settings, all of them. They are causing “TO JS undefined”
+errors in the Xcode console and breaking functionality.
+
+Keep @capacitor/haptics in package.json. Just remove all usage.
+
+After removal, rebuild and confirm zero haptic references remain:
+grep -rn “Haptics|@capacitor/haptics” client/src/ –include=”*.tsx” –include=”*.ts”
+
+This must return NOTHING.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 2: REWRITE DELETE SESSION FROM SCRATCH
+══════════════════════════════════════════════════════════════════════════
+
+Delete was working before. Now it is broken. Do not try to patch
+the existing handler. Delete it and rewrite from scratch.
+
+The red Delete button must call this function directly. Not through
+a wrapper, not through a confirmation dialog, not through any
+intermediate function. Direct.
+
+const handleDeleteSession = async () => {
+if (!currentSessionId) return;
+
+try {
+const res = await fetch(
+`/api/training/sessions/${currentSessionId}`,
+{
+method: ‘DELETE’,
+headers: {
+‘Content-Type’: ‘application/json’,
+‘Authorization’: `Bearer ${getAuthToken()}`
+}
+}
+);
+
+```
+if (res.ok) {
+  setShowBottomSheet(false);
+  await fetchSessions();
+  await fetchStats();
+} else {
+  console.error('Delete failed with status:', res.status);
+}
+```
+
+} catch (err) {
+console.error(‘Delete error:’, err);
+}
+};
+
+Wire it directly:
+<button onClick={handleDeleteSession}>Delete</button>
+
+NOT:
+<button onClick={() => confirmDelete(sessionId)}>Delete</button>
+
+No confirmation dialog. No intermediate steps. Tap Delete, it deletes,
+sheet closes, calendar refreshes. Done.
+
+Also verify the backend:
+
+- Does DELETE /api/training/sessions/:id exist?
+- Does it delete from training_session_techniques first (foreign key)?
+- Then delete from training_sessions?
+- Does it return 200?
+
+If the endpoint is broken, fix it. Test it by calling it directly
+from the Replit console or shell.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 3: REWRITE UPDATE SESSION FROM SCRATCH
+══════════════════════════════════════════════════════════════════════════
+
+Same approach. Delete the existing update handler. Rewrite clean.
+
+const handleUpdateSession = async () => {
+if (!currentSessionId) return;
+
+const body = {
+mood: selectedMood,
+session_type: selectedSessionType,
+is_gi: selectedGi,
+session_time: selectedTime,
+notes: notes,
+techniques: selectedTechniques.map(t => ({
+taxonomy_id: t.taxonomy_id,
+name: t.name
+}))
+};
+
+try {
+const res = await fetch(
+`/api/training/sessions/${currentSessionId}`,
+{
+method: ‘PUT’,
+headers: {
+‘Content-Type’: ‘application/json’,
+‘Authorization’: `Bearer ${getAuthToken()}`
+},
+body: JSON.stringify(body)
+}
+);
+
+```
+if (res.ok) {
+  setShowBottomSheet(false);
+  await fetchSessions();
+  await fetchStats();
+} else {
+  console.error('Update failed with status:', res.status);
+}
+```
+
+} catch (err) {
+console.error(‘Update error:’, err);
+}
+};
+
+Wire Update button directly:
+<button onClick={handleUpdateSession}>Update</button>
+
+Backend PUT /api/training/sessions/:id must:
+
+- Update mood, session_type, is_gi, session_time, notes
+- Delete existing training_session_techniques for this session
+- Re-insert the new techniques from the request body
+- Return 200
+
+══════════════════════════════════════════════════════════════════════════
+STEP 4: FIX TIME SAVING
+══════════════════════════════════════════════════════════════════════════
+
+A) Verify column exists:
+SELECT column_name FROM information_schema.columns
+WHERE table_name = ‘training_sessions’ AND column_name = ‘session_time’;
+
+If missing:
+ALTER TABLE training_sessions ADD COLUMN session_time VARCHAR(10);
+
+B) POST /api/training/sessions — the INSERT query must include
+session_time. Read it from req.body.session_time.
+
+C) PUT /api/training/sessions/:id — the UPDATE query must include
+session_time.
+
+D) GET /api/training/sessions — the SELECT query must return
+session_time in the response for each session.
+
+E) TIME DEFAULT LOGIC — this is critical:
+
+When the bottom sheet opens for a NEW session:
+
+- Query the user’s most recent session_time:
+  SELECT session_time FROM training_sessions
+  WHERE user_id = $1 AND session_time IS NOT NULL
+  ORDER BY created_at DESC LIMIT 1;
+- If found: use that time as the default. The user trains at
+  the same time most days. Do not make them re-enter it.
+- If not found (first session): use current time.
+- The time picker shows this default. User can change it if
+  they want but should not have to.
+
+When the bottom sheet opens for an EXISTING session (edit mode):
+
+- Pre-fill the picker with THAT session’s saved session_time.
+- If session_time is null, show current time.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 5: FIX PRESET TECHNIQUE CHIPS SAVING
+══════════════════════════════════════════════════════════════════════════
+
+The preset technique chips (Armbar, Triangle, Half Guard, Guard Pass)
+and recent technique chips do NOT save when tapped. Only techniques
+entered through the search field save.
+
+ROOT CAUSE: The preset/recent chips are not adding to the same
+selectedTechniques array that the search autocomplete uses.
+
+FIX:
+
+1. On component mount (or when bottom sheet opens), look up the
+   taxonomy IDs for the default techniques:
+   
+   const defaults = [
+   { name: ‘Armbar’, taxonomy_id: null },
+   { name: ‘Triangle’, taxonomy_id: null },
+   { name: ‘Half Guard’, taxonomy_id: null },
+   { name: ‘Guard Pass’, taxonomy_id: null }
+   ];
+   
+   For each, query:
+   SELECT id FROM technique_taxonomy
+   WHERE LOWER(name) = LOWER($1) LIMIT 1;
+   
+   Store the IDs so they are available when chips are tapped.
+1. When a preset or recent chip is tapped:
+- Add { taxonomy_id: id, name: name } to selectedTechniques
+- This is the SAME array that search results add to
+1. When a chip is tapped again (deselect):
+- Remove it from selectedTechniques
+1. When Save or Update is called:
+- selectedTechniques contains ALL selected techniques from
+  both presets/recents AND search
+- All of them get saved to training_session_techniques
+1. For recent chips: query the user’s recently logged techniques
+   with their taxonomy IDs. Show up to 4. If user has fewer than
+   4 recents, fill remaining slots with defaults.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 6: RECENT SESSIONS DISPLAY — SHOW EVERYTHING
+══════════════════════════════════════════════════════════════════════════
+
+Each Recent Session card must show ALL saved data for that session.
+
+CURRENT DISPLAY:
+Feb 15 · 🔥 Great · Class · Gi
+
+REQUIRED DISPLAY:
+Feb 15 · 6:30 PM · 🔥 Great · Class · Gi
+Armbar, Triangle
+
+LINE 1: Date · Time · Mood emoji + label · Session type · Gi or No-Gi
+LINE 2: Technique names in purple text, comma separated
+Only show this line if techniques were logged.
+
+If session_time is null (old session before time was added),
+just show without time:
+Feb 15 · 🔥 Great · Class · Gi
+
+The GET endpoint that returns recent sessions MUST:
+
+- Return session_time for each session
+- JOIN with training_session_techniques and technique_taxonomy
+  to return technique names for each session
+- Return format per session:
+  {
+  id: number,
+  session_date: string,
+  session_time: string or null,
+  mood: string,
+  session_type: string,
+  is_gi: boolean,
+  notes: string or null,
+  techniques: [{ taxonomy_id: number, name: string }]
+  }
+
+══════════════════════════════════════════════════════════════════════════
+STEP 7: TIME PICKER INFINITE SCROLL
+══════════════════════════════════════════════════════════════════════════
+
+The time picker wheels must loop infinitely in both directions:
+
+- Hours: … 11 → 12 → 1 → 2 … (never stops)
+- Minutes: … 58 → 59 → 00 → 01 … (never stops)
+- AM/PM: loops continuously
+
+No dead ends. No stopping at min/max values.
+
+══════════════════════════════════════════════════════════════════════════
+ORDER OF OPERATIONS
+══════════════════════════════════════════════════════════════════════════
+
+1. Remove ALL haptics from entire app (Step 1)
+1. Rewrite delete handler (Step 2) → TEST: delete works
+1. Rewrite update handler (Step 3) → TEST: update persists
+1. Fix time saving and defaults (Step 4) → TEST: time saves and
+   defaults to last session time
+1. Fix preset chips (Step 5) → TEST: tapped chips save and show
+1. Update Recent Sessions display (Step 6) → TEST: time and
+   techniques visible on cards
+1. Infinite scroll (Step 7) → TEST: no dead ends on picker
+
+TEST EACH STEP BEFORE MOVING TO THE NEXT.
+DO NOT publish until ALL steps pass.
+Show me results for each step.
