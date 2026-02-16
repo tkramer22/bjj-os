@@ -1,0 +1,203 @@
+TRAINING TAB — REPLACE INSIGHT LINE WITH CLAUDE-GENERATED ONE-LINER
+
+⚠️ DO NOT break any existing functionality.
+⚠️ DO NOT touch Professor OS chat, video library, video curation, or profile.
+⚠️ Only modify the Training tab insight line and its backend endpoint.
+
+══════════════════════════════════════════════════════════════════════════
+WHAT WE’RE CHANGING
+══════════════════════════════════════════════════════════════════════════
+
+The Training tab currently has a rule-based insight line between the
+streak counter and the calendar. We are replacing the static template
+system with a short Claude API call that generates a fresh, contextual
+one-liner every time.
+
+We are also REMOVING the 🧠 brain emoji from the insight line.
+No emoji on the insight. Just text. Clean.
+
+══════════════════════════════════════════════════════════════════════════
+BACKEND: NEW ENDPOINT
+══════════════════════════════════════════════════════════════════════════
+
+Replace or update: GET /api/training/insight
+
+This endpoint:
+
+1. Queries the user’s training data
+1. Sends a short Claude API call
+1. Returns a one-liner string
+1. Caches the result for 1 hour per user OR until a new session is saved
+
+STEP 1 — GATHER USER TRAINING STATS:
+
+Query the following for the authenticated user:
+
+const stats = {
+sessionsThisWeek: // count of sessions in last 7 days
+sessionsLastWeek: // count of sessions 8-14 days ago
+sessionsThisMonth: // count of sessions this calendar month
+sessionsLastMonth: // count of sessions last calendar month
+totalSessions: // total all-time session count
+currentStreak: // consecutive days with sessions (existing logic)
+daysSinceLastSession: // days since most recent session
+techniquesThisWeek: // array of {name, count} for techniques logged in last 7 days, ordered by count DESC
+mostLoggedTechniqueAllTime: // {name, count} — single most logged technique ever
+lastSessionDate: // date of most recent session
+lastSessionMood: // mood of most recent session
+recentTechniques: // last 5 unique techniques logged
+};
+
+STEP 2 — CALL CLAUDE:
+
+Use the same Claude client/API key already configured for Professor OS.
+Model: claude-haiku-4-5-20251001 (cheapest, fastest — sufficient for one sentence)
+Max tokens: 60
+
+System prompt:
+“You are Professor OS — an elite BJJ black belt coach and training
+partner. You’ve been coaching this student for months. You know their
+game, their habits, their patterns. You talk like a real coach in the
+gym — the way JT Torres or John Danaher would speak to a dedicated
+student between rounds. Warm but direct. Knowledgeable. You respect
+them enough to be honest. Occasionally dry humor. You’re proud of them
+when they earn it. You push them when they need it. You never
+patronize.
+
+You are glancing at their training log and making ONE brief comment.
+Like a coach walking past the whiteboard and saying something in
+passing before moving on.
+
+STRICT RULES:
+
+- One sentence only. Maximum 15 words. No exceptions.
+- No emojis. No exclamation marks. No question marks.
+- Reference specific numbers or techniques from their data.
+- Never generic motivation. If it could apply to anyone, don’t say it.
+- Never say: ‘keep it up’, ‘great job’, ‘you got this’, ‘proud of you’,
+  ‘keep pushing’, ‘stay consistent’, ‘believe in yourself’, or anything
+  that sounds like a motivational poster.
+- DO say things a real coach would say — observations about their
+  patterns, technique focus, volume, rest, progress, or habits.
+- Vary your tone — sometimes encouraging, sometimes a nudge, sometimes
+  just a factual observation that makes them think.
+- If they train a lot, acknowledge the work without being sycophantic.
+- If they haven’t trained recently, be direct but human about it.
+- If they keep drilling the same technique, that’s worth noting.
+- If their volume changed from last week or last month, mention it.”
+
+User message:
+Send the stats object as a formatted string:
+
+“Here is my student’s training data:
+
+- Sessions this week: {sessionsThisWeek}
+- Sessions last week: {sessionsLastWeek}
+- Sessions this month: {sessionsThisMonth}
+- Sessions last month: {sessionsLastMonth}
+- Total sessions all-time: {totalSessions}
+- Current streak: {currentStreak} days
+- Days since last session: {daysSinceLastSession}
+- Techniques this week: {techniquesThisWeek formatted as ‘Armbar (3), Half Guard (2)’}
+- Most logged technique all-time: {mostLoggedTechniqueAllTime}
+- Last session mood: {lastSessionMood}
+
+Give one observation.”
+
+STEP 3 — CACHE THE RESULT:
+
+Store the Claude response in an in-memory cache (or Redis if available):
+
+- Key: `training_insight_${userId}`
+- Value: the insight string
+- TTL: 1 hour
+
+INVALIDATE the cache when:
+
+- User saves a new training session (POST /api/training/sessions)
+- User deletes a training session (DELETE /api/training/sessions/:id)
+- User updates a training session (PUT /api/training/sessions/:id)
+
+After invalidation, the NEXT time the Training tab loads, it will
+generate a fresh insight from Claude with the updated data.
+
+STEP 4 — RETURN:
+
+Response: { insight: “string” }
+
+If Claude call fails for any reason (timeout, rate limit, error):
+
+- Return a fallback: { insight: “One session at a time.” }
+- Log the error server-side
+- Do NOT crash or show an error to the user
+
+══════════════════════════════════════════════════════════════════════════
+FRONTEND: UPDATE TRAINING TAB
+══════════════════════════════════════════════════════════════════════════
+
+REMOVE the 🧠 brain emoji from the insight line completely.
+
+The insight line should render as plain text only. No emoji prefix.
+Same styling as before:
+
+- Muted white text (white at 70-80% opacity)
+- 14px font size
+- Same horizontal padding as rest of the tab
+- Sits between streak counter and calendar
+
+LOADING BEHAVIOR:
+
+1. Training tab renders immediately with streak counter and calendar
+1. Insight line area is empty (no placeholder, no skeleton, no spinner)
+1. Fetch GET /api/training/insight in the background
+1. When response arrives, fade the insight text in (300ms ease-in)
+1. If the fetch takes more than 3 seconds, skip it — don’t show anything
+
+INTERACTION BEHAVIOR (same as before):
+
+- Bottom sheet opens → insight fades out (200ms)
+- Bottom sheet closes after save → re-fetch fresh insight (cache was
+  invalidated by the save), fade in new one
+- Bottom sheet closes without save → previous insight fades back in
+  (no re-fetch needed, use cached version)
+
+TAB SWITCHING:
+
+- When user leaves Training tab and comes back within 1 hour →
+  show cached insight immediately (no fade, instant)
+- When user comes back after 1 hour → re-fetch and fade in
+
+ZERO STATE:
+
+- If user has ZERO sessions ever logged → do NOT call Claude,
+  do NOT show any insight line. Just show “Log a session to start
+  your streak” as the streak text. That’s enough.
+
+══════════════════════════════════════════════════════════════════════════
+TESTING
+══════════════════════════════════════════════════════════════════════════
+
+□ Training tab loads without delay (insight appears after a beat)
+□ Insight text has NO emoji — just plain text
+□ Insight references actual user data (technique names, session counts)
+□ Insight is one sentence, under 15 words
+□ Insight tone is direct coach voice, not generic motivation
+□ Tapping a date → insight fades out
+□ Saving a session → NEW insight appears (not the old cached one)
+□ Dismissing bottom sheet without save → old insight returns
+□ User with zero sessions → no insight line shown at all
+□ If Claude API fails → shows “One session at a time.” as fallback
+□ No visible loading spinner or skeleton for the insight
+□ Switching tabs and coming back → insight still there (cached)
+□ After 1 hour → fresh insight generated on next tab load
+□ Insight never shows generic phrases like “keep it up” or “great job”
+□ Test with different data scenarios:
+
+- User who trained 6 days this week
+- User who hasn’t trained in 5 days
+- User who logged the same technique 4 times
+- User who just hit 50 total sessions
+- User who trained more this month than last month
+
+DO NOT publish until I confirm the insight messages look right.
+Show me 5 different example insights from the preview before deploying.

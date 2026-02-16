@@ -5,6 +5,8 @@ import { triggerHaptic } from "@/lib/haptics";
 import { useToast } from "@/hooks/use-toast";
 import { TrainingLogSheet } from "@/components/training-log-sheet";
 
+const INSIGHT_CACHE_TTL = 60 * 60 * 1000;
+
 interface TrainingSession {
   id: number;
   userId: string;
@@ -113,9 +115,10 @@ export default function IOSTrainingPage() {
     enabled: !!user?.id,
   });
 
-  const { data: insightData } = useQuery<{ insight: string }>({
+  const { data: insightData } = useQuery<{ insight: string | null }>({
     queryKey: ['/api/training/insight'],
     enabled: !!user?.id,
+    staleTime: INSIGHT_CACHE_TTL,
   });
 
   const sessions = sessionsData?.sessions || [];
@@ -300,15 +303,12 @@ export default function IOSTrainingPage() {
               padding: '8px 0',
               fontSize: '14px',
               color: 'rgba(255, 255, 255, 0.75)',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '8px',
+              lineHeight: 1.5,
               opacity: insightVisible ? 1 : 0,
               transition: insightVisible ? 'opacity 300ms ease-in' : 'opacity 200ms ease-out',
             }}
           >
-            <span style={{ fontSize: '14px', lineHeight: 1.5, flexShrink: 0 }}>{'\uD83E\uDDE0'}</span>
-            <span style={{ lineHeight: 1.5 }}>{insightData.insight}</span>
+            {insightData.insight}
           </div>
         )}
 

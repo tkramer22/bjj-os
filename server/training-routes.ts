@@ -1,5 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import Anthropic from '@anthropic-ai/sdk';
 import { db } from "./db";
 import { trainingSessions, trainingSessionTechniques } from "@shared/schema";
 import { eq, desc, sql, and, gte, lte, count } from "drizzle-orm";
@@ -8,6 +9,8 @@ const router = express.Router();
 const JWT_SECRET = process.env.SESSION_SECRET || 'your-secret-key';
 const insightCache = new Map<string, { insight: string; generatedAt: number }>();
 const INSIGHT_CACHE_TTL = 60 * 60 * 1000;
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 let tablesInitialized = false;
 
@@ -459,7 +462,17 @@ router.get('/insight', async (req, res) => {
 
     const cached = insightCache.get(userIdStr);
     if (cached && Date.now() - cached.generatedAt < INSIGHT_CACHE_TTL) {
-      return res.json({ insight: cached.insight });
+      return res.json({ insight: cached.insight || null });
+    }
+
+    const totalCheck = await db.execute(sql`
+      SELECT COUNT(*)::int as total FROM training_sessions WHERE user_id = ${userIdStr}
+    `);
+    const totalRows = Array.isArray(totalCheck) ? totalCheck : (totalCheck as any).rows || [];
+    const totalCount = Number(totalRows[0]?.total || 0);
+    if (totalCount === 0) {
+      insightCache.set(userIdStr, { insight: '', generatedAt: Date.now() });
+      return res.json({ insight: null });
     }
 
     const insight = await generateTrainingInsight(userIdStr);
@@ -467,103 +480,26 @@ router.get('/insight', async (req, res) => {
     res.json({ insight });
   } catch (error: any) {
     console.error('[TRAINING] Error generating insight:', error.message);
-    res.json({ insight: 'Every session is a deposit in the bank.' });
+    res.json({ insight: 'One session at a time.' });
   }
 });
 
 async function generateTrainingInsight(userId: string): Promise<string> {
-  const totalResult = await db.execute(sql`
-    SELECT COUNT(*)::int as total FROM training_sessions WHERE user_id = ${userId}
-  `);
-  const totalRows = Array.isArray(totalResult) ? totalResult : (totalResult as any).rows || [];
-  const totalCount = Number(totalRows[0]?.total || 0);
-
-  if (totalCount === 0) return "Every session is a deposit in the bank.";
-
-  let milestonesShown: string[] = [];
-  try {
-    const msResult = await db.execute(sql`
-      SELECT milestones_shown FROM training_user_milestones WHERE user_id = ${userId} LIMIT 1
-    `);
-    const msRows = Array.isArray(msResult) ? msResult : (msResult as any).rows || [];
-    if (msRows.length > 0 && msRows[0].milestones_shown) {
-      milestonesShown = msRows[0].milestones_shown;
-    }
-  } catch (e) {}
-
-  const milestones = [
-    { threshold: 100, msg: "100 sessions logged. That's not casual \u2014 that's commitment." },
-    { threshold: 50, msg: "50 sessions deep. You're building something real." },
-    { threshold: 25, msg: "25 sessions in the books. The foundation is forming." },
-    { threshold: 10, msg: "Double digits. You're locked in." },
-  ];
-  for (const m of milestones) {
-    if (totalCount >= m.threshold && !milestonesShown.includes(String(m.threshold))) {
-      try {
-        await db.execute(sql`
-          INSERT INTO training_user_milestones (user_id, milestones_shown)
-          VALUES (${userId}, ${JSON.stringify([...milestonesShown, String(m.threshold)])}::jsonb)
-          ON CONFLICT (user_id) DO UPDATE SET milestones_shown = ${JSON.stringify([...milestonesShown, String(m.threshold)])}::jsonb
-        `);
-      } catch (e) {}
-      return m.msg;
-    }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.warn('[TRAINING INSIGHT] ANTHROPIC_API_KEY not set, using fallback');
+    return 'One session at a time.';
   }
 
-  const weekResult = await db.execute(sql`
-    SELECT COUNT(DISTINCT session_date)::int as cnt FROM training_sessions
-    WHERE user_id = ${userId} AND session_date >= CURRENT_DATE - INTERVAL '7 days'
-  `);
-  const weekRows = Array.isArray(weekResult) ? weekResult : (weekResult as any).rows || [];
-  const weekCount = Number(weekRows[0]?.cnt || 0);
-
-  if (weekCount >= 6) return "6 days on the mats this week. That's elite.";
-  if (weekCount === 5) return "5 sessions this week. Consistency builds champions.";
-  if (weekCount === 4) return "4 days this week. Solid work.";
-
-  const monthCompare = await db.execute(sql`
+  const statsQuery = await db.execute(sql`
     SELECT
-      (SELECT COUNT(DISTINCT session_date)::int FROM training_sessions
-       WHERE user_id = ${userId} AND session_date >= date_trunc('month', CURRENT_DATE)) as this_month,
-      (SELECT COUNT(DISTINCT session_date)::int FROM training_sessions
-       WHERE user_id = ${userId}
-       AND session_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month')
-       AND session_date < date_trunc('month', CURRENT_DATE)) as last_month
+      (SELECT COUNT(*)::int FROM training_sessions WHERE user_id = ${userId}) as total_sessions,
+      (SELECT COUNT(*)::int FROM training_sessions WHERE user_id = ${userId} AND session_date >= CURRENT_DATE - INTERVAL '7 days') as sessions_this_week,
+      (SELECT COUNT(*)::int FROM training_sessions WHERE user_id = ${userId} AND session_date >= CURRENT_DATE - INTERVAL '14 days' AND session_date < CURRENT_DATE - INTERVAL '7 days') as sessions_last_week,
+      (SELECT COUNT(*)::int FROM training_sessions WHERE user_id = ${userId} AND session_date >= date_trunc('month', CURRENT_DATE)) as sessions_this_month,
+      (SELECT COUNT(*)::int FROM training_sessions WHERE user_id = ${userId} AND session_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND session_date < date_trunc('month', CURRENT_DATE)) as sessions_last_month
   `);
-  const mcRows = Array.isArray(monthCompare) ? monthCompare : (monthCompare as any).rows || [];
-  const thisMonth = Number(mcRows[0]?.this_month || 0);
-  const lastMonth = Number(mcRows[0]?.last_month || 0);
-
-  if (lastMonth > 0 && thisMonth > lastMonth) return "You're training more this month than last. Momentum.";
-  if (lastMonth > 0 && thisMonth === lastMonth) return "Holding steady this month. Consistency is king.";
-
-  const techPattern = await db.execute(sql`
-    SELECT ttv2.name, COUNT(*)::int as cnt
-    FROM training_session_techniques tst
-    JOIN training_sessions ts ON tst.session_id = ts.id
-    LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
-    WHERE ts.user_id = ${userId} AND ts.session_date >= CURRENT_DATE - INTERVAL '7 days'
-    GROUP BY ttv2.name ORDER BY cnt DESC LIMIT 1
-  `);
-  const tpRows = Array.isArray(techPattern) ? techPattern : (techPattern as any).rows || [];
-  if (tpRows.length > 0 && Number(tpRows[0].cnt) >= 3 && tpRows[0].name) {
-    return `${tpRows[0].name} ${tpRows[0].cnt} times this week. That's how you sharpen a weapon.`;
-  }
-
-  const firstTimeResult = await db.execute(sql`
-    SELECT ttv2.name FROM training_session_techniques tst
-    JOIN training_sessions ts ON tst.session_id = ts.id
-    LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
-    WHERE ts.user_id = ${userId}
-    GROUP BY ttv2.name
-    HAVING COUNT(*) = 1 AND MAX(ts.session_date) >= CURRENT_DATE - INTERVAL '3 days'
-    ORDER BY MAX(ts.session_date) DESC
-    LIMIT 1
-  `);
-  const ftRows = Array.isArray(firstTimeResult) ? firstTimeResult : (firstTimeResult as any).rows || [];
-  if (ftRows.length > 0 && ftRows[0].name) {
-    return `First time logging ${ftRows[0].name}. Expanding the game.`;
-  }
+  const sRows = Array.isArray(statsQuery) ? statsQuery : (statsQuery as any).rows || [];
+  const s = sRows[0] || {};
 
   const streakResult = await db.execute(sql`
     SELECT DISTINCT session_date FROM training_sessions
@@ -594,34 +530,114 @@ async function generateTrainingInsight(userId: string): Promise<string> {
     }
   }
 
-  if (currentStreak >= 30) return "30 day streak. Most people can't do 7.";
-  if (currentStreak >= 14) return "Two weeks straight. This is becoming who you are.";
-  if (currentStreak >= 7) return "A full week on the mats. Keep building.";
-
-  let daysSince = -1;
-  if (allDates.length > 0) {
-    daysSince = Math.round((today.getTime() - new Date(allDates[0] + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24));
+  let daysSinceLastSession = -1;
+  const lastSessionDate = allDates.length > 0 ? allDates[0] : null;
+  if (lastSessionDate) {
+    daysSinceLastSession = Math.round((today.getTime() - new Date(lastSessionDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24));
   }
 
-  if (daysSince === 2 && currentStreak === 0) {
-    const recentStreak = await db.execute(sql`
-      SELECT COUNT(DISTINCT session_date)::int as cnt FROM training_sessions
-      WHERE user_id = ${userId} AND session_date >= CURRENT_DATE - INTERVAL '9 days'
-    `);
-    const rsRows = Array.isArray(recentStreak) ? recentStreak : (recentStreak as any).rows || [];
-    if (Number(rsRows[0]?.cnt || 0) >= 5) {
-      return "Two days off after a strong run. Recovery is part of the game.";
+  const techWeekResult = await db.execute(sql`
+    SELECT ttv2.name, COUNT(*)::int as cnt
+    FROM training_session_techniques tst
+    JOIN training_sessions ts ON tst.session_id = ts.id
+    LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
+    WHERE ts.user_id = ${userId} AND ts.session_date >= CURRENT_DATE - INTERVAL '7 days' AND ttv2.name IS NOT NULL
+    GROUP BY ttv2.name ORDER BY cnt DESC LIMIT 5
+  `);
+  const techWeekRows = Array.isArray(techWeekResult) ? techWeekResult : (techWeekResult as any).rows || [];
+
+  const topTechResult = await db.execute(sql`
+    SELECT ttv2.name, COUNT(*)::int as cnt
+    FROM training_session_techniques tst
+    JOIN training_sessions ts ON tst.session_id = ts.id
+    LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
+    WHERE ts.user_id = ${userId} AND ttv2.name IS NOT NULL
+    GROUP BY ttv2.name ORDER BY cnt DESC LIMIT 1
+  `);
+  const topTechRows = Array.isArray(topTechResult) ? topTechResult : (topTechResult as any).rows || [];
+
+  const lastMoodResult = await db.execute(sql`
+    SELECT mood FROM training_sessions WHERE user_id = ${userId} AND mood IS NOT NULL ORDER BY session_date DESC LIMIT 1
+  `);
+  const moodRows = Array.isArray(lastMoodResult) ? lastMoodResult : (lastMoodResult as any).rows || [];
+
+  const recentTechResult = await db.execute(sql`
+    SELECT DISTINCT ON (ttv2.name) ttv2.name
+    FROM training_session_techniques tst
+    JOIN training_sessions ts ON tst.session_id = ts.id
+    LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
+    WHERE ts.user_id = ${userId} AND ttv2.name IS NOT NULL
+    ORDER BY ttv2.name, ts.session_date DESC
+    LIMIT 5
+  `);
+  const recentTechRows = Array.isArray(recentTechResult) ? recentTechResult : (recentTechResult as any).rows || [];
+
+  const techniquesThisWeek = techWeekRows.map((r: any) => `${r.name} (${r.cnt})`).join(', ') || 'None';
+  const mostLoggedAllTime = topTechRows.length > 0 ? `${topTechRows[0].name} (${topTechRows[0].cnt})` : 'None';
+  const lastMood = moodRows.length > 0 ? moodRows[0].mood : 'Not recorded';
+  const recentTechniques = recentTechRows.map((r: any) => r.name).join(', ') || 'None';
+
+  const userMessage = `Here is my student's training data:
+
+- Sessions this week: ${s.sessions_this_week || 0}
+- Sessions last week: ${s.sessions_last_week || 0}
+- Sessions this month: ${s.sessions_this_month || 0}
+- Sessions last month: ${s.sessions_last_month || 0}
+- Total sessions all-time: ${s.total_sessions || 0}
+- Current streak: ${currentStreak} days
+- Days since last session: ${daysSinceLastSession}
+- Techniques this week: ${techniquesThisWeek}
+- Most logged technique all-time: ${mostLoggedAllTime}
+- Last session mood: ${lastMood}
+- Recent techniques: ${recentTechniques}
+
+Give one observation.`;
+
+  const systemPrompt = `You are Professor OS — an elite BJJ black belt coach and training partner. You've been coaching this student for months. You know their game, their habits, their patterns. You talk like a real coach in the gym — the way JT Torres or John Danaher would speak to a dedicated student between rounds. Warm but direct. Knowledgeable. You respect them enough to be honest. Occasionally dry humor. You're proud of them when they earn it. You push them when they need it. You never patronize.
+
+You are glancing at their training log and making ONE brief comment. Like a coach walking past the whiteboard and saying something in passing before moving on.
+
+STRICT RULES:
+
+- One sentence only. Maximum 15 words. No exceptions.
+- No emojis. No exclamation marks. No question marks.
+- Reference specific numbers or techniques from their data.
+- Never generic motivation. If it could apply to anyone, don't say it.
+- Never say: 'keep it up', 'great job', 'you got this', 'proud of you', 'keep pushing', 'stay consistent', 'believe in yourself', or anything that sounds like a motivational poster.
+- DO say things a real coach would say — observations about their patterns, technique focus, volume, rest, progress, or habits.
+- Vary your tone — sometimes encouraging, sometimes a nudge, sometimes just a factual observation that makes them think.
+- If they train a lot, acknowledge the work without being sycophantic.
+- If they haven't trained recently, be direct but human about it.
+- If they keep drilling the same technique, that's worth noting.
+- If their volume changed from last week or last month, mention it.`;
+
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 60,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    });
+
+    let text = response.content[0]?.type === 'text' ? response.content[0].text.trim() : '';
+    if (text) {
+      text = text.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+      text = text.replace(/[!?]/g, '.').replace(/\.+/g, '.').trim();
+      const firstSentence = text.split(/(?<=\.)\s/)[0] || text;
+      const words = firstSentence.split(/\s+/);
+      if (words.length > 15) {
+        text = words.slice(0, 15).join(' ');
+        if (!text.endsWith('.')) text += '.';
+      } else {
+        text = firstSentence;
+      }
+      return text;
     }
+    return 'One session at a time.'
+  } catch (error: any) {
+    console.error('[TRAINING INSIGHT] Claude API error:', error.message);
+    return 'One session at a time.';
   }
-  if (daysSince >= 3 && daysSince <= 4) return "The mats miss you.";
-  if (daysSince >= 5) return "Shake the rust off. One session changes everything.";
-
-  const fallbacks = [
-    "Every session is a deposit in the bank.",
-    "The best ability is availability. Show up.",
-    "Trust the process.",
-  ];
-  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
 }
 
 export function invalidateInsightCache(userId: string) {
