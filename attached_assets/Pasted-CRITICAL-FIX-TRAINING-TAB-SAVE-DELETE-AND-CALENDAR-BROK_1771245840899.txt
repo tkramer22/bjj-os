@@ -1,0 +1,197 @@
+CRITICAL FIX — TRAINING TAB SAVE, DELETE, AND CALENDAR BROKEN
+
+The Training tab has 3 regressions that must be fixed NOW:
+
+1. Saving a session does NOT close the bottom sheet
+1. Deleting a session does NOT close the bottom sheet
+1. After save/delete, the calendar does NOT refresh (purple dots
+   don’t appear/disappear, streak doesn’t update)
+
+These were ALL working before the haptics update. The haptics
+plugin throws “TO JS undefined” JavaScript errors that crash
+the handler chain.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 1: COMPLETELY REMOVE ALL HAPTICS FROM TRAINING TAB
+══════════════════════════════════════════════════════════════════════════
+
+Search EVERY file related to the Training tab for ANY reference to:
+
+- Haptics
+- haptic
+- ImpactStyle
+- NotificationType
+- safeHaptic
+- safeNotification
+- @capacitor/haptics
+
+REMOVE all of them. Every import, every call, every wrapper function.
+Delete them completely. Do NOT comment them out. DELETE them.
+
+We will add haptics back LATER after everything works.
+
+Do NOT touch haptic code in Chat, Videos, or Profile — ONLY Training.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 2: FIX THE SAVE SESSION HANDLER
+══════════════════════════════════════════════════════════════════════════
+
+Find the save/create session handler. It must do these things
+IN THIS EXACT ORDER:
+
+1. Collect all form data (mood, session type, techniques, time,
+   gi/nogi, notes, rolls, subs, taps, duration)
+1. Call POST /api/training/sessions with the data
+1. AWAIT the response
+1. If response is successful (200/201):
+   a. Close the bottom sheet (set showBottomSheet = false or
+   equivalent state)
+   b. Clear the form state
+   c. RE-FETCH the calendar data for the current month
+   (call GET /api/training/sessions?userId=X&month=M&year=Y)
+   d. RE-FETCH the stats
+   (call GET /api/training/stats?userId=X)
+   e. The calendar grid must re-render with the new purple dot
+   f. The streak line must update with new count
+   g. The recent sessions list must show the new session
+1. If response fails: show error toast, do NOT close sheet
+
+CRITICAL: There must be NO haptic calls anywhere in this handler.
+CRITICAL: The sheet MUST close on success. If it’s not closing,
+check that the state variable controlling sheet visibility is
+being set correctly.
+CRITICAL: The calendar data MUST be re-fetched after save. If
+you’re using local state for sessions, update the local state
+AND re-fetch from API to ensure consistency.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 3: FIX THE DELETE SESSION HANDLER
+══════════════════════════════════════════════════════════════════════════
+
+Find the delete session handler. It must do these things
+IN THIS EXACT ORDER:
+
+1. Show confirmation dialog: “Delete this session?”
+   with [Cancel] and [Delete] buttons
+1. If user confirms:
+   a. Call DELETE /api/training/sessions/:id
+   b. AWAIT the response
+   c. If successful:
+- Close the bottom sheet immediately
+- RE-FETCH calendar data for current month
+- RE-FETCH stats (streak will change)
+- Recent sessions list must remove the deleted session
+- If that was the only session on that date, the purple
+  dot must disappear from the calendar
+  d. If fails: show error toast, keep sheet open
+
+CRITICAL: No haptic calls in delete handler.
+CRITICAL: Sheet MUST close after successful delete.
+CRITICAL: Calendar MUST refresh — the dot must disappear.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 4: FIX THE UPDATE SESSION HANDLER
+══════════════════════════════════════════════════════════════════════════
+
+Find the update session handler. Same pattern:
+
+1. Collect updated form data
+1. Call PUT /api/training/sessions/:id with updated data
+1. AWAIT response
+1. If successful:
+   a. Close bottom sheet
+   b. RE-FETCH calendar data
+   c. RE-FETCH stats
+   d. Recent sessions list must show updated data
+1. If fails: show error toast, keep sheet open
+
+══════════════════════════════════════════════════════════════════════════
+STEP 5: VERIFY CALENDAR RE-RENDER LOGIC
+══════════════════════════════════════════════════════════════════════════
+
+The calendar grid renders purple dots based on session data.
+After save/delete/update, the calendar MUST show the correct dots.
+
+Check these things:
+
+1. How does the calendar know which dates have sessions?
+- Is it a state variable like `trainedDates` or `sessions`?
+- Is it derived from the fetched session data?
+1. When sessions are re-fetched after save/delete, does the
+   calendar component actually re-render?
+- If using React state, setting the new sessions array should
+  trigger a re-render
+- If the calendar is memoized or cached, make sure the
+  dependency array includes the sessions data
+1. The purple dot logic should be:
+- For each date in the month, check if ANY session exists
+  for that date
+- If yes: render filled purple circle with white number
+- If no: render plain gray number (no circle, no outline)
+- Today (no session): subtle purple ring (unfilled)
+- Today (has session): filled purple circle
+1. Make sure the dot check uses the CORRECT date format.
+   If sessions store dates as ISO strings and the calendar
+   compares as YYYY-MM-DD, make sure the comparison works.
+   Common bug: timezone offset makes Feb 16 show as Feb 15.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 6: VERIFY BOTTOM SHEET CLOSE MECHANISM
+══════════════════════════════════════════════════════════════════════════
+
+The bottom sheet must close after successful save/delete/update.
+
+Check:
+
+1. What state variable controls the sheet? (isOpen, showSheet, etc.)
+1. Is it being set to false/null after the API call succeeds?
+1. Is there an animation or transition that might prevent closing?
+1. Is there an error being thrown BETWEEN the API call and the
+   state update that prevents the close from executing?
+
+Add console.log statements to debug:
+console.log(’[TRAINING] Save successful, closing sheet…’);
+console.log(’[TRAINING] Sheet state before close:’, sheetState);
+// set state to close
+console.log(’[TRAINING] Sheet state after close:’, sheetState);
+
+══════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST — ALL MUST PASS
+══════════════════════════════════════════════════════════════════════════
+
+□ Save new session → sheet closes → purple dot appears → streak updates
+□ Delete session → sheet closes → purple dot disappears → streak updates
+□ Update session → sheet closes → data refreshes in recent sessions
+□ Save second session on same day → sheet closes → still one dot
+□ Delete one of two sessions on same day → dot stays (other session exists)
+□ Delete last session on a day → dot disappears
+□ No “TO JS undefined” errors in console
+□ No haptic-related code remains in Training tab files
+□ Streak counter is accurate after save/delete
+□ Recent sessions list updates after save/delete
+□ Calendar month navigation still works after save/delete
+
+══════════════════════════════════════════════════════════════════════════
+DO NOT
+══════════════════════════════════════════════════════════════════════════
+
+❌ Do NOT add haptics back. We will do that separately later.
+❌ Do NOT change the visual design of anything.
+❌ Do NOT modify the bottom sheet UI or layout.
+❌ Do NOT touch Chat, Videos, or Profile tabs.
+❌ Do NOT modify the API endpoints themselves — they work fine.
+The problem is the FRONTEND handlers, not the backend.
+
+══════════════════════════════════════════════════════════════════════════
+SHOW ME
+══════════════════════════════════════════════════════════════════════════
+
+After fixing, show me:
+
+1. The save handler code — confirm zero haptic references
+1. The delete handler code — confirm zero haptic references
+1. The update handler code — confirm zero haptic references
+1. Console output proving save works (sheet closes, data refreshes)
+1. Console output proving delete works (sheet closes, data refreshes)
+
+Do NOT publish until all tests pass.

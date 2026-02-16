@@ -235,7 +235,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
   const defaultHour = now.getHours() > 12 ? now.getHours() - 12 : (now.getHours() === 0 ? 12 : now.getHours());
   const defaultAmPm = now.getHours() >= 12 ? 'PM' : 'AM';
 
-  const initTime = existingSession?.sessionTime
+  const initTime: { hour: number; minute: number; ampm: 'AM' | 'PM' } = existingSession?.sessionTime
     ? parseTimeString(existingSession.sessionTime)
     : { hour: defaultHour, minute: now.getMinutes(), ampm: defaultAmPm };
 
@@ -298,10 +298,12 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
 
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleSaveSession = async () => {
     if (isSaving) return;
     setIsSaving(true);
+    console.log('[TRAINING] Save started, isEditing:', isEditing);
     const sessionTimeStr = formatTimeTo12h(timeHour, timeMinute, timeAmPm);
     const payload = {
       sessionDate: date,
@@ -320,12 +322,19 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
       })),
     };
 
+    let token: string | null = null;
     try {
-      const token = await getAuthToken();
+      token = await getAuthToken();
+    } catch (e) {
+      console.warn('[TRAINING] getAuthToken failed, proceeding without token:', e);
+    }
+
+    try {
       const url = isEditing && existingSession
         ? getApiUrl(`/api/training/sessions/${existingSession.id}`)
         : getApiUrl('/api/training/sessions');
       const method = isEditing && existingSession ? 'PUT' : 'POST';
+      console.log('[TRAINING] Fetching:', method, url);
 
       const res = await fetch(url, {
         method,
@@ -337,8 +346,9 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
         credentials: 'include',
       });
 
+      console.log('[TRAINING] Response status:', res.status);
+
       if (res.ok) {
-        queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith?.('/api/training') });
         const streak = (statsData?.currentStreak || 0) + (isEditing ? 0 : 1);
         const milestones = [7, 14, 21, 30, 60, 90, 100];
         const isMilestone = milestones.includes(streak);
@@ -349,25 +359,38 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
         } else {
           toast({ title: `Session logged \u00B7 \uD83D\uDD25 ${streak > 0 ? streak : 1} day streak` });
         }
+        console.log('[TRAINING] Save successful, calling onSave to close sheet and refresh');
+        setIsSaving(false);
         onSave();
+        return;
       } else {
-        console.error('SAVE: failed with status:', res.status);
+        const errorText = await res.text().catch(() => '');
+        console.error('[TRAINING] Save failed:', res.status, errorText);
         toast({ title: "Failed to save", variant: "destructive" });
       }
     } catch (err: any) {
-      console.error('SAVE: error:', err);
+      console.error('[TRAINING] Save error:', err);
       toast({ title: "Failed to save", description: err?.message, variant: "destructive" });
-    } finally {
-      setIsSaving(false);
     }
+    setIsSaving(false);
   };
 
   const handleDeleteSession = async () => {
     if (!existingSession || isDeleting) return;
     setIsDeleting(true);
+    console.log('[TRAINING] Delete started for session:', existingSession.id);
+
+    let token: string | null = null;
     try {
-      const token = await getAuthToken();
+      token = await getAuthToken();
+    } catch (e) {
+      console.warn('[TRAINING] getAuthToken failed, proceeding without token:', e);
+    }
+
+    try {
       const url = getApiUrl(`/api/training/sessions/${existingSession.id}`);
+      console.log('[TRAINING] Fetching: DELETE', url);
+
       const res = await fetch(url, {
         method: 'DELETE',
         headers: {
@@ -377,20 +400,25 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
         credentials: 'include',
       });
 
+      console.log('[TRAINING] Delete response status:', res.status);
+
       if (res.ok) {
-        queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith?.('/api/training') });
         toast({ title: "Session deleted" });
+        console.log('[TRAINING] Delete successful, calling onSave to close sheet and refresh');
+        setIsDeleting(false);
+        setShowDeleteConfirm(false);
         onSave();
+        return;
       } else {
-        console.error('DELETE: failed with status:', res.status);
+        const errorText = await res.text().catch(() => '');
+        console.error('[TRAINING] Delete failed:', res.status, errorText);
         toast({ title: "Failed to delete", variant: "destructive" });
       }
     } catch (err: any) {
-      console.error('DELETE: error:', err);
+      console.error('[TRAINING] Delete error:', err);
       toast({ title: "Failed to delete", description: err?.message, variant: "destructive" });
-    } finally {
-      setIsDeleting(false);
     }
+    setIsDeleting(false);
   };
 
   const toggleTechnique = useCallback((tech: { id: number; name: string }) => {
@@ -761,7 +789,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
           {isEditing && (
             <>
               <button
-                onClick={handleDeleteSession}
+                onClick={() => setShowDeleteConfirm(true)}
                 disabled={isDeleting}
                 data-testid="button-delete-session"
                 style={{
@@ -794,6 +822,58 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
           )}
         </div>
       </div>
+
+      {showDeleteConfirm && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 10001,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 40px',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowDeleteConfirm(false); }}
+          data-testid="delete-confirm-backdrop"
+        >
+          <div style={{
+            background: '#1C1C1E', borderRadius: '14px', width: '100%', maxWidth: '300px',
+            overflow: 'hidden', textAlign: 'center',
+          }}>
+            <div style={{ padding: '20px 16px 16px' }}>
+              <div style={{ fontSize: '17px', fontWeight: 600, color: '#FFFFFF', marginBottom: '4px' }}>
+                Delete this session?
+              </div>
+              <div style={{ fontSize: '13px', color: '#71717A' }}>
+                This can't be undone.
+              </div>
+            </div>
+            <div style={{ borderTop: '1px solid #2A2A2E', display: 'flex' }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                data-testid="button-delete-cancel"
+                style={{
+                  flex: 1, padding: '14px', background: 'transparent', border: 'none',
+                  borderRight: '1px solid #2A2A2E',
+                  color: '#8B5CF6', fontSize: '17px', fontWeight: 400, cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteSession}
+                disabled={isDeleting}
+                data-testid="button-delete-confirm"
+                style={{
+                  flex: 1, padding: '14px', background: 'transparent', border: 'none',
+                  color: '#EF4444', fontSize: '17px', fontWeight: 600, cursor: 'pointer',
+                  opacity: isDeleting ? 0.5 : 1,
+                }}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

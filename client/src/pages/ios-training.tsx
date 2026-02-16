@@ -204,15 +204,21 @@ export default function IOSTrainingPage() {
   }, [savedInsight]);
 
   const handleSheetSave = useCallback(() => {
+    console.log('[TRAINING] handleSheetSave called - closing sheet and refreshing data');
     didSaveRef.current = true;
-    queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith?.('/api/training') });
     setShowLogSheet(false);
     setEditingSession(null);
     setSelectedDate(null);
     setShowDaySessionsList(false);
     setSavedInsight(null);
+    queryClient.refetchQueries({ queryKey: [`/api/training/sessions?month=${currentMonth + 1}&year=${currentYear}`] });
+    queryClient.refetchQueries({ queryKey: ['/api/training/stats'] });
+    queryClient.refetchQueries({ queryKey: ['/api/training/sessions'] });
+    queryClient.refetchQueries({ queryKey: ['/api/training/insight'] });
+    queryClient.refetchQueries({ queryKey: ['/api/training/recent-techniques'] });
+    console.log('[TRAINING] Sheet closed, all training queries refetched');
     setTimeout(() => setInsightVisible(true), 300);
-  }, [queryClient]);
+  }, [queryClient, currentMonth, currentYear]);
 
   useEffect(() => {
     const handler = (e: Event) => {
