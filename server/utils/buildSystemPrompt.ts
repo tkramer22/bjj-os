@@ -1,6 +1,6 @@
 import { db } from '../db';
-import { eq, desc, sql, inArray, exists, and } from 'drizzle-orm';
-import { bjjUsers, aiVideoKnowledge, videoKnowledge, trainingSessions, trainingSessionTechniques } from '../../shared/schema';
+import { eq, desc, sql, inArray, exists, and, gte, count, countDistinct } from 'drizzle-orm';
+import { bjjUsers, aiVideoKnowledge, videoKnowledge, trainingSessions, trainingSessionTechniques, techniqueTaxonomyV2 } from '../../shared/schema';
 import { getCredentialsForInstructors, buildCredentialsSection } from './verified-credentials';
 
 /**
@@ -1127,6 +1127,197 @@ REMEMBER: This is ${displayName}'s journey. You're their training partner, not a
   // Everything AFTER is user-specific + per-message content (profile, videos, search results)
   let fullPrompt = systemPrompt;
   
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TRAINING LOG INTELLIGENCE — Inject user's training data for coaching
+  // ═══════════════════════════════════════════════════════════════════════════
+  try {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+
+    const [recentSessions, weekCountResult, streakSessions, topTechniques] = await Promise.all([
+      db.select({
+        id: trainingSessions.id,
+        sessionDate: trainingSessions.sessionDate,
+        mood: trainingSessions.mood,
+        sessionType: trainingSessions.sessionType,
+        isGi: trainingSessions.isGi,
+        notes: trainingSessions.notes,
+        durationMinutes: trainingSessions.durationMinutes,
+        rolls: trainingSessions.rolls,
+        submissions: trainingSessions.submissions,
+        taps: trainingSessions.taps,
+      })
+        .from(trainingSessions)
+        .where(and(eq(trainingSessions.userId, userId), gte(trainingSessions.sessionDate, sql`${thirtyDaysAgoStr}::date`)))
+        .orderBy(desc(trainingSessions.sessionDate))
+        .limit(10),
+
+      db.select({ count: countDistinct(trainingSessions.sessionDate) })
+        .from(trainingSessions)
+        .where(and(eq(trainingSessions.userId, userId), gte(trainingSessions.sessionDate, sql`${weekStartStr}::date`))),
+
+      db.select({ sessionDate: trainingSessions.sessionDate })
+        .from(trainingSessions)
+        .where(eq(trainingSessions.userId, userId))
+        .orderBy(desc(trainingSessions.sessionDate))
+        .limit(60),
+
+      db.select({
+        name: techniqueTaxonomyV2.name,
+        count: count(),
+      })
+        .from(trainingSessionTechniques)
+        .innerJoin(techniqueTaxonomyV2, eq(trainingSessionTechniques.taxonomyId, techniqueTaxonomyV2.id))
+        .innerJoin(trainingSessions, eq(trainingSessionTechniques.sessionId, trainingSessions.id))
+        .where(and(eq(trainingSessions.userId, userId), gte(trainingSessions.sessionDate, sql`${thirtyDaysAgoStr}::date`)))
+        .groupBy(techniqueTaxonomyV2.name)
+        .orderBy(desc(count()))
+        .limit(5),
+    ]);
+
+    if (recentSessions.length > 0) {
+      let currentStreak = 0;
+      const uniqueDates = [...new Set(streakSessions.map(s => {
+        const d = s.sessionDate;
+        if (typeof d === 'string') return d.slice(0, 10);
+        if (d instanceof Date) return d.toISOString().slice(0, 10);
+        return String(d).slice(0, 10);
+      }))].sort().reverse();
+      if (uniqueDates.length > 0) {
+        const latestDate = new Date(uniqueDates[0] + 'T12:00:00');
+        const todayLocal = new Date();
+        todayLocal.setHours(12, 0, 0, 0);
+        const diffDays = Math.floor((todayLocal.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays <= 1) {
+          currentStreak = 1;
+          for (let i = 1; i < uniqueDates.length; i++) {
+            const prev = new Date(uniqueDates[i - 1] + 'T12:00:00');
+            const curr = new Date(uniqueDates[i] + 'T12:00:00');
+            const gap = Math.floor((prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24));
+            if (gap === 1) {
+              currentStreak++;
+            } else {
+              break;
+            }
+          }
+        }
+      }
+
+      const weekCount = Number(weekCountResult[0]?.count || 0);
+
+      const sessionIds = recentSessions.map(s => s.id);
+      let sessionTechniquesMap: Map<number, string[]> = new Map();
+      if (sessionIds.length > 0) {
+        const techRows = await db.select({
+          sessionId: trainingSessionTechniques.sessionId,
+          name: techniqueTaxonomyV2.name,
+        })
+          .from(trainingSessionTechniques)
+          .innerJoin(techniqueTaxonomyV2, eq(trainingSessionTechniques.taxonomyId, techniqueTaxonomyV2.id))
+          .where(inArray(trainingSessionTechniques.sessionId, sessionIds));
+
+        for (const row of techRows) {
+          if (!sessionTechniquesMap.has(row.sessionId)) sessionTechniquesMap.set(row.sessionId, []);
+          sessionTechniquesMap.get(row.sessionId)!.push(row.name);
+        }
+      }
+
+      const moodLabels: Record<string, string> = { great: 'Great', good: 'Good', tough: 'Tough', rough: 'Rough' };
+
+      const last5 = recentSessions.slice(0, 5);
+      const sessionLines = last5.map(s => {
+        const date = new Date(s.sessionDate + 'T12:00:00');
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const mood = moodLabels[s.mood || ''] || s.mood || '?';
+        const type = s.sessionType ? s.sessionType.charAt(0).toUpperCase() + s.sessionType.slice(1).replace(/_/g, ' ') : '?';
+        const gi = s.isGi === true ? 'Gi' : s.isGi === false ? 'No-Gi' : '';
+        const techs = sessionTechniquesMap.get(s.id);
+        const techStr = techs?.length ? ` Worked on: ${techs.join(', ')}.` : '';
+        const noteStr = s.notes ? ` Note: "${s.notes}"` : '';
+        return `  - ${dateStr}: ${mood}, ${type}${gi ? ', ' + gi : ''}.${techStr}${noteStr}`;
+      }).join('\n');
+
+      const topTechStr = topTechniques.length > 0
+        ? topTechniques.map(t => `${t.name} (${t.count}x)`).join(', ')
+        : 'Not enough data yet';
+
+      const moodCounts: Record<string, number> = {};
+      for (const s of recentSessions) {
+        if (s.mood) moodCounts[s.mood] = (moodCounts[s.mood] || 0) + 1;
+      }
+      const roughToughCount = (moodCounts['rough'] || 0) + (moodCounts['tough'] || 0);
+      const moodNote = roughToughCount >= 3 ? '\nRecent mood trend: Several tough/rough sessions — be extra encouraging.' : '';
+
+      fullPrompt += `
+
+═══════════════════════════════════════════════════════════════════════════════
+TRAINING LOG (from their session tracker — use naturally, never recite)
+═══════════════════════════════════════════════════════════════════════════════
+
+Streak: ${currentStreak} day${currentStreak !== 1 ? 's' : ''}
+This week: ${weekCount} session${weekCount !== 1 ? 's' : ''}
+Recent sessions:
+${sessionLines}
+Frequently trained (last 30 days): ${topTechStr}${moodNote}
+
+HOW TO USE THIS TRAINING DATA:
+
+You have access to their training log. Use it like a real coach would —
+to inform your coaching, not to display data.
+
+GOOD uses:
+- Notice patterns they haven't noticed ("you've been drilling armbars
+  all week but guard retention hasn't come up — want to balance that out?")
+- Connect their question to recent training ("since you've been
+  working half guard sweeps, here's a detail that'll make them sharper")
+- Acknowledge effort naturally ("you've been on the mat a lot lately —
+  this is when breakthroughs happen")
+- Recognize struggle patterns ("tough sessions lately — plateaus break
+  when you least expect it, stay with it")
+- Guide recommendations toward gaps they haven't trained recently
+- If they just logged a technique and ask about it, connect the dots
+  ("good timing — you just drilled this today")
+
+BAD uses — NEVER DO THESE:
+- Never recite stats unprompted ("you've trained 4.2 times per week")
+- Never list their training log back unless they specifically ask
+- Never say "according to your training data" or "your log shows"
+- Never guilt them about rest days or gaps
+- Never mention training data for pure technique questions without personal context
+- Never make them feel surveilled or tracked
+- Never force training references into responses that don't need them
+
+THE RULE: Use the data to be a smarter coach. They should feel
+like you just "know" them — not that you're reading their file.
+
+WHEN USER EXPLICITLY ASKS about training ("what have I trained lately",
+"show me my stats", "what should I focus on"):
+- Reference specific sessions, techniques, dates
+- Connect patterns and give actionable advice
+
+WHEN USER ASKS A GENERAL QUESTION:
+- Let training data inform your answer subtly
+- Recommend techniques they haven't been working on
+- Build on techniques they HAVE been working on
+- Don't mention the log unless genuinely relevant
+═══════════════════════════════════════════════════════════════════════════════
+`;
+      console.log(`[SYSTEM PROMPT] Injected training data: ${recentSessions.length} sessions, streak=${currentStreak}, weekCount=${weekCount}, topTechniques=${topTechniques.length}`);
+    } else {
+      console.log('[SYSTEM PROMPT] No training sessions found for user');
+    }
+  } catch (err) {
+    console.error('[SYSTEM PROMPT] Failed to load training data (non-fatal):', err);
+  }
+
   console.log('[SYSTEM PROMPT] Checking dynamic context:', {
     hasDynamicContext: !!dynamicContext,
     dynamicVideosCount: dynamicContext?.dynamicVideos?.length || 0,
