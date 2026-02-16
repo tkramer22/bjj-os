@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Search, Check, Minus, Plus, ChevronDown, ChevronUp } from "lucide-react";
-import { triggerHaptic } from "@/lib/haptics";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -60,7 +59,7 @@ function ScrollColumn({ items, selectedIndex, onChange, width }: {
 
     if (realIndex !== lastRealIndexRef.current) {
       lastRealIndexRef.current = realIndex;
-      triggerHaptic('light');
+      
       onChange(realIndex);
     }
 
@@ -116,7 +115,7 @@ function ScrollColumn({ items, selectedIndex, onChange, width }: {
           <div
             key={i}
             onClick={() => {
-              triggerHaptic('light');
+              
               onChange(realIndex);
             }}
             style={{
@@ -355,7 +354,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
   });
 
   const toggleTechnique = useCallback((tech: { id: number; name: string }) => {
-    triggerHaptic('light');
+    
     setSelectedTechniques(prev => {
       const exists = prev.find(t => t.taxonomyId === tech.id);
       if (exists) return prev.filter(t => t.taxonomyId !== tech.id);
@@ -365,7 +364,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
   }, []);
 
   const toggleChipTechnique = useCallback((chip: { id: number; name: string; displayName?: string }) => {
-    triggerHaptic('light');
+    
     setSelectedTechniques(prev => {
       const exists = prev.find(t => t.taxonomyId === chip.id);
       if (exists) return prev.filter(t => t.taxonomyId !== chip.id);
@@ -374,7 +373,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
   }, []);
 
   const removeTechnique = useCallback((taxonomyId: number) => {
-    triggerHaptic('light');
+    
     setSelectedTechniques(prev => prev.filter(t => t.taxonomyId !== taxonomyId));
   }, []);
 
@@ -486,7 +485,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
               {MOODS.map(m => (
                 <button
                   key={m.key}
-                  onClick={() => { triggerHaptic('light'); setMood(mood === m.key ? '' : m.key); }}
+                  onClick={() => { setMood(mood === m.key ? '' : m.key); }}
                   data-testid={`mood-${m.key}`}
                   style={uniformChipStyle(mood === m.key)}
                 >
@@ -502,7 +501,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
               {SESSION_TYPES.map(t => (
                 <button
                   key={t.key}
-                  onClick={() => { triggerHaptic('light'); setSessionType(sessionType === t.key ? '' : t.key); }}
+                  onClick={() => { setSessionType(sessionType === t.key ? '' : t.key); }}
                   data-testid={`session-type-${t.key}`}
                   style={uniformChipStyle(sessionType === t.key)}
                 >
@@ -609,12 +608,12 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
           </div>
 
           <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-            <button onClick={() => { triggerHaptic('light'); setIsGi(true); }} data-testid="button-gi" style={uniformChipStyle(isGi)}>Gi</button>
-            <button onClick={() => { triggerHaptic('light'); setIsGi(false); }} data-testid="button-nogi" style={uniformChipStyle(!isGi)}>No-Gi</button>
+            <button onClick={() => { setIsGi(true); }} data-testid="button-gi" style={uniformChipStyle(isGi)}>Gi</button>
+            <button onClick={() => { setIsGi(false); }} data-testid="button-nogi" style={uniformChipStyle(!isGi)}>No-Gi</button>
           </div>
 
           <button
-            onClick={() => { triggerHaptic('light'); setShowMore(!showMore); }}
+            onClick={() => { setShowMore(!showMore); }}
             data-testid="button-toggle-details"
             style={{
               width: '100%', padding: '12px', background: 'transparent', border: '1px solid #2A2A2E',
@@ -635,7 +634,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
                   {DURATION_OPTIONS.map(d => (
                     <button
                       key={d.value}
-                      onClick={() => { triggerHaptic('light'); setDurationMinutes(d.value); }}
+                      onClick={() => { setDurationMinutes(d.value); }}
                       data-testid={`duration-${d.value}`}
                       style={{
                         padding: '8px 14px', borderRadius: '100px',
@@ -661,7 +660,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
                     <div style={{ fontSize: '12px', color: '#71717A', marginBottom: '8px' }}>{item.label}</div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
                       <button
-                        onClick={() => { triggerHaptic('light'); item.setter(Math.max(0, item.value - 1)); }}
+                        onClick={() => { item.setter(Math.max(0, item.value - 1)); }}
                         style={{
                           width: '30px', height: '30px', borderRadius: '50%',
                           background: '#1A1A1D', border: '1px solid #2A2A2E',
@@ -673,7 +672,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
                       </button>
                       <span style={{ fontSize: '16px', fontWeight: 600, minWidth: '20px', textAlign: 'center', color: '#FFFFFF' }}>{item.value}</span>
                       <button
-                        onClick={() => { triggerHaptic('light'); item.setter(Math.min(99, item.value + 1)); }}
+                        onClick={() => { item.setter(Math.min(99, item.value + 1)); }}
                         style={{
                           width: '30px', height: '30px', borderRadius: '50%',
                           background: '#1A1A1D', border: '1px solid #2A2A2E',
@@ -723,7 +722,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
             <>
               {!showDeleteConfirm ? (
                 <button
-                  onClick={() => { triggerHaptic('light'); setShowDeleteConfirm(true); }}
+                  onClick={() => { setShowDeleteConfirm(true); }}
                   data-testid="button-delete-session"
                   style={{
                     width: '100%', marginTop: '12px', padding: '12px', background: 'transparent',
@@ -756,7 +755,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
 
               <button
                 onClick={() => {
-                  triggerHaptic('light');
+                  
                   onClose();
                   setTimeout(() => {
                     const event = new CustomEvent('training-add-another', { detail: { date } });

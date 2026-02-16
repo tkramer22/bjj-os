@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
-import { triggerHaptic } from "@/lib/haptics";
 import { useToast } from "@/hooks/use-toast";
 import { TrainingLogSheet } from "@/components/training-log-sheet";
 
@@ -175,7 +174,7 @@ export default function IOSTrainingPage() {
     todayCheck.setHours(0, 0, 0, 0);
     if (futureCheck > todayCheck) return;
 
-    triggerHaptic('light');
+    
     setSavedInsight(insightData?.insight || null);
     setInsightVisible(false);
     didSaveRef.current = false;
@@ -283,7 +282,7 @@ export default function IOSTrainingPage() {
 
       <div style={{ padding: '0 20px' }}>
         <button
-          onClick={() => { triggerHaptic('light'); setShowStatsDetail(true); }}
+          onClick={() => { setShowStatsDetail(true); }}
           data-testid="button-streak-line"
           style={{ background: 'transparent', border: 'none', padding: '0 0 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', width: '100%' }}
         >
@@ -444,7 +443,7 @@ export default function IOSTrainingPage() {
                     key={session.id}
                     data-testid={`session-card-${session.id}`}
                     onClick={() => {
-                      triggerHaptic('light');
+                      
                       setEditingSession(session);
                       setSelectedDate(session.sessionDate);
                       setShowLogSheet(true);
@@ -500,7 +499,7 @@ export default function IOSTrainingPage() {
                         </div>
                         <button
                           onClick={() => {
-                            triggerHaptic('light');
+                            
                             setEditingSession(session);
                             setSelectedDate(session.sessionDate);
                             setShowDaySessionsList(false);
@@ -519,7 +518,7 @@ export default function IOSTrainingPage() {
               </div>
               <button
                 onClick={() => {
-                  triggerHaptic('light');
+                  
                   setEditingSession(null);
                   setSelectedDate(daySessionsDate);
                   setShowDaySessionsList(false);
