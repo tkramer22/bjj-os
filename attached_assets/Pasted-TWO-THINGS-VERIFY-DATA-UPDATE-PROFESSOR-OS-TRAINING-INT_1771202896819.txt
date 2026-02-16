@@ -1,0 +1,163 @@
+TWO THINGS: VERIFY DATA + UPDATE PROFESSOR OS TRAINING INTELLIGENCE
+
+══════════════════════════════════════════════════════════════════════════
+PART 1: VERIFY TRAINING DATA IS SAVING PROPERLY
+══════════════════════════════════════════════════════════════════════════
+
+Run these checks NOW:
+
+1. Query the training_sessions table:
+   SELECT * FROM training_sessions ORDER BY created_at DESC LIMIT 10;
+   
+   Show me the results — confirm sessions are being saved with:
+- user_id populated
+- session_date correct
+- mood saved
+- session_type saved
+- is_gi saved
+- Any notes, rolls, subs, taps if entered
+1. Query the training_session_techniques table:
+   SELECT tst.*, tt.name as technique_name
+   FROM training_session_techniques tst
+   JOIN technique_taxonomy_v2 tt ON tst.taxonomy_id = tt.id
+   ORDER BY tst.created_at DESC LIMIT 20;
+   
+   Show me — confirm techniques are linked to taxonomy nodes.
+1. Check that MULTIPLE sessions per day works:
+   Verify there is NO unique constraint on (user_id, session_date).
+1. Check the stats endpoint:
+   GET /api/training/stats?userId=[test user id]
+   
+   Confirm it returns correct streak, weekly count, monthly count.
+1. Check that the recent techniques endpoint works:
+   GET /api/training/recent-techniques?userId=[test user id]
+   
+   Confirm it returns deduplicated technique names.
+
+══════════════════════════════════════════════════════════════════════════
+PART 2: UPDATE PROFESSOR OS SYSTEM PROMPT — TRAINING INTELLIGENCE
+══════════════════════════════════════════════════════════════════════════
+
+Find buildSystemPrompt() in server/routes.ts. Add training data to
+the DYNAMIC section of the system prompt (not the cached static part,
+since training data changes per user and per session).
+
+INJECT THIS DATA:
+
+- Current streak
+- Sessions this week
+- Last 5 sessions with: date, mood, session_type, gi/nogi,
+  techniques logged, notes (if any)
+- Most logged techniques over last 30 days (top 5)
+- Any techniques tagged as “Working On” (struggles)
+
+FORMAT IT LIKE THIS in the system prompt:
+
+-----
+
+TRAINING LOG (from their session tracker — use naturally, never recite):
+Streak: 12 days
+This week: 4 sessions
+Recent sessions:
+
+- Feb 16: Great, Class, Gi. Worked on: Armbar, Half Guard Sweeps.
+  Note: “Hit the kimura chain twice”
+- Feb 15: Good, Sparring, No-Gi. Worked on: Guard Pass, Back Take.
+- Feb 14: Tough, Open Mat, Gi. Worked on: Triangle, Sweep.
+- Feb 13: Great, Class, Gi. Worked on: Armbar, Kimura.
+- Feb 12: Rough, Sparring, Gi. Worked on: Guard Retention.
+  Frequently trained: Armbar (5x), Half Guard Sweeps (4x), Guard Pass (3x)
+  Working on (struggles): Guard Retention, Passing
+
+-----
+
+NOW ADD THESE RULES to the system prompt about HOW to use this data:
+
+-----
+
+HOW TO USE TRAINING DATA:
+
+You have access to their training log. Use it like a real coach would —
+to inform your coaching, not to display data.
+
+GOOD uses of training data:
+
+- Notice patterns they haven’t noticed (“you’ve been drilling armbars
+  all week but your guard retention hasn’t come up — want to balance
+  that out tonight?”)
+- Connect their question to their recent training (“since you’ve been
+  working half guard sweeps, here’s a detail that’ll make them sharper”)
+- Acknowledge effort naturally when relevant (“you’ve been on the mat
+  a lot lately — this is when breakthroughs happen”)
+- Recognize struggle patterns (“tough sessions 3 days in a row —
+  plateaus break when you least expect it, stay with it”)
+- Guide recommendations toward gaps they haven’t trained recently
+- If mood has been “rough” or “tough” repeatedly, be extra encouraging
+- If they just logged a technique and then ask about it in chat,
+  connect the dots (“good timing — you just drilled this today”)
+
+BAD uses of training data — NEVER DO THESE:
+
+- Never recite stats unprompted (“you’ve trained 4.2 times per week”)
+- Never list their training log back to them unless they specifically ask
+- Never say “according to your training data” or “your log shows”
+- Never guilt them about rest days or gaps
+- Never mention training data when they ask a pure technique question
+  that doesn’t need personal context
+- Never make them feel surveilled or tracked
+- Never force training references into responses that don’t need them
+
+THE RULE: Use the data to be a smarter coach. The user should feel
+like you just “know” them — not that you’re reading their file.
+
+WHEN USER EXPLICITLY ASKS about training (like “what have I trained
+lately” or “show me my stats” or “what should I focus on”):
+
+- Then you CAN reference specific sessions, techniques, and patterns
+- Be specific and helpful, reference dates and techniques
+- Connect patterns and give actionable advice based on what you see
+
+WHEN USER ASKS A GENERAL QUESTION:
+
+- Let training data inform your answer subtly
+- Recommend techniques they haven’t been working on
+- Build on techniques they HAVE been working on
+- Don’t mention the log unless it’s genuinely relevant
+
+-----
+
+══════════════════════════════════════════════════════════════════════════
+PART 3: TEST THE INTEGRATION
+══════════════════════════════════════════════════════════════════════════
+
+After implementing, test with these 5 chat messages:
+
+TEST 1 — Direct ask:
+“What have I been training lately?”
+EXPECTED: Professor OS references specific sessions, techniques, dates.
+
+TEST 2 — Technique question with subtle connection:
+“How do I finish the armbar from mount?”
+EXPECTED: Professor OS answers the technique question AND may naturally
+connect to the fact they’ve been drilling armbars (“good timing —
+you’ve been working these”). But the technique answer comes first.
+
+TEST 3 — General advice:
+“What should I work on tonight?”
+EXPECTED: Professor OS looks at what they’ve trained recently and
+what’s missing, gives a recommendation that fills a gap or builds
+on momentum. References their actual training without being robotic.
+
+TEST 4 — No training reference needed:
+“What’s the difference between a kimura and an americana?”
+EXPECTED: Pure technique explanation. NO forced training data
+references. Training data is irrelevant here.
+
+TEST 5 — Mood awareness:
+(Only works if they logged “Tough” or “Rough” recently)
+“I keep getting passed”
+EXPECTED: Professor OS is extra encouraging, acknowledges the grind,
+and gives practical help. May subtly reference that it’s been a tough
+stretch without being heavy-handed.
+
+Show me the responses to all 5 tests.
