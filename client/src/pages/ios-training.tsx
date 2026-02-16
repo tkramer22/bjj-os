@@ -318,22 +318,26 @@ export default function IOSTrainingPage() {
 
               let bg = 'transparent';
               let color = '#71717A';
-              let border = 'none';
               let fontWeight = 400;
               let boxShadow = 'none';
-              let outerRing = false;
+
+              const isSelected = selectedDate === dateStr;
 
               if (isFuture) {
                 color = 'rgba(113, 113, 122, 0.4)';
-              } else if (isToday && isTrained) {
+              } else if (isSelected) {
                 bg = '#8B5CF6';
                 color = '#FFFFFF';
                 fontWeight = 600;
-                boxShadow = '0 0 8px rgba(139, 92, 246, 0.4)';
-                outerRing = true;
+                boxShadow = '0 0 10px rgba(139, 92, 246, 0.5)';
+              } else if (isToday && isTrained) {
+                bg = '#9B6FF6';
+                color = '#FFFFFF';
+                fontWeight = 600;
+                boxShadow = '0 0 12px rgba(139, 92, 246, 0.5)';
               } else if (isToday && !isTrained) {
-                border = '2px solid #8B5CF6';
-                color = '#8B5CF6';
+                bg = 'rgba(139, 92, 246, 0.2)';
+                color = '#A78BFA';
                 fontWeight = 600;
               } else if (isTrained) {
                 bg = '#8B5CF6';
@@ -354,7 +358,7 @@ export default function IOSTrainingPage() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: '50%',
-                    border,
+                    border: 'none',
                     background: bg,
                     color,
                     fontSize: '13px',
@@ -363,9 +367,8 @@ export default function IOSTrainingPage() {
                     padding: 0,
                     boxShadow,
                     position: 'relative',
-                    outline: outerRing ? '2px solid rgba(255, 255, 255, 0.6)' : 'none',
-                    outlineOffset: '2px',
-                    transition: 'transform 0.1s ease-out',
+                    outline: 'none',
+                    transition: 'background 0.1s ease-out',
                   }}
                 >
                   {day}
