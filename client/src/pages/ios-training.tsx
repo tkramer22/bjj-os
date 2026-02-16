@@ -557,6 +557,13 @@ export default function IOSTrainingPage() {
           existingSession={editingSession}
           onClose={handleSheetClose}
           onSave={handleSheetSave}
+          lastSessionTime={
+            allSessions.length > 0
+              ? [...allSessions]
+                  .sort((a, b) => b.sessionDate.localeCompare(a.sessionDate))
+                  .find(s => s.sessionTime)?.sessionTime || null
+              : null
+          }
         />
       )}
     </div>

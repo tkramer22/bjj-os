@@ -1,0 +1,81 @@
+FIX: TIME PICKER SHOULD DEFAULT TO LAST SAVED TIME, NOT CURRENT TIME
+
+══════════════════════════════════════════════════════════════════════════
+BUG
+══════════════════════════════════════════════════════════════════════════
+
+When opening the bottom sheet to log a new session, the time picker 
+always defaults to the current real time. If someone trains at 6:30 PM 
+every day, they have to scroll to 6:30 PM every single time.
+
+══════════════════════════════════════════════════════════════════════════
+FIX
+══════════════════════════════════════════════════════════════════════════
+
+When the bottom sheet opens for a NEW session:
+
+1. Query the user's most recent saved session time:
+   GET /api/training/sessions with limit=1, sorted by created desc
+   OR use the sessions already fetched for the calendar
+
+2. If the user has a previous session with a saved time:
+   → Default the time picker to THAT time (e.g. 6:30 PM)
+
+3. If the user has NO previous sessions (first time logging):
+   → Default to current time (existing behavior)
+
+When the bottom sheet opens for EDITING an existing session:
+   → Default to THAT session's saved time (this should already work)
+
+══════════════════════════════════════════════════════════════════════════
+IMPLEMENTATION
+══════════════════════════════════════════════════════════════════════════
+
+In the component that opens the bottom sheet for a new session:
+
+// When opening sheet for NEW session
+const getDefaultTime = () => {
+  // Check most recent session for this user
+  const recentSessions = /* your cached/fetched sessions array */;
+  if (recentSessions && recentSessions.length > 0) {
+    // Sort by date descending, get the most recent
+    const lastSession = recentSessions.sort(
+      (a, b) => new Date(b.session_date) - new Date(a.session_date)
+    )[0];
+    if (lastSession.session_time) {
+      return lastSession.session_time; // e.g. "06:30 PM"
+    }
+  }
+  // Fallback: current time
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const h = hours % 12 || 12;
+  const m = minutes < 10 ? '0' + minutes : minutes;
+  return `${h}:${m} ${period}`;
+};
+
+// Use this when initializing the time picker state
+const [selectedTime, setSelectedTime] = useState(getDefaultTime());
+
+══════════════════════════════════════════════════════════════════════════
+DO NOT
+══════════════════════════════════════════════════════════════════════════
+
+❌ Do NOT change how time is saved to the database
+❌ Do NOT change the time picker UI or scroll behavior
+❌ Do NOT change edit mode (it should already show the session's time)
+❌ Do NOT break save, delete, or update — these are working now
+
+══════════════════════════════════════════════════════════════════════════
+TEST
+══════════════════════════════════════════════════════════════════════════
+
+□ Log a session at 6:30 PM → save
+□ Open bottom sheet for a NEW session → time should default to 6:30 PM
+□ Change time to 8:00 AM → save
+□ Open bottom sheet for another NEW session → time should default to 8:00 AM
+□ Edit an existing session → time shows THAT session's saved time
+□ First-time user with zero sessions → time defaults to current time
+□ Save and delete still work (no regressions)

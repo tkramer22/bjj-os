@@ -179,6 +179,7 @@ interface Props {
   existingSession: TrainingSession | null;
   onClose: () => void;
   onSave: () => void;
+  lastSessionTime?: string | null;
 }
 
 const MOODS = [
@@ -211,7 +212,7 @@ const DEFAULT_TECHNIQUE_CHIPS = [
   { name: 'Guard Passing', id: 2, displayName: 'Guard Pass' },
 ];
 
-export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Props) {
+export function TrainingLogSheet({ date, existingSession, onClose, onSave, lastSessionTime }: Props) {
   const isEditing = !!existingSession;
   const [mood, setMood] = useState(existingSession?.mood || '');
   const [sessionType, setSessionType] = useState(existingSession?.sessionType || '');
@@ -237,7 +238,9 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
 
   const initTime: { hour: number; minute: number; ampm: 'AM' | 'PM' } = existingSession?.sessionTime
     ? parseTimeString(existingSession.sessionTime)
-    : { hour: defaultHour, minute: now.getMinutes(), ampm: defaultAmPm };
+    : lastSessionTime
+      ? parseTimeString(lastSessionTime)
+      : { hour: defaultHour, minute: now.getMinutes(), ampm: defaultAmPm };
 
   const [timeHour, setTimeHour] = useState(initTime.hour);
   const [timeMinute, setTimeMinute] = useState(initTime.minute);
