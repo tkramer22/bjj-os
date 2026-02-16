@@ -1,9 +1,11 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { db } from "./db";
 import { trainingSessions, trainingSessionTechniques } from "@shared/schema";
 import { eq, desc, sql, and, gte, lte, count } from "drizzle-orm";
 
 const router = express.Router();
+const JWT_SECRET = process.env.SESSION_SECRET || 'your-secret-key';
 
 let tablesInitialized = false;
 
@@ -53,12 +55,27 @@ async function ensureTablesExist() {
 }
 
 function getUserId(req: express.Request): string | null {
-  const userId = (req as any).userId || req.headers['x-user-id'] as string;
-  return userId || null;
+  if ((req as any).userId) return String((req as any).userId);
+  const xUserId = req.headers['x-user-id'] as string;
+  if (xUserId) return xUserId;
+  return null;
 }
 
-router.use(async (_req, _res, next) => {
+router.use(async (req, _res, next) => {
   await ensureTablesExist();
+  try {
+    let token = req.cookies?.sessionToken;
+    const authHeader = req.headers.authorization;
+    if (!token && authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+    if (token) {
+      const decoded: any = jwt.verify(token, JWT_SECRET);
+      if (decoded?.userId) {
+        (req as any).userId = decoded.userId;
+      }
+    }
+  } catch (e) {}
   next();
 });
 

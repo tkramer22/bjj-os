@@ -99,7 +99,7 @@ export default function IOSTrainingPage() {
   });
 
   const { data: sessionsData, isLoading } = useQuery<{ sessions: TrainingSession[] }>({
-    queryKey: ['/api/training/sessions', { month: currentMonth + 1, year: currentYear }],
+    queryKey: [`/api/training/sessions?month=${currentMonth + 1}&year=${currentYear}`],
     enabled: !!user?.id,
   });
 
@@ -108,8 +108,7 @@ export default function IOSTrainingPage() {
       await apiRequest('DELETE', `/api/training/sessions/${sessionId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/training/sessions'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/training/stats'] });
+      queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith('/api/training/') });
       triggerHaptic('medium');
       toast({ title: "Session deleted" });
     },
@@ -175,8 +174,7 @@ export default function IOSTrainingPage() {
   }, []);
 
   const handleSheetSave = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['/api/training/sessions'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/training/stats'] });
+    queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith('/api/training/') });
     setShowLogSheet(false);
     setEditingSession(null);
     setSelectedDate(null);
