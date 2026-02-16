@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Search, Check, Minus, Plus, ChevronDown, ChevronUp } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getApiUrl, getAuthToken } from "@/lib/capacitorAuth";
 
 function parseTimeString(timeStr: string): { hour: number; minute: number; ampm: 'AM' | 'PM' } {
   const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -229,7 +230,6 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
     })) || []
   );
   const [showMore, setShowMore] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const now = new Date();
   const defaultHour = now.getHours() > 12 ? now.getHours() - 12 : (now.getHours() === 0 ? 12 : now.getHours());
@@ -296,72 +296,102 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
     return [...recents, ...defaults];
   }, [recentTechData]);
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const sessionTimeStr = formatTimeTo12h(timeHour, timeMinute, timeAmPm);
-      const payload = {
-        sessionDate: date,
-        sessionTime: sessionTimeStr,
-        mood: mood || null,
-        sessionType: sessionType || null,
-        durationMinutes,
-        isGi,
-        notes: notes || null,
-        rolls,
-        submissions,
-        taps,
-        techniques: selectedTechniques.map(t => ({
-          taxonomyId: t.taxonomyId,
-          category: t.category,
-        })),
-      };
-      if (isEditing && existingSession) {
-        await apiRequest('PUT', `/api/training/sessions/${existingSession.id}`, payload);
-      } else {
-        await apiRequest('POST', '/api/training/sessions', payload);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/training/last-session-time'] });
-      const streak = (statsData?.currentStreak || 0) + (isEditing ? 0 : 1);
-      const milestones = [7, 14, 21, 30, 60, 90, 100];
-      const isMilestone = milestones.includes(streak);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-      if (isEditing) {
-        toast({ title: "Session updated" });
-      } else if (isMilestone) {
-        toast({ title: `\uD83D\uDD25 ${streak} day streak! Keep pushing.` });
-      } else {
-        toast({ title: `Session logged \u00B7 \uD83D\uDD25 ${streak > 0 ? streak : 1} day streak` });
-      }
-      onSave();
-    },
-    onError: (err: any) => {
-      toast({ title: "Failed to save", description: err.message, variant: "destructive" });
-    },
-  });
+  const handleSaveSession = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    const sessionTimeStr = formatTimeTo12h(timeHour, timeMinute, timeAmPm);
+    const payload = {
+      sessionDate: date,
+      sessionTime: sessionTimeStr,
+      mood: mood || null,
+      sessionType: sessionType || null,
+      durationMinutes,
+      isGi,
+      notes: notes || null,
+      rolls,
+      submissions,
+      taps,
+      techniques: selectedTechniques.map(t => ({
+        taxonomyId: t.taxonomyId,
+        category: t.category,
+      })),
+    };
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      if (!existingSession) {
-        console.log('DELETE: No existing session, aborting');
-        return;
+    try {
+      const token = await getAuthToken();
+      const url = isEditing && existingSession
+        ? getApiUrl(`/api/training/sessions/${existingSession.id}`)
+        : getApiUrl('/api/training/sessions');
+      const method = isEditing && existingSession ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+        credentials: 'include',
+      });
+
+      if (res.ok) {
+        queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith?.('/api/training') });
+        const streak = (statsData?.currentStreak || 0) + (isEditing ? 0 : 1);
+        const milestones = [7, 14, 21, 30, 60, 90, 100];
+        const isMilestone = milestones.includes(streak);
+        if (isEditing) {
+          toast({ title: "Session updated" });
+        } else if (isMilestone) {
+          toast({ title: `\uD83D\uDD25 ${streak} day streak! Keep pushing.` });
+        } else {
+          toast({ title: `Session logged \u00B7 \uD83D\uDD25 ${streak > 0 ? streak : 1} day streak` });
+        }
+        onSave();
+      } else {
+        console.error('SAVE: failed with status:', res.status);
+        toast({ title: "Failed to save", variant: "destructive" });
       }
-      console.log('DELETE: Calling API for session', existingSession.id);
-      await apiRequest('DELETE', `/api/training/sessions/${existingSession.id}`);
-      console.log('DELETE: API call successful');
-    },
-    onSuccess: () => {
-      console.log('DELETE: onSuccess fired');
-      toast({ title: "Session deleted" });
-      queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith?.('/api/training') });
-      onSave();
-    },
-    onError: (err: any) => {
-      console.error('DELETE: onError fired', err);
-      toast({ title: "Failed to delete", description: err?.message || 'Unknown error', variant: "destructive" });
-    },
-  });
+    } catch (err: any) {
+      console.error('SAVE: error:', err);
+      toast({ title: "Failed to save", description: err?.message, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteSession = async () => {
+    if (!existingSession || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      const token = await getAuthToken();
+      const url = getApiUrl(`/api/training/sessions/${existingSession.id}`);
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+      });
+
+      if (res.ok) {
+        queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith?.('/api/training') });
+        toast({ title: "Session deleted" });
+        onSave();
+      } else {
+        console.error('DELETE: failed with status:', res.status);
+        toast({ title: "Failed to delete", variant: "destructive" });
+      }
+    } catch (err: any) {
+      console.error('DELETE: error:', err);
+      toast({ title: "Failed to delete", description: err?.message, variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const toggleTechnique = useCallback((tech: { id: number; name: string }) => {
     
@@ -716,52 +746,32 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
           )}
 
           <button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
+            onClick={handleSaveSession}
+            disabled={isSaving}
             data-testid="button-save-session"
             style={{
               width: '100%', padding: '14px', background: '#8B5CF6', border: 'none', borderRadius: '12px',
               color: '#FFFFFF', fontSize: '16px', fontWeight: 600, cursor: 'pointer',
-              opacity: saveMutation.isPending ? 0.7 : 1,
+              opacity: isSaving ? 0.7 : 1,
             }}
           >
-            {saveMutation.isPending ? 'Saving...' : (isEditing ? 'Update' : 'Save')}
+            {isSaving ? 'Saving...' : (isEditing ? 'Update' : 'Save')}
           </button>
 
           {isEditing && (
             <>
-              {!showDeleteConfirm ? (
-                <button
-                  onClick={() => { setShowDeleteConfirm(true); }}
-                  data-testid="button-delete-session"
-                  style={{
-                    width: '100%', marginTop: '12px', padding: '12px', background: 'transparent',
-                    border: 'none', color: '#EF4444', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
-                  }}
-                >
-                  Delete session
-                </button>
-              ) : (
-                <div style={{ marginTop: '12px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '14px', color: '#FFFFFF', marginBottom: '12px' }}>Delete this session?</div>
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <button
-                      onClick={() => setShowDeleteConfirm(false)}
-                      data-testid="button-cancel-delete"
-                      style={{ padding: '10px 20px', background: 'transparent', border: '1px solid #2A2A2E', borderRadius: '10px', color: '#FFFFFF', fontSize: '14px', cursor: 'pointer' }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => deleteMutation.mutate()}
-                      data-testid="button-confirm-delete"
-                      style={{ padding: '10px 20px', background: '#EF4444', border: 'none', borderRadius: '10px', color: '#FFFFFF', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              )}
+              <button
+                onClick={handleDeleteSession}
+                disabled={isDeleting}
+                data-testid="button-delete-session"
+                style={{
+                  width: '100%', marginTop: '12px', padding: '12px', background: 'transparent',
+                  border: 'none', color: '#EF4444', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+                  opacity: isDeleting ? 0.5 : 1,
+                }}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete session'}
+              </button>
 
               <button
                 onClick={() => {

@@ -435,7 +435,7 @@ export default function IOSTrainingPage() {
                 const giLabel = session.isGi === false ? 'No-Gi' : session.isGi ? 'Gi' : '';
                 const timeLabel = session.sessionTime || '';
                 const firstLine = [dateLabel, timeLabel, moodEmoji ? `${moodEmoji} ${moodLabel}` : '', typeLabel, giLabel].filter(Boolean).join(' \u00B7 ');
-                const techNames = session.techniques?.map(t => t.technique_name).filter(Boolean).join(' \u00B7 ') || '';
+                const techNames = session.techniques?.map(t => t.technique_name).filter(Boolean).join(', ') || '';
                 const notesPreview = session.notes ? `"${session.notes.split('\n')[0].slice(0, 60)}${session.notes.length > 60 ? '\u2026' : ''}"` : '';
 
                 return (
@@ -489,7 +489,7 @@ export default function IOSTrainingPage() {
                   const moodLabel = session.mood ? MOOD_LABELS[session.mood] || '' : '';
                   const typeLabel = session.sessionType ? SESSION_TYPE_LABELS[session.sessionType] || session.sessionType : '';
                   const giLabel = session.isGi === false ? 'No-Gi' : session.isGi ? 'Gi' : '';
-                  const techNames = session.techniques?.map(t => t.technique_name).filter(Boolean).join(' \u00B7 ') || '';
+                  const techNames = session.techniques?.map(t => t.technique_name).filter(Boolean).join(', ') || '';
 
                   return (
                     <div key={session.id} style={{ background: '#1A1A1D', borderRadius: '10px', padding: '14px 16px' }}>
