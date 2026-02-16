@@ -786,16 +786,19 @@ router.get('/search', async (req, res) => {
 
     const searchPattern = `%${query}%`;
 
-    const [taxonomyResults, videoResults] = await Promise.all([
-      db.select()
-        .from(techniqueTaxonomyV2)
-        .where(or(
-          ilike(techniqueTaxonomyV2.name, searchPattern),
-          ilike(techniqueTaxonomyV2.slug, searchPattern),
-          ilike(techniqueTaxonomyV2.description, searchPattern)
-        ))
-        .orderBy(asc(techniqueTaxonomyV2.level), desc(techniqueTaxonomyV2.videoCount))
-        .limit(20),
+    const [leafResults, videoResults] = await Promise.all([
+      db.execute(sql`
+        SELECT DISTINCT ON (t.name) t.id, t.name, t.slug, t.level, t.parent_id, t.video_count, t.description,
+               p.name as parent_name
+        FROM technique_taxonomy_v2 t
+        LEFT JOIN technique_taxonomy_v2 p ON t.parent_id = p.id
+        WHERE NOT EXISTS (
+          SELECT 1 FROM technique_taxonomy_v2 child WHERE child.parent_id = t.id
+        )
+        AND (t.name ILIKE ${searchPattern} OR t.slug ILIKE ${searchPattern})
+        ORDER BY t.name, t.level DESC
+        LIMIT 15
+      `),
 
       db.select({
         id: aiVideoKnowledge.id,
@@ -839,6 +842,17 @@ router.get('/search', async (req, res) => {
       viewCount: Number(video.viewCount ?? 0),
       duration: formatDuration(video.duration),
       createdAt: video.createdAt,
+    }));
+
+    const taxonomyResults = (Array.isArray(leafResults) ? leafResults : (leafResults as any).rows || []).map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      level: r.level,
+      parentId: r.parent_id,
+      videoCount: r.video_count || 0,
+      description: r.description,
+      parentName: r.parent_name,
     }));
 
     res.json({ taxonomyResults, videoResults: transformedVideos });

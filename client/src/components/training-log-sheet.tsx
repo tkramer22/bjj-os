@@ -10,6 +10,7 @@ interface TaxonomyNode {
   name: string;
   slug: string;
   level: number;
+  parentName?: string;
 }
 
 interface TrainingSession {
@@ -103,16 +104,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
 
   const taxonomyResults = useMemo(() => {
     if (!searchResults?.taxonomyResults) return [];
-    const seen = new Set<string>();
-    return searchResults.taxonomyResults
-      .filter((n: TaxonomyNode) => {
-        if (n.level < 1) return false;
-        const lower = n.name.toLowerCase();
-        if (seen.has(lower)) return false;
-        seen.add(lower);
-        return true;
-      })
-      .slice(0, 8);
+    return searchResults.taxonomyResults.slice(0, 10);
   }, [searchResults]);
 
   const recentTechChips = useMemo(() => {
@@ -371,7 +363,12 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       }}
                     >
-                      <span>{node.name}</span>
+                      <span>
+                        {node.name}
+                        {node.parentName && (
+                          <span style={{ color: '#71717A', fontSize: '12px', marginLeft: '6px' }}>({node.parentName})</span>
+                        )}
+                      </span>
                       {isSelected && <Check size={16} color="#8B5CF6" />}
                     </button>
                   );
