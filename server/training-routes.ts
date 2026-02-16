@@ -6,6 +6,8 @@ import { eq, desc, sql, and, gte, lte, count } from "drizzle-orm";
 
 const router = express.Router();
 const JWT_SECRET = process.env.SESSION_SECRET || 'your-secret-key';
+const insightCache = new Map<string, { insight: string; generatedAt: number }>();
+const INSIGHT_CACHE_TTL = 60 * 60 * 1000;
 
 let tablesInitialized = false;
 
@@ -42,6 +44,13 @@ async function ensureTablesExist() {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_training_sessions_date ON training_sessions(session_date)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_training_techniques_session ON training_session_techniques(session_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_training_techniques_taxonomy ON training_session_techniques(taxonomy_id)`);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS training_user_milestones (
+        user_id VARCHAR(255) PRIMARY KEY,
+        milestones_shown JSONB DEFAULT '[]'::jsonb NOT NULL
+      )
+    `);
 
     try {
       await db.execute(sql`ALTER TABLE training_sessions DROP CONSTRAINT IF EXISTS unique_user_session_date`);
@@ -203,6 +212,8 @@ router.post('/sessions', async (req, res) => {
     `);
     const techs = Array.isArray(techResult) ? techResult : (techResult as any).rows || [];
 
+    insightCache.delete(String(userId));
+
     res.json({ session: { ...session, techniques: techs } });
   } catch (error: any) {
     console.error('[TRAINING] Error saving session:', error.message);
@@ -255,6 +266,8 @@ router.put('/sessions/:id', async (req, res) => {
     `);
     const techs = Array.isArray(techResult) ? techResult : (techResult as any).rows || [];
 
+    insightCache.delete(String(userId));
+
     res.json({ session: { ...updated, techniques: techs } });
   } catch (error: any) {
     console.error('[TRAINING] Error updating session:', error.message);
@@ -278,6 +291,8 @@ router.delete('/sessions/:id', async (req, res) => {
 
     await db.execute(sql`DELETE FROM training_session_techniques WHERE session_id = ${sessionId}`);
     await db.delete(trainingSessions).where(eq(trainingSessions.id, sessionId));
+
+    insightCache.delete(String(userId));
 
     res.json({ success: true });
   } catch (error: any) {
@@ -413,15 +428,21 @@ router.get('/recent-techniques', async (req, res) => {
 
     const result = await db.execute(sql`
       SELECT DISTINCT ON (ttv2.id) ttv2.id, ttv2.name, ttv2.slug, ttv2.level, tst.category,
-             ts.session_date
+             MAX(tst.created_at) OVER (PARTITION BY ttv2.id) as last_used
       FROM training_session_techniques tst
       JOIN training_sessions ts ON tst.session_id = ts.id
       LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
       WHERE ts.user_id = ${String(userId)}
-      ORDER BY ttv2.id, ts.session_date DESC
-      LIMIT 20
+      ORDER BY ttv2.id, tst.created_at DESC
     `);
-    const techniques = Array.isArray(result) ? result : (result as any).rows || [];
+    const rows = Array.isArray(result) ? result : (result as any).rows || [];
+    const techniques = rows
+      .sort((a: any, b: any) => {
+        const aTime = new Date(a.last_used || 0).getTime();
+        const bTime = new Date(b.last_used || 0).getTime();
+        return bTime - aTime;
+      })
+      .slice(0, 4);
 
     res.json({ techniques });
   } catch (error: any) {
@@ -429,5 +450,182 @@ router.get('/recent-techniques', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch recent techniques' });
   }
 });
+
+router.get('/insight', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const userIdStr = String(userId);
+
+    const cached = insightCache.get(userIdStr);
+    if (cached && Date.now() - cached.generatedAt < INSIGHT_CACHE_TTL) {
+      return res.json({ insight: cached.insight });
+    }
+
+    const insight = await generateTrainingInsight(userIdStr);
+    insightCache.set(userIdStr, { insight, generatedAt: Date.now() });
+    res.json({ insight });
+  } catch (error: any) {
+    console.error('[TRAINING] Error generating insight:', error.message);
+    res.json({ insight: 'Every session is a deposit in the bank.' });
+  }
+});
+
+async function generateTrainingInsight(userId: string): Promise<string> {
+  const totalResult = await db.execute(sql`
+    SELECT COUNT(*)::int as total FROM training_sessions WHERE user_id = ${userId}
+  `);
+  const totalRows = Array.isArray(totalResult) ? totalResult : (totalResult as any).rows || [];
+  const totalCount = Number(totalRows[0]?.total || 0);
+
+  if (totalCount === 0) return "Every session is a deposit in the bank.";
+
+  let milestonesShown: string[] = [];
+  try {
+    const msResult = await db.execute(sql`
+      SELECT milestones_shown FROM training_user_milestones WHERE user_id = ${userId} LIMIT 1
+    `);
+    const msRows = Array.isArray(msResult) ? msResult : (msResult as any).rows || [];
+    if (msRows.length > 0 && msRows[0].milestones_shown) {
+      milestonesShown = msRows[0].milestones_shown;
+    }
+  } catch (e) {}
+
+  const milestones = [
+    { threshold: 100, msg: "100 sessions logged. That's not casual \u2014 that's commitment." },
+    { threshold: 50, msg: "50 sessions deep. You're building something real." },
+    { threshold: 25, msg: "25 sessions in the books. The foundation is forming." },
+    { threshold: 10, msg: "Double digits. You're locked in." },
+  ];
+  for (const m of milestones) {
+    if (totalCount >= m.threshold && !milestonesShown.includes(String(m.threshold))) {
+      try {
+        await db.execute(sql`
+          INSERT INTO training_user_milestones (user_id, milestones_shown)
+          VALUES (${userId}, ${JSON.stringify([...milestonesShown, String(m.threshold)])}::jsonb)
+          ON CONFLICT (user_id) DO UPDATE SET milestones_shown = ${JSON.stringify([...milestonesShown, String(m.threshold)])}::jsonb
+        `);
+      } catch (e) {}
+      return m.msg;
+    }
+  }
+
+  const weekResult = await db.execute(sql`
+    SELECT COUNT(DISTINCT session_date)::int as cnt FROM training_sessions
+    WHERE user_id = ${userId} AND session_date >= CURRENT_DATE - INTERVAL '7 days'
+  `);
+  const weekRows = Array.isArray(weekResult) ? weekResult : (weekResult as any).rows || [];
+  const weekCount = Number(weekRows[0]?.cnt || 0);
+
+  if (weekCount >= 6) return "6 days on the mats this week. That's elite.";
+  if (weekCount === 5) return "5 sessions this week. Consistency builds champions.";
+  if (weekCount === 4) return "4 days this week. Solid work.";
+
+  const monthCompare = await db.execute(sql`
+    SELECT
+      (SELECT COUNT(DISTINCT session_date)::int FROM training_sessions
+       WHERE user_id = ${userId} AND session_date >= date_trunc('month', CURRENT_DATE)) as this_month,
+      (SELECT COUNT(DISTINCT session_date)::int FROM training_sessions
+       WHERE user_id = ${userId}
+       AND session_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month')
+       AND session_date < date_trunc('month', CURRENT_DATE)) as last_month
+  `);
+  const mcRows = Array.isArray(monthCompare) ? monthCompare : (monthCompare as any).rows || [];
+  const thisMonth = Number(mcRows[0]?.this_month || 0);
+  const lastMonth = Number(mcRows[0]?.last_month || 0);
+
+  if (lastMonth > 0 && thisMonth > lastMonth) return "You're training more this month than last. Momentum.";
+  if (lastMonth > 0 && thisMonth === lastMonth) return "Holding steady this month. Consistency is king.";
+
+  const techPattern = await db.execute(sql`
+    SELECT ttv2.name, COUNT(*)::int as cnt
+    FROM training_session_techniques tst
+    JOIN training_sessions ts ON tst.session_id = ts.id
+    LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
+    WHERE ts.user_id = ${userId} AND ts.session_date >= CURRENT_DATE - INTERVAL '7 days'
+    GROUP BY ttv2.name ORDER BY cnt DESC LIMIT 1
+  `);
+  const tpRows = Array.isArray(techPattern) ? techPattern : (techPattern as any).rows || [];
+  if (tpRows.length > 0 && Number(tpRows[0].cnt) >= 3 && tpRows[0].name) {
+    return `${tpRows[0].name} ${tpRows[0].cnt} times this week. That's how you sharpen a weapon.`;
+  }
+
+  const firstTimeResult = await db.execute(sql`
+    SELECT ttv2.name FROM training_session_techniques tst
+    JOIN training_sessions ts ON tst.session_id = ts.id
+    LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
+    WHERE ts.user_id = ${userId}
+    GROUP BY ttv2.name
+    HAVING COUNT(*) = 1 AND MAX(ts.session_date) >= CURRENT_DATE - INTERVAL '3 days'
+    ORDER BY MAX(ts.session_date) DESC
+    LIMIT 1
+  `);
+  const ftRows = Array.isArray(firstTimeResult) ? firstTimeResult : (firstTimeResult as any).rows || [];
+  if (ftRows.length > 0 && ftRows[0].name) {
+    return `First time logging ${ftRows[0].name}. Expanding the game.`;
+  }
+
+  const streakResult = await db.execute(sql`
+    SELECT DISTINCT session_date FROM training_sessions
+    WHERE user_id = ${userId} ORDER BY session_date DESC
+  `);
+  const allDates: string[] = (Array.isArray(streakResult) ? streakResult : (streakResult as any).rows || [])
+    .map((r: any) => {
+      const d = r.session_date;
+      if (d instanceof Date) return d.toISOString().split('T')[0];
+      if (typeof d === 'string') return d.includes('T') ? d.split('T')[0] : d;
+      return String(d);
+    });
+
+  let currentStreak = 0;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0];
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+  if (allDates.length > 0 && (allDates[0] === todayStr || allDates[0] === yesterdayStr)) {
+    currentStreak = 1;
+    for (let i = 1; i < allDates.length; i++) {
+      const prev = new Date(allDates[i - 1] + 'T00:00:00');
+      const curr = new Date(allDates[i] + 'T00:00:00');
+      if (Math.round((prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24)) === 1) {
+        currentStreak++;
+      } else break;
+    }
+  }
+
+  if (currentStreak >= 30) return "30 day streak. Most people can't do 7.";
+  if (currentStreak >= 14) return "Two weeks straight. This is becoming who you are.";
+  if (currentStreak >= 7) return "A full week on the mats. Keep building.";
+
+  let daysSince = -1;
+  if (allDates.length > 0) {
+    daysSince = Math.round((today.getTime() - new Date(allDates[0] + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  if (daysSince === 2 && currentStreak === 0) {
+    const recentStreak = await db.execute(sql`
+      SELECT COUNT(DISTINCT session_date)::int as cnt FROM training_sessions
+      WHERE user_id = ${userId} AND session_date >= CURRENT_DATE - INTERVAL '9 days'
+    `);
+    const rsRows = Array.isArray(recentStreak) ? recentStreak : (recentStreak as any).rows || [];
+    if (Number(rsRows[0]?.cnt || 0) >= 5) {
+      return "Two days off after a strong run. Recovery is part of the game.";
+    }
+  }
+  if (daysSince >= 3 && daysSince <= 4) return "The mats miss you.";
+  if (daysSince >= 5) return "Shake the rust off. One session changes everything.";
+
+  const fallbacks = [
+    "Every session is a deposit in the bank.",
+    "The best ability is availability. Show up.",
+    "Trust the process.",
+  ];
+  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+}
+
+export function invalidateInsightCache(userId: string) {
+  insightCache.delete(userId);
+}
 
 export default router;

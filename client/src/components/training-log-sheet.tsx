@@ -62,7 +62,7 @@ const DURATION_OPTIONS = [
   { label: '3hr', value: 180 },
 ];
 
-const DEFAULT_TECHNIQUE_CHIPS = ['Armbar', 'Triangle', 'Guard Pass', 'Sweep', 'Takedown', 'Back Take'];
+const DEFAULT_TECHNIQUE_CHIPS = ['Armbar', 'Triangle', 'Half Guard', 'Guard Pass'];
 
 export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Props) {
   const isEditing = !!existingSession;
@@ -108,15 +108,19 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
   }, [searchResults]);
 
   const recentTechChips = useMemo(() => {
-    const totalSessions = statsData?.totalCount || 0;
-    if (totalSessions < 3 || !recentTechData?.techniques?.length) {
-      return DEFAULT_TECHNIQUE_CHIPS.map((name, i) => ({ id: -(i + 1), name, isDefault: true }));
-    }
-    return recentTechData.techniques
+    const recents = (recentTechData?.techniques || [])
       .filter(t => t.name)
-      .slice(0, 8)
+      .slice(0, 4)
       .map(t => ({ id: t.id, name: t.name, isDefault: false }));
-  }, [recentTechData, statsData]);
+    const needed = 4 - recents.length;
+    const defaults = needed > 0
+      ? DEFAULT_TECHNIQUE_CHIPS
+          .filter(name => !recents.some(r => r.name.toLowerCase() === name.toLowerCase()))
+          .slice(0, needed)
+          .map((name, i) => ({ id: -(i + 1), name, isDefault: true }))
+      : [];
+    return [...recents, ...defaults];
+  }, [recentTechData]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -347,7 +351,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
               <Search size={16} color="#71717A" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
               <input
                 type="text"
-                placeholder="Search techniques\u2026"
+                placeholder={"Search techniques\u2026"}
                 value={techSearch}
                 onChange={(e) => setTechSearch(e.target.value)}
                 data-testid="input-technique-search"
@@ -473,7 +477,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add a note\u2026"
+                  placeholder={"Add a note\u2026"}
                   data-testid="input-notes"
                   rows={3}
                   style={{

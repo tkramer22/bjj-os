@@ -1,0 +1,298 @@
+TRAINING TAB POLISH — 7 FIXES IN ONE DEPLOYMENT
+
+⚠️ DO NOT break any existing functionality.
+⚠️ DO NOT touch Professor OS chat, video library, video curation, or profile.
+⚠️ DO NOT modify database tables that already work.
+⚠️ Only modify Training tab UI and related backend logic.
+
+══════════════════════════════════════════════════════════════════════════
+FIX 1: UNICODE BUG IN TECHNIQUE SEARCH FIELD
+══════════════════════════════════════════════════════════════════════════
+
+The search input placeholder shows “\u2026” as literal text instead of
+the ellipsis character “…”
+
+Find the technique search input in the Training tab bottom sheet.
+The placeholder text is rendering the unicode escape instead of the
+actual character.
+
+FIX: Replace the placeholder string so it renders as:
+“Search techniques…”
+
+NOT:
+“Search techniques\u2026”
+
+Check all placeholder strings in the Training tab for similar issues.
+
+══════════════════════════════════════════════════════════════════════════
+FIX 2: DEFAULT TECHNIQUE CHIPS — 4 MAX, NO SCROLL
+══════════════════════════════════════════════════════════════════════════
+
+The “What did you work on?” section in the bottom sheet needs exactly
+4 pre-selected technique chips. NO horizontal scrolling. Just 4 chips
+in a single row that fit the screen width.
+
+DEFAULT CHIPS (shown when user has zero logged techniques):
+
+1. Armbar
+1. Triangle
+1. Half Guard
+1. Guard Pass
+
+These must match taxonomy leaf nodes. When the user taps one, it gets
+selected (purple highlight) and added to their session log linked to
+the correct taxonomy_id.
+
+CHIP STYLING:
+
+- Same style as existing technique chips in the app
+- Equal width, evenly spaced across the row
+- 4 chips maximum — no 5th chip, no scroll, no overflow
+- Selected state: purple background, white text
+- Unselected state: dark surface, gray/white text
+
+══════════════════════════════════════════════════════════════════════════
+FIX 3: RECENTS REPLACE DEFAULTS
+══════════════════════════════════════════════════════════════════════════
+
+As soon as a user logs a technique (either by tapping a default chip
+or typing one manually), that technique becomes a “recent.”
+
+LOGIC:
+
+- Query the user’s most recently logged techniques from
+  training_session_techniques, ordered by created_at DESC
+- Deduplicate (same technique logged multiple sessions = show once)
+- Take the first 4
+
+DISPLAY RULES:
+
+- If user has 0 recents → show all 4 defaults
+- If user has 1 recent → show 1 recent + 3 defaults
+- If user has 2 recents → show 2 recents + 2 defaults
+- If user has 3 recents → show 3 recents + 1 default
+- If user has 4+ recents → show 4 recents, NO defaults
+
+Recents always appear first (left side). Defaults fill remaining slots.
+
+When a user logs a new technique that wasn’t in their recents, it
+becomes chip #1 (leftmost) and everything shifts right. The 4th chip
+drops off.
+
+The GET /api/training/recent-techniques endpoint should support this
+logic. If it doesn’t exist, create it. If it exists, update it.
+
+══════════════════════════════════════════════════════════════════════════
+FIX 4: STREAK ZERO STATE
+══════════════════════════════════════════════════════════════════════════
+
+Currently the streak counter shows “1 day streak” even when the user
+has no active streak. This is wrong.
+
+STREAK LOGIC:
+
+A streak is consecutive days with at least one logged session. A day
+without a session breaks the streak.
+
+DISPLAY:
+
+- NO active streak (0 consecutive days, or user has never logged):
+  Show: “Log a session to start your streak”
+  Style: secondary gray text, no flame emoji
+- ACTIVE streak (1+ consecutive days including today or yesterday):
+  Show: “🔥 X day streak”
+  Style: white text with flame emoji
+  
+  Note: If user trained today, today counts. If user trained
+  yesterday but not today, the streak is still alive (they might
+  train later today). If the last session was 2+ days ago, streak
+  is broken.
+
+FIX the streak calculation in the backend:
+
+- Query training_sessions for the user ordered by session_date DESC
+- Walk backwards from today counting consecutive days
+- If yesterday has a session but today doesn’t, streak = yesterday’s
+  count (still alive, not broken yet)
+- If the most recent session is 2+ days ago, streak = 0
+
+══════════════════════════════════════════════════════════════════════════
+FIX 5: REMOVE WINS / WORKING ON TOGGLE
+══════════════════════════════════════════════════════════════════════════
+
+If there is a “Wins” / “Working On” toggle or segmented control in
+the bottom sheet technique section, REMOVE IT completely.
+
+All techniques logged are just techniques — no categorization needed.
+Remove any UI for this toggle and any references to the ‘category’
+field in training_session_techniques if it affects the UI. Do NOT
+drop the database column — just stop using it in the UI.
+
+══════════════════════════════════════════════════════════════════════════
+FIX 6: PROFESSOR OS INSIGHT LINE
+══════════════════════════════════════════════════════════════════════════
+
+Add a single line of text from Professor OS that appears on the
+Training tab between the streak counter and the calendar grid.
+
+PLACEMENT (top to bottom of Training tab):
+
+1. “Training” header
+1. Streak counter (or zero-state message)
+1. → PROFESSOR OS INSIGHT LINE ← (NEW)
+1. “February 2026” calendar header
+1. Calendar grid
+1. Recent sessions
+
+STYLING:
+
+- 🧠 emoji on the left, then the insight text
+- Font: same secondary text style used elsewhere in the app
+- Color: slightly muted white (white at 70-80% opacity)
+- Size: 14px — subtle, not dominant
+- No card, no border, no background — just a line of text
+- Padding: 8px top and bottom, same horizontal padding as rest of tab
+- Fade-in animation on tab load: 300ms ease-in opacity 0 → 1
+
+BEHAVIOR:
+
+- When user taps a date and the bottom sheet opens → insight line
+  fades out (200ms ease-out to opacity 0)
+- When user closes the bottom sheet after saving a session →
+  new insight generates and fades in (300ms)
+- When user closes the bottom sheet WITHOUT saving → previous
+  insight fades back in
+
+INSIGHT GENERATION — RULE-BASED (no AI API call):
+
+This is NOT a Claude API call. It is server-side logic that picks
+an insight template based on the user’s training data. Fast, free,
+and always available.
+
+Create a function: generateTrainingInsight(userId) that returns a
+string. It queries the user’s training_sessions and picks the FIRST
+matching rule:
+
+RULE PRIORITY (check in this order, use FIRST match):
+
+1. MILESTONE CHECK
+   Query: total session count
+- 100+ sessions: “100 sessions logged. That’s not casual — that’s commitment.”
+- 50+ sessions: “50 sessions deep. You’re building something real.”
+- 25+ sessions: “25 sessions in the books. The foundation is forming.”
+- 10+ sessions: “Double digits. You’re locked in.”
+   
+   Only show milestone messages ONCE. Track in a user_milestones
+   table or a milestones_shown JSONB column. After shown once,
+   skip to next rule.
+1. CONSISTENCY CHECK
+   Query: sessions in the last 7 days
+- 6-7 sessions: “6 days on the mats this week. That’s elite.”
+- 5 sessions: “5 sessions this week. Consistency builds champions.”
+- 4 sessions: “4 days this week. Solid work.”
+   
+   Query: compare this month vs last month session count
+- More this month: “You’re training more this month than last. Momentum.”
+- Equal: “Holding steady this month. Consistency is king.”
+1. TECHNIQUE PATTERN CHECK
+   Query: most logged technique in last 7 days with count
+- If any technique logged 3+ times this week:
+  “[Technique] 3 times this week. That’s how you sharpen a weapon.”
+- If a technique appears for the first time ever:
+  “First time logging [technique]. Expanding the game.”
+1. STREAK CONTEXT
+   Query: current streak length
+- 30+ days: “30 day streak. Most people can’t do 7.”
+- 14+ days: “Two weeks straight. This is becoming who you are.”
+- 7+ days: “A full week on the mats. Keep building.”
+1. REST DAY AWARENESS
+   Query: days since last session
+- 2 days off after 5+ day streak:
+  “Two days off after a strong run. Recovery is part of the game.”
+- 3-4 days off: “The mats miss you.”
+- 5+ days off: “Shake the rust off. One session changes everything.”
+1. FALLBACK (if no other rule matches)
+- “Every session is a deposit in the bank.”
+- “The best ability is availability. Show up.”
+- “Trust the process.”
+  Pick randomly from fallback list.
+
+The function returns ONE string. Short. 1-2 sentences max.
+No corporate tone — this should sound like a coach, not an app.
+
+ENDPOINT:
+GET /api/training/insight?userId=X
+Returns: { insight: “string” }
+
+Cache the insight for 1 hour per user. Don’t regenerate on every
+tab load — only regenerate after a new session is saved or cache expires.
+
+══════════════════════════════════════════════════════════════════════════
+FIX 7: REFRESH INSIGHT AFTER SESSION SAVE
+══════════════════════════════════════════════════════════════════════════
+
+After a user saves a new training session (POST /api/training/sessions):
+
+1. Invalidate the cached insight for that user
+1. The Training tab should re-fetch the insight when the bottom sheet
+   closes after a successful save
+1. The new insight fades in reflecting the updated data
+
+Example: User had no sessions today. Insight says “The mats miss you.”
+User logs a session. Bottom sheet closes. New insight fades in:
+“Back on the mats. That’s what matters.”
+
+══════════════════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+══════════════════════════════════════════════════════════════════════════
+
+UNICODE FIX:
+□ Search field placeholder shows “Search techniques…” not “\u2026”
+
+DEFAULT CHIPS:
+□ New user sees: Armbar, Triangle, Half Guard, Guard Pass
+□ Exactly 4 chips visible, no scroll
+□ Tapping a chip selects it (purple)
+□ Tapping again deselects it
+□ Chips link to correct taxonomy nodes
+
+RECENTS:
+□ Log a session with “Omoplata” manually typed
+□ Open bottom sheet again — “Omoplata” is now chip #1
+□ Log another session with “Kimura”
+□ Open bottom sheet — chips show: Kimura, Omoplata, Half Guard, Guard Pass
+□ Log 2 more unique techniques — all 4 chips are now recents, zero defaults
+
+STREAK:
+□ Delete all sessions for test user
+□ Streak shows: “Log a session to start your streak”
+□ Log one session for today
+□ Streak shows: “🔥 1 day streak”
+□ Log sessions for yesterday and day before
+□ Streak shows: “🔥 3 day streak”
+□ Delete today’s session
+□ Streak still shows previous days (not broken yet — today isn’t over)
+
+WINS/WORKING ON:
+□ No toggle visible in bottom sheet
+□ Technique section just shows chips and search, nothing else
+
+PROFESSOR OS INSIGHT:
+□ Insight line appears between streak and calendar
+□ Shows 🧠 emoji + text
+□ Fades in on tab load (300ms)
+□ Tapping a date → insight fades out
+□ Saving session → new insight fades in
+□ Dismissing sheet without save → old insight returns
+□ Insight text matches user’s actual data
+□ No API call to Claude — fast load, no delay
+
+VISUAL:
+□ Everything matches app’s dark theme
+□ No layout shifts or jank
+□ Insight line doesn’t push calendar down noticeably
+□ Chips row looks balanced and clean
+□ Works on iPhone Pro Max AND smaller screens (SE, Mini)
+
+DO NOT publish until all checks pass. Show me the Training tab
+in preview before deploying.

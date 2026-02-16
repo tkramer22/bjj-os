@@ -1,6 +1,6 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, ArrowLeft, Bot } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { useToast } from "@/hooks/use-toast";
 import { TrainingLogSheet } from "@/components/training-log-sheet";
@@ -78,24 +78,6 @@ function formatDateStr(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-function getInsightMessage(stats: TrainingStats): string {
-  const { currentStreak, weekCount, sessionsToday, daysSinceLastSession, totalCount, mostLoggedTechnique } = stats;
-
-  if (totalCount === 0) return "Log your first session and I'll start tracking your journey.";
-  if (totalCount === 1) return "First one logged. This is where it starts.";
-  if (currentStreak >= 14) return `\uD83D\uDD25 ${currentStreak} days straight. That's elite.`;
-  if (currentStreak >= 7) return `\uD83D\uDD25 ${currentStreak} days. You're building something.`;
-  if (weekCount >= 5) return `${weekCount} sessions this week. You're a machine.`;
-  if (daysSinceLastSession === 0 && sessionsToday > 1) return "Twice today. That's a competitor's mentality.";
-  if (weekCount >= 3) return `${weekCount} sessions this week. Solid work.`;
-  if (daysSinceLastSession === 1) return "Back on the mat. Let's go.";
-  if (daysSinceLastSession >= 5) return "It's been a minute. No judgment \u2014 just get back.";
-  if (daysSinceLastSession >= 2) return "Haven't seen you in a couple days. Your mat is waiting.";
-  if (mostLoggedTechnique) return `You've been drilling ${mostLoggedTechnique} a lot. That focus pays off.`;
-  if (currentStreak >= 2) return `\uD83D\uDD25 ${currentStreak} day streak. Keep it rolling.`;
-  return "Your mat is waiting. Let's get after it.";
-}
-
 export default function IOSTrainingPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -105,6 +87,9 @@ export default function IOSTrainingPage() {
   const [showStatsDetail, setShowStatsDetail] = useState(false);
   const [showDaySessionsList, setShowDaySessionsList] = useState(false);
   const [daySessionsDate, setDaySessionsDate] = useState<string | null>(null);
+  const [insightVisible, setInsightVisible] = useState(false);
+  const [savedInsight, setSavedInsight] = useState<string | null>(null);
+  const didSaveRef = useRef(false);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -125,6 +110,11 @@ export default function IOSTrainingPage() {
 
   const { data: recentData } = useQuery<{ sessions: TrainingSession[] }>({
     queryKey: ['/api/training/sessions'],
+    enabled: !!user?.id,
+  });
+
+  const { data: insightData } = useQuery<{ insight: string }>({
+    queryKey: ['/api/training/insight'],
     enabled: !!user?.id,
   });
 
@@ -182,6 +172,9 @@ export default function IOSTrainingPage() {
     if (futureCheck > todayCheck) return;
 
     triggerHaptic('light');
+    setSavedInsight(insightData?.insight || null);
+    setInsightVisible(false);
+    didSaveRef.current = false;
     const daySessions = sessionsByDate.get(dateStr) || [];
 
     if (daySessions.length === 0) {
@@ -196,20 +189,26 @@ export default function IOSTrainingPage() {
       setDaySessionsDate(dateStr);
       setShowDaySessionsList(true);
     }
-  }, [currentYear, currentMonth, sessionsByDate]);
+  }, [currentYear, currentMonth, sessionsByDate, insightData]);
 
   const handleSheetClose = useCallback(() => {
     setShowLogSheet(false);
     setEditingSession(null);
     setSelectedDate(null);
-  }, []);
+    if (!didSaveRef.current && savedInsight) {
+      setTimeout(() => setInsightVisible(true), 50);
+    }
+  }, [savedInsight]);
 
   const handleSheetSave = useCallback(() => {
+    didSaveRef.current = true;
     queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith?.('/api/training') });
     setShowLogSheet(false);
     setEditingSession(null);
     setSelectedDate(null);
     setShowDaySessionsList(false);
+    setSavedInsight(null);
+    setTimeout(() => setInsightVisible(true), 300);
   }, [queryClient]);
 
   useEffect(() => {
@@ -224,6 +223,13 @@ export default function IOSTrainingPage() {
     window.addEventListener('training-add-another', handler);
     return () => window.removeEventListener('training-add-another', handler);
   }, []);
+
+  useEffect(() => {
+    if (insightData?.insight) {
+      const t = setTimeout(() => setInsightVisible(true), 100);
+      return () => clearTimeout(t);
+    }
+  }, [insightData?.insight]);
 
   const recentSessions = useMemo(() => {
     return [...allSessions]
@@ -274,7 +280,7 @@ export default function IOSTrainingPage() {
         <button
           onClick={() => { triggerHaptic('light'); setShowStatsDetail(true); }}
           data-testid="button-streak-line"
-          style={{ background: 'transparent', border: 'none', padding: '0 0 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', width: '100%' }}
+          style={{ background: 'transparent', border: 'none', padding: '0 0 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', width: '100%' }}
         >
           {stats.currentStreak > 0 ? (
             <>
@@ -283,11 +289,30 @@ export default function IOSTrainingPage() {
               <span style={{ fontSize: '16px', color: '#71717A' }}>day streak</span>
             </>
           ) : (
-            <span style={{ fontSize: '16px', color: '#71717A' }}>Start your streak</span>
+            <span style={{ fontSize: '14px', color: '#71717A' }}>Log a session to start your streak</span>
           )}
         </button>
 
-        <div style={{ background: '#121214', borderRadius: '12px', padding: '16px', marginBottom: '16px' }} data-testid="calendar-grid">
+        {insightData?.insight && (
+          <div
+            data-testid="text-insight-line"
+            style={{
+              padding: '8px 0',
+              fontSize: '14px',
+              color: 'rgba(255, 255, 255, 0.75)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '8px',
+              opacity: insightVisible ? 1 : 0,
+              transition: insightVisible ? 'opacity 300ms ease-in' : 'opacity 200ms ease-out',
+            }}
+          >
+            <span style={{ fontSize: '14px', lineHeight: 1.5, flexShrink: 0 }}>{'\uD83E\uDDE0'}</span>
+            <span style={{ lineHeight: 1.5 }}>{insightData.insight}</span>
+          </div>
+        )}
+
+        <div style={{ background: '#121214', borderRadius: '12px', padding: '16px', marginBottom: '16px', marginTop: '8px' }} data-testid="calendar-grid">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <button onClick={() => navigateMonth(-1)} data-testid="button-prev-month" style={{ background: 'transparent', border: 'none', padding: '4px', cursor: 'pointer', color: '#71717A' }}>
               <ChevronLeft size={20} />
@@ -438,36 +463,6 @@ export default function IOSTrainingPage() {
           </div>
         )}
 
-        {stats.totalCount > 0 && (
-          <div
-            style={{
-              background: '#121214',
-              borderRadius: '12px',
-              padding: '16px',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '12px',
-              border: '1px solid rgba(139, 92, 246, 0.15)',
-              marginBottom: '16px',
-            }}
-            data-testid="insight-card"
-          >
-            <div style={{
-              width: '36px', height: '36px', borderRadius: '50%',
-              background: 'rgba(139, 92, 246, 0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexShrink: 0,
-            }}>
-              <Bot size={18} color="#8B5CF6" />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '11px', color: '#8B5CF6', fontWeight: 600, marginBottom: '4px' }}>PROF. OS</div>
-              <div style={{ fontSize: '14px', color: '#E4E4E7', lineHeight: '1.5' }}>
-                {getInsightMessage(stats)}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {showDaySessionsList && daySessionsDate && (
