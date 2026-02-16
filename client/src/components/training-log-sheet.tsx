@@ -62,7 +62,12 @@ const DURATION_OPTIONS = [
   { label: '3hr', value: 180 },
 ];
 
-const DEFAULT_TECHNIQUE_CHIPS = ['Armbar', 'Triangle', 'Half Guard', 'Guard Pass'];
+const DEFAULT_TECHNIQUE_CHIPS = [
+  { name: 'Armbar', id: 65 },
+  { name: 'Triangle Choke', id: 72, displayName: 'Triangle' },
+  { name: 'Half Guard', id: 14 },
+  { name: 'Guard Passing', id: 2, displayName: 'Guard Pass' },
+];
 
 export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Props) {
   const isEditing = !!existingSession;
@@ -111,13 +116,13 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
     const recents = (recentTechData?.techniques || [])
       .filter(t => t.name)
       .slice(0, 4)
-      .map(t => ({ id: t.id, name: t.name, isDefault: false }));
+      .map(t => ({ id: t.id, name: t.name, displayName: t.name, isDefault: false }));
     const needed = 4 - recents.length;
     const defaults = needed > 0
       ? DEFAULT_TECHNIQUE_CHIPS
-          .filter(name => !recents.some(r => r.name.toLowerCase() === name.toLowerCase()))
+          .filter(d => !recents.some(r => r.name.toLowerCase() === d.name.toLowerCase()))
           .slice(0, needed)
-          .map((name, i) => ({ id: -(i + 1), name, isDefault: true }))
+          .map(d => ({ id: d.id, name: d.name, displayName: (d as any).displayName || d.name, isDefault: true }))
       : [];
     return [...recents, ...defaults];
   }, [recentTechData]);
@@ -189,21 +194,13 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
     setTechSearch('');
   }, []);
 
-  const toggleChipTechnique = useCallback((chip: { id: number; name: string; isDefault?: boolean }) => {
+  const toggleChipTechnique = useCallback((chip: { id: number; name: string; displayName?: string }) => {
     triggerHaptic('light');
-    if (chip.isDefault) {
-      setSelectedTechniques(prev => {
-        const exists = prev.find(t => t.name.toLowerCase() === chip.name.toLowerCase());
-        if (exists) return prev.filter(t => t.name.toLowerCase() !== chip.name.toLowerCase());
-        return [...prev, { taxonomyId: chip.id, name: chip.name, category: 'technique' }];
-      });
-    } else {
-      setSelectedTechniques(prev => {
-        const exists = prev.find(t => t.taxonomyId === chip.id);
-        if (exists) return prev.filter(t => t.taxonomyId !== chip.id);
-        return [...prev, { taxonomyId: chip.id, name: chip.name, category: 'technique' }];
-      });
-    }
+    setSelectedTechniques(prev => {
+      const exists = prev.find(t => t.taxonomyId === chip.id);
+      if (exists) return prev.filter(t => t.taxonomyId !== chip.id);
+      return [...prev, { taxonomyId: chip.id, name: chip.name, category: 'technique' }];
+    });
   }, []);
 
   const removeTechnique = useCallback((taxonomyId: number) => {
@@ -300,14 +297,12 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
 
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
               {recentTechChips.map(chip => {
-                const isSelected = chip.isDefault
-                  ? selectedTechniques.some(t => t.name.toLowerCase() === chip.name.toLowerCase())
-                  : selectedTechniques.some(t => t.taxonomyId === chip.id);
+                const isSelected = selectedTechniques.some(t => t.taxonomyId === chip.id);
                 return (
                   <button
                     key={chip.id}
                     onClick={() => toggleChipTechnique(chip)}
-                    data-testid={`tech-chip-${chip.name.toLowerCase().replace(/\s+/g, '-')}`}
+                    data-testid={`tech-chip-${(chip.displayName || chip.name).toLowerCase().replace(/\s+/g, '-')}`}
                     style={{
                       padding: '6px 12px',
                       borderRadius: '100px',
@@ -318,7 +313,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
                       cursor: 'pointer',
                     }}
                   >
-                    {chip.name}
+                    {chip.displayName || chip.name}
                   </button>
                 );
               })}
@@ -327,7 +322,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
             {selectedTechniques.length > 0 && (
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
                 {selectedTechniques
-                  .filter(t => !recentTechChips.some(c => c.isDefault ? c.name.toLowerCase() === t.name.toLowerCase() : c.id === t.taxonomyId))
+                  .filter(t => !recentTechChips.some(c => c.id === t.taxonomyId))
                   .map(t => (
                     <span
                       key={t.taxonomyId}

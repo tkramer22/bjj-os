@@ -274,10 +274,11 @@ export default function IOSTrainingPage() {
   const daySessionsDateObj = daySessionsDate ? new Date(daySessionsDate + 'T00:00:00') : null;
 
   return (
-    <div className="ios-page" style={{ minHeight: '100vh', background: '#0A0A0B', color: '#FFFFFF', paddingBottom: '100px' }}>
-      <div style={{ padding: '16px 20px', paddingTop: 'max(16px, env(safe-area-inset-top))', position: 'sticky', top: 0, background: '#0A0A0B', zIndex: 10 }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0 }} data-testid="text-training-title">Training</h1>
-      </div>
+    <div className="ios-page" style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#0A0A0B', color: '#FFFFFF' }}>
+      <div style={{ flexShrink: 0 }}>
+        <div style={{ padding: '16px 20px', paddingTop: 'max(16px, env(safe-area-inset-top))', background: '#0A0A0B' }}>
+          <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0 }} data-testid="text-training-title">Training</h1>
+        </div>
 
       <div style={{ padding: '0 20px' }}>
         <button
@@ -415,8 +416,11 @@ export default function IOSTrainingPage() {
             <div style={{ fontSize: '14px', color: '#71717A' }}>Tap a date to log your first session.</div>
           </div>
         )}
+      </div>
+      </div>
 
-        {recentSessions.length > 0 && (
+      {recentSessions.length > 0 && (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px', paddingBottom: 'max(100px, calc(80px + env(safe-area-inset-bottom)))' }}>
           <div style={{ marginBottom: '16px' }}>
             <h2 style={{ fontSize: '17px', fontWeight: 600, marginBottom: '12px', color: '#FFFFFF' }} data-testid="text-recent-sessions">
               Recent Sessions
@@ -461,9 +465,8 @@ export default function IOSTrainingPage() {
               })}
             </div>
           </div>
-        )}
-
-      </div>
+        </div>
+      )}
 
       {showDaySessionsList && daySessionsDate && (
         <div

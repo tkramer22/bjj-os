@@ -1,0 +1,101 @@
+Good call. The header area (Training title, streak, insight line, calendar) should be pinned/fixed at the top. Only the Recent Sessions list below should scroll. That way no matter how many sessions they’ve logged, the calendar and streak are always visible.
+Let me write one prompt that fixes both issues:
+
+TWO FIXES FOR TRAINING TAB — DO NOT BREAK ANYTHING ELSE
+
+══════════════════════════════════════════════════════════════════════════
+FIX 1: PRESET TECHNIQUE CHIPS NOT SAVING
+══════════════════════════════════════════════════════════════════════════
+
+BUG: When a user taps a preset technique chip (Armbar, Triangle, 
+Half Guard, Guard Pass) in the bottom sheet, the chip visually 
+highlights but the technique is NOT saved with the session. Only 
+techniques typed manually in the search field are saved.
+
+EVIDENCE: Recent Sessions show no technique for sessions where the 
+user only tapped preset chips. Sessions where the user typed in the 
+search field (like "Omoplata") do show the technique.
+
+ROOT CAUSE: The preset chips are likely not wired into the same 
+state/array that the search autocomplete uses. When Save is called, 
+it only reads techniques from the search-selected array, not from 
+the preset chip selections.
+
+FIX:
+1. Find the preset/default technique chips in the bottom sheet
+2. When a preset chip is tapped, it MUST add the technique to the 
+   same selectedTechniques array that the search autocomplete uses
+3. Each preset chip must have a taxonomy_id associated with it. 
+   Look up the taxonomy_id for each default:
+   - "Armbar" → find its ID in technique_taxonomy
+   - "Triangle" → find its ID in technique_taxonomy
+   - "Half Guard" → find its ID in technique_taxonomy
+   - "Guard Pass" → find its ID in technique_taxonomy
+4. When Save is called, ALL selected techniques (both from presets 
+   AND from search) must be included in the POST request
+5. After saving, the technique must appear in the Recent Sessions 
+   card for that date
+
+ALSO FIX FOR RECENTS:
+When the user has logged techniques before, their recent techniques 
+replace the defaults. These recent chips must ALSO save correctly 
+when tapped. Same fix — wire them into the selectedTechniques array 
+with their taxonomy_id.
+
+TEST:
+□ Tap "Armbar" preset chip → chip highlights purple
+□ Hit Save
+□ Session appears in Recent Sessions showing "Armbar"
+□ Open bottom sheet again → "Armbar" appears as a recent chip
+□ Tap "Triangle" preset chip AND type "Omoplata" in search
+□ Hit Save
+□ Session shows both "Triangle" and "Omoplata"
+□ Open bottom sheet again → recents show Omoplata, Triangle, Armbar
+
+══════════════════════════════════════════════════════════════════════════
+FIX 2: STICKY HEADER — ONLY RECENT SESSIONS SCROLLS
+══════════════════════════════════════════════════════════════════════════
+
+CURRENT: The entire Training tab scrolls as one page. When the user 
+has many recent sessions and scrolls down, the Training header, 
+streak counter, insight line, and calendar all scroll off screen.
+
+DESIRED: The top section is fixed/sticky. Only the Recent Sessions 
+list scrolls independently below it.
+
+LAYOUT (top to bottom):
+
+FIXED/STICKY SECTION (does not scroll):
+- "Training" header
+- Streak counter
+- Professor OS insight line
+- Calendar grid with month navigation
+- "Tap a date to log your session" text
+
+SCROLLABLE SECTION (fills remaining screen height):
+- "Recent Sessions" header
+- List of session cards (scrolls independently)
+
+IMPLEMENTATION:
+- The fixed section stays pinned at the top of the screen
+- The scrollable section takes up the remaining vertical space 
+  below the fixed section
+- Use overflow-y: auto or a ScrollView only on the Recent Sessions 
+  container
+- The fixed section should NOT have its own scroll
+- On shorter screens (iPhone SE, Mini), the calendar may take more 
+  relative space but should still be fully visible without scrolling
+
+TEST:
+□ Add 10+ sessions to test data
+□ Scroll through Recent Sessions
+□ Training header stays visible at top
+□ Streak counter stays visible
+□ Insight line stays visible
+□ Calendar stays visible
+□ Only the session list scrolls
+□ Works on iPhone Pro Max (tall screen)
+□ Works on iPhone SE or Mini simulator (short screen)
+□ Bottom sheet still slides up correctly over the fixed section
+
+DO NOT publish until both fixes are verified.
