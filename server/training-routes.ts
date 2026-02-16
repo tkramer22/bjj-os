@@ -60,6 +60,18 @@ async function ensureTablesExist() {
       await db.execute(sql`ALTER TABLE training_sessions DROP CONSTRAINT IF EXISTS unique_user_session_date`);
     } catch (e) {}
 
+    try {
+      const colCheck = await db.execute(sql`
+        SELECT data_type FROM information_schema.columns 
+        WHERE table_name = 'training_sessions' AND column_name = 'session_time'
+      `);
+      const rows = Array.isArray(colCheck) ? colCheck : (colCheck as any).rows || [];
+      if (rows.length > 0 && rows[0].data_type !== 'character varying') {
+        await db.execute(sql`ALTER TABLE training_sessions ALTER COLUMN session_time TYPE VARCHAR(8) USING session_time::VARCHAR(8)`);
+        console.log('[TRAINING] Migrated session_time column to VARCHAR(8)');
+      }
+    } catch (e) {}
+
     tablesInitialized = true;
     console.log('[TRAINING] Tables initialized successfully');
   } catch (e: any) {

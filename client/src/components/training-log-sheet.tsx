@@ -32,11 +32,19 @@ function ScrollColumn({ items, selectedIndex, onChange, width }: {
   const containerRef = useRef<HTMLDivElement>(null);
   const itemHeight = 36;
   const isScrollingRef = useRef(false);
-  const lastIndexRef = useRef(selectedIndex);
+  const lastRealIndexRef = useRef(selectedIndex);
+  const centeredRawRef = useRef(0);
+  const [centeredRaw, setCenteredRaw] = useState(0);
+  const REPEATS = 20;
+  const totalItems = items.length * REPEATS;
+  const middleSetStart = Math.floor(REPEATS / 2) * items.length;
 
   useEffect(() => {
     if (containerRef.current && !isScrollingRef.current) {
-      containerRef.current.scrollTop = selectedIndex * itemHeight;
+      const targetRaw = middleSetStart + selectedIndex;
+      containerRef.current.scrollTop = targetRaw * itemHeight;
+      centeredRawRef.current = targetRaw;
+      setCenteredRaw(targetRaw);
     }
   }, [selectedIndex]);
 
@@ -44,21 +52,46 @@ function ScrollColumn({ items, selectedIndex, onChange, width }: {
     if (!containerRef.current) return;
     isScrollingRef.current = true;
     const scrollTop = containerRef.current.scrollTop;
-    const newIndex = Math.round(scrollTop / itemHeight);
-    const clampedIndex = Math.max(0, Math.min(newIndex, items.length - 1));
-    if (clampedIndex !== lastIndexRef.current) {
-      lastIndexRef.current = clampedIndex;
+    const rawIndex = Math.round(scrollTop / itemHeight);
+    const realIndex = ((rawIndex % items.length) + items.length) % items.length;
+
+    centeredRawRef.current = rawIndex;
+    setCenteredRaw(rawIndex);
+
+    if (realIndex !== lastRealIndexRef.current) {
+      lastRealIndexRef.current = realIndex;
       triggerHaptic('light');
-      onChange(clampedIndex);
+      onChange(realIndex);
     }
+
     clearTimeout((containerRef.current as any)._scrollTimer);
     (containerRef.current as any)._scrollTimer = setTimeout(() => {
       isScrollingRef.current = false;
-      if (containerRef.current) {
-        containerRef.current.scrollTo({ top: clampedIndex * itemHeight, behavior: 'smooth' });
+      if (!containerRef.current) return;
+      const currentRaw = Math.round(containerRef.current.scrollTop / itemHeight);
+      const currentReal = ((currentRaw % items.length) + items.length) % items.length;
+      const lowerBound = items.length * 10;
+      const upperBound = totalItems - items.length * 10;
+      if (currentRaw < lowerBound || currentRaw > upperBound) {
+        const resetRaw = middleSetStart + currentReal;
+        containerRef.current.scrollTop = resetRaw * itemHeight;
+        centeredRawRef.current = resetRaw;
+        setCenteredRaw(resetRaw);
+      } else {
+        containerRef.current.scrollTo({ top: currentRaw * itemHeight, behavior: 'smooth' });
       }
     }, 100);
-  }, [items.length, onChange]);
+  }, [items.length, onChange, middleSetStart, totalItems]);
+
+  const allItems = useMemo(() => {
+    const result: string[] = [];
+    for (let r = 0; r < REPEATS; r++) {
+      for (let i = 0; i < items.length; i++) {
+        result.push(items[i]);
+      }
+    }
+    return result;
+  }, [items]);
 
   return (
     <div
@@ -76,30 +109,34 @@ function ScrollColumn({ items, selectedIndex, onChange, width }: {
       }}
     >
       <div style={{ height: `${itemHeight}px` }} />
-      {items.map((item, i) => (
-        <div
-          key={i}
-          onClick={() => {
-            triggerHaptic('light');
-            onChange(i);
-          }}
-          style={{
-            height: `${itemHeight}px`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            scrollSnapAlign: 'center',
-            fontSize: i === selectedIndex ? '18px' : '14px',
-            fontWeight: i === selectedIndex ? 600 : 400,
-            color: i === selectedIndex ? '#FFFFFF' : '#71717A',
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-            opacity: i === selectedIndex ? 1 : 0.5,
-          }}
-        >
-          {item}
-        </div>
-      ))}
+      {allItems.map((item, i) => {
+        const realIndex = i % items.length;
+        const isCentered = i === centeredRaw;
+        return (
+          <div
+            key={i}
+            onClick={() => {
+              triggerHaptic('light');
+              onChange(realIndex);
+            }}
+            style={{
+              height: `${itemHeight}px`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              scrollSnapAlign: 'center',
+              fontSize: isCentered ? '18px' : '14px',
+              fontWeight: isCentered ? 600 : 400,
+              color: isCentered ? '#FFFFFF' : '#71717A',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              opacity: isCentered ? 1 : 0.5,
+            }}
+          >
+            {item}
+          </div>
+        );
+      })}
       <div style={{ height: `${itemHeight}px` }} />
     </div>
   );

@@ -3,12 +3,17 @@ import { Capacitor } from '@capacitor/core';
 
 type HapticType = 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error' | 'selection';
 
-export async function triggerHaptic(type: HapticType = 'light'): Promise<void> {
-  if (!Capacitor.isNativePlatform()) {
-    return;
-  }
+let isNative: boolean;
+try {
+  isNative = Capacitor.isNativePlatform();
+} catch (_) {
+  isNative = false;
+}
 
-  try {
+export function triggerHaptic(type: HapticType = 'light'): void {
+  if (!isNative) return;
+
+  const run = async () => {
     switch (type) {
       case 'light':
         await Haptics.impact({ style: ImpactStyle.Light });
@@ -34,24 +39,20 @@ export async function triggerHaptic(type: HapticType = 'light'): Promise<void> {
         await Haptics.selectionEnd();
         break;
     }
-  } catch (error) {
-    console.warn('Haptics not available:', error);
-  }
+  };
+  run().catch(() => {});
 }
 
-export async function vibratePattern(pattern: number[]): Promise<void> {
-  if (!Capacitor.isNativePlatform()) {
-    return;
-  }
+export function vibratePattern(pattern: number[]): void {
+  if (!isNative) return;
 
-  try {
+  const run = async () => {
     for (let i = 0; i < pattern.length; i++) {
       if (i % 2 === 0) {
         await Haptics.impact({ style: ImpactStyle.Medium });
       }
       await new Promise(resolve => setTimeout(resolve, pattern[i]));
     }
-  } catch (error) {
-    console.warn('Haptics pattern not available:', error);
-  }
+  };
+  run().catch(() => {});
 }

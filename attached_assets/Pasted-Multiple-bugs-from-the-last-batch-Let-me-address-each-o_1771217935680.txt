@@ -1,0 +1,155 @@
+Multiple bugs from the last batch. Let me address each one:
+
+URGENT FIXES — LAST UPDATE BROKE THINGS
+
+⚠️ These are regressions from the last deployment. Fix immediately.
+
+══════════════════════════════════════════════════════════════════════════
+BUG 1: DELETE AND UPDATE SESSION BROKEN
+══════════════════════════════════════════════════════════════════════════
+
+Delete Session and Update Session stopped working after the last 
+update. They were working fine before.
+
+LIKELY CAUSE: The haptics additions are throwing JavaScript errors 
+that break the delete/update handlers. If Haptics.impact() or 
+Haptics.notification() throws an undefined error, it stops the 
+function from completing the actual delete/update API call.
+
+FIX:
+1. Find every haptic call in the Training tab code
+2. Wrap EVERY SINGLE ONE in a try/catch:
+
+   try {
+     await Haptics.impact({ style: ImpactStyle.Light });
+   } catch (e) {
+     // silently ignore — haptics not available
+   }
+
+   OR better — create a safe wrapper function:
+
+   const safeHaptic = async (style) => {
+     try {
+       await Haptics.impact({ style });
+     } catch (e) {}
+   };
+
+   const safeNotification = async (type) => {
+     try {
+       await Haptics.notification({ type });
+     } catch (e) {}
+   };
+
+   Use safeHaptic() and safeNotification() everywhere instead of 
+   calling Haptics directly.
+
+3. Make sure the haptic call does NOT block the delete/update logic.
+   The delete should work even if haptics fail. The haptic is cosmetic.
+   The API call is critical. Never let a haptic error prevent a 
+   database operation.
+
+4. Check the delete handler specifically:
+   - Does it call the DELETE /api/training/sessions/:id endpoint?
+   - Does it await the response?
+   - Does it close the bottom sheet after successful delete?
+   - Does it refresh the calendar and recent sessions?
+   - Is there an error being swallowed silently?
+
+5. Check the update handler:
+   - Same checks as delete
+   - Does it call PUT /api/training/sessions/:id?
+   - Does it close the bottom sheet after successful update?
+
+TEST:
+□ Open an existing session
+□ Tap Delete → session is deleted, bottom sheet closes, calendar updates
+□ Open another session → change mood → tap Update → session updates
+□ No JavaScript errors in console
+□ Haptics still work where available (but never break functionality)
+
+══════════════════════════════════════════════════════════════════════════
+BUG 2: TIME PICKER NOT SAVING / NOT DEFAULTING
+══════════════════════════════════════════════════════════════════════════
+
+The time picker is not saving the selected time. When the user sets 
+a time on one session, the next session still shows current time 
+instead of defaulting to the last saved time.
+
+TWO ISSUES:
+
+A) TIME NOT SAVING TO DATABASE:
+   Check that the POST /api/training/sessions endpoint is receiving 
+   the session_time value from the frontend. Console.log the request 
+   body on the server to verify.
+   
+   Check that the session_time column exists in training_sessions:
+   SELECT column_name, data_type FROM information_schema.columns 
+   WHERE table_name = 'training_sessions' AND column_name = 'session_time';
+   
+   If the column doesn't exist, add it:
+   ALTER TABLE training_sessions ADD COLUMN session_time TIME;
+   
+   Make sure the INSERT and UPDATE queries include session_time.
+
+B) DEFAULT NOT PULLING FROM LAST SESSION:
+   The time picker should default to the time from the user's most 
+   recent saved session. Query:
+   
+   SELECT session_time FROM training_sessions 
+   WHERE user_id = $1 AND session_time IS NOT NULL 
+   ORDER BY created_at DESC LIMIT 1;
+   
+   If a time is returned, use it as the default.
+   If no time found (first session or no times saved), use current time.
+   
+   This query should run when the bottom sheet OPENS, not on page load.
+
+TEST:
+□ Log a session at 6:30 PM
+□ Open bottom sheet for a new session → time defaults to 6:30 PM
+□ Change time to 8:00 AM → save
+□ Open bottom sheet again → time defaults to 8:00 AM
+□ Check Recent Sessions → time shows on the session card
+
+══════════════════════════════════════════════════════════════════════════
+BUG 3: TIME PICKER SCROLL MUST LOOP INFINITELY
+══════════════════════════════════════════════════════════════════════════
+
+The time picker scroll wheels currently stop at the min/max values.
+They should loop infinitely like a native iOS picker:
+
+HOURS: ... 11 → 12 → 1 → 2 → 3 ... (loops forever in both directions)
+MINUTES: ... 58 → 59 → 00 → 01 → 02 ... (loops forever)
+AM/PM: AM → PM → AM → PM (loops forever)
+
+The scroll should never hit a wall or stop. It wraps around 
+continuously in both directions.
+
+If using a library for the picker, check if it has a "loop" or 
+"infinite" or "circular" prop and enable it.
+
+If custom built, implement modular wrapping:
+- Hours: value = ((value - 1) % 12) + 1
+- Minutes: value = value % 60
+- When scrolling past 12 → show 1
+- When scrolling past 59 → show 00
+- When scrolling before 1 → show 12
+- When scrolling before 00 → show 59
+
+TEST:
+□ Scroll hours past 12 → goes to 1 smoothly
+□ Scroll hours before 1 → goes to 12 smoothly
+□ Scroll minutes past 59 → goes to 00 smoothly
+□ Scroll minutes before 00 → goes to 59 smoothly
+□ AM/PM loops continuously
+□ No stopping, no dead ends, no jerky behavior
+
+══════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER
+══════════════════════════════════════════════════════════════════════════
+
+1. Fix delete/update FIRST (this is a regression, critical)
+2. Fix time saving and defaults
+3. Fix infinite scroll on time picker
+
+DO NOT publish until delete and update are confirmed working again.
