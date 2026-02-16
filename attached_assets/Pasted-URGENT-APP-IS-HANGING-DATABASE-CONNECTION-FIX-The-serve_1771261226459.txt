@@ -1,0 +1,132 @@
+URGENT: APP IS HANGING — DATABASE CONNECTION FIX
+
+The server is pinwheeling because database connections are hanging.
+
+DO ALL OF THIS NOW:
+
+══════════════════════════════════════════════════════════════════════════
+1. RESTART THE SERVER FIRST
+══════════════════════════════════════════════════════════════════════════
+
+In the Shell, run:
+pkill -f node; npm run dev
+
+══════════════════════════════════════════════════════════════════════════
+2. FIX THE DATABASE CONNECTION POOL
+══════════════════════════════════════════════════════════════════════════
+
+Find where the database connection is created (db.ts, drizzle config, 
+or server.ts). The pool is either exhausted or has no limits set.
+
+Set these pool options:
+
+If using pg (Pool):
+
+const pool = new Pool({
+  connectionString: process.env.SUPABASE_DATABASE_URL,
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+  allowExitOnIdle: true,
+});
+
+pool.on('error', (err) => {
+  console.error('[DB] Pool error:', err.message);
+});
+
+If using postgres-js:
+
+const client = postgres(process.env.SUPABASE_DATABASE_URL, {
+  max: 5,
+  idle_timeout: 30,
+  connect_timeout: 10,
+});
+
+══════════════════════════════════════════════════════════════════════════
+3. ADD TIMEOUT WRAPPER FOR ALL DB QUERIES
+══════════════════════════════════════════════════════════════════════════
+
+Create this utility function and use it on EVERY database call 
+in the training routes:
+
+const withTimeout = (promise, ms = 10000) => {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('Query timeout')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+};
+
+Wrap every db call:
+  const sessions = await withTimeout(db.select()...);
+  const result = await withTimeout(db.insert()...);
+  const deleted = await withTimeout(db.delete()...);
+
+Apply to ALL training route db calls: GET sessions, POST save, 
+PUT update, DELETE, GET stats, GET recent techniques.
+
+══════════════════════════════════════════════════════════════════════════
+4. ADD REQUEST TIMEOUT MIDDLEWARE
+══════════════════════════════════════════════════════════════════════════
+
+Add this BEFORE all route handlers in server.ts:
+
+app.use((req, res, next) => {
+  req.setTimeout(30000, () => {
+    if (!res.headersSent) {
+      res.status(408).json({ error: 'Request timeout' });
+    }
+  });
+  next();
+});
+
+══════════════════════════════════════════════════════════════════════════
+5. ADD ERROR HANDLERS
+══════════════════════════════════════════════════════════════════════════
+
+Add at the BOTTOM of server.ts AFTER all routes:
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[SERVER] Unhandled Rejection:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[SERVER] Uncaught Exception:', error);
+});
+
+app.use((err, req, res, next) => {
+  console.error('[SERVER] Error:', err.message);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+══════════════════════════════════════════════════════════════════════════
+6. ADD HEALTH CHECK
+══════════════════════════════════════════════════════════════════════════
+
+app.get('/api/health', async (req, res) => {
+  try {
+    const start = Date.now();
+    await withTimeout(db.execute(sql`SELECT 1`), 5000);
+    res.json({ status: 'ok', dbResponseMs: Date.now() - start });
+  } catch (e) {
+    res.status(503).json({ status: 'db_down', error: e.message });
+  }
+});
+
+══════════════════════════════════════════════════════════════════════════
+7. TEST AFTER FIXING
+══════════════════════════════════════════════════════════════════════════
+
+□ Server starts without hanging
+□ Hit /api/health — should return { status: 'ok' }
+□ Save a training session — should respond in under 5 seconds
+□ Delete a training session — should respond in under 5 seconds
+□ No pinwheeling, no hanging, no infinite loading
+
+THE APP MUST NEVER HANG. If a database call fails, return an error 
+to the user within 10 seconds. Never wait forever.
+
+
+Paste that in right now. It restarts the server, fixes the connection pool, adds timeouts to every DB call, and adds error handlers so the app never hangs again.​​​​​​​​​​​​​​​​

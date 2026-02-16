@@ -10,6 +10,14 @@ const JWT_SECRET = process.env.SESSION_SECRET || 'your-secret-key';
 const insightCache = new Map<string, { insight: string; generatedAt: number }>();
 const INSIGHT_CACHE_TTL = 60 * 60 * 1000;
 
+const withTimeout = <T>(promise: Promise<T>, ms = 10000): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`DB query timeout after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+};
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 let tablesInitialized = false;
@@ -152,20 +160,20 @@ router.get('/sessions', async (req, res) => {
       const endMonth = Number(month) === 12 ? 1 : Number(month) + 1;
       const endYear = Number(month) === 12 ? Number(year) + 1 : Number(year);
       const endDate = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
-      const result = await db.execute(sql`
+      const result = await withTimeout(db.execute(sql`
         SELECT * FROM training_sessions
         WHERE user_id = ${userIdStr}
         AND session_date >= ${startDate}::date
         AND session_date < ${endDate}::date
         ORDER BY session_date DESC, created_at DESC
-      `);
+      `));
       sessions = Array.isArray(result) ? result : (result as any).rows || [];
     } else {
-      const result = await db.execute(sql`
+      const result = await withTimeout(db.execute(sql`
         SELECT * FROM training_sessions
         WHERE user_id = ${userIdStr}
         ORDER BY session_date DESC, created_at DESC
-      `);
+      `));
       sessions = Array.isArray(result) ? result : (result as any).rows || [];
     }
 
@@ -173,12 +181,12 @@ router.get('/sessions', async (req, res) => {
     let techniques: any[] = [];
     if (sessionIds.length > 0) {
       const idParams = sessionIds.map((id: number) => sql`${String(id)}::int`);
-      const techResult = await db.execute(sql`
+      const techResult = await withTimeout(db.execute(sql`
         SELECT tst.*, ttv2.name as technique_name, ttv2.slug, ttv2.level
         FROM training_session_techniques tst
         LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
         WHERE tst.session_id IN (${sql.join(idParams, sql`, `)})
-      `);
+      `));
       techniques = Array.isArray(techResult) ? techResult : (techResult as any).rows || [];
     }
 
@@ -203,14 +211,14 @@ router.post('/sessions', async (req, res) => {
 
     if (!sessionDate) return res.status(400).json({ error: 'Session date is required' });
 
-    const [session] = await db
+    const [session] = await withTimeout(db
       .insert(trainingSessions)
       .values({
         userId: String(userId),
         sessionDate, sessionTime: sessionTime || null, mood, sessionType, durationMinutes, isGi, notes,
         rolls: rolls || 0, submissions: submissions || 0, taps: taps || 0,
       })
-      .returning();
+      .returning());
 
     if (techniques && Array.isArray(techniques) && techniques.length > 0) {
       const techValues = techniques.map((t: any) => ({
@@ -218,15 +226,15 @@ router.post('/sessions', async (req, res) => {
         taxonomyId: t.taxonomyId,
         category: t.category || 'technique',
       }));
-      await db.insert(trainingSessionTechniques).values(techValues);
+      await withTimeout(db.insert(trainingSessionTechniques).values(techValues));
     }
 
-    const techResult = await db.execute(sql`
+    const techResult = await withTimeout(db.execute(sql`
       SELECT tst.*, ttv2.name as technique_name, ttv2.slug, ttv2.level
       FROM training_session_techniques tst
       LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
       WHERE tst.session_id = ${session.id}
-    `);
+    `));
     const techs = Array.isArray(techResult) ? techResult : (techResult as any).rows || [];
 
     insightCache.delete(String(userId));
@@ -246,15 +254,15 @@ router.put('/sessions/:id', async (req, res) => {
     const sessionId = parseInt(req.params.id);
     const { sessionTime, mood, sessionType, durationMinutes, isGi, notes, rolls, submissions, taps, techniques } = req.body;
 
-    const [existing] = await db
+    const [existing] = await withTimeout(db
       .select()
       .from(trainingSessions)
       .where(and(eq(trainingSessions.id, sessionId), eq(trainingSessions.userId, String(userId))))
-      .limit(1);
+      .limit(1));
 
     if (!existing) return res.status(404).json({ error: 'Session not found' });
 
-    const [updated] = await db
+    const [updated] = await withTimeout(db
       .update(trainingSessions)
       .set({
         sessionTime: sessionTime || null, mood, sessionType, durationMinutes, isGi, notes,
@@ -262,9 +270,9 @@ router.put('/sessions/:id', async (req, res) => {
         updatedAt: new Date(),
       })
       .where(eq(trainingSessions.id, sessionId))
-      .returning();
+      .returning());
 
-    await db.execute(sql`DELETE FROM training_session_techniques WHERE session_id = ${sessionId}`);
+    await withTimeout(db.execute(sql`DELETE FROM training_session_techniques WHERE session_id = ${sessionId}`));
 
     if (techniques && Array.isArray(techniques) && techniques.length > 0) {
       const techValues = techniques.map((t: any) => ({
@@ -272,15 +280,15 @@ router.put('/sessions/:id', async (req, res) => {
         taxonomyId: t.taxonomyId,
         category: t.category || 'technique',
       }));
-      await db.insert(trainingSessionTechniques).values(techValues);
+      await withTimeout(db.insert(trainingSessionTechniques).values(techValues));
     }
 
-    const techResult = await db.execute(sql`
+    const techResult = await withTimeout(db.execute(sql`
       SELECT tst.*, ttv2.name as technique_name, ttv2.slug, ttv2.level
       FROM training_session_techniques tst
       LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
       WHERE tst.session_id = ${sessionId}
-    `);
+    `));
     const techs = Array.isArray(techResult) ? techResult : (techResult as any).rows || [];
 
     insightCache.delete(String(userId));
@@ -298,16 +306,16 @@ router.delete('/sessions/:id', async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     const sessionId = parseInt(req.params.id);
-    const [session] = await db
+    const [session] = await withTimeout(db
       .select()
       .from(trainingSessions)
       .where(and(eq(trainingSessions.id, sessionId), eq(trainingSessions.userId, String(userId))))
-      .limit(1);
+      .limit(1));
 
     if (!session) return res.status(404).json({ error: 'Session not found' });
 
-    await db.execute(sql`DELETE FROM training_session_techniques WHERE session_id = ${sessionId}`);
-    await db.delete(trainingSessions).where(eq(trainingSessions.id, sessionId));
+    await withTimeout(db.execute(sql`DELETE FROM training_session_techniques WHERE session_id = ${sessionId}`));
+    await withTimeout(db.delete(trainingSessions).where(eq(trainingSessions.id, sessionId)));
 
     insightCache.delete(String(userId));
 
@@ -323,11 +331,11 @@ router.get('/stats', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const result = await db.execute(sql`
+    const result = await withTimeout(db.execute(sql`
       SELECT DISTINCT session_date FROM training_sessions
       WHERE user_id = ${String(userId)}
       ORDER BY session_date DESC
-    `);
+    `));
     const allDates: string[] = (Array.isArray(result) ? result : (result as any).rows || [])
       .map((r: any) => {
         const d = r.session_date;
@@ -390,10 +398,10 @@ router.get('/stats', async (req, res) => {
     const totalCount = allDates.length;
     const trainedToday = allDates.includes(todayStr);
 
-    const sessionsTodayResult = await db.execute(sql`
+    const sessionsTodayResult = await withTimeout(db.execute(sql`
       SELECT COUNT(*) as cnt FROM training_sessions
       WHERE user_id = ${String(userId)} AND session_date = ${todayStr}::date
-    `);
+    `));
     const sessionsToday = Number((Array.isArray(sessionsTodayResult) ? sessionsTodayResult : (sessionsTodayResult as any).rows || [])[0]?.cnt || 0);
 
     let daysSinceLastSession = -1;
@@ -404,7 +412,7 @@ router.get('/stats', async (req, res) => {
 
     let mostLoggedTechnique: string | null = null;
     try {
-      const techResult = await db.execute(sql`
+      const techResult = await withTimeout(db.execute(sql`
         SELECT ttv2.name, COUNT(*) as cnt
         FROM training_session_techniques tst
         JOIN training_sessions ts ON tst.session_id = ts.id
@@ -414,7 +422,7 @@ router.get('/stats', async (req, res) => {
         GROUP BY ttv2.name
         ORDER BY cnt DESC
         LIMIT 1
-      `);
+      `));
       const techRows = Array.isArray(techResult) ? techResult : (techResult as any).rows || [];
       if (techRows.length > 0 && techRows[0].name) {
         mostLoggedTechnique = techRows[0].name;
@@ -443,11 +451,11 @@ router.get('/last-session-time', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const result = await db.execute(sql`
+    const result = await withTimeout(db.execute(sql`
       SELECT session_time FROM training_sessions
       WHERE user_id = ${String(userId)} AND session_time IS NOT NULL
       ORDER BY created_at DESC LIMIT 1
-    `);
+    `));
     const rows = Array.isArray(result) ? result : (result as any).rows || [];
     const sessionTime = rows.length > 0 ? rows[0].session_time : null;
     res.json({ sessionTime });
@@ -462,7 +470,7 @@ router.get('/recent-techniques', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const result = await db.execute(sql`
+    const result = await withTimeout(db.execute(sql`
       SELECT DISTINCT ON (ttv2.id) ttv2.id, ttv2.name, ttv2.slug, ttv2.level, tst.category,
              MAX(tst.created_at) OVER (PARTITION BY ttv2.id) as last_used
       FROM training_session_techniques tst
@@ -470,7 +478,7 @@ router.get('/recent-techniques', async (req, res) => {
       LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
       WHERE ts.user_id = ${String(userId)}
       ORDER BY ttv2.id, tst.created_at DESC
-    `);
+    `));
     const rows = Array.isArray(result) ? result : (result as any).rows || [];
     const techniques = rows
       .sort((a: any, b: any) => {
@@ -498,9 +506,9 @@ router.get('/insight', async (req, res) => {
       return res.json({ insight: cached.insight || null });
     }
 
-    const totalCheck = await db.execute(sql`
+    const totalCheck = await withTimeout(db.execute(sql`
       SELECT COUNT(*)::int as total FROM training_sessions WHERE user_id = ${userIdStr}
-    `);
+    `));
     const totalRows = Array.isArray(totalCheck) ? totalCheck : (totalCheck as any).rows || [];
     const totalCount = Number(totalRows[0]?.total || 0);
     if (totalCount === 0) {
@@ -523,21 +531,21 @@ async function generateTrainingInsight(userId: string): Promise<string> {
     return 'One session at a time.';
   }
 
-  const statsQuery = await db.execute(sql`
+  const statsQuery = await withTimeout(db.execute(sql`
     SELECT
       (SELECT COUNT(*)::int FROM training_sessions WHERE user_id = ${userId}) as total_sessions,
       (SELECT COUNT(*)::int FROM training_sessions WHERE user_id = ${userId} AND session_date >= CURRENT_DATE - INTERVAL '7 days') as sessions_this_week,
       (SELECT COUNT(*)::int FROM training_sessions WHERE user_id = ${userId} AND session_date >= CURRENT_DATE - INTERVAL '14 days' AND session_date < CURRENT_DATE - INTERVAL '7 days') as sessions_last_week,
       (SELECT COUNT(*)::int FROM training_sessions WHERE user_id = ${userId} AND session_date >= date_trunc('month', CURRENT_DATE)) as sessions_this_month,
       (SELECT COUNT(*)::int FROM training_sessions WHERE user_id = ${userId} AND session_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND session_date < date_trunc('month', CURRENT_DATE)) as sessions_last_month
-  `);
+  `));
   const sRows = Array.isArray(statsQuery) ? statsQuery : (statsQuery as any).rows || [];
   const s = sRows[0] || {};
 
-  const streakResult = await db.execute(sql`
+  const streakResult = await withTimeout(db.execute(sql`
     SELECT DISTINCT session_date FROM training_sessions
     WHERE user_id = ${userId} ORDER BY session_date DESC
-  `);
+  `));
   const allDates: string[] = (Array.isArray(streakResult) ? streakResult : (streakResult as any).rows || [])
     .map((r: any) => {
       const d = r.session_date;
@@ -569,32 +577,32 @@ async function generateTrainingInsight(userId: string): Promise<string> {
     daysSinceLastSession = Math.round((today.getTime() - new Date(lastSessionDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24));
   }
 
-  const techWeekResult = await db.execute(sql`
+  const techWeekResult = await withTimeout(db.execute(sql`
     SELECT ttv2.name, COUNT(*)::int as cnt
     FROM training_session_techniques tst
     JOIN training_sessions ts ON tst.session_id = ts.id
     LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
     WHERE ts.user_id = ${userId} AND ts.session_date >= CURRENT_DATE - INTERVAL '7 days' AND ttv2.name IS NOT NULL
     GROUP BY ttv2.name ORDER BY cnt DESC LIMIT 5
-  `);
+  `));
   const techWeekRows = Array.isArray(techWeekResult) ? techWeekResult : (techWeekResult as any).rows || [];
 
-  const topTechResult = await db.execute(sql`
+  const topTechResult = await withTimeout(db.execute(sql`
     SELECT ttv2.name, COUNT(*)::int as cnt
     FROM training_session_techniques tst
     JOIN training_sessions ts ON tst.session_id = ts.id
     LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
     WHERE ts.user_id = ${userId} AND ttv2.name IS NOT NULL
     GROUP BY ttv2.name ORDER BY cnt DESC LIMIT 1
-  `);
+  `));
   const topTechRows = Array.isArray(topTechResult) ? topTechResult : (topTechResult as any).rows || [];
 
-  const lastMoodResult = await db.execute(sql`
+  const lastMoodResult = await withTimeout(db.execute(sql`
     SELECT mood FROM training_sessions WHERE user_id = ${userId} AND mood IS NOT NULL ORDER BY session_date DESC LIMIT 1
-  `);
+  `));
   const moodRows = Array.isArray(lastMoodResult) ? lastMoodResult : (lastMoodResult as any).rows || [];
 
-  const recentTechResult = await db.execute(sql`
+  const recentTechResult = await withTimeout(db.execute(sql`
     SELECT DISTINCT ON (ttv2.name) ttv2.name
     FROM training_session_techniques tst
     JOIN training_sessions ts ON tst.session_id = ts.id
@@ -602,12 +610,12 @@ async function generateTrainingInsight(userId: string): Promise<string> {
     WHERE ts.user_id = ${userId} AND ttv2.name IS NOT NULL
     ORDER BY ttv2.name, ts.session_date DESC
     LIMIT 5
-  `);
+  `));
   const recentTechRows = Array.isArray(recentTechResult) ? recentTechResult : (recentTechResult as any).rows || [];
 
-  const firstSessionResult = await db.execute(sql`
+  const firstSessionResult = await withTimeout(db.execute(sql`
     SELECT MIN(session_date) as first_date FROM training_sessions WHERE user_id = ${userId}
-  `);
+  `));
   const fsRows = Array.isArray(firstSessionResult) ? firstSessionResult : (firstSessionResult as any).rows || [];
   const firstDateRaw = fsRows[0]?.first_date;
   let firstSessionDate = 'Unknown';
