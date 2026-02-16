@@ -323,7 +323,6 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
       }
     },
     onSuccess: () => {
-      triggerHaptic('medium');
       queryClient.invalidateQueries({ queryKey: ['/api/training/last-session-time'] });
       const streak = (statsData?.currentStreak || 0) + (isEditing ? 0 : 1);
       const milestones = [7, 14, 21, 30, 60, 90, 100];
@@ -332,12 +331,12 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
       if (isEditing) {
         toast({ title: "Session updated" });
       } else if (isMilestone) {
-        triggerHaptic('success');
         toast({ title: `\uD83D\uDD25 ${streak} day streak! Keep pushing.` });
       } else {
         toast({ title: `Session logged \u00B7 \uD83D\uDD25 ${streak > 0 ? streak : 1} day streak` });
       }
       onSave();
+      setTimeout(() => triggerHaptic(isMilestone ? 'success' : 'medium'), 0);
     },
     onError: (err: any) => {
       toast({ title: "Failed to save", description: err.message, variant: "destructive" });
@@ -350,10 +349,10 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
       await apiRequest('DELETE', `/api/training/sessions/${existingSession.id}`);
     },
     onSuccess: () => {
-      triggerHaptic('medium');
       toast({ title: "Session deleted" });
       queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith?.('/api/training') });
       onSave();
+      setTimeout(() => triggerHaptic('medium'), 0);
     },
   });
 
@@ -747,7 +746,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
                       Cancel
                     </button>
                     <button
-                      onClick={() => { triggerHaptic('warning'); deleteMutation.mutate(); }}
+                      onClick={() => { deleteMutation.mutate(); setTimeout(() => triggerHaptic('warning'), 0); }}
                       data-testid="button-confirm-delete"
                       style={{ padding: '10px 20px', background: '#EF4444', border: 'none', borderRadius: '10px', color: '#FFFFFF', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
                     >

@@ -1,0 +1,58 @@
+I can see the problem right in the Xcode console on the right:
+“TO JS undefined” — twice. And “To Native → Haptics notification 93916876” in between.
+Exactly what I suspected. The haptic call on delete is throwing a JS undefined error which is killing the delete function before it reaches the API call. The haptic fires, throws an error, and the delete never executes.
+
+CRITICAL FIX — DELETE BROKEN BY HAPTICS
+
+The delete button is not working. The Xcode console shows 
+"TO JS undefined" errors when tapping Delete.
+
+The haptic notification call on delete is throwing an error 
+that prevents the delete API call from executing.
+
+FIX IMMEDIATELY:
+
+1. Find the delete session handler in the Training tab code
+
+2. The haptic call is BLOCKING the delete. Either:
+   a) The haptic is awaited and throws before the delete runs
+   b) The haptic and delete are in the same try/catch and the 
+      haptic error catches and skips the delete
+
+3. Move the haptic AFTER the delete, or remove it entirely 
+   from delete. The delete operation is more important than 
+   a vibration.
+
+4. Create this wrapper function if it doesn't exist yet:
+
+   const safeHaptic = async (style) => {
+     try { await Haptics.impact({ style }); } catch (e) {}
+   };
+
+   const safeNotification = async (type) => {
+     try { await Haptics.notification({ type }); } catch (e) {}
+   };
+
+5. Replace EVERY direct Haptics call in the Training tab with 
+   the safe wrapper. Every single one. Search for "Haptics." 
+   and replace all instances.
+
+6. For the delete handler specifically, the order must be:
+   a) Call DELETE /api/training/sessions/:id
+   b) Wait for success response
+   c) Close the bottom sheet
+   d) Refresh calendar and recent sessions
+   e) THEN try haptic (optional, non-blocking)
+
+7. Same fix for Update — make sure haptics don't block the 
+   PUT request either.
+
+TEST:
+□ Tap Delete → session deletes, bottom sheet closes
+□ Tap Update → session updates, bottom sheet closes
+□ No "TO JS undefined" errors in Xcode console
+□ Calendar and recent sessions refresh after delete/update
+□ Haptics still work on other interactions (non-blocking)
+
+THIS IS THE HIGHEST PRIORITY FIX. Ship nothing else until 
+delete and update work again.
