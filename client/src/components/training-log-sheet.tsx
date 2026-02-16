@@ -336,7 +336,6 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
         toast({ title: `Session logged \u00B7 \uD83D\uDD25 ${streak > 0 ? streak : 1} day streak` });
       }
       onSave();
-      setTimeout(() => triggerHaptic(isMilestone ? 'success' : 'medium'), 0);
     },
     onError: (err: any) => {
       toast({ title: "Failed to save", description: err.message, variant: "destructive" });
@@ -352,7 +351,6 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
       toast({ title: "Session deleted" });
       queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith?.('/api/training') });
       onSave();
-      setTimeout(() => triggerHaptic('medium'), 0);
     },
   });
 
@@ -746,7 +744,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
                       Cancel
                     </button>
                     <button
-                      onClick={() => { deleteMutation.mutate(); setTimeout(() => triggerHaptic('warning'), 0); }}
+                      onClick={() => deleteMutation.mutate()}
                       data-testid="button-confirm-delete"
                       style={{ padding: '10px 20px', background: '#EF4444', border: 'none', borderRadius: '10px', color: '#FFFFFF', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
                     >

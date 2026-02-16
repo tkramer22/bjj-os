@@ -1,0 +1,57 @@
+Same errors in the console — “TO JS undefined” sandwiching the Haptics notification call. Replit didn’t actually wrap them in try/catch properly.
+Don’t remove haptics entirely — just tell Replit to remove them from delete and update specifically, and fix the wrapper for everything else. Quick surgical fix:
+
+HAPTICS ARE STILL BREAKING DELETE AND UPDATE — FIX NOW
+
+The Xcode console still shows "TO JS undefined" when tapping Delete.
+The previous fix did not work. The haptic calls are still crashing 
+the delete and update handlers.
+
+DO THIS EXACTLY:
+
+1. Find the delete session handler function
+2. REMOVE the Haptics call from it completely. No haptic on delete.
+3. Find the update session handler function  
+4. REMOVE the Haptics call from it completely. No haptic on update.
+
+Delete and update should have ZERO haptic code in them. None.
+
+5. For ALL other haptic calls in the Training tab, replace the 
+   import and every call with this pattern:
+
+   // At the top of the file
+   let safeHaptic = async () => {};
+   let safeNotification = async () => {};
+   
+   try {
+     const { Haptics, ImpactStyle, NotificationType } = await import('@capacitor/haptics');
+     safeHaptic = async (style) => {
+       try { await Haptics.impact({ style }); } catch(e) {}
+     };
+     safeNotification = async (type) => {
+       try { await Haptics.notification({ type }); } catch(e) {}
+     };
+   } catch(e) {
+     // Haptics not available
+   }
+
+   Then use safeHaptic(ImpactStyle.Light) everywhere instead of 
+   Haptics.impact() directly.
+
+6. The delete handler should be simply:
+   - Call DELETE API
+   - On success: close bottom sheet, refresh calendar
+   - That's it. No haptics. No extras.
+
+7. The update handler should be simply:
+   - Call PUT API
+   - On success: close bottom sheet, refresh calendar
+   - That's it. No haptics. No extras.
+
+TEST:
+□ Delete works — session removed, sheet closes, calendar updates
+□ Update works — session updated, sheet closes
+□ No "TO JS undefined" in Xcode console
+□ Other haptics (mood chips, save button) still work
+
+THIS IS BLOCKING APP STORE SUBMISSION. Fix this first.
