@@ -1,0 +1,231 @@
+THREE FIXES + ONE ADDITION FOR TRAINING TAB
+
+⚠️ DO NOT break any existing functionality.
+⚠️ DO NOT touch Professor OS chat, video library, or profile.
+⚠️ Only modify the Training tab.
+
+══════════════════════════════════════════════════════════════════════════
+FIX 1: PRESET TECHNIQUE CHIPS NOT SAVING
+══════════════════════════════════════════════════════════════════════════
+
+BUG: When a user taps a preset technique chip (Armbar, Triangle,
+Half Guard, Guard Pass) in the bottom sheet, the chip visually
+highlights but the technique is NOT saved with the session. Only
+techniques typed manually in the search field are saved.
+
+EVIDENCE: Recent Sessions show no technique for sessions where the
+user only tapped preset chips. Sessions where the user typed in the
+search field (like “Omoplata”) do show the technique.
+
+ROOT CAUSE: The preset chips are likely not wired into the same
+state/array that the search autocomplete uses. When Save is called,
+it only reads techniques from the search-selected array, not from
+the preset chip selections.
+
+FIX:
+
+1. Find the preset/default technique chips in the bottom sheet
+1. When a preset chip is tapped, it MUST add the technique to the
+   same selectedTechniques array that the search autocomplete uses
+1. Each preset chip must have a taxonomy_id associated with it.
+   Look up the taxonomy_id for each default:
+- “Armbar” → find its ID in technique_taxonomy
+- “Triangle” → find its ID in technique_taxonomy
+- “Half Guard” → find its ID in technique_taxonomy
+- “Guard Pass” → find its ID in technique_taxonomy
+1. When Save is called, ALL selected techniques (both from presets
+   AND from search) must be included in the POST request
+1. After saving, the technique must appear in the Recent Sessions
+   card for that date
+
+ALSO FIX FOR RECENTS:
+When the user has logged techniques before, their recent techniques
+replace the defaults. These recent chips must ALSO save correctly
+when tapped. Same fix — wire them into the selectedTechniques array
+with their taxonomy_id.
+
+TEST:
+□ Tap “Armbar” preset chip → chip highlights purple
+□ Hit Save
+□ Session appears in Recent Sessions showing “Armbar”
+□ Open bottom sheet again → “Armbar” appears as a recent chip
+□ Tap “Triangle” preset chip AND type “Omoplata” in search
+□ Hit Save
+□ Session shows both “Triangle” and “Omoplata”
+□ Open bottom sheet again → recents show Omoplata, Triangle, Armbar
+
+══════════════════════════════════════════════════════════════════════════
+FIX 2: STICKY HEADER — ONLY RECENT SESSIONS SCROLLS
+══════════════════════════════════════════════════════════════════════════
+
+CURRENT: The entire Training tab scrolls as one page. When the user
+has many recent sessions and scrolls down, the Training header,
+streak counter, insight line, and calendar all scroll off screen.
+
+DESIRED: The top section is fixed/sticky. Only the Recent Sessions
+list scrolls independently below it.
+
+LAYOUT (top to bottom):
+
+FIXED/STICKY SECTION (does not scroll):
+
+- “Training” header
+- Streak counter
+- Professor OS insight line
+- Calendar grid with month navigation
+- “Tap a date to log your session” text
+
+SCROLLABLE SECTION (fills remaining screen height):
+
+- “Recent Sessions” header
+- List of session cards (scrolls independently)
+
+IMPLEMENTATION:
+
+- The fixed section stays pinned at the top of the screen
+- The scrollable section takes up the remaining vertical space
+  below the fixed section
+- Use overflow-y: auto or a ScrollView only on the Recent Sessions
+  container
+- The fixed section should NOT have its own scroll
+- On shorter screens (iPhone SE, Mini), the calendar may take more
+  relative space but should still be fully visible without scrolling
+
+TEST:
+□ Add 10+ sessions
+□ Scroll through Recent Sessions
+□ Training header, streak, insight, calendar all stay visible at top
+□ Only the session list scrolls
+□ Works on iPhone Pro Max AND smaller screens
+□ Bottom sheet still slides up correctly over the fixed section
+
+══════════════════════════════════════════════════════════════════════════
+ADDITION 1: TIME PICKER IN BOTTOM SHEET
+══════════════════════════════════════════════════════════════════════════
+
+Add a time picker to the training log bottom sheet.
+
+PLACEMENT: Directly below the date header, above the session type
+chips. The bottom sheet order becomes:
+
+1. Date header (“Saturday, February 15”)
+1. TIME PICKER ← NEW
+1. Session type chips (Class, Sparring, Open Mat, Comp)
+1. Mood chips (Great, Good, Tough, Rough)
+1. Technique chips + search
+1. Gi / No-Gi toggle
+1. Add More (expandable)
+1. Save button
+
+STYLE:
+
+- Inline scroll wheel picker (not a full screen picker)
+- Shows Hour : Minute  AM/PM
+- Three scroll columns: hours (1-12), minutes (00-59), AM/PM
+- Compact height — should not take more than 50-60px
+- Dark theme matching rest of bottom sheet
+- Text color: white
+- Selected value highlighted or slightly larger
+- Scroll feel should be smooth and native-like
+
+DEFAULT LOGIC:
+
+- User’s FIRST session ever: default to current time
+- Every session after: default to the time from their most recent
+  saved session
+- Query: SELECT session_time FROM training_sessions
+  WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1
+- If that returns a time, use it as default
+- If no previous session, use current time
+- User can always scroll to change
+
+DATABASE:
+
+- Add a session_time column to training_sessions table:
+  ALTER TABLE training_sessions ADD COLUMN session_time TIME;
+- Do NOT make it required — existing sessions without a time are fine
+- Save the time from the picker with every new session
+
+DISPLAY IN RECENT SESSIONS:
+Show the time in the session card if it exists:
+“Feb 15 · 🔥 Great · Class · Gi · 6:30 PM”
+If no time saved (older sessions), just show without it:
+“Feb 15 · 🔥 Great · Class · Gi”
+
+HAPTIC FEEDBACK ON SCROLL:
+Each tick/value change on the scroll wheel should trigger a light
+haptic tap (UIImpactFeedbackGenerator style light). This is the
+same satisfying click feel as the native iOS time picker.
+
+══════════════════════════════════════════════════════════════════════════
+ADDITION 2: VERIFY AND FIX ALL HAPTICS
+══════════════════════════════════════════════════════════════════════════
+
+Verify that ALL of these haptic feedback points exist in the Training
+tab. If any are missing, ADD them.
+
+Uses Capacitor Haptics plugin (@capacitor/haptics) which is already
+installed.
+
+import { Haptics, ImpactStyle, NotificationType } from ‘@capacitor/haptics’;
+
+REQUIRED HAPTIC POINTS:
+
+1. MOOD CHIP TAP (Great, Good, Tough, Rough):
+   Haptics.impact({ style: ImpactStyle.Light });
+   Trigger: on tap/selection
+1. SESSION TYPE CHIP TAP (Class, Sparring, Open Mat, Comp):
+   Haptics.impact({ style: ImpactStyle.Light });
+   Trigger: on tap/selection
+1. TECHNIQUE CHIP TAP (presets and recents):
+   Haptics.impact({ style: ImpactStyle.Light });
+   Trigger: on tap/selection
+1. TECHNIQUE CHIP DESELECT (tap to remove):
+   Haptics.impact({ style: ImpactStyle.Light });
+   Trigger: on deselection
+1. TECHNIQUE SEARCH RESULT TAP:
+   Haptics.impact({ style: ImpactStyle.Light });
+   Trigger: when tapping an autocomplete suggestion
+1. GI / NO-GI TOGGLE:
+   Haptics.impact({ style: ImpactStyle.Light });
+   Trigger: on toggle
+1. TIME PICKER SCROLL:
+   Haptics.impact({ style: ImpactStyle.Light });
+   Trigger: on each value change while scrolling
+1. SAVE BUTTON:
+   Haptics.impact({ style: ImpactStyle.Medium });
+   Trigger: on successful save
+1. CALENDAR DATE TAP (opening bottom sheet):
+   Haptics.impact({ style: ImpactStyle.Light });
+   Trigger: when tapping a date to open the log sheet
+1. DELETE SESSION:
+   Haptics.notification({ type: NotificationType.Warning });
+   Trigger: when confirming session deletion
+
+CHECK each one exists in the code. If missing, add it.
+Wrap all haptic calls in a try/catch so they fail silently on web
+(haptics only work on native iOS).
+
+TEST:
+□ Tap each mood chip — feel light tap
+□ Tap each session type chip — feel light tap
+□ Tap technique preset chip — feel light tap
+□ Tap autocomplete suggestion — feel light tap
+□ Toggle Gi/No-Gi — feel light tap
+□ Scroll time picker — feel light tap on each value
+□ Tap Save — feel medium impact
+□ Tap a calendar date — feel light tap
+□ All haptics work on real iPhone or simulator
+□ No crashes on web (haptics gracefully skipped)
+
+══════════════════════════════════════════════════════════════════════════
+BUILD ORDER
+══════════════════════════════════════════════════════════════════════════
+
+1. Fix preset technique chips saving (Fix 1)
+1. Add time picker with defaults (Addition 1)
+1. Add/verify all haptics (Addition 2)
+1. Make header sticky with scrollable sessions (Fix 2)
+
+DO NOT publish until all fixes are verified. Show me the Training
+tab in preview before deploying.

@@ -11,6 +11,7 @@ interface TrainingSession {
   id: number;
   userId: string;
   sessionDate: string;
+  sessionTime: string | null;
   mood: string | null;
   sessionType: string | null;
   durationMinutes: number | null;
@@ -433,7 +434,8 @@ export default function IOSTrainingPage() {
                 const moodLabel = session.mood ? MOOD_LABELS[session.mood] || '' : '';
                 const typeLabel = session.sessionType ? SESSION_TYPE_LABELS[session.sessionType] || session.sessionType : '';
                 const giLabel = session.isGi === false ? 'No-Gi' : session.isGi ? 'Gi' : '';
-                const firstLine = [dateLabel, moodEmoji ? `${moodEmoji} ${moodLabel}` : '', typeLabel, giLabel].filter(Boolean).join(' \u00B7 ');
+                const timeLabel = session.sessionTime || '';
+                const firstLine = [dateLabel, timeLabel, moodEmoji ? `${moodEmoji} ${moodLabel}` : '', typeLabel, giLabel].filter(Boolean).join(' \u00B7 ');
                 const techNames = session.techniques?.map(t => t.technique_name).filter(Boolean).join(' \u00B7 ') || '';
                 const notesPreview = session.notes ? `"${session.notes.split('\n')[0].slice(0, 60)}${session.notes.length > 60 ? '\u2026' : ''}"` : '';
 

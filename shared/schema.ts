@@ -6527,6 +6527,7 @@ export const trainingSessions = pgTable("training_sessions", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id", { length: 255 }).notNull(),
   sessionDate: date("session_date").notNull(),
+  sessionTime: varchar("session_time", { length: 8 }),
   mood: varchar("mood", { length: 20 }),
   sessionType: varchar("session_type", { length: 20 }),
   durationMinutes: integer("duration_minutes"),

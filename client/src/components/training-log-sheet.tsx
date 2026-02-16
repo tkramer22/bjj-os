@@ -1,9 +1,113 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Search, Check, Minus, Plus, ChevronDown, ChevronUp } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+function parseTimeString(timeStr: string): { hour: number; minute: number; ampm: 'AM' | 'PM' } {
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (match) {
+    return { hour: parseInt(match[1]), minute: parseInt(match[2]), ampm: match[3].toUpperCase() as 'AM' | 'PM' };
+  }
+  const parts = timeStr.split(':');
+  let h = parseInt(parts[0]);
+  const m = parseInt(parts[1]) || 0;
+  const ampm: 'AM' | 'PM' = h >= 12 ? 'PM' : 'AM';
+  if (h > 12) h -= 12;
+  if (h === 0) h = 12;
+  return { hour: h, minute: m, ampm };
+}
+
+function formatTimeTo12h(hour: number, minute: number, ampm: string): string {
+  return `${hour}:${String(minute).padStart(2, '0')} ${ampm}`;
+}
+
+function ScrollColumn({ items, selectedIndex, onChange, width }: {
+  items: string[];
+  selectedIndex: number;
+  onChange: (index: number) => void;
+  width: string;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const itemHeight = 36;
+  const isScrollingRef = useRef(false);
+  const lastIndexRef = useRef(selectedIndex);
+
+  useEffect(() => {
+    if (containerRef.current && !isScrollingRef.current) {
+      containerRef.current.scrollTop = selectedIndex * itemHeight;
+    }
+  }, [selectedIndex]);
+
+  const handleScroll = useCallback(() => {
+    if (!containerRef.current) return;
+    isScrollingRef.current = true;
+    const scrollTop = containerRef.current.scrollTop;
+    const newIndex = Math.round(scrollTop / itemHeight);
+    const clampedIndex = Math.max(0, Math.min(newIndex, items.length - 1));
+    if (clampedIndex !== lastIndexRef.current) {
+      lastIndexRef.current = clampedIndex;
+      triggerHaptic('light');
+      onChange(clampedIndex);
+    }
+    clearTimeout((containerRef.current as any)._scrollTimer);
+    (containerRef.current as any)._scrollTimer = setTimeout(() => {
+      isScrollingRef.current = false;
+      if (containerRef.current) {
+        containerRef.current.scrollTo({ top: clampedIndex * itemHeight, behavior: 'smooth' });
+      }
+    }, 100);
+  }, [items.length, onChange]);
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      style={{
+        width,
+        height: `${itemHeight * 3}px`,
+        overflowY: 'auto',
+        scrollSnapType: 'y mandatory',
+        WebkitOverflowScrolling: 'touch',
+        position: 'relative',
+        msOverflowStyle: 'none',
+        scrollbarWidth: 'none',
+      }}
+    >
+      <div style={{ height: `${itemHeight}px` }} />
+      {items.map((item, i) => (
+        <div
+          key={i}
+          onClick={() => {
+            triggerHaptic('light');
+            onChange(i);
+          }}
+          style={{
+            height: `${itemHeight}px`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            scrollSnapAlign: 'center',
+            fontSize: i === selectedIndex ? '18px' : '14px',
+            fontWeight: i === selectedIndex ? 600 : 400,
+            color: i === selectedIndex ? '#FFFFFF' : '#71717A',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            opacity: i === selectedIndex ? 1 : 0.5,
+          }}
+        >
+          {item}
+        </div>
+      ))}
+      <div style={{ height: `${itemHeight}px` }} />
+    </div>
+  );
+}
+
+const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+const AMPM_OPTIONS = ['AM', 'PM'];
 
 interface TaxonomyNode {
   id: number;
@@ -16,6 +120,7 @@ interface TaxonomyNode {
 interface TrainingSession {
   id: number;
   sessionDate: string;
+  sessionTime: string | null;
   mood: string | null;
   sessionType: string | null;
   durationMinutes: number | null;
@@ -90,6 +195,19 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
   const [showMore, setShowMore] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  const now = new Date();
+  const defaultHour = now.getHours() > 12 ? now.getHours() - 12 : (now.getHours() === 0 ? 12 : now.getHours());
+  const defaultAmPm = now.getHours() >= 12 ? 'PM' : 'AM';
+
+  const initTime = existingSession?.sessionTime
+    ? parseTimeString(existingSession.sessionTime)
+    : { hour: defaultHour, minute: now.getMinutes(), ampm: defaultAmPm };
+
+  const [timeHour, setTimeHour] = useState(initTime.hour);
+  const [timeMinute, setTimeMinute] = useState(initTime.minute);
+  const [timeAmPm, setTimeAmPm] = useState<'AM' | 'PM'>(initTime.ampm);
+  const [timeInitialized, setTimeInitialized] = useState(!!existingSession?.sessionTime);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -106,6 +224,21 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
   const { data: statsData } = useQuery<{ currentStreak: number; totalCount: number }>({
     queryKey: ['/api/training/stats'],
   });
+
+  const { data: lastTimeData } = useQuery<{ sessionTime: string | null }>({
+    queryKey: ['/api/training/last-session-time'],
+    enabled: !existingSession?.sessionTime,
+  });
+
+  useEffect(() => {
+    if (!timeInitialized && lastTimeData?.sessionTime) {
+      const parsed = parseTimeString(lastTimeData.sessionTime);
+      setTimeHour(parsed.hour);
+      setTimeMinute(parsed.minute);
+      setTimeAmPm(parsed.ampm);
+      setTimeInitialized(true);
+    }
+  }, [lastTimeData, timeInitialized]);
 
   const taxonomyResults = useMemo(() => {
     if (!searchResults?.taxonomyResults) return [];
@@ -129,8 +262,10 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const sessionTimeStr = formatTimeTo12h(timeHour, timeMinute, timeAmPm);
       const payload = {
         sessionDate: date,
+        sessionTime: sessionTimeStr,
         mood: mood || null,
         sessionType: sessionType || null,
         durationMinutes,
@@ -152,6 +287,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
     },
     onSuccess: () => {
       triggerHaptic('medium');
+      queryClient.invalidateQueries({ queryKey: ['/api/training/last-session-time'] });
       const streak = (statsData?.currentStreak || 0) + (isEditing ? 0 : 1);
       const milestones = [7, 14, 21, 30, 60, 90, 100];
       const isMilestone = milestones.includes(streak);
@@ -260,7 +396,58 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
             </button>
           </div>
 
-          <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+          <div
+            data-testid="time-picker"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '2px',
+              margin: '12px 0 16px',
+              background: '#1A1A1D',
+              borderRadius: '10px',
+              padding: '4px 12px',
+              position: 'relative',
+              height: '56px',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '12px',
+              right: '12px',
+              height: '36px',
+              transform: 'translateY(-50%)',
+              background: 'rgba(139, 92, 246, 0.12)',
+              borderRadius: '8px',
+              pointerEvents: 'none',
+              zIndex: 0,
+            }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0px', zIndex: 1 }}>
+              <ScrollColumn
+                items={HOURS}
+                selectedIndex={timeHour - 1}
+                onChange={(i) => setTimeHour(i + 1)}
+                width="40px"
+              />
+              <span style={{ fontSize: '18px', fontWeight: 600, color: '#FFFFFF', padding: '0 1px' }}>:</span>
+              <ScrollColumn
+                items={MINUTES}
+                selectedIndex={timeMinute}
+                onChange={setTimeMinute}
+                width="40px"
+              />
+              <ScrollColumn
+                items={AMPM_OPTIONS}
+                selectedIndex={timeAmPm === 'AM' ? 0 : 1}
+                onChange={(i) => setTimeAmPm(i === 0 ? 'AM' : 'PM')}
+                width="44px"
+              />
+            </div>
+          </div>
+
+          <div style={{ marginTop: '4px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', gap: '8px' }}>
               {MOODS.map(m => (
                 <button
@@ -502,7 +689,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
             <>
               {!showDeleteConfirm ? (
                 <button
-                  onClick={() => setShowDeleteConfirm(true)}
+                  onClick={() => { triggerHaptic('light'); setShowDeleteConfirm(true); }}
                   data-testid="button-delete-session"
                   style={{
                     width: '100%', marginTop: '12px', padding: '12px', background: 'transparent',
@@ -523,7 +710,7 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
                       Cancel
                     </button>
                     <button
-                      onClick={() => deleteMutation.mutate()}
+                      onClick={() => { triggerHaptic('warning'); deleteMutation.mutate(); }}
                       data-testid="button-confirm-delete"
                       style={{ padding: '10px 20px', background: '#EF4444', border: 'none', borderRadius: '10px', color: '#FFFFFF', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
                     >

@@ -22,6 +22,7 @@ async function ensureTablesExist() {
         id SERIAL PRIMARY KEY,
         user_id VARCHAR(255) NOT NULL,
         session_date DATE NOT NULL,
+        session_time VARCHAR(8),
         mood VARCHAR(20),
         session_type VARCHAR(20),
         duration_minutes INTEGER,
@@ -109,6 +110,7 @@ function normalizeSession(s: any) {
     id: s.id,
     userId: s.user_id ?? s.userId,
     sessionDate,
+    sessionTime: s.session_time ?? s.sessionTime ?? null,
     mood: s.mood,
     sessionType: s.session_type ?? s.sessionType,
     durationMinutes: s.duration_minutes ?? s.durationMinutes,
@@ -185,7 +187,7 @@ router.post('/sessions', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { sessionDate, mood, sessionType, durationMinutes, isGi, notes, rolls, submissions, taps, techniques } = req.body;
+    const { sessionDate, sessionTime, mood, sessionType, durationMinutes, isGi, notes, rolls, submissions, taps, techniques } = req.body;
 
     if (!sessionDate) return res.status(400).json({ error: 'Session date is required' });
 
@@ -193,7 +195,7 @@ router.post('/sessions', async (req, res) => {
       .insert(trainingSessions)
       .values({
         userId: String(userId),
-        sessionDate, mood, sessionType, durationMinutes, isGi, notes,
+        sessionDate, sessionTime: sessionTime || null, mood, sessionType, durationMinutes, isGi, notes,
         rolls: rolls || 0, submissions: submissions || 0, taps: taps || 0,
       })
       .returning();
@@ -230,7 +232,7 @@ router.put('/sessions/:id', async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     const sessionId = parseInt(req.params.id);
-    const { mood, sessionType, durationMinutes, isGi, notes, rolls, submissions, taps, techniques } = req.body;
+    const { sessionTime, mood, sessionType, durationMinutes, isGi, notes, rolls, submissions, taps, techniques } = req.body;
 
     const [existing] = await db
       .select()
@@ -243,7 +245,7 @@ router.put('/sessions/:id', async (req, res) => {
     const [updated] = await db
       .update(trainingSessions)
       .set({
-        mood, sessionType, durationMinutes, isGi, notes,
+        sessionTime: sessionTime || null, mood, sessionType, durationMinutes, isGi, notes,
         rolls: rolls || 0, submissions: submissions || 0, taps: taps || 0,
         updatedAt: new Date(),
       })
@@ -421,6 +423,25 @@ router.get('/stats', async (req, res) => {
   } catch (error: any) {
     console.error('[TRAINING] Error fetching stats:', error.message);
     res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+router.get('/last-session-time', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const result = await db.execute(sql`
+      SELECT session_time FROM training_sessions
+      WHERE user_id = ${String(userId)} AND session_time IS NOT NULL
+      ORDER BY created_at DESC LIMIT 1
+    `);
+    const rows = Array.isArray(result) ? result : (result as any).rows || [];
+    const sessionTime = rows.length > 0 ? rows[0].session_time : null;
+    res.json({ sessionTime });
+  } catch (error: any) {
+    console.error('[TRAINING] Error fetching last session time:', error.message);
+    res.json({ sessionTime: null });
   }
 });
 
