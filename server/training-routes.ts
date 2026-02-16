@@ -572,6 +572,18 @@ async function generateTrainingInsight(userId: string): Promise<string> {
   `);
   const recentTechRows = Array.isArray(recentTechResult) ? recentTechResult : (recentTechResult as any).rows || [];
 
+  const firstSessionResult = await db.execute(sql`
+    SELECT MIN(session_date) as first_date FROM training_sessions WHERE user_id = ${userId}
+  `);
+  const fsRows = Array.isArray(firstSessionResult) ? firstSessionResult : (firstSessionResult as any).rows || [];
+  const firstDateRaw = fsRows[0]?.first_date;
+  let firstSessionDate = 'Unknown';
+  if (firstDateRaw) {
+    if (firstDateRaw instanceof Date) firstSessionDate = firstDateRaw.toISOString().split('T')[0];
+    else if (typeof firstDateRaw === 'string') firstSessionDate = firstDateRaw.includes('T') ? firstDateRaw.split('T')[0] : firstDateRaw;
+    else firstSessionDate = String(firstDateRaw);
+  }
+
   const techniquesThisWeek = techWeekRows.map((r: any) => `${r.name} (${r.cnt})`).join(', ') || 'None';
   const mostLoggedAllTime = topTechRows.length > 0 ? `${topTechRows[0].name} (${topTechRows[0].cnt})` : 'None';
   const lastMood = moodRows.length > 0 ? moodRows[0].mood : 'Not recorded';
@@ -590,6 +602,7 @@ async function generateTrainingInsight(userId: string): Promise<string> {
 - Most logged technique all-time: ${mostLoggedAllTime}
 - Last session mood: ${lastMood}
 - Recent techniques: ${recentTechniques}
+- First session ever logged: ${firstSessionDate}
 
 Give one observation.`;
 
@@ -613,7 +626,8 @@ STRICT RULES:
 - If they train a lot, acknowledge the work genuinely.
 - If they haven't trained recently, be inviting not guilt-tripping. Example: "Been a few days, the mats are waiting." NOT "You've been off the mat and it shows."
 - If they focus on one technique a lot, frame it as dedication not imbalance. Example: "Armbar four times this week, that kind of focus pays off." NOT "You're only drilling armbar and ignoring everything else."
-- If their volume changed from last week or last month, mention it positively.`;
+- If their volume changed from last week or last month, mention it positively.
+- If the student's first session was logged less than 30 days ago, they are NEW to tracking. Do not reference past months or imply they took time off. Treat them as someone building a new habit. Focus on what they are doing now, not what data is missing. Zero sessions last month means they were not tracking yet, not that they skipped training.`;
 
   try {
     const response = await anthropic.messages.create({
