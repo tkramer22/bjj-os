@@ -210,16 +210,25 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
   const dateObj = new Date(date + 'T00:00:00');
   const dateLabel = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  const chipStyle = (selected: boolean) => ({
-    padding: '8px 16px',
-    borderRadius: '100px',
-    border: selected ? '2px solid #8B5CF6' : '1px solid #2A2A2E',
-    background: selected ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
-    color: selected ? '#FFFFFF' : '#A1A1AA',
+  const uniformChipStyle = (selected: boolean): React.CSSProperties => ({
+    flex: '1 1 0',
+    minWidth: 0,
+    height: '40px',
+    padding: '8px 12px',
+    borderRadius: '20px',
+    border: selected ? '1px solid transparent' : '1px solid #3A3A3E',
+    background: selected ? '#8B5CF6' : 'transparent',
+    color: '#FFFFFF',
     fontSize: '14px',
-    fontWeight: selected ? 600 : 400,
+    fontWeight: 500,
     cursor: 'pointer',
-    whiteSpace: 'nowrap' as const,
+    whiteSpace: 'nowrap',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '5px',
+    lineHeight: 1,
+    boxSizing: 'border-box',
   });
 
   return (
@@ -257,9 +266,10 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
                   key={m.key}
                   onClick={() => { triggerHaptic('light'); setMood(mood === m.key ? '' : m.key); }}
                   data-testid={`mood-${m.key}`}
-                  style={chipStyle(mood === m.key)}
+                  style={uniformChipStyle(mood === m.key)}
                 >
-                  {m.emoji} {m.label}
+                  <span style={{ fontSize: '16px', lineHeight: 1, display: 'flex', alignItems: 'center' }}>{m.emoji}</span>
+                  <span>{m.label}</span>
                 </button>
               ))}
             </div>
@@ -272,9 +282,10 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
                   key={t.key}
                   onClick={() => { triggerHaptic('light'); setSessionType(sessionType === t.key ? '' : t.key); }}
                   data-testid={`session-type-${t.key}`}
-                  style={chipStyle(sessionType === t.key)}
+                  style={uniformChipStyle(sessionType === t.key)}
                 >
-                  {t.emoji} {t.label}
+                  <span style={{ fontSize: '16px', lineHeight: 1, display: 'flex', alignItems: 'center' }}>{t.emoji}</span>
+                  <span>{t.label}</span>
                 </button>
               ))}
             </div>
@@ -377,9 +388,9 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-            <button onClick={() => { triggerHaptic('light'); setIsGi(true); }} data-testid="button-gi" style={chipStyle(isGi)}>Gi</button>
-            <button onClick={() => { triggerHaptic('light'); setIsGi(false); }} data-testid="button-nogi" style={chipStyle(!isGi)}>No-Gi</button>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+            <button onClick={() => { triggerHaptic('light'); setIsGi(true); }} data-testid="button-gi" style={uniformChipStyle(isGi)}>Gi</button>
+            <button onClick={() => { triggerHaptic('light'); setIsGi(false); }} data-testid="button-nogi" style={uniformChipStyle(!isGi)}>No-Gi</button>
           </div>
 
           <button
