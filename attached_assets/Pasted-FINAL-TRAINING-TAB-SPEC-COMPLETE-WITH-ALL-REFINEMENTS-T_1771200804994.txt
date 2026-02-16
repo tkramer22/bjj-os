@@ -1,0 +1,411 @@
+FINAL TRAINING TAB SPEC — COMPLETE WITH ALL REFINEMENTS
+
+This replaces ALL previous training tab specs and fix files.
+Apply everything in this document.
+
+══════════════════════════════════════════════════════════════════════════
+CORE PRINCIPLE: THIS IS A TRAINING PARTNER, NOT A DASHBOARD
+══════════════════════════════════════════════════════════════════════════
+
+Every label, every word, every interaction should feel like your
+BJJ training partner — not a corporate analytics tool. No stiff
+labels. No spreadsheet language. Conversational, warm, premium.
+
+══════════════════════════════════════════════════════════════════════════
+TAB BAR
+══════════════════════════════════════════════════════════════════════════
+
+Bottom tabs: Chat | Videos | Training | Profile
+
+- “Saved” is gone from the bottom bar
+- Saved videos now live inside Videos tab as a sub-tab: Library | Saved
+- Training icon: calendar glyph, matching weight of other icons
+- Active: purple icon + label. Inactive: gray icon + label.
+
+══════════════════════════════════════════════════════════════════════════
+MULTIPLE SESSIONS PER DAY
+══════════════════════════════════════════════════════════════════════════
+
+REMOVE the UNIQUE constraint on (user_id, session_date). Users can
+log multiple sessions per day (morning class + evening sparring,
+competition day, etc.).
+
+Calendar dot logic:
+
+- Purple dot = at least one session that day
+- One dot regardless of how many sessions (not multiple dots)
+
+Tapping a date with ONE session: opens bottom sheet in edit mode
+with that session’s data pre-filled. “Add another session” link
+at the bottom of the sheet.
+
+Tapping a date with MULTIPLE sessions: shows a mini list of that
+day’s sessions:
+
+┌─────────────────────────────────────────────┐
+│  Monday, February 16                        │
+│                                             │
+│  🔥 Great · Class · Gi         10:00 AM     │
+│  Armbar · Triangle                    Edit  │
+│                                             │
+│  👍 Good · Sparring · No-Gi    7:00 PM      │
+│  Guard Pass · Back Take               Edit  │
+│                                             │
+│  ┌──────────────────────────┐               │
+│  │   + Add another session  │               │
+│  └──────────────────────────┘               │
+└─────────────────────────────────────────────┘
+
+Tapping “Edit” on a session opens the bottom sheet pre-filled.
+Tapping “+ Add another session” opens a fresh bottom sheet.
+
+Tapping a date with NO sessions: opens fresh bottom sheet to log.
+
+Streak logic: counts UNIQUE DAYS trained, not session count.
+
+══════════════════════════════════════════════════════════════════════════
+TRAINING TAB — MAIN SCREEN LAYOUT
+══════════════════════════════════════════════════════════════════════════
+
+From top to bottom:
+
+HEADER:
+
+- “Training” on the left — bold, same size as “Technique Library”
+  and “Prof. OS” headers on other tabs
+- Nothing on the right. No buttons. Clean.
+
+STREAK LINE:
+
+- Single line below header:
+  🔥 12 day streak
+- White text for number, secondary gray for “day streak”
+- Flame emoji adds warmth
+- When streak is 0: “Start your streak” in gray (no flame)
+- Tapping the streak line opens a simple stats detail view:
+  Sessions this week: 4
+  Sessions this month: 18
+  Longest streak: 23 days
+  Total sessions: 87
+  (Simple list, same dark card styling, back arrow to return)
+
+MONTHLY CALENDAR GRID:
+
+- Dark surface card background, rounded corners matching app’s cards
+- Month/year header: “February 2026” centered
+- Left/right chevrons to navigate months
+- Swipe left/right also works
+- Day headers: S M T W T F S in small secondary gray text
+
+Date cells:
+
+- UNTRAINED past dates: just the number in gray, no circle
+- TRAINED dates: number inside a FILLED PURPLE CIRCLE with
+  subtle glow/shadow
+- TODAY (not logged): number with a PURPLE RING (unfilled) —
+  this is the visual invitation to tap
+- TODAY (logged): filled purple circle with white ring around it
+- FUTURE dates: numbers at lower opacity (dimmed)
+
+Tap behavior:
+
+- Tapping any past or today date: brief highlight flash (100ms),
+  then appropriate action (log, edit, or multi-session list)
+- Tapping future dates: nothing happens
+- Haptic: light tap on date press (iOS only)
+
+NO weekly dots row. NO “+ Log” button. NO “Log today’s training”
+card. The calendar IS the interface.
+
+FIRST-TIME HINT:
+If user has fewer than 3 total sessions logged, show a subtle
+gray text line below the calendar grid:
+“Tap a date to log your session”
+After 3 sessions, this hint disappears permanently.
+
+RECENT SESSIONS (scrollable below calendar):
+Show last 5-7 sessions as compact cards:
+
+┌─────────────────────────────────────────────┐
+│  Feb 16 · 🔥 Great · Class · Gi            │
+│  Armbar · Half Guard Sweeps                 │
+│  “Hit the kimura chain twice…”            │
+└─────────────────────────────────────────────┘
+
+- Date, mood emoji, session type, gi/nogi on first line
+- Technique chips on second line
+- Notes preview (first line, truncated) in quotes on third line
+  Only show notes line if they actually wrote notes
+- Cards styled exactly like other cards in the app
+- Tapping a card opens that session for editing
+
+PROFESSOR OS INSIGHT CARD (at bottom of scroll):
+Purple OS avatar on the left, message on the right.
+Dark card, slightly different from session cards (maybe subtle
+purple border or left accent stripe to distinguish it).
+
+The tone must sound like Professor OS — conversational,
+encouraging, specific. NOT corporate analytics language.
+
+Examples of GOOD insight messages:
+
+- “4 sessions this week. You’re in a groove — don’t let up.”
+- “No training today? Good. Your body needs this.”
+- “You’ve been all over armbars lately. That obsession phase
+  is where breakthroughs happen.”
+- “🔥 14 days straight. That’s discipline. That’s growth.”
+- “First session logged! This is where the journey starts.”
+- “You trained twice today. That’s a competitor’s mentality.”
+
+Examples of BAD insight messages (do NOT write like this):
+
+- “You’ve trained 4 times this week. Consistency is up 15%.”
+- “Rest day detected. Recovery is important for performance.”
+- “Your most practiced technique this month is armbar.”
+
+Template logic for v1:
+
+```
+if (streak >= 14): "🔥 {streak} days straight. That's elite."
+if (streak >= 7): "🔥 {streak} days. You're building something."
+if (sessionsThisWeek >= 5): "5 sessions this week. You're a machine."
+if (sessionsThisWeek >= 3): "{n} sessions this week. Solid work."
+if (daysSinceLastSession == 0 && sessionsToday > 1): 
+  "Twice today. That's a competitor's mentality."
+if (daysSinceLastSession == 1): "Back on the mat. Let's go."
+if (daysSinceLastSession >= 2): "Haven't seen you in a couple days. Your mat is waiting."
+if (daysSinceLastSession >= 5): "It's been a minute. No judgment — just get back."
+if (totalSessions == 1): "First one logged. This is where it starts."
+if (totalSessions == 0): "Log your first session and I'll start tracking your journey."
+if (mostLoggedTechnique): 
+  "You've been drilling {technique} a lot. That focus pays off."
+```
+
+══════════════════════════════════════════════════════════════════════════
+BOTTOM SHEET — QUICK LOG
+══════════════════════════════════════════════════════════════════════════
+
+Slides up from bottom. Calendar visible but dimmed behind.
+Drag handle at top (small gray bar). Swipe down to dismiss. X button
+top right to close.
+
+Background: app’s elevated surface color
+Rounded top corners (16px or matching existing modals)
+
+LAYOUT (top to bottom):
+
+1. DATE
+   “How was training?”
+   Monday, February 16
+   
+   “How was training?” in bold white (the header — conversational)
+   Date in secondary gray below it
+1. MOOD (one row, 4 chips)
+   🔥 Great    👍 Good    😤 Tough    💀 Rough
+- One row, no wrapping
+- No label above (no “How did it feel?” — the header already asks)
+- Tap to select, selected = purple background + white text
+- Only one selectable
+- Haptic: light tap on selection
+1. SESSION TYPE (one row, 4 chips)
+   🥋 Class    🤼 Sparring    📚 Open Mat    🏆 Comp
+- One row, no wrapping
+- NO label above (no “Session Type” text — chips are self-explanatory)
+- Tap to select, selected = purple background + white text
+- Only one selectable
+- Haptic: light tap on selection
+1. TECHNIQUES
+   Label: “What did you work on?” (conversational, secondary gray)
+   
+   CHIP ROW (recent or defaults):
+   For new users (fewer than 3 sessions):
+   Armbar · Triangle · Guard Pass · Sweep · Takedown · Back Take
+   
+   For returning users:
+   Their last 6-8 logged techniques (most recent first)
+   
+   Chips are tappable — tap to select (turns purple), tap again
+   to deselect. Multiple can be selected.
+   
+   SEARCH FIELD below chips:
+   “Search techniques…”
+   Autocomplete from taxonomy — DEDUPLICATED results (no duplicate
+   Armbars). Tapping a result adds it as a selected chip.
+   
+   Selected techniques show as purple chips above the search field
+   with X to remove each.
+1. GI / NO-GI (toggle)
+   Simple two-segment toggle: Gi | No-Gi
+   Default: Gi selected (purple)
+   No label needed — self-explanatory
+1. ADD MORE ▾ (expandable)
+   Tapping expands to reveal:
+- Duration: 30m | 1hr | 1.5hr | 2hr | 2.5hr | 3hr
+  (horizontal scrollable chips)
+- Rolls: [ - ] 0 [ + ]
+- Submissions: [ - ] 0 [ + ]
+- Taps: [ - ] 0 [ + ]
+- Notes: “Add a note…” (text field, expandable)
+   
+   Number steppers styled simply, haptic light tap on each press.
+   
+   When expanded, text changes to “Less ▴”
+   All of these fields are optional.
+1. SAVE BUTTON (full width, bottom)
+   “Save” — purple background, white text, full width
+   Matches existing button styling in app
+   
+   ON SAVE:
+   a) Haptic: medium impact
+   b) Bottom sheet slides down
+   c) Purple dot appears/stays on calendar (scale animation, 300ms)
+   d) Streak line updates
+   e) Toast slides down from top (auto-dismiss 2 seconds):
+   “Session logged · 🔥 1 day streak”
+   For milestones (7, 14, 21, 30, 60, 90, 100):
+   “🔥 14 day streak! Keep pushing.”
+   f) New session card appears in recent sessions list
+   g) Haptic: success notification for streak milestones
+
+EDIT MODE:
+When editing an existing session, all fields pre-filled.
+Button says “Update” instead of “Save”
+Red “Delete session” text link below the Update button.
+Deleting shows a brief confirmation: “Delete this session?”
+with Cancel and Delete options.
+
+══════════════════════════════════════════════════════════════════════════
+EMPTY STATE (first visit, zero sessions)
+══════════════════════════════════════════════════════════════════════════
+
+Calendar grid visible but empty.
+Streak line shows: “Start your streak”
+
+Below the calendar, centered:
+
+“Track Your Training”
+“Tap a date to log your first session.”
+
+Bold white header, gray subtitle. Clean. Minimal.
+No illustrations, no icons, no emojis in the empty state.
+Premium and restrained.
+
+After first session is logged, empty state disappears forever.
+
+══════════════════════════════════════════════════════════════════════════
+PROFESSOR OS SYSTEM PROMPT INTEGRATION
+══════════════════════════════════════════════════════════════════════════
+
+Update buildSystemPrompt() to inject training data:
+
+Add a section to the DYNAMIC part of the system prompt:
+
+TRAINING LOG:
+Current streak: {streak} days
+Sessions this week: {count}
+Last 5 sessions:
+
+- Feb 16: Great, Class, Gi. Techniques: Armbar, Half Guard Sweeps.
+  Notes: “Hit the kimura chain twice”
+- Feb 15: Good, Sparring, No-Gi. Techniques: Guard Pass, Back Take.
+- Feb 14: Tough, Open Mat, Gi. Techniques: Triangle, Sweep.
+  [etc.]
+  Most trained techniques (last 30 days): Armbar (5x), Half Guard
+  Sweeps (4x), Guard Pass (3x)
+  Wins: Armbar, Triangle, Back Take
+  Working On: Guard Retention, Passing
+
+Professor OS should reference this NATURALLY when relevant:
+
+- “You’ve been drilling armbars all week — want to add a
+  kimura chain to complement it?”
+- “3 tough sessions in a row. You’re in a grind phase.
+  That’s where growth happens.”
+- “Your guard retention keeps showing up in ‘working on’ —
+  let’s fix that tonight.”
+
+DO NOT force training references when not relevant.
+
+══════════════════════════════════════════════════════════════════════════
+HAPTIC FEEDBACK (iOS ONLY)
+══════════════════════════════════════════════════════════════════════════
+
+import { Haptics, ImpactStyle } from ‘@capacitor/haptics’;
+
+- Date tap: Haptics.impact({ style: ImpactStyle.Light })
+- Mood selection: Haptics.impact({ style: ImpactStyle.Light })
+- Session type selection: Haptics.impact({ style: ImpactStyle.Light })
+- Technique chip tap: Haptics.impact({ style: ImpactStyle.Light })
+- Number stepper +/-: Haptics.impact({ style: ImpactStyle.Light })
+- Save session: Haptics.impact({ style: ImpactStyle.Medium })
+- Streak milestone: Haptics.notification({ type: ‘success’ })
+- Month swipe: no haptic
+
+Only on iOS (Capacitor.getPlatform() === ‘ios’). No haptics on web.
+
+══════════════════════════════════════════════════════════════════════════
+DESIGN RULES (NON-NEGOTIABLE)
+══════════════════════════════════════════════════════════════════════════
+
+COLORS:
+
+- All selected states: PURPLE (app accent color). No green. No blue.
+- Text primary: white
+- Text secondary: gray (same gray as instructor names on video cards)
+- Backgrounds: same dark as rest of app
+- Card surfaces: same elevated dark as video cards
+- Destructive: red (delete only)
+- Streak flame: emoji handles the color naturally
+
+TYPOGRAPHY:
+
+- Same font as rest of app throughout
+- Same sizes, same weights
+- NO new fonts, NO different sizes
+
+SPACING:
+
+- 8px grid system
+- Same padding as other screens
+- Same card border radius
+- Consistent with Chat, Videos, Profile tabs
+
+ANIMATIONS:
+
+- Subtle, fast (200-300ms), ease-out
+- No bounces, no springs, no playful physics
+- Premium and restrained
+
+══════════════════════════════════════════════════════════════════════════
+TESTING BEFORE PUBLISH
+══════════════════════════════════════════════════════════════════════════
+
+□ 4 tabs: Chat, Videos, Training, Profile
+□ Videos tab has Library | Saved sub-tabs
+□ All saved videos accessible and working
+□ Training tab: clean header, streak line, calendar grid
+□ No “+ Log” button, no weekly dots row, no “Log today” card
+□ Today’s date has purple ring (unfilled) when not logged
+□ Tapping date opens bottom sheet
+□ Bottom sheet: “How was training?”, mood emojis, session types,
+technique chips, gi/nogi, expandable details, save button
+□ Mood chips have emojis, one row, selected = purple (NOT green)
+□ Session types: 4 options, one row
+□ Technique autocomplete: no duplicates
+□ Default technique chips for new users
+□ Saving: haptic, dot appears, streak updates, toast shows
+□ Multiple sessions per day works
+□ Tapping date with multiple sessions shows list
+□ Edit mode pre-fills data
+□ Delete works with confirmation
+□ Recent sessions show below calendar with notes preview
+□ Professor OS insight card at bottom with warm tone
+□ Empty state for first visit
+□ First-time hint text disappears after 3 sessions
+□ Stats detail accessible by tapping streak
+□ Professor OS in Chat can reference training data
+□ Visual consistency with rest of app
+□ Dark theme matches exactly
+□ No corporate language anywhere
+
+DO NOT PUBLISH UNTIL I CONFIRM.

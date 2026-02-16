@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { MessageCircle, BookOpen, User, Dumbbell } from "lucide-react";
+import { MessageCircle, BookOpen, User, CalendarDays } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 
 export function IOSBottomNav() {
@@ -8,7 +8,7 @@ export function IOSBottomNav() {
   const navItems = [
     { path: "/ios-chat", icon: MessageCircle, label: "Chat" },
     { path: "/ios-library", icon: BookOpen, label: "Videos" },
-    { path: "/ios-training", icon: Dumbbell, label: "Training" },
+    { path: "/ios-training", icon: CalendarDays, label: "Training" },
     { path: "/ios-profile", icon: User, label: "Profile" },
   ];
 

@@ -1,8 +1,7 @@
-import { useState, useMemo, useCallback } from "react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { Plus, Flame, Calendar, TrendingUp, ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, ArrowLeft, Bot } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
-import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { TrainingLogSheet } from "@/components/training-log-sheet";
 
@@ -34,31 +33,32 @@ interface TrainingStats {
   monthCount: number;
   totalCount: number;
   trainedToday: boolean;
+  sessionsToday: number;
+  daysSinceLastSession: number;
+  mostLoggedTechnique: string | null;
 }
 
-const MOODS: Record<string, string> = {
+const MOOD_EMOJI: Record<string, string> = {
+  great: '\uD83D\uDD25',
+  good: '\uD83D\uDC4D',
+  tough: '\uD83D\uDE24',
+  rough: '\uD83D\uDC80',
+};
+
+const MOOD_LABELS: Record<string, string> = {
   great: 'Great',
   good: 'Good',
-  okay: 'Okay',
   tough: 'Tough',
   rough: 'Rough',
 };
 
-const MOOD_COLORS: Record<string, string> = {
-  great: '#22C55E',
-  good: '#86EFAC',
-  okay: '#FBBF24',
-  tough: '#F97316',
-  rough: '#EF4444',
-};
-
-const SESSION_TYPES: Record<string, string> = {
-  drilling: 'Drilling',
-  sparring: 'Sparring',
-  competition: 'Competition',
-  private: 'Private',
-  open_mat: 'Open Mat',
+const SESSION_TYPE_LABELS: Record<string, string> = {
   class: 'Class',
+  sparring: 'Sparring',
+  open_mat: 'Open Mat',
+  competition: 'Comp',
+  drilling: 'Drilling',
+  private: 'Private',
 };
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -68,7 +68,6 @@ function getMonthDays(year: number, month: number) {
   const lastDay = new Date(year, month + 1, 0);
   const startOffset = firstDay.getDay();
   const totalDays = lastDay.getDate();
-
   const days: (number | null)[] = [];
   for (let i = 0; i < startOffset; i++) days.push(null);
   for (let i = 1; i <= totalDays; i++) days.push(i);
@@ -79,12 +78,33 @@ function formatDateStr(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+function getInsightMessage(stats: TrainingStats): string {
+  const { currentStreak, weekCount, sessionsToday, daysSinceLastSession, totalCount, mostLoggedTechnique } = stats;
+
+  if (totalCount === 0) return "Log your first session and I'll start tracking your journey.";
+  if (totalCount === 1) return "First one logged. This is where it starts.";
+  if (currentStreak >= 14) return `\uD83D\uDD25 ${currentStreak} days straight. That's elite.`;
+  if (currentStreak >= 7) return `\uD83D\uDD25 ${currentStreak} days. You're building something.`;
+  if (weekCount >= 5) return `${weekCount} sessions this week. You're a machine.`;
+  if (daysSinceLastSession === 0 && sessionsToday > 1) return "Twice today. That's a competitor's mentality.";
+  if (weekCount >= 3) return `${weekCount} sessions this week. Solid work.`;
+  if (daysSinceLastSession === 1) return "Back on the mat. Let's go.";
+  if (daysSinceLastSession >= 5) return "It's been a minute. No judgment \u2014 just get back.";
+  if (daysSinceLastSession >= 2) return "Haven't seen you in a couple days. Your mat is waiting.";
+  if (mostLoggedTechnique) return `You've been drilling ${mostLoggedTechnique} a lot. That focus pays off.`;
+  if (currentStreak >= 2) return `\uD83D\uDD25 ${currentStreak} day streak. Keep it rolling.`;
+  return "Your mat is waiting. Let's get after it.";
+}
+
 export default function IOSTrainingPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [showLogSheet, setShowLogSheet] = useState(false);
   const [editingSession, setEditingSession] = useState<TrainingSession | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [showStatsDetail, setShowStatsDetail] = useState(false);
+  const [showDaySessionsList, setShowDaySessionsList] = useState(false);
+  const [daySessionsDate, setDaySessionsDate] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -98,29 +118,38 @@ export default function IOSTrainingPage() {
     enabled: !!user?.id,
   });
 
-  const { data: sessionsData, isLoading } = useQuery<{ sessions: TrainingSession[] }>({
+  const { data: sessionsData } = useQuery<{ sessions: TrainingSession[] }>({
     queryKey: [`/api/training/sessions?month=${currentMonth + 1}&year=${currentYear}`],
     enabled: !!user?.id,
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (sessionId: number) => {
-      await apiRequest('DELETE', `/api/training/sessions/${sessionId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith('/api/training/') });
-      triggerHaptic('medium');
-      toast({ title: "Session deleted" });
-    },
+  const { data: recentData } = useQuery<{ sessions: TrainingSession[] }>({
+    queryKey: ['/api/training/sessions'],
+    enabled: !!user?.id,
   });
 
   const sessions = sessionsData?.sessions || [];
-  const stats = statsData || { currentStreak: 0, longestStreak: 0, weekCount: 0, monthCount: 0, totalCount: 0, trainedToday: false };
+  const allSessions = recentData?.sessions || [];
+  const stats = statsData || {
+    currentStreak: 0, longestStreak: 0, weekCount: 0, monthCount: 0,
+    totalCount: 0, trainedToday: false, sessionsToday: 0, daysSinceLastSession: -1,
+    mostLoggedTechnique: null,
+  };
 
   const trainedDates = useMemo(() => {
     const set = new Set<string>();
     sessions.forEach(s => set.add(s.sessionDate));
     return set;
+  }, [sessions]);
+
+  const sessionsByDate = useMemo(() => {
+    const map = new Map<string, TrainingSession[]>();
+    sessions.forEach(s => {
+      const existing = map.get(s.sessionDate) || [];
+      existing.push(s);
+      map.set(s.sessionDate, existing);
+    });
+    return map;
   }, [sessions]);
 
   const days = useMemo(() => getMonthDays(currentYear, currentMonth), [currentYear, currentMonth]);
@@ -130,7 +159,6 @@ export default function IOSTrainingPage() {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   const navigateMonth = useCallback((dir: 1 | -1) => {
-    triggerHaptic('light');
     setCurrentMonth(prev => {
       const newMonth = prev + dir;
       if (newMonth < 0) {
@@ -147,25 +175,28 @@ export default function IOSTrainingPage() {
 
   const handleDayPress = useCallback((day: number) => {
     const dateStr = formatDateStr(currentYear, currentMonth, day);
+    const futureCheck = new Date(currentYear, currentMonth, day);
+    futureCheck.setHours(0, 0, 0, 0);
+    const todayCheck = new Date();
+    todayCheck.setHours(0, 0, 0, 0);
+    if (futureCheck > todayCheck) return;
+
     triggerHaptic('light');
-    const existing = sessions.find(s => s.sessionDate === dateStr);
-    if (existing) {
-      setEditingSession(existing);
-      setSelectedDate(dateStr);
-      setShowLogSheet(true);
-    } else {
+    const daySessions = sessionsByDate.get(dateStr) || [];
+
+    if (daySessions.length === 0) {
       setEditingSession(null);
       setSelectedDate(dateStr);
       setShowLogSheet(true);
+    } else if (daySessions.length === 1) {
+      setEditingSession(daySessions[0]);
+      setSelectedDate(dateStr);
+      setShowLogSheet(true);
+    } else {
+      setDaySessionsDate(dateStr);
+      setShowDaySessionsList(true);
     }
-  }, [currentYear, currentMonth, sessions]);
-
-  const handleLogPress = useCallback(() => {
-    triggerHaptic('medium');
-    setEditingSession(null);
-    setSelectedDate(todayStr);
-    setShowLogSheet(true);
-  }, [todayStr]);
+  }, [currentYear, currentMonth, sessionsByDate]);
 
   const handleSheetClose = useCallback(() => {
     setShowLogSheet(false);
@@ -174,199 +205,147 @@ export default function IOSTrainingPage() {
   }, []);
 
   const handleSheetSave = useCallback(() => {
-    queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith('/api/training/') });
+    queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith?.('/api/training') });
     setShowLogSheet(false);
     setEditingSession(null);
     setSelectedDate(null);
+    setShowDaySessionsList(false);
   }, [queryClient]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.date) {
+        setEditingSession(null);
+        setSelectedDate(detail.date);
+        setShowLogSheet(true);
+      }
+    };
+    window.addEventListener('training-add-another', handler);
+    return () => window.removeEventListener('training-add-another', handler);
+  }, []);
+
   const recentSessions = useMemo(() => {
-    return [...sessions]
+    return [...allSessions]
       .sort((a, b) => b.sessionDate.localeCompare(a.sessionDate))
-      .slice(0, 5);
-  }, [sessions]);
+      .slice(0, 7);
+  }, [allSessions]);
 
-  const weekDots = useMemo(() => {
-    const result: boolean[] = [];
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - dayOfWeek + i);
-      const str = formatDateStr(d.getFullYear(), d.getMonth(), d.getDate());
-      result.push(trainedDates.has(str));
-    }
-    return result;
-  }, [trainedDates]);
-
-  return (
-    <div
-      className="ios-page"
-      style={{
-        minHeight: '100vh',
-        background: '#0A0A0B',
-        color: '#FFFFFF',
-        paddingBottom: '100px',
-      }}
-    >
-      <div style={{
-        padding: '16px 20px',
-        paddingTop: 'max(16px, env(safe-area-inset-top))',
-        borderBottom: '1px solid #2A2A2E',
-        position: 'sticky',
-        top: 0,
-        background: '#0A0A0B',
-        zIndex: 10,
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0 }} data-testid="text-training-title">Training</h1>
-          <button
-            onClick={handleLogPress}
-            data-testid="button-log-training"
-            style={{
-              background: '#8B5CF6',
-              border: 'none',
-              borderRadius: '12px',
-              padding: '10px 18px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: '#FFFFFF',
-              fontSize: '14px',
-              fontWeight: 600,
-            }}
-          >
-            <Plus size={18} />
-            Log
-          </button>
+  if (showStatsDetail) {
+    return (
+      <div className="ios-page" style={{ minHeight: '100vh', background: '#0A0A0B', color: '#FFFFFF', paddingBottom: '100px' }}>
+        <div style={{ padding: '16px 20px', paddingTop: 'max(16px, env(safe-area-inset-top))', borderBottom: '1px solid #2A2A2E', position: 'sticky', top: 0, background: '#0A0A0B', zIndex: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button onClick={() => setShowStatsDetail(false)} data-testid="button-stats-back" style={{ background: 'transparent', border: 'none', padding: '4px', cursor: 'pointer', color: '#FFFFFF' }}>
+              <ArrowLeft size={24} />
+            </button>
+            <h1 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>Training Stats</h1>
+          </div>
+        </div>
+        <div style={{ padding: '20px' }}>
+          <div style={{ background: '#121214', borderRadius: '12px', overflow: 'hidden' }}>
+            {[
+              { label: 'Sessions this week', value: stats.weekCount },
+              { label: 'Sessions this month', value: stats.monthCount },
+              { label: 'Longest streak', value: `${stats.longestStreak} days` },
+              { label: 'Total sessions', value: stats.totalCount },
+            ].map((item, i) => (
+              <div key={i} style={{ padding: '16px 20px', borderBottom: i < 3 ? '1px solid #1A1A1D' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '15px', color: '#A1A1AA' }}>{item.label}</span>
+                <span style={{ fontSize: '17px', fontWeight: 600, color: '#FFFFFF' }}>{item.value}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+    );
+  }
 
-      <div style={{ padding: '16px 20px' }}>
-        <div style={{
-          display: 'flex',
-          gap: '12px',
-          marginBottom: '20px',
-        }}>
-          <div style={{
-            flex: 1,
-            background: '#121214',
-            borderRadius: '12px',
-            padding: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-          }} data-testid="stat-streak">
-            <Flame size={22} color="#F97316" />
-            <div>
-              <div style={{ fontSize: '22px', fontWeight: 700, color: '#FFFFFF' }}>{stats.currentStreak}</div>
-              <div style={{ fontSize: '11px', color: '#71717A' }}>day streak</div>
-            </div>
-          </div>
-          <div style={{
-            flex: 1,
-            background: '#121214',
-            borderRadius: '12px',
-            padding: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-          }} data-testid="stat-week">
-            <Calendar size={22} color="#8B5CF6" />
-            <div>
-              <div style={{ fontSize: '22px', fontWeight: 700, color: '#FFFFFF' }}>{stats.weekCount}</div>
-              <div style={{ fontSize: '11px', color: '#71717A' }}>this week</div>
-            </div>
-          </div>
-          <div style={{
-            flex: 1,
-            background: '#121214',
-            borderRadius: '12px',
-            padding: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-          }} data-testid="stat-month">
-            <TrendingUp size={22} color="#22C55E" />
-            <div>
-              <div style={{ fontSize: '22px', fontWeight: 700, color: '#FFFFFF' }}>{stats.monthCount}</div>
-              <div style={{ fontSize: '11px', color: '#71717A' }}>this month</div>
-            </div>
-          </div>
-        </div>
+  const daySessionsForList = daySessionsDate ? (sessionsByDate.get(daySessionsDate) || []) : [];
+  const daySessionsDateObj = daySessionsDate ? new Date(daySessionsDate + 'T00:00:00') : null;
 
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '8px',
-          marginBottom: '20px',
-        }} data-testid="week-dots">
-          {WEEKDAYS.map((day, i) => (
-            <div key={i} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '10px', color: '#71717A', marginBottom: '4px' }}>{day}</div>
-              <div style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                background: weekDots[i] ? '#8B5CF6' : '#1A1A1D',
-                border: weekDots[i] ? 'none' : '1px solid #2A2A2E',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                {weekDots[i] && (
-                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#FFFFFF' }} />
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+  return (
+    <div className="ios-page" style={{ minHeight: '100vh', background: '#0A0A0B', color: '#FFFFFF', paddingBottom: '100px' }}>
+      <div style={{ padding: '16px 20px', paddingTop: 'max(16px, env(safe-area-inset-top))', position: 'sticky', top: 0, background: '#0A0A0B', zIndex: 10 }}>
+        <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0 }} data-testid="text-training-title">Training</h1>
+      </div>
 
-        <div style={{
-          background: '#121214',
-          borderRadius: '16px',
-          padding: '16px',
-          marginBottom: '20px',
-        }} data-testid="calendar-grid">
+      <div style={{ padding: '0 20px' }}>
+        <button
+          onClick={() => { triggerHaptic('light'); setShowStatsDetail(true); }}
+          data-testid="button-streak-line"
+          style={{ background: 'transparent', border: 'none', padding: '0 0 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', width: '100%' }}
+        >
+          {stats.currentStreak > 0 ? (
+            <>
+              <span style={{ fontSize: '16px' }}>{'\uD83D\uDD25'}</span>
+              <span style={{ fontSize: '16px', fontWeight: 700, color: '#FFFFFF' }}>{stats.currentStreak}</span>
+              <span style={{ fontSize: '16px', color: '#71717A' }}>day streak</span>
+            </>
+          ) : (
+            <span style={{ fontSize: '16px', color: '#71717A' }}>Start your streak</span>
+          )}
+        </button>
+
+        <div style={{ background: '#121214', borderRadius: '12px', padding: '16px', marginBottom: '16px' }} data-testid="calendar-grid">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <button
-              onClick={() => navigateMonth(-1)}
-              data-testid="button-prev-month"
-              style={{ background: 'transparent', border: 'none', padding: '4px', cursor: 'pointer', color: '#71717A' }}
-            >
+            <button onClick={() => navigateMonth(-1)} data-testid="button-prev-month" style={{ background: 'transparent', border: 'none', padding: '4px', cursor: 'pointer', color: '#71717A' }}>
               <ChevronLeft size={20} />
             </button>
             <span style={{ fontSize: '15px', fontWeight: 600, color: '#FFFFFF' }} data-testid="text-current-month">
               {monthNames[currentMonth]} {currentYear}
             </span>
-            <button
-              onClick={() => navigateMonth(1)}
-              data-testid="button-next-month"
-              style={{ background: 'transparent', border: 'none', padding: '4px', cursor: 'pointer', color: '#71717A' }}
-            >
+            <button onClick={() => navigateMonth(1)} data-testid="button-next-month" style={{ background: 'transparent', border: 'none', padding: '4px', cursor: 'pointer', color: '#71717A' }}>
               <ChevronRight size={20} />
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
             {WEEKDAYS.map((d, i) => (
-              <div key={i} style={{ textAlign: 'center', fontSize: '11px', color: '#71717A', padding: '4px 0', fontWeight: 500 }}>
-                {d}
-              </div>
+              <div key={i} style={{ textAlign: 'center', fontSize: '11px', color: '#71717A', padding: '4px 0', fontWeight: 500 }}>{d}</div>
             ))}
             {days.map((day, i) => {
-              if (day === null) {
-                return <div key={`empty-${i}`} />;
-              }
+              if (day === null) return <div key={`empty-${i}`} />;
+
               const dateStr = formatDateStr(currentYear, currentMonth, day);
               const isTrained = trainedDates.has(dateStr);
               const isToday = dateStr === todayStr;
+              const cellDate = new Date(currentYear, currentMonth, day);
+              cellDate.setHours(0, 0, 0, 0);
+              const todayDate = new Date();
+              todayDate.setHours(0, 0, 0, 0);
+              const isFuture = cellDate > todayDate;
+
+              let bg = 'transparent';
+              let color = '#71717A';
+              let border = 'none';
+              let fontWeight = 400;
+              let boxShadow = 'none';
+              let outerRing = false;
+
+              if (isFuture) {
+                color = 'rgba(113, 113, 122, 0.4)';
+              } else if (isToday && isTrained) {
+                bg = '#8B5CF6';
+                color = '#FFFFFF';
+                fontWeight = 600;
+                boxShadow = '0 0 8px rgba(139, 92, 246, 0.4)';
+                outerRing = true;
+              } else if (isToday && !isTrained) {
+                border = '2px solid #8B5CF6';
+                color = '#8B5CF6';
+                fontWeight = 600;
+              } else if (isTrained) {
+                bg = '#8B5CF6';
+                color = '#FFFFFF';
+                fontWeight = 600;
+                boxShadow = '0 0 6px rgba(139, 92, 246, 0.3)';
+              }
 
               return (
                 <button
                   key={day}
-                  onClick={() => handleDayPress(day)}
+                  onClick={() => !isFuture && handleDayPress(day)}
                   data-testid={`calendar-day-${day}`}
                   style={{
                     width: '100%',
@@ -375,13 +354,18 @@ export default function IOSTrainingPage() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: '50%',
-                    border: isToday && !isTrained ? '1px solid #8B5CF6' : 'none',
-                    background: isTrained ? '#8B5CF6' : 'transparent',
-                    color: isTrained ? '#FFFFFF' : isToday ? '#8B5CF6' : '#A1A1AA',
+                    border,
+                    background: bg,
+                    color,
                     fontSize: '13px',
-                    fontWeight: isTrained || isToday ? 600 : 400,
-                    cursor: 'pointer',
+                    fontWeight,
+                    cursor: isFuture ? 'default' : 'pointer',
                     padding: 0,
+                    boxShadow,
+                    position: 'relative',
+                    outline: outerRing ? '2px solid rgba(255, 255, 255, 0.6)' : 'none',
+                    outlineOffset: '2px',
+                    transition: 'transform 0.1s ease-out',
                   }}
                 >
                   {day}
@@ -391,56 +375,38 @@ export default function IOSTrainingPage() {
           </div>
         </div>
 
-        {!stats.trainedToday && (
-          <button
-            onClick={handleLogPress}
-            data-testid="button-log-today-cta"
-            style={{
-              width: '100%',
-              background: 'rgba(139, 92, 246, 0.08)',
-              border: '1px solid rgba(139, 92, 246, 0.2)',
-              borderRadius: '12px',
-              padding: '16px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              marginBottom: '20px',
-              color: '#FFFFFF',
-            }}
-          >
-            <div style={{
-              width: '40px', height: '40px', borderRadius: '50%',
-              background: 'rgba(139, 92, 246, 0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Plus size={20} color="#8B5CF6" />
-            </div>
-            <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: '15px', fontWeight: 600 }}>Log today's training</div>
-              <div style={{ fontSize: '12px', color: '#71717A' }}>
-                {stats.currentStreak > 0 
-                  ? `Keep your ${stats.currentStreak}-day streak going!`
-                  : 'Start building your streak!'
-                }
-              </div>
-            </div>
-          </button>
+        {stats.totalCount < 3 && (
+          <div style={{ textAlign: 'center', padding: '4px 0 16px', fontSize: '14px', color: '#71717A' }} data-testid="text-first-time-hint">
+            {stats.totalCount === 0 ? "Tap a date to log your first session." : "Tap a date to log your session"}
+          </div>
+        )}
+
+        {stats.totalCount === 0 && (
+          <div style={{ textAlign: 'center', padding: '20px 0 24px' }}>
+            <div style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF', marginBottom: '8px' }}>Track Your Training</div>
+            <div style={{ fontSize: '14px', color: '#71717A' }}>Tap a date to log your first session.</div>
+          </div>
         )}
 
         {recentSessions.length > 0 && (
-          <div>
+          <div style={{ marginBottom: '16px' }}>
             <h2 style={{ fontSize: '17px', fontWeight: 600, marginBottom: '12px', color: '#FFFFFF' }} data-testid="text-recent-sessions">
               Recent Sessions
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {recentSessions.map(session => {
                 const sessionDate = new Date(session.sessionDate + 'T00:00:00');
-                const dayName = sessionDate.toLocaleDateString('en-US', { weekday: 'short' });
                 const dateLabel = sessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const moodEmoji = session.mood ? MOOD_EMOJI[session.mood] || '' : '';
+                const moodLabel = session.mood ? MOOD_LABELS[session.mood] || '' : '';
+                const typeLabel = session.sessionType ? SESSION_TYPE_LABELS[session.sessionType] || session.sessionType : '';
+                const giLabel = session.isGi === false ? 'No-Gi' : session.isGi ? 'Gi' : '';
+                const firstLine = [dateLabel, moodEmoji ? `${moodEmoji} ${moodLabel}` : '', typeLabel, giLabel].filter(Boolean).join(' \u00B7 ');
+                const techNames = session.techniques?.map(t => t.technique_name).filter(Boolean).join(' \u00B7 ') || '';
+                const notesPreview = session.notes ? `"${session.notes.split('\n')[0].slice(0, 60)}${session.notes.length > 60 ? '\u2026' : ''}"` : '';
 
                 return (
-                  <div
+                  <button
                     key={session.id}
                     data-testid={`session-card-${session.id}`}
                     onClick={() => {
@@ -453,74 +419,129 @@ export default function IOSTrainingPage() {
                       background: '#121214',
                       borderRadius: '12px',
                       padding: '14px 16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
                       cursor: 'pointer',
+                      textAlign: 'left',
+                      border: 'none',
+                      width: '100%',
                     }}
                   >
-                    <div style={{
-                      width: '40px', height: '40px', borderRadius: '10px',
-                      background: session.mood ? `${MOOD_COLORS[session.mood]}15` : '#1A1A1D',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0,
-                    }}>
-                      <div style={{
-                        width: '10px', height: '10px', borderRadius: '50%',
-                        background: session.mood ? MOOD_COLORS[session.mood] : '#71717A',
-                      }} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 600, color: '#FFFFFF' }}>
-                          {dayName}, {dateLabel}
-                        </span>
-                        {session.sessionType && (
-                          <span style={{
-                            fontSize: '11px',
-                            color: '#A78BFA',
-                            background: 'rgba(139, 92, 246, 0.1)',
-                            padding: '2px 8px',
-                            borderRadius: '100px',
-                          }}>
-                            {SESSION_TYPES[session.sessionType] || session.sessionType}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#71717A', marginTop: '2px' }}>
-                        {[
-                          session.mood ? MOODS[session.mood] : null,
-                          session.durationMinutes ? `${session.durationMinutes}min` : null,
-                          session.isGi === false ? 'No-Gi' : session.isGi ? 'Gi' : null,
-                          session.techniques?.length ? `${session.techniques.length} techniques` : null,
-                        ].filter(Boolean).join(' · ')}
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        triggerHaptic('medium');
-                        deleteMutation.mutate(session.id);
-                      }}
-                      data-testid={`button-delete-session-${session.id}`}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '8px',
-                        cursor: 'pointer',
-                        color: '#71717A',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+                    <div style={{ fontSize: '14px', fontWeight: 500, color: '#FFFFFF', marginBottom: techNames ? '4px' : '0' }}>{firstLine}</div>
+                    {techNames && <div style={{ fontSize: '13px', color: '#A78BFA', marginBottom: notesPreview ? '4px' : '0' }}>{techNames}</div>}
+                    {notesPreview && <div style={{ fontSize: '12px', color: '#71717A', fontStyle: 'italic' }}>{notesPreview}</div>}
+                  </button>
                 );
               })}
             </div>
           </div>
         )}
+
+        {stats.totalCount > 0 && (
+          <div
+            style={{
+              background: '#121214',
+              borderRadius: '12px',
+              padding: '16px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+              border: '1px solid rgba(139, 92, 246, 0.15)',
+              marginBottom: '16px',
+            }}
+            data-testid="insight-card"
+          >
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '50%',
+              background: 'rgba(139, 92, 246, 0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <Bot size={18} color="#8B5CF6" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '11px', color: '#8B5CF6', fontWeight: 600, marginBottom: '4px' }}>PROF. OS</div>
+              <div style={{ fontSize: '14px', color: '#E4E4E7', lineHeight: '1.5' }}>
+                {getInsightMessage(stats)}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {showDaySessionsList && daySessionsDate && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowDaySessionsList(false); }}
+          data-testid="day-sessions-list-backdrop"
+        >
+          <div style={{ background: '#121214', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', maxHeight: '70vh', overflowY: 'auto', paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+              <div style={{ width: '36px', height: '4px', borderRadius: '2px', background: '#3A3A3E' }} />
+            </div>
+            <div style={{ padding: '8px 20px 16px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFFFFF', marginBottom: '16px' }}>
+                {daySessionsDateObj?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {daySessionsForList.map(session => {
+                  const moodEmoji = session.mood ? MOOD_EMOJI[session.mood] || '' : '';
+                  const moodLabel = session.mood ? MOOD_LABELS[session.mood] || '' : '';
+                  const typeLabel = session.sessionType ? SESSION_TYPE_LABELS[session.sessionType] || session.sessionType : '';
+                  const giLabel = session.isGi === false ? 'No-Gi' : session.isGi ? 'Gi' : '';
+                  const techNames = session.techniques?.map(t => t.technique_name).filter(Boolean).join(' \u00B7 ') || '';
+
+                  return (
+                    <div key={session.id} style={{ background: '#1A1A1D', borderRadius: '10px', padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: techNames ? '6px' : '0' }}>
+                        <div style={{ fontSize: '14px', color: '#FFFFFF' }}>
+                          {[moodEmoji ? `${moodEmoji} ${moodLabel}` : '', typeLabel, giLabel].filter(Boolean).join(' \u00B7 ')}
+                        </div>
+                        <button
+                          onClick={() => {
+                            triggerHaptic('light');
+                            setEditingSession(session);
+                            setSelectedDate(session.sessionDate);
+                            setShowDaySessionsList(false);
+                            setShowLogSheet(true);
+                          }}
+                          data-testid={`button-edit-session-${session.id}`}
+                          style={{ background: 'transparent', border: 'none', color: '#8B5CF6', fontSize: '14px', fontWeight: 600, cursor: 'pointer', padding: '4px 8px' }}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      {techNames && <div style={{ fontSize: '13px', color: '#A1A1AA' }}>{techNames}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => {
+                  triggerHaptic('light');
+                  setEditingSession(null);
+                  setSelectedDate(daySessionsDate);
+                  setShowDaySessionsList(false);
+                  setShowLogSheet(true);
+                }}
+                data-testid="button-add-another-session"
+                style={{
+                  width: '100%',
+                  marginTop: '16px',
+                  padding: '14px',
+                  background: 'transparent',
+                  border: '1px solid #2A2A2E',
+                  borderRadius: '10px',
+                  color: '#8B5CF6',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                + Add another session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showLogSheet && (
         <TrainingLogSheet

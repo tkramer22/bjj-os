@@ -26,8 +26,7 @@ async function ensureTablesExist() {
         submissions INTEGER DEFAULT 0,
         taps INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT now() NOT NULL,
-        updated_at TIMESTAMP DEFAULT now() NOT NULL,
-        CONSTRAINT unique_user_session_date UNIQUE (user_id, session_date)
+        updated_at TIMESTAMP DEFAULT now() NOT NULL
       )
     `);
     await db.execute(sql`
@@ -43,6 +42,11 @@ async function ensureTablesExist() {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_training_sessions_date ON training_sessions(session_date)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_training_techniques_session ON training_session_techniques(session_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_training_techniques_taxonomy ON training_session_techniques(taxonomy_id)`);
+
+    try {
+      await db.execute(sql`ALTER TABLE training_sessions DROP CONSTRAINT IF EXISTS unique_user_session_date`);
+    } catch (e) {}
+
     tablesInitialized = true;
     console.log('[TRAINING] Tables initialized successfully');
   } catch (e: any) {
@@ -79,6 +83,33 @@ router.use(async (req, _res, next) => {
   next();
 });
 
+function normalizeSession(s: any) {
+  const dateVal = s.session_date ?? s.sessionDate;
+  let sessionDate: string;
+  if (dateVal instanceof Date) {
+    sessionDate = dateVal.toISOString().split('T')[0];
+  } else if (typeof dateVal === 'string') {
+    sessionDate = dateVal.includes('T') ? dateVal.split('T')[0] : dateVal;
+  } else {
+    sessionDate = String(dateVal);
+  }
+  return {
+    id: s.id,
+    userId: s.user_id ?? s.userId,
+    sessionDate,
+    mood: s.mood,
+    sessionType: s.session_type ?? s.sessionType,
+    durationMinutes: s.duration_minutes ?? s.durationMinutes,
+    isGi: s.is_gi ?? s.isGi,
+    notes: s.notes,
+    rolls: s.rolls,
+    submissions: s.submissions,
+    taps: s.taps,
+    createdAt: s.created_at ?? s.createdAt,
+    updatedAt: s.updated_at ?? s.updatedAt,
+  };
+}
+
 router.get('/sessions', async (req, res) => {
   try {
     const userId = getUserId(req);
@@ -100,14 +131,14 @@ router.get('/sessions', async (req, res) => {
         WHERE user_id = ${userIdStr}
         AND session_date >= ${startDate}::date
         AND session_date < ${endDate}::date
-        ORDER BY session_date DESC
+        ORDER BY session_date DESC, created_at DESC
       `);
       sessions = Array.isArray(result) ? result : (result as any).rows || [];
     } else {
       const result = await db.execute(sql`
         SELECT * FROM training_sessions
         WHERE user_id = ${userIdStr}
-        ORDER BY session_date DESC
+        ORDER BY session_date DESC, created_at DESC
       `);
       sessions = Array.isArray(result) ? result : (result as any).rows || [];
     }
@@ -125,25 +156,9 @@ router.get('/sessions', async (req, res) => {
       techniques = Array.isArray(techResult) ? techResult : (techResult as any).rows || [];
     }
 
-    const normalizeSession = (s: any) => ({
-      id: s.id,
-      userId: s.user_id ?? s.userId,
-      sessionDate: s.session_date ?? s.sessionDate,
-      mood: s.mood,
-      sessionType: s.session_type ?? s.sessionType,
-      durationMinutes: s.duration_minutes ?? s.durationMinutes,
-      isGi: s.is_gi ?? s.isGi,
-      notes: s.notes,
-      rolls: s.rolls,
-      submissions: s.submissions,
-      taps: s.taps,
-      createdAt: s.created_at ?? s.createdAt,
-      updatedAt: s.updated_at ?? s.updatedAt,
-    });
-
     const sessionsWithTechniques = sessions.map((s: any) => ({
       ...normalizeSession(s),
-      techniques: (techniques as any[]).filter((t: any) => t.session_id === (s.id)),
+      techniques: (techniques as any[]).filter((t: any) => t.session_id === s.id),
     }));
 
     res.json({ sessions: sessionsWithTechniques });
@@ -162,40 +177,14 @@ router.post('/sessions', async (req, res) => {
 
     if (!sessionDate) return res.status(400).json({ error: 'Session date is required' });
 
-    const existing = await db
-      .select()
-      .from(trainingSessions)
-      .where(and(
-        eq(trainingSessions.userId, String(userId)),
-        eq(trainingSessions.sessionDate, sessionDate)
-      ))
-      .limit(1);
-
-    let session;
-    if (existing.length > 0) {
-      const [updated] = await db
-        .update(trainingSessions)
-        .set({
-          mood, sessionType, durationMinutes, isGi, notes,
-          rolls: rolls || 0, submissions: submissions || 0, taps: taps || 0,
-          updatedAt: new Date(),
-        })
-        .where(eq(trainingSessions.id, existing[0].id))
-        .returning();
-      session = updated;
-
-      await db.execute(sql`DELETE FROM training_session_techniques WHERE session_id = ${session.id}`);
-    } else {
-      const [created] = await db
-        .insert(trainingSessions)
-        .values({
-          userId: String(userId),
-          sessionDate, mood, sessionType, durationMinutes, isGi, notes,
-          rolls: rolls || 0, submissions: submissions || 0, taps: taps || 0,
-        })
-        .returning();
-      session = created;
-    }
+    const [session] = await db
+      .insert(trainingSessions)
+      .values({
+        userId: String(userId),
+        sessionDate, mood, sessionType, durationMinutes, isGi, notes,
+        rolls: rolls || 0, submissions: submissions || 0, taps: taps || 0,
+      })
+      .returning();
 
     if (techniques && Array.isArray(techniques) && techniques.length > 0) {
       const techValues = techniques.map((t: any) => ({
@@ -218,6 +207,58 @@ router.post('/sessions', async (req, res) => {
   } catch (error: any) {
     console.error('[TRAINING] Error saving session:', error.message);
     res.status(500).json({ error: 'Failed to save session' });
+  }
+});
+
+router.put('/sessions/:id', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const sessionId = parseInt(req.params.id);
+    const { mood, sessionType, durationMinutes, isGi, notes, rolls, submissions, taps, techniques } = req.body;
+
+    const [existing] = await db
+      .select()
+      .from(trainingSessions)
+      .where(and(eq(trainingSessions.id, sessionId), eq(trainingSessions.userId, String(userId))))
+      .limit(1);
+
+    if (!existing) return res.status(404).json({ error: 'Session not found' });
+
+    const [updated] = await db
+      .update(trainingSessions)
+      .set({
+        mood, sessionType, durationMinutes, isGi, notes,
+        rolls: rolls || 0, submissions: submissions || 0, taps: taps || 0,
+        updatedAt: new Date(),
+      })
+      .where(eq(trainingSessions.id, sessionId))
+      .returning();
+
+    await db.execute(sql`DELETE FROM training_session_techniques WHERE session_id = ${sessionId}`);
+
+    if (techniques && Array.isArray(techniques) && techniques.length > 0) {
+      const techValues = techniques.map((t: any) => ({
+        sessionId: sessionId,
+        taxonomyId: t.taxonomyId,
+        category: t.category || 'technique',
+      }));
+      await db.insert(trainingSessionTechniques).values(techValues);
+    }
+
+    const techResult = await db.execute(sql`
+      SELECT tst.*, ttv2.name as technique_name, ttv2.slug, ttv2.level
+      FROM training_session_techniques tst
+      LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
+      WHERE tst.session_id = ${sessionId}
+    `);
+    const techs = Array.isArray(techResult) ? techResult : (techResult as any).rows || [];
+
+    res.json({ session: { ...updated, techniques: techs } });
+  } catch (error: any) {
+    console.error('[TRAINING] Error updating session:', error.message);
+    res.status(500).json({ error: 'Failed to update session' });
   }
 });
 
@@ -250,30 +291,34 @@ router.get('/stats', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const allSessions = await db
-      .select({ sessionDate: trainingSessions.sessionDate })
-      .from(trainingSessions)
-      .where(eq(trainingSessions.userId, String(userId)))
-      .orderBy(desc(trainingSessions.sessionDate));
+    const result = await db.execute(sql`
+      SELECT DISTINCT session_date FROM training_sessions
+      WHERE user_id = ${String(userId)}
+      ORDER BY session_date DESC
+    `);
+    const allDates: string[] = (Array.isArray(result) ? result : (result as any).rows || [])
+      .map((r: any) => {
+        const d = r.session_date;
+        if (d instanceof Date) return d.toISOString().split('T')[0];
+        if (typeof d === 'string') return d.includes('T') ? d.split('T')[0] : d;
+        return String(d);
+      });
 
     let currentStreak = 0;
     let longestStreak = 0;
-    if (allSessions.length > 0) {
-      const dates = allSessions.map(s => new Date(s.sessionDate + 'T00:00:00'));
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      const latestSession = dates[0];
-      latestSession.setHours(0, 0, 0, 0);
-
-      if (latestSession.getTime() === today.getTime() || latestSession.getTime() === yesterday.getTime()) {
+    if (allDates.length > 0) {
+      if (allDates[0] === todayStr || allDates[0] === yesterdayStr) {
         currentStreak = 1;
-        for (let i = 1; i < dates.length; i++) {
-          const prev = dates[i - 1];
-          const curr = dates[i];
+        for (let i = 1; i < allDates.length; i++) {
+          const prev = new Date(allDates[i - 1] + 'T00:00:00');
+          const curr = new Date(allDates[i] + 'T00:00:00');
           const diffDays = Math.round((prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24));
           if (diffDays === 1) {
             currentStreak++;
@@ -284,9 +329,9 @@ router.get('/stats', async (req, res) => {
       }
 
       let streak = 1;
-      for (let i = 1; i < dates.length; i++) {
-        const prev = dates[i - 1];
-        const curr = dates[i];
+      for (let i = 1; i < allDates.length; i++) {
+        const prev = new Date(allDates[i - 1] + 'T00:00:00');
+        const curr = new Date(allDates[i] + 'T00:00:00');
         const diffDays = Math.round((prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays === 1) {
           streak++;
@@ -301,43 +346,59 @@ router.get('/stats', async (req, res) => {
     const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
     const weekStr = startOfWeek.toISOString().split('T')[0];
-
     const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
-    const [weekCount] = await db
-      .select({ count: count() })
-      .from(trainingSessions)
-      .where(and(
-        eq(trainingSessions.userId, String(userId)),
-        gte(trainingSessions.sessionDate, weekStr)
-      ));
+    const weekDates = allDates.filter(d => d >= weekStr);
+    const monthDates = allDates.filter(d => d >= startOfMonth);
 
-    const [monthCount] = await db
-      .select({ count: count() })
-      .from(trainingSessions)
-      .where(and(
-        eq(trainingSessions.userId, String(userId)),
-        gte(trainingSessions.sessionDate, startOfMonth)
-      ));
+    const weekCount = weekDates.length;
+    const monthCount = monthDates.length;
+    const totalCount = allDates.length;
+    const trainedToday = allDates.includes(todayStr);
 
-    const totalCount = allSessions.length;
+    const sessionsTodayResult = await db.execute(sql`
+      SELECT COUNT(*) as cnt FROM training_sessions
+      WHERE user_id = ${String(userId)} AND session_date = ${todayStr}::date
+    `);
+    const sessionsToday = Number((Array.isArray(sessionsTodayResult) ? sessionsTodayResult : (sessionsTodayResult as any).rows || [])[0]?.cnt || 0);
 
-    const trainedToday = allSessions.some(s => {
-      const d = new Date(s.sessionDate + 'T00:00:00');
-      d.setHours(0, 0, 0, 0);
-      const t = new Date();
-      t.setHours(0, 0, 0, 0);
-      return d.getTime() === t.getTime();
-    });
+    let daysSinceLastSession = -1;
+    if (allDates.length > 0) {
+      const lastDate = new Date(allDates[0] + 'T00:00:00');
+      daysSinceLastSession = Math.round((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    let mostLoggedTechnique: string | null = null;
+    try {
+      const techResult = await db.execute(sql`
+        SELECT ttv2.name, COUNT(*) as cnt
+        FROM training_session_techniques tst
+        JOIN training_sessions ts ON tst.session_id = ts.id
+        LEFT JOIN technique_taxonomy_v2 ttv2 ON tst.taxonomy_id = ttv2.id
+        WHERE ts.user_id = ${String(userId)}
+          AND ts.session_date >= (CURRENT_DATE - INTERVAL '30 days')
+        GROUP BY ttv2.name
+        ORDER BY cnt DESC
+        LIMIT 1
+      `);
+      const techRows = Array.isArray(techResult) ? techResult : (techResult as any).rows || [];
+      if (techRows.length > 0 && techRows[0].name) {
+        mostLoggedTechnique = techRows[0].name;
+      }
+    } catch (e) {}
 
     res.json({
       currentStreak,
       longestStreak,
-      weekCount: weekCount?.count || 0,
-      monthCount: monthCount?.count || 0,
+      weekCount,
+      monthCount,
       totalCount,
       trainedToday,
+      sessionsToday,
+      daysSinceLastSession,
+      mostLoggedTechnique,
     });
   } catch (error: any) {
     console.error('[TRAINING] Error fetching stats:', error.message);
