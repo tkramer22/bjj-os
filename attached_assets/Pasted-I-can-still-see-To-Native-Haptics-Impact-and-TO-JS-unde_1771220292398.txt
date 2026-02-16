@@ -1,0 +1,48 @@
+I can still see “To Native → Haptics Impact” and “TO JS undefined” at the bottom of the console. Haptics were NOT fully removed — there’s still at least one haptic call firing somewhere, possibly outside the Training tab (maybe in a shared component or the chat system triggering on app load).
+But more importantly, looking at the console there’s also “Failed to change to usage state 2: (null)” which could be a separate issue blocking the delete.
+Let me try a different approach. Instead of fighting haptics, let’s diagnose the actual delete:
+
+DELETE SESSION IS STILL BROKEN — DIAGNOSE AND FIX
+
+Haptics removal from Training tab did not fix the delete.
+There may be a separate issue.
+
+DO THIS IN ORDER:
+
+1. Add console.log statements to the delete handler:
+
+   console.log('DELETE: Button clicked');
+   console.log('DELETE: Session ID:', sessionId);
+   
+   // Before API call
+   console.log('DELETE: Calling API...');
+   
+   const response = await fetch(`/api/training/sessions/${sessionId}`, {
+     method: 'DELETE'
+   });
+   
+   console.log('DELETE: Response status:', response.status);
+   console.log('DELETE: Response body:', await response.text());
+   
+   // After API call
+   console.log('DELETE: Closing sheet...');
+
+2. Also check: Is the delete button's onClick handler actually 
+   wired up? It might be that the "Delete" red button has no 
+   onClick at all, or it points to the wrong function.
+
+3. Check if there is a confirmation dialog that is supposed to 
+   appear but is failing silently. Maybe the flow is:
+   Tap Delete → confirmation dialog → confirm → actual delete
+   And the confirmation dialog is what's broken.
+
+4. Check the console for ANY error when Delete is tapped. 
+   Screenshot the Xcode console immediately after tapping Delete.
+
+5. Also search the ENTIRE codebase (not just Training tab) for 
+   remaining Haptics imports that might fire on state changes:
+   grep -r "Haptics" client/src/ --include="*.tsx" --include="*.ts"
+   Show me every file that still has Haptics.
+
+Show me the console.log output and the grep results. 
+DO NOT try to fix yet — just diagnose and report back.

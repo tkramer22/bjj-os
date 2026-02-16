@@ -343,13 +343,23 @@ export function TrainingLogSheet({ date, existingSession, onClose, onSave }: Pro
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      if (!existingSession) return;
+      if (!existingSession) {
+        console.log('DELETE: No existing session, aborting');
+        return;
+      }
+      console.log('DELETE: Calling API for session', existingSession.id);
       await apiRequest('DELETE', `/api/training/sessions/${existingSession.id}`);
+      console.log('DELETE: API call successful');
     },
     onSuccess: () => {
+      console.log('DELETE: onSuccess fired');
       toast({ title: "Session deleted" });
       queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith?.('/api/training') });
       onSave();
+    },
+    onError: (err: any) => {
+      console.error('DELETE: onError fired', err);
+      toast({ title: "Failed to delete", description: err?.message || 'Unknown error', variant: "destructive" });
     },
   });
 
