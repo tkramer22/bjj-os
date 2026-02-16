@@ -153,9 +153,9 @@ const MOODS = [
 
 const SESSION_TYPES = [
   { key: 'class', label: 'Class', emoji: '\uD83E\uDD4B' },
-  { key: 'sparring', label: 'Sparring', emoji: '\uD83E\uDD3C' },
   { key: 'open_mat', label: 'Open Mat', emoji: '\uD83D\uDCDA' },
   { key: 'competition', label: 'Comp', emoji: '\uD83C\uDFC6' },
+  { key: 'private', label: 'Private', emoji: '\uD83C\uDFAF' },
 ];
 
 const DURATION_OPTIONS = [
