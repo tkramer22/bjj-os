@@ -184,10 +184,6 @@ export default function IOSTrainingPage() {
       setEditingSession(null);
       setSelectedDate(dateStr);
       setShowLogSheet(true);
-    } else if (daySessions.length === 1) {
-      setEditingSession(daySessions[0]);
-      setSelectedDate(dateStr);
-      setShowLogSheet(true);
     } else {
       setDaySessionsDate(dateStr);
       setShowDaySessionsList(true);
@@ -242,8 +238,12 @@ export default function IOSTrainingPage() {
 
   const recentSessions = useMemo(() => {
     return [...allSessions]
-      .sort((a, b) => b.sessionDate.localeCompare(a.sessionDate))
-      .slice(0, 7);
+      .sort((a, b) => {
+        const dateCompare = b.sessionDate.localeCompare(a.sessionDate);
+        if (dateCompare !== 0) return dateCompare;
+        return b.id - a.id;
+      })
+      .slice(0, 10);
   }, [allSessions]);
 
   if (showStatsDetail) {
@@ -501,7 +501,7 @@ export default function IOSTrainingPage() {
                     <div key={session.id} style={{ background: '#1A1A1D', borderRadius: '10px', padding: '14px 16px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: techNames ? '6px' : '0' }}>
                         <div style={{ fontSize: '14px', color: '#FFFFFF' }}>
-                          {[moodEmoji ? `${moodEmoji} ${moodLabel}` : '', typeLabel, giLabel].filter(Boolean).join(' \u00B7 ')}
+                          {[session.sessionTime || '', moodEmoji ? `${moodEmoji} ${moodLabel}` : '', typeLabel, giLabel].filter(Boolean).join(' \u00B7 ')}
                         </div>
                         <button
                           onClick={() => {
