@@ -50,7 +50,8 @@ The server includes multiple stability safeguards to prevent crashes and resourc
   - 10:00 AM EST: Meta Analysis
   - 11:00 AM EST: Population Intelligence
   - 12:00 PM EST: User Profile Building
-  - 2:00 PM EST: Combat Sports Scraping + Emergency Curation
+  - 2:00 PM EST: Auto-Curation (second daily run) + Combat Sports Scraping
+  - 9:00 PM EST: Daily Curation Digest Email (single summary of all runs)
 - **Reduced Processing Frequency**: Video Knowledge Processing runs every 2 minutes (down from 30 seconds) to reduce memory churn
 
 ## External Dependencies

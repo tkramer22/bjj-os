@@ -117,8 +117,8 @@ export async function checkAndResendMissedCurationEmails(): Promise<void> {
           quotaExhausted: false
         };
         
-        await sendCurationEmail(result);
-        console.log(`[AUTO-CURATION EMAIL RECOVERY] ✅ Recovered email for run ${run.id}`);
+        accumulateCurationResult(result);
+        console.log(`[AUTO-CURATION EMAIL RECOVERY] ✅ Accumulated recovered run ${run.id}`);
       }
     }
     
@@ -171,6 +171,183 @@ export interface AutoCurationStatus {
 }
 
 let lastRunStatus: { at: Date; result: string; videosAdded: number } | null = null;
+
+interface DailyRunAccumulator {
+  runs: Array<{
+    timestamp: Date;
+    videosAnalyzed: number;
+    videosAdded: number;
+    videosSkipped: number;
+    instructorsProcessed: string[];
+    skippedReasons: Record<string, number>;
+    quotaExhausted: boolean;
+    errors: string[];
+  }>;
+  lastResetDate: string;
+}
+
+const dailyAccumulator: DailyRunAccumulator = {
+  runs: [],
+  lastResetDate: new Date().toISOString().split('T')[0],
+};
+
+function getTodayEST(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+function accumulateCurationResult(result: CurationResult): void {
+  const today = getTodayEST();
+  if (dailyAccumulator.lastResetDate !== today) {
+    dailyAccumulator.runs = [];
+    dailyAccumulator.lastResetDate = today;
+  }
+  dailyAccumulator.runs.push({
+    timestamp: new Date(),
+    videosAnalyzed: result.videosAnalyzed,
+    videosAdded: result.videosAdded,
+    videosSkipped: result.videosSkipped,
+    instructorsProcessed: [...result.instructorsProcessed],
+    skippedReasons: { ...result.skippedReasons },
+    quotaExhausted: result.quotaExhausted,
+    errors: [...result.errors],
+  });
+  console.log(`[AUTO-CURATION] 📋 Result accumulated (run ${dailyAccumulator.runs.length} today, +${result.videosAdded} videos)`);
+}
+
+export async function sendDailyCurationDigest(): Promise<void> {
+  const today = getTodayEST();
+  if (dailyAccumulator.lastResetDate !== today) {
+    dailyAccumulator.runs = [];
+    dailyAccumulator.lastResetDate = today;
+  }
+
+  const runs = dailyAccumulator.runs;
+
+  if (runs.length === 0) {
+    console.log('[AUTO-CURATION] No curation runs today — skipping daily digest email');
+    return;
+  }
+  const totalAnalyzed = runs.reduce((sum, r) => sum + r.videosAnalyzed, 0);
+  const totalAdded = runs.reduce((sum, r) => sum + r.videosAdded, 0);
+  const totalSkipped = runs.reduce((sum, r) => sum + r.videosSkipped, 0);
+  const allInstructors = [...new Set(runs.flatMap(r => r.instructorsProcessed))];
+  const mergedReasons: Record<string, number> = {};
+  runs.forEach(r => {
+    for (const [reason, count] of Object.entries(r.skippedReasons)) {
+      mergedReasons[reason] = (mergedReasons[reason] || 0) + count;
+    }
+  });
+  const hadQuotaIssue = runs.some(r => r.quotaExhausted);
+  const allErrors = runs.flatMap(r => r.errors).slice(0, 10);
+
+  try {
+    const totalVideosResult = await db.execute(sql`SELECT COUNT(*)::int as cnt FROM ai_video_knowledge WHERE status = 'active'`);
+    const totalRows = Array.isArray(totalVideosResult) ? totalVideosResult : (totalVideosResult.rows || []);
+    const libraryTotal = totalRows[0]?.cnt || 0;
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const subject = totalAdded > 0
+      ? `\uD83D\uDCCA Daily Curation Report: +${totalAdded} videos`
+      : `\uD83D\uDCCA Daily Curation Report: No new videos`;
+
+    let reasonsList = '';
+    if (Object.keys(mergedReasons).length > 0) {
+      const sorted = Object.entries(mergedReasons).sort((a, b) => b[1] - a[1]);
+      reasonsList = `
+        <h3 style="color: #374151;">Rejection Breakdown</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          ${sorted.map(([reason, count]) => `
+            <tr>
+              <td style="padding: 6px 12px; border-bottom: 1px solid #eee;">${reason}</td>
+              <td style="padding: 6px 12px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">${count}</td>
+            </tr>
+          `).join('')}
+        </table>
+      `;
+    }
+
+    const htmlContent = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px;">
+        <h2 style="color: #8B5CF6; margin-bottom: 5px;">\uD83D\uDCCA Daily Curation Report</h2>
+        <p style="color: #666; margin-top: 0;">${dateStr}</p>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Curation Runs Today</strong></td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">${runs.length}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Videos Analyzed</strong></td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right;">${totalAnalyzed}</td>
+          </tr>
+          <tr style="background: ${totalAdded > 0 ? '#dcfce7' : '#fef9c3'};">
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Videos Added</strong></td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">+${totalAdded}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Videos Rejected</strong></td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right;">${totalSkipped}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Instructors Targeted</strong></td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right;">${allInstructors.length}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Library Total</strong></td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right;">${libraryTotal} videos</td>
+          </tr>
+          ${hadQuotaIssue ? `
+          <tr style="background: #fee2e2;">
+            <td style="padding: 8px 0; border-bottom: 1px solid #eee;" colspan="2">\u26A0\uFE0F Quota exhaustion occurred during one or more runs</td>
+          </tr>
+          ` : ''}
+        </table>
+
+        ${reasonsList}
+
+        ${totalAdded < LOW_YIELD_THRESHOLD && runs.length > 0 ? `
+        <div style="background: #fef9c3; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <strong>\u26A0\uFE0F Low Yield</strong><br>
+          Only ${totalAdded} videos added across ${runs.length} runs. May need new instructor seeds or technique searches.
+        </div>
+        ` : ''}
+
+        ${allErrors.length > 0 ? `
+        <h3 style="color: #ef4444;">\u26A0\uFE0F Errors</h3>
+        <ul style="color: #ef4444;">
+          ${allErrors.map(e => `<li>${e}</li>`).join('')}
+        </ul>
+        ` : ''}
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 14px;">
+          <p>Next curation runs: 3:15 AM and 2:00 PM EST</p>
+          <a href="https://bjjos.app/admin/videos" style="background: #8B5CF6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            View Video Library
+          </a>
+        </div>
+      </div>
+    `;
+
+    await resend.emails.send({
+      from: 'BJJ OS <noreply@bjjos.app>',
+      to: [ADMIN_EMAIL],
+      subject,
+      html: htmlContent,
+    });
+
+    console.log(`[AUTO-CURATION] \u2705 Daily curation digest sent: ${subject}`);
+    dailyAccumulator.runs = [];
+  } catch (error) {
+    console.error(`[AUTO-CURATION] \u274C Failed to send daily curation digest:`, error);
+  }
+}
 
 export function getAutoCurationStatus(): AutoCurationStatus {
   return {
@@ -690,7 +867,7 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
         .where(eq(curationRuns.id, result.runId!));
       
       result.success = true;
-      await sendCurationEmail(result);
+      accumulateCurationResult(result);
       return result;
     }
     
@@ -960,11 +1137,7 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
     console.log(`   Quota exhausted: ${result.quotaExhausted}`);
     console.log(`${'═'.repeat(70)}\n`);
     
-    await sendCurationEmail(result);
-    
-    if (result.videosAdded < LOW_YIELD_THRESHOLD && !result.quotaExhausted && result.instructorsProcessed.length > 0) {
-      await sendLowYieldAlert(result);
-    }
+    accumulateCurationResult(result);
     
   } catch (error: any) {
     result.errors.push(`Fatal error: ${error.message}`);

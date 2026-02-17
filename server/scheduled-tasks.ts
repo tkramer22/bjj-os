@@ -3,7 +3,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { runAlertMonitor } from './alert-monitor-service';
 import { sendHourlyDigest } from './hourly-digest-service';
 import { processBatch as processVideoKnowledgeBatch } from './video-knowledge-service';
-import { runPermanentAutoCuration, initializeAutoCurationState, checkAndResendMissedCurationEmails } from './permanent-auto-curation';
+import { runPermanentAutoCuration, initializeAutoCurationState, checkAndResendMissedCurationEmails, sendDailyCurationDigest } from './permanent-auto-curation';
 import { runDemandDrivenCuration, initializeDemandCurationState, isDemandCurationEnabled } from './demand-driven-curation';
 import { withMemoryManagement, forceGC, shouldSkipDueToMemory, logMemory } from './utils/memory-management';
 
@@ -111,8 +111,8 @@ export async function initScheduledTasks() {
   console.log(`  ✅ Video Knowledge Processing: Every 2 min (20 videos/batch, ${keyMode})`);
   
   // ═══════════════════════════════════════════════════════════════
-  // PERMANENT AUTO-CURATION - 4x daily (EST/EDT times with timezone)
-  // Automatically curates videos targeting underrepresented instructors
+  // PERMANENT AUTO-CURATION - 2x daily + daily digest email
+  // Reduced from 4x to minimize API usage and email spam
   // Using America/New_York timezone to handle DST automatically
   // ═══════════════════════════════════════════════════════════════
   
@@ -125,80 +125,60 @@ export async function initScheduledTasks() {
     const now = new Date();
     const dayOfWeek = formatInTimeZone(now, 'America/New_York', 'EEEE');
     
-    // Skip if memory is critically low
     if (shouldSkipDueToMemory()) {
-      console.log('⏸️ [AUTO-CURATION] Skipping 3:15 AM run due to memory pressure');
+      console.log('[AUTO-CURATION] Skipping 3:15 AM run due to memory pressure');
       return;
     }
     
     if (dayOfWeek === 'Monday' && isDemandCurationEnabled()) {
-      console.log('🎯 [DEMAND-CURATION] Starting Monday 3:15 AM demand-driven curation...');
+      console.log('[DEMAND-CURATION] Starting Monday 3:15 AM demand-driven curation...');
       try {
         await withMemoryManagement('Demand-Driven Curation', runDemandDrivenCuration);
       } catch (error) {
-        console.error('❌ [DEMAND-CURATION] Monday 3:15 AM run failed:', error);
-        console.log('🔄 [AUTO-CURATION] Falling back to regular instructor-based curation...');
+        console.error('[DEMAND-CURATION] Monday 3:15 AM run failed:', error);
+        console.log('[AUTO-CURATION] Falling back to regular instructor-based curation...');
         await withMemoryManagement('Auto-Curation Fallback', runPermanentAutoCuration);
       }
     } else {
-      console.log('🤖 [AUTO-CURATION] Starting 3:15 AM EST/EDT run...');
+      console.log('[AUTO-CURATION] Starting 3:15 AM EST/EDT run...');
       try {
         await withMemoryManagement('Auto-Curation 3:15AM', runPermanentAutoCuration);
       } catch (error) {
-        console.error('❌ [AUTO-CURATION] 3:15 AM run failed:', error);
+        console.error('[AUTO-CURATION] 3:15 AM run failed:', error);
         forceGC('Auto-Curation Error Recovery');
       }
     }
   }, cronOptions);
   
-  // 9:00 AM EST/EDT - Morning run
-  cron.schedule('0 9 * * *', async () => {
+  // 2:00 PM EST/EDT - Afternoon run
+  cron.schedule('0 14 * * *', async () => {
     if (shouldSkipDueToMemory()) {
-      console.log('⏸️ [AUTO-CURATION] Skipping 9:00 AM run due to memory pressure');
+      console.log('[AUTO-CURATION] Skipping 2:00 PM run due to memory pressure');
       return;
     }
-    console.log('🤖 [AUTO-CURATION] Starting 9:00 AM EST/EDT run...');
+    console.log('[AUTO-CURATION] Starting 2:00 PM EST/EDT run...');
     try {
-      await withMemoryManagement('Auto-Curation 9AM', runPermanentAutoCuration);
+      await withMemoryManagement('Auto-Curation 2PM', runPermanentAutoCuration);
     } catch (error) {
-      console.error('❌ [AUTO-CURATION] 9:00 AM run failed:', error);
+      console.error('[AUTO-CURATION] 2:00 PM run failed:', error);
       forceGC('Auto-Curation Error Recovery');
     }
   }, cronOptions);
   
-  // 3:00 PM EST/EDT - Afternoon run
-  cron.schedule('0 15 * * *', async () => {
-    if (shouldSkipDueToMemory()) {
-      console.log('⏸️ [AUTO-CURATION] Skipping 3:00 PM run due to memory pressure');
-      return;
-    }
-    console.log('🤖 [AUTO-CURATION] Starting 3:00 PM EST/EDT run...');
-    try {
-      await withMemoryManagement('Auto-Curation 3PM', runPermanentAutoCuration);
-    } catch (error) {
-      console.error('❌ [AUTO-CURATION] 3:00 PM run failed:', error);
-      forceGC('Auto-Curation Error Recovery');
-    }
-  }, cronOptions);
-  
-  // 9:00 PM EST/EDT - Evening run
+  // 9:00 PM EST/EDT - Daily curation digest email (ONE email per day)
   cron.schedule('0 21 * * *', async () => {
-    if (shouldSkipDueToMemory()) {
-      console.log('⏸️ [AUTO-CURATION] Skipping 9:00 PM run due to memory pressure');
-      return;
-    }
-    console.log('🤖 [AUTO-CURATION] Starting 9:00 PM EST/EDT run...');
+    console.log('[AUTO-CURATION] Sending daily curation digest email...');
     try {
-      await withMemoryManagement('Auto-Curation 9PM', runPermanentAutoCuration);
+      await sendDailyCurationDigest();
     } catch (error) {
-      console.error('❌ [AUTO-CURATION] 9:00 PM run failed:', error);
-      forceGC('Auto-Curation Error Recovery');
+      console.error('[AUTO-CURATION] Failed to send daily digest:', error);
     }
   }, cronOptions);
   
-  console.log('  ✅ Permanent Auto-Curation: 4x daily (3:15am, 9am, 3pm, 9pm America/New_York)');
+  console.log('  ✅ Permanent Auto-Curation: 2x daily (3:15am, 2pm America/New_York)');
   console.log('     📌 Monday 3:15 AM: Demand-driven curation (user requests)');
   console.log('     📌 Tue-Sun 3:15 AM: Regular instructor-based curation');
+  console.log('     📧 Daily digest email: 9:00 PM EST (single summary)');
   
   // ═══════════════════════════════════════════════════════════════
   // INITIAL RUN - Run alert monitor on startup
@@ -271,7 +251,7 @@ export function getSchedulerStatus() {
       },
       {
         name: 'Permanent Auto-Curation',
-        schedule: '4x daily (3:15am, 9am, 3pm, 9pm EST)',
+        schedule: '2x daily (3:15am, 2pm EST) + 9pm digest email',
         enabled: isInitialized && !!process.env.YOUTUBE_API_KEY
       }
     ]

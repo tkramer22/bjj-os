@@ -510,17 +510,7 @@ async function sendDemandCurationEmail(result: DemandCurationResult): Promise<vo
 </body>
 </html>`;
   
-  try {
-    await resend.emails.send({
-      from: 'BJJ OS <noreply@bjjos.app>',
-      to: ADMIN_EMAIL,
-      subject: `🎯 Weekly DEMAND-DRIVEN Curation Complete - ${result.totalVideosAdded} videos added`,
-      html: emailHtml
-    });
-    console.log(`[DEMAND-CURATION] Email sent to ${ADMIN_EMAIL}`);
-  } catch (error) {
-    console.error('[DEMAND-CURATION] Failed to send email:', error);
-  }
+  console.log(`[DEMAND-CURATION] Demand-driven curation complete: ${result.totalVideosAdded} videos added (email suppressed - included in daily digest)`);
 }
 
 export async function runDemandDrivenCuration(): Promise<DemandCurationResult> {
