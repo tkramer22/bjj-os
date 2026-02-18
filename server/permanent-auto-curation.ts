@@ -525,18 +525,19 @@ async function markInstructorFullyMined(instructorName: string, videoCount: numb
   const cooldownDays = videoCount <= 5 ? COOLDOWN_DAYS * 3 : COOLDOWN_DAYS;
   const cooldownUntil = new Date();
   cooldownUntil.setDate(cooldownUntil.getDate() + cooldownDays);
+  const cooldownStr = cooldownUntil.toISOString();
   
   try {
     await db.execute(sql`
       INSERT INTO fully_mined_instructors (instructor_name, video_count, last_mined_at, cooldown_until)
-      VALUES (${instructorName}, ${videoCount}, NOW(), ${cooldownUntil})
+      VALUES (${instructorName}, ${videoCount}, NOW(), ${cooldownStr}::timestamp)
       ON CONFLICT (instructor_name) DO UPDATE SET
         video_count = ${videoCount},
         last_mined_at = NOW(),
-        cooldown_until = ${cooldownUntil}
+        cooldown_until = ${cooldownStr}::timestamp
     `);
     
-    console.log(`[AUTO-CURATION] ✅ Marked ${instructorName} as fully mined (${videoCount} videos, cooldown ${cooldownDays} days until ${cooldownUntil.toISOString()})`);
+    console.log(`[AUTO-CURATION] ✅ Marked ${instructorName} as fully mined (${videoCount} videos, cooldown ${cooldownDays} days until ${cooldownStr})`);
   } catch (error) {
     console.error(`[AUTO-CURATION] Error marking instructor fully mined:`, error);
   }
