@@ -1,0 +1,92 @@
+That’s likely a user-specific issue — their account, session, or data is hitting an edge case your account doesn’t. Paste this into Replit:
+
+A USER IS REPORTING "INTERNAL ERROR" BUT MY ACCOUNT WORKS FINE
+
+This means the bug is user-specific, not global. Diagnose NOW.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 1: CHECK SERVER LOGS FOR ERRORS
+══════════════════════════════════════════════════════════════════════════
+
+Look at the last 24 hours of server logs for ANY error:
+
+Search for:
+- "500"
+- "Internal Server Error"
+- "Error"
+- "FATAL"
+- "undefined"
+- "null"
+- "Cannot read properties"
+
+Show me every error with the timestamp and the full error message 
+including stack trace. I need to see WHICH endpoint is failing 
+and WHY.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 2: CHECK IF IT'S A SPECIFIC ENDPOINT
+══════════════════════════════════════════════════════════════════════════
+
+The error could be on:
+- /api/ai/chat/message (Professor OS chat)
+- /api/training/sessions (Training tab)
+- /api/videos (Video library)
+- /api/user/profile (Profile loading)
+- Auth/login flow
+
+Which endpoint is throwing 500s? The logs will show this.
+
+══════════════════════════════════════════════════════════════════════════
+STEP 3: CHECK FOR USER-SPECIFIC DATA ISSUES
+══════════════════════════════════════════════════════════════════════════
+
+Common causes of "works for me, not for them":
+
+1. Their profile has a NULL field that your code doesn't handle:
+   SELECT * FROM users ORDER BY created_at DESC LIMIT 10;
+   Look for any NULL values in required fields
+
+2. Their conversation history has bad data that crashes the 
+   chat handler
+
+3. They signed up differently (web vs iOS) and their account 
+   is missing data your account has
+
+4. Their subscription status is different and a paywall check 
+   is throwing an error instead of showing the paywall
+
+5. They have zero training sessions and the Training tab 
+   crashes on empty data (your account has sessions)
+
+══════════════════════════════════════════════════════════════════════════
+STEP 4: ADD BETTER ERROR RESPONSES
+══════════════════════════════════════════════════════════════════════════
+
+Right now the user sees "Internal Error" with no context.
+Every API endpoint should catch errors and return helpful messages:
+
+app.use((err, req, res, next) => {
+  console.error('[ERROR]', req.method, req.path, err.message, err.stack);
+  if (!res.headersSent) {
+    res.status(500).json({ 
+      error: 'Something went wrong. Please try again.',
+      path: req.path,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+══════════════════════════════════════════════════════════════════════════
+SHOW ME
+══════════════════════════════════════════════════════════════════════════
+
+1. All 500 errors from the last 24 hours with full details
+2. Which user(s) are hitting errors
+3. Which endpoint is failing
+4. The root cause
+5. The fix
+
+Do NOT guess. Read the actual server logs.
+
+
+Also — ask the user exactly what screen they see the error on (Chat? Training? Videos? Login?) and whether they’re on iOS or web. That’ll narrow it down fast.​​​​​​​​​​​​​​​​
