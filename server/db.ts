@@ -27,14 +27,14 @@ if (isSupabasePooler) {
   // ═══════════════════════════════════════════════════════════════
   
   postgresClient = postgres(databaseUrl, {
-    max: 5,                         // Reduced from 10 to 5 for memory efficiency
+    max: 8,                         // Increased from 5 to 8 to handle concurrent curation + admin + user traffic
     idle_timeout: 20,               // Close idle connections after 20s (faster cleanup)
     connect_timeout: 15,            // Connection timeout (15s to tolerate brief Supabase hiccups)
     prepare: false,                 // Supabase transaction mode doesn't support prepared statements
     max_lifetime: 60 * 30,          // Max 30 minutes per connection (prevent stale)
     onnotice: () => {},             // Suppress notice messages
   });
-  console.log('📊 [DB POOL] Configured with max=5 connections (memory optimized)');
+  console.log('📊 [DB POOL] Configured with max=8 connections (balanced for concurrency)');
   
   db = drizzlePostgres(postgresClient, { schema });
   console.log('🔗 Using Supabase pooler connection (postgres-js)');
@@ -48,13 +48,13 @@ if (isSupabasePooler) {
   
   pool = new Pool({
     connectionString: databaseUrl,
-    max: 5,                         // Reduced from 10 to 5 for memory efficiency
+    max: 8,                         // Increased from 5 to 8 to handle concurrent curation + admin + user traffic
     maxUses: Infinity,              // Reuse connections indefinitely
     allowExitOnIdle: false,         // Keep pool alive even when idle
     maxLifetimeSeconds: 1800,       // Expire connections after 30 minutes
     idleTimeoutMillis: 20000,       // Close idle connections after 20s (faster cleanup)
   });
-  console.log('📊 [DB POOL] Configured with max=5 connections (memory optimized)');
+  console.log('📊 [DB POOL] Configured with max=8 connections (balanced for concurrency)');
   
   pool.on('error', (err: Error) => {
     console.error('❌ Unexpected database pool error:', err.message);

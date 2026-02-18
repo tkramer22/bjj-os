@@ -13854,10 +13854,10 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
     console.log('[QUICK-METRICS] Starting quick metrics fetch...');
     const startTime = Date.now();
 
-    // Return cached data if fresh enough
+    // Return cached data if fresh enough (normal cache hit - not degraded)
     if (quickMetricsCache && (Date.now() - quickMetricsCacheTime) < QUICK_METRICS_CACHE_TTL) {
       console.log('[QUICK-METRICS] Returning cached data (age:', Math.round((Date.now() - quickMetricsCacheTime) / 1000), 's)');
-      return res.json({ ...quickMetricsCache, _cached: true, _cacheAge: Math.round((Date.now() - quickMetricsCacheTime) / 1000) });
+      return res.json({ ...quickMetricsCache, _cacheAge: Math.round((Date.now() - quickMetricsCacheTime) / 1000) });
     }
 
     // Default/fallback metrics (used when DB is unavailable)

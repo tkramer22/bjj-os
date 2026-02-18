@@ -75,10 +75,10 @@ let dashboardCacheTime = 0;
 const DASHBOARD_CACHE_TTL = 60000; // 1 minute
 
 router.get('/dashboard', requireAdmin, async (req, res) => {
-  // Return cached data if fresh enough
+  // Return cached data if fresh enough (normal cache hit - not degraded)
   if (dashboardCache && (Date.now() - dashboardCacheTime) < DASHBOARD_CACHE_TTL) {
     console.log('[ADMIN DASHBOARD] Returning cached data (age:', Math.round((Date.now() - dashboardCacheTime) / 1000), 's)');
-    return res.json({ ...dashboardCache, _cached: true });
+    return res.json({ ...dashboardCache, _cacheAge: Math.round((Date.now() - dashboardCacheTime) / 1000) });
   }
 
   const defaultDashboard = {
