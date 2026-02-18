@@ -169,7 +169,7 @@ async function runCombatSportsTest(test: typeof COMBAT_SPORTS_TESTS[0]) {
   try {
     const anthropic = new Anthropic();
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: systemPrompt,
       messages: [{ role: 'user', content: test.message }]

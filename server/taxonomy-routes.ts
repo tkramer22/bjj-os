@@ -143,7 +143,7 @@ router.post('/generate', requireAdmin, async (req, res) => {
     console.log(`[TAXONOMY] Generating taxonomy from ${labels.length} labels using Claude...`);
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-sonnet-4-6",
       max_tokens: 8000,
       messages: [{
         role: "user",
@@ -320,7 +320,7 @@ router.post('/map-videos', requireAdmin, async (req, res) => {
     })).join('\n');
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-sonnet-4-6",
       max_tokens: 4000,
       messages: [{
         role: "user",
@@ -465,7 +465,7 @@ router.post('/map-all-videos', requireAdmin, async (req, res) => {
 
       try {
         const response = await anthropic.messages.create({
-          model: "claude-sonnet-4-5-20250929",
+          model: "claude-sonnet-4-6",
           max_tokens: 4000,
           messages: [{
             role: "user",

@@ -43,7 +43,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const anthropic = new Anthropic();
-const MODEL = 'claude-sonnet-4-5';
+const MODEL = 'claude-sonnet-4-6';
 
 // Test categories
 interface TestCase {

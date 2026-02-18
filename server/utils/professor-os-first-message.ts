@@ -43,7 +43,7 @@ export async function saveFirstMessage(userId: string, message: string): Promise
     messageType: 'coach_sent',
     containsValuableSignal: false,
     isNoise: false,
-    modelUsed: 'claude-sonnet-4',
+    modelUsed: 'claude-sonnet-4-6',
     conversationTopic: 'first_message_magic'
   });
 }

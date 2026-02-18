@@ -39,7 +39,7 @@ const MODEL_REGISTRY: Record<string, ModelConfig> = {
   },
   'claude-sonnet-4': {
     provider: 'anthropic',
-    model: 'claude-sonnet-4-5',
+    model: 'claude-sonnet-4-6',
     costPer1kTokens: 0.003, // $3 per 1M input tokens
     maxTokens: 200000,
     capabilities: ['long_context', 'json_mode']

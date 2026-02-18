@@ -146,7 +146,7 @@ export async function extractInsightsFromMessage(
     
     // Build prompt for Claude to extract insights
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 1500,
       temperature: 0.3, // Lower temp for more consistent extraction
       system: `You are an expert at analyzing BJJ conversations to extract learning insights.

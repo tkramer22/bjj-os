@@ -187,7 +187,7 @@ async function runDiagnosticTest(testNum: number, message: string): Promise<Diag
     
     const anthropic = new Anthropic();
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: systemPrompt,
       messages: [{ role: 'user', content: message }]
@@ -220,7 +220,7 @@ async function runDiagnosticTest(testNum: number, message: string): Promise<Diag
 
     await db.execute(sql`
       INSERT INTO professor_os_diagnostics (user_id, user_message, model_used, response_time_ms, diagnostics, timestamp)
-      VALUES (${TEST_USER_ID}, ${message}, 'claude-sonnet-4-5', ${Date.now() - startTime}, ${JSON.stringify(diagJson)}::jsonb, NOW())
+      VALUES (${TEST_USER_ID}, ${message}, 'claude-sonnet-4-6', ${Date.now() - startTime}, ${JSON.stringify(diagJson)}::jsonb, NOW())
     `);
 
   } catch (error: any) {

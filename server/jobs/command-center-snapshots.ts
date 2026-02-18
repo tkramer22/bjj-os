@@ -156,7 +156,7 @@ Be specific and actionable. Flag anything that deviates >20% from recent average
 Use "healthy", "warning", or "critical" for healthStatus (camelCase).`;
 
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       messages: [{
         role: 'user',

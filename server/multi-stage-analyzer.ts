@@ -149,7 +149,7 @@ Note: We're looking for instructional content. Title like "Triangle Choke Tutori
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 200,
       messages: [{ role: "user", content: prompt }]
     });
@@ -265,7 +265,7 @@ Return ONLY valid JSON:
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 500,
       messages: [{ role: "user", content: prompt }]
     });
@@ -320,7 +320,7 @@ Return ONLY valid JSON:
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 300,
       messages: [{ role: "user", content: prompt }]
     });
@@ -381,7 +381,7 @@ Only approve grade A or B.`;
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 400,
       messages: [{ role: "user", content: prompt }]
     });
@@ -436,7 +436,7 @@ Return ONLY valid JSON:
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 300,
       messages: [{ role: "user", content: prompt }]
     });
@@ -545,7 +545,7 @@ Use clear, searchable key names. Each timestamp should be a distinct teaching po
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 2000,
       messages: [{ role: "user", content: prompt }]
     });
@@ -622,7 +622,7 @@ Return ONLY valid JSON:
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 150,
       messages: [{ role: "user", content: prompt }]
     });
@@ -1073,7 +1073,7 @@ Return ONLY valid JSON:
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 300,
       messages: [{ role: "user", content: prompt }]
     });

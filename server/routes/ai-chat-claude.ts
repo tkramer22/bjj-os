@@ -102,7 +102,7 @@ async function saveDiagnostics(
     await db.insert(professorOsDiagnostics).values({
       userId,
       userMessage,
-      modelUsed: 'claude-sonnet-4-5-20250929',
+      modelUsed: 'claude-sonnet-4-6',
       responseTimeMs: diagnostics.timingBreakdown.totalMs,
       diagnostics: diagnostics
     });
@@ -879,7 +879,7 @@ export async function handleClaudeStream(req: any, res: any) {
     }
     
     const stream = anthropic.messages.stream({
-      model: 'claude-sonnet-4-5-20250929',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       temperature: 0.7,
       system: systemContent,

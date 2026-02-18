@@ -110,7 +110,7 @@ export function registerTestRoutes(app: Express) {
         // PHASE 4: Call Claude API
         const t3 = Date.now();
         const response = await anthropic.messages.create({
-          model: 'claude-sonnet-4-5',
+          model: 'claude-sonnet-4-6',
           max_tokens: 4000,
           temperature: 0.7,
           system: systemPrompt,

@@ -575,7 +575,7 @@ export function registerRoutes(app: Express): Server {
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
       
       const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 100,
         messages: [{ role: "user", content: "Say hello briefly" }]
       });
@@ -612,7 +612,7 @@ export function registerRoutes(app: Express): Server {
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
       
       const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 500,
         system: "You are Professor OS, a helpful BJJ coach. Be brief and friendly.",
         messages: [{ role: "user", content: message }]
@@ -657,7 +657,7 @@ export function registerRoutes(app: Express): Server {
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
       
       const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 1000,
         system: systemPrompt,
         messages: [{ role: "user", content: message }]
@@ -10034,7 +10034,7 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
       const callClaudeWithRetry = async (retryCount = 0): Promise<string> => {
         try {
           const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-5',
+            model: 'claude-sonnet-4-6',
             max_tokens: 2048,
             system: systemPrompt,
             messages: messages as any
@@ -10134,7 +10134,7 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
         messageText: message,
         messageType: 'user_sent',
         containsValuableSignal: true,
-        modelUsed: 'claude-sonnet-4-5'
+        modelUsed: 'claude-sonnet-4-6'
       });
       
       await db.insert(aiConversationLearning).values({
@@ -10142,7 +10142,7 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
         messageText: aiResponse,
         messageType: 'ai_sent',
         containsValuableSignal: false,
-        modelUsed: 'claude-sonnet-4-5'
+        modelUsed: 'claude-sonnet-4-6'
       });
       
       // 7. RETURN RESPONSE
@@ -10153,7 +10153,7 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
         videos: [],
         timestamp: new Date().toISOString(),
         metadata: {
-          model: 'claude-sonnet-4-5',
+          model: 'claude-sonnet-4-6',
           responseTime: responseTime,
           promptLength: systemPrompt.length,
           videoCount: videoLibrary.length
@@ -10179,7 +10179,7 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
         videos: [],
         timestamp: new Date().toISOString(),
         metadata: {
-          model: 'claude-sonnet-4-5',
+          model: 'claude-sonnet-4-6',
           error: true
         }
       });
@@ -10578,7 +10578,7 @@ DO NOT ignore the repetition. DO NOT give the same exact answer with no acknowle
       });
       
       const claudeMessage = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-6',
         max_tokens: 2048,
         system: aiPrompt,
         messages: [{
@@ -11789,7 +11789,7 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       
       console.log('[DEV OS] Calling Claude API...');
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-6',
         max_tokens: 4000,
         system: systemPrompt,
         messages: conversationHistory,

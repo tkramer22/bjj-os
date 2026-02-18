@@ -8,7 +8,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // Model costs per 1M tokens (as of 2025)
 const MODEL_COSTS = {
-  'claude-sonnet-4-5': { input: 3.00, output: 15.00 },  // Claude Sonnet 4.5: $3/$15 per 1M tokens
+  'claude-sonnet-4-6': { input: 3.00, output: 15.00 },  // Claude Sonnet 4.5: $3/$15 per 1M tokens
   'gpt-4o': { input: 2.50, output: 10.00 },                      // GPT-4o: $2.50/$10 per 1M tokens
   'gpt-4o-mini': { input: 0.15, output: 0.60 }                   // GPT-4o-mini: $0.15/$0.60 per 1M tokens
 };
@@ -41,7 +41,7 @@ export class MultiModelRouter {
     switch (taskType) {
       case 'coaching':
         // Use Claude Sonnet 4.5 for main coaching (best reasoning and empathy)
-        modelName = 'claude-sonnet-4-5';
+        modelName = 'claude-sonnet-4-6';
         response = await this.callClaude(request);
         break;
 
@@ -65,7 +65,7 @@ export class MultiModelRouter {
 
       case 'analysis':
         // Use Claude Sonnet 4.5 for complex analysis
-        modelName = 'claude-sonnet-4-5';
+        modelName = 'claude-sonnet-4-6';
         response = await this.callClaude(request);
         break;
 
@@ -86,7 +86,7 @@ export class MultiModelRouter {
     const startTime = Date.now();
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: request.maxTokens || 2048,
       temperature: request.temperature || 0.7,
       messages: request.messages as any
@@ -94,14 +94,14 @@ export class MultiModelRouter {
 
     const tokensInput = response.usage.input_tokens;
     const tokensOutput = response.usage.output_tokens;
-    const costUsd = this.calculateCost('claude-sonnet-4-5', tokensInput, tokensOutput);
+    const costUsd = this.calculateCost('claude-sonnet-4-6', tokensInput, tokensOutput);
     const responseTimeMs = Date.now() - startTime;
 
     const content = response.content[0].type === 'text' ? response.content[0].text : '';
 
     return {
       content,
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       tokensInput,
       tokensOutput,
       costUsd,

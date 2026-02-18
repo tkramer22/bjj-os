@@ -184,7 +184,7 @@ export default function AdminLogs() {
               <SelectContent>
                 <SelectItem value="all">All Models</SelectItem>
                 <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                <SelectItem value="claude-sonnet-4">Claude Sonnet 4</SelectItem>
+                <SelectItem value="claude-sonnet-4">Claude Sonnet 4.6</SelectItem>
                 <SelectItem value="gpt-4o-fallback">GPT-4o (Fallback)</SelectItem>
               </SelectContent>
             </Select>
@@ -229,7 +229,7 @@ export default function AdminLogs() {
                           {log.aiResponse}
                         </TableCell>
                         <TableCell>
-                          {log.modelUsed === 'claude-sonnet-4' ? (
+                          {log.modelUsed === 'claude-sonnet-4-6' ? (
                             <Badge variant="default" data-testid={`badge-model-${log.id}`}>
                               Claude S4
                             </Badge>

@@ -105,7 +105,7 @@ If nothing in a category, return empty array. Be precise. Only extract what's ex
   
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       messages: [{
         role: 'user',

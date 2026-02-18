@@ -167,7 +167,7 @@ Return ONLY valid JSON:
 Minimum for inclusion: credibility_score >= 18, is_quality_instructor = true`;
 
   const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-5",
+    model: "claude-sonnet-4-6",
     max_tokens: 500,
     messages: [{
       role: "user",

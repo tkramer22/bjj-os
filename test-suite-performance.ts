@@ -89,7 +89,7 @@ async function runPerformanceTest(message: string, testNumber: number): Promise<
   const systemPrompt = `You are Professor OS, an expert BJJ coach. User is ${userProfile[0]?.belt_level || 'blue'} belt. Respond with coaching advice.`;
   
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 2000,
     temperature: 0.7,
     system: systemPrompt,
