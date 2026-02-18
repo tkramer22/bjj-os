@@ -438,11 +438,6 @@ interface CurationResult {
 }
 
 async function getUnderrepresentedInstructors(): Promise<{name: string; count: number; priority: number}[]> {
-  // SMART ROTATION: Get instructors across all priority levels
-  // Priority 1: <50 videos (fill first)
-  // Priority 2: 50-100 videos (fill second)  
-  // Priority 3: 100+ videos (always include 1-2 for fresh content)
-  
   const result = await db.execute(sql`
     WITH instructor_counts AS (
       SELECT 
@@ -460,6 +455,13 @@ async function getUnderrepresentedInstructors(): Promise<{name: string; count: n
         AND avk.instructor_name != ''
         AND avk.instructor_name NOT LIKE '%Unknown%'
         AND avk.instructor_name NOT LIKE '%Not Identified%'
+        AND avk.instructor_name NOT LIKE '%Not Specified%'
+        AND avk.instructor_name NOT LIKE '%(and likely%'
+        AND avk.instructor_name NOT LIKE '%(analyzed by%'
+        AND avk.instructor_name NOT LIKE '%(tribute%'
+        AND avk.instructor_name NOT LIKE '%(method being%'
+        AND avk.instructor_name NOT LIKE '%,%and%'
+        AND LENGTH(avk.instructor_name) < 60
         AND (fmi.cooldown_until IS NULL OR fmi.cooldown_until < NOW())
       GROUP BY avk.instructor_name
     )
@@ -520,34 +522,21 @@ function isNonInstructionalContent(title: string): boolean {
 }
 
 async function markInstructorFullyMined(instructorName: string, videoCount: number): Promise<void> {
+  const cooldownDays = videoCount <= 5 ? COOLDOWN_DAYS * 3 : COOLDOWN_DAYS;
   const cooldownUntil = new Date();
-  cooldownUntil.setDate(cooldownUntil.getDate() + COOLDOWN_DAYS);
+  cooldownUntil.setDate(cooldownUntil.getDate() + cooldownDays);
   
   try {
-    const existing = await db.select()
-      .from(fullyMinedInstructors)
-      .where(sql`LOWER(instructor_name) = LOWER(${instructorName})`)
-      .limit(1);
+    await db.execute(sql`
+      INSERT INTO fully_mined_instructors (instructor_name, video_count, last_mined_at, cooldown_until)
+      VALUES (${instructorName}, ${videoCount}, NOW(), ${cooldownUntil})
+      ON CONFLICT (instructor_name) DO UPDATE SET
+        video_count = ${videoCount},
+        last_mined_at = NOW(),
+        cooldown_until = ${cooldownUntil}
+    `);
     
-    if (existing.length > 0) {
-      await db.update(fullyMinedInstructors)
-        .set({
-          minedAt: new Date(),
-          cooldownUntil,
-          consecutiveEmptyRuns: (existing[0].consecutiveEmptyRuns || 0) + 1,
-          lastVideoCount: videoCount
-        })
-        .where(eq(fullyMinedInstructors.id, existing[0].id));
-    } else {
-      await db.insert(fullyMinedInstructors).values({
-        instructorName,
-        cooldownUntil,
-        consecutiveEmptyRuns: 1,
-        lastVideoCount: videoCount
-      });
-    }
-    
-    console.log(`[AUTO-CURATION] Marked ${instructorName} as fully mined until ${cooldownUntil.toISOString()}`);
+    console.log(`[AUTO-CURATION] ✅ Marked ${instructorName} as fully mined (${videoCount} videos, cooldown ${cooldownDays} days until ${cooldownUntil.toISOString()})`);
   } catch (error) {
     console.error(`[AUTO-CURATION] Error marking instructor fully mined:`, error);
   }
@@ -658,48 +647,80 @@ async function findInstructorChannelId(instructorName: string): Promise<string |
 }
 
 /**
- * QUOTA-EFFICIENT: Get videos from channel's uploads playlist
+ * QUOTA-EFFICIENT: Get videos from channel's uploads playlist WITH PAGINATION
  * Uses playlistItems.list = 1 unit per 50 videos (vs search.list = 100 units per 15 videos!)
+ * 
+ * PAGINATION FIX: Now fetches up to 3 pages (150 videos) instead of just 50.
+ * Pre-filters already-known videos to find NEW content deeper in the channel.
  * 
  * QUOTA COMPARISON:
  * - OLD: 5 search.list calls × 100 units = 500 units per instructor
- * - NEW: 1 playlistItems.list × 1 unit + 1 videos.list × 1 unit = 2 units per instructor!
+ * - NEW: up to 3 playlistItems.list × 1 unit + 1 videos.list × 1 unit = 4 units per instructor!
  */
-async function getChannelVideosEfficient(channelId: string, maxResults: number = 50): Promise<any[]> {
+async function getChannelVideosEfficient(channelId: string, maxResults: number = 150): Promise<any[]> {
   try {
     const uploadsPlaylistId = getUploadsPlaylistId(channelId);
+    const allVideoIds: string[] = [];
+    let pageToken: string | undefined = undefined;
+    const maxPages = 3;
+    let page = 0;
     
-    // Get playlist items (1 unit per call - 50x cheaper than search!)
-    const playlistResponse = await youtube.playlistItems.list({
-      part: ['contentDetails'],
-      playlistId: uploadsPlaylistId,
-      maxResults: Math.min(maxResults, 50) // API max is 50 per call
-    });
-    
-    if (!playlistResponse.data.items?.length) {
-      console.log(`   📭 No videos in uploads playlist`);
-      return [];
+    while (page < maxPages) {
+      const playlistResponse = await youtube.playlistItems.list({
+        part: ['contentDetails'],
+        playlistId: uploadsPlaylistId,
+        maxResults: 50,
+        ...(pageToken ? { pageToken } : {})
+      });
+      
+      if (!playlistResponse.data.items?.length) {
+        if (page === 0) console.log(`   📭 No videos in uploads playlist`);
+        break;
+      }
+      
+      const pageVideoIds = playlistResponse.data.items
+        .map(item => item.contentDetails?.videoId)
+        .filter(Boolean) as string[];
+      
+      allVideoIds.push(...pageVideoIds);
+      page++;
+      
+      pageToken = playlistResponse.data.nextPageToken || undefined;
+      if (!pageToken) break;
     }
     
-    const videoIds = playlistResponse.data.items
-      .map(item => item.contentDetails?.videoId)
-      .filter(Boolean) as string[];
+    if (!allVideoIds.length) return [];
     
-    if (!videoIds.length) return [];
+    const newVideoIds: string[] = [];
+    for (const vid of allVideoIds) {
+      if (!(await videoExists(vid))) {
+        newVideoIds.push(vid);
+      }
+    }
     
-    // Get video details (1 unit for up to 50 videos - batch call!)
-    const detailsResponse = await youtube.videos.list({
-      part: ['snippet', 'contentDetails', 'statistics'],
-      id: videoIds
-    });
+    console.log(`   📊 Scanned ${allVideoIds.length} uploads (${page} page${page > 1 ? 's' : ''}), ${newVideoIds.length} are NEW`);
     
-    console.log(`   📹 Retrieved ${detailsResponse.data.items?.length || 0} videos (2 API units total)`);
-    return detailsResponse.data.items || [];
+    if (!newVideoIds.length) return [];
+    
+    const allDetails: any[] = [];
+    for (let i = 0; i < newVideoIds.length; i += 50) {
+      const batch = newVideoIds.slice(i, i + 50);
+      const detailsResponse = await youtube.videos.list({
+        part: ['snippet', 'contentDetails', 'statistics'],
+        id: batch
+      });
+      if (detailsResponse.data.items) {
+        allDetails.push(...detailsResponse.data.items);
+      }
+    }
+    
+    const detailBatches = Math.ceil(newVideoIds.length / 50);
+    console.log(`   📹 Retrieved ${allDetails.length} new video details (${page + detailBatches} API units total)`);
+    return allDetails;
   } catch (error: any) {
     if (error.code === 403 || error.message?.includes('quota')) {
       throw new Error('QUOTA_EXHAUSTED');
     }
-    // Playlist not found is common for some channels
     if (error.message?.includes('playlistNotFound')) {
       console.log(`   ⚠️ Uploads playlist not found - channel may have different structure`);
       return [];
@@ -905,13 +926,12 @@ export async function runPermanentAutoCuration(): Promise<CurationResult> {
       
       let instructorVideosAdded = 0;
       
-      // QUOTA-EFFICIENT: Try channel playlist first (2 units vs 500+ units!)
       try {
         const channelId = await findInstructorChannelId(instructor.name);
         
         if (channelId) {
-          console.log(`   📺 Using QUOTA-EFFICIENT playlist method (2 units vs 500+ old method)`);
-          const videos = await getChannelVideosEfficient(channelId, 50);
+          console.log(`   📺 Using QUOTA-EFFICIENT playlist method with pagination`);
+          const videos = await getChannelVideosEfficient(channelId);
           result.videosScreened += videos.length; // Track total discovered
           
           for (const video of videos) {

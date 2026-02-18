@@ -1,0 +1,51 @@
+CURATION PIPELINE FIX — ADDRESS ALL 4 ISSUES NOW
+
+We diagnosed 4 problems. Fix them all.
+
+══════════════════════════════════════════════════════════════════════════
+FIX 1: REMOVE GARBAGE INSTRUCTORS
+══════════════════════════════════════════════════════════════════════════
+
+First show me the list of suspected garbage instructors:
+
+SELECT id, name, video_count FROM instructors 
+WHERE video_count <= 3 
+ORDER BY video_count ASC;
+
+Then DELETE any that are clearly NOT BJJ instructors (like 
+"NBC Sports", "Athletes Ocean", "Home of Football", or any 
+channel that is obviously not a BJJ/grappling instructor).
+
+Also delete their associated videos if any exist:
+DELETE FROM videos WHERE instructor_id IN (list of garbage IDs);
+DELETE FROM instructors WHERE id IN (list of garbage IDs);
+
+Show me the full list BEFORE deleting so I can confirm.
+
+══════════════════════════════════════════════════════════════════════════
+FIX 2: FIX "MARK AS FULLY MINED" LOGIC
+══════════════════════════════════════════════════════════════════════════
+
+The fully_mined_instructors table is EMPTY. No instructor has 
+ever been marked as fully mined. This means garbage instructors 
+with 0 new videos keep getting re-targeted every single run.
+
+FIX: After a curation run processes an instructor and finds 
+0 new eligible videos, mark them as fully mined:
+
+INSERT INTO fully_mined_instructors (instructor_name, channel_id, mined_at)
+VALUES (name, channelId, NOW());
+
+Also: any instructor with fewer than 5 total videos on their 
+YouTube channel should be auto-marked as fully mined after 
+first scan. They're not real BJJ content creators.
+
+Show me the code that should be marking instructors as mined 
+and tell me why it's not triggering.
+
+══════════════════════════════════════════════════════════════════════════
+FIX 3: STOP RE-FETCHING SAME 50 UPLOADS
+══════════════════════════════════════════════════════════════════════════
+
+The playlist method fetches the same 50 most recent uploads 
+every run. 82% get rejected, 18% are duplicates. Only​​​​​​​​​​​​​​​​
