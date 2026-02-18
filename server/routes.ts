@@ -17481,11 +17481,27 @@ CRITICAL: When admin says "start curation" or similar, you MUST call the start_c
       // Use SQL NOW() - INTERVAL for reliable timestamp comparison
       const timeFilter = sql`NOW() - INTERVAL '24 hours'`;
 
-      // USER ACTIVITY
-      const allQueries = await db
-        .select()
-        .from(profQueries)
-        .where(sql`${profQueries.createdAt} >= ${timeFilter}`);
+      // USER ACTIVITY - use raw SQL to be resilient to missing columns in production
+      let allQueries: any[] = [];
+      try {
+        allQueries = await db
+          .select()
+          .from(profQueries)
+          .where(sql`${profQueries.createdAt} >= ${timeFilter}`);
+      } catch (queryError: any) {
+        console.warn('[ACTIVITY-24H] Drizzle select failed, using raw SQL fallback:', queryError.message);
+        console.warn('[ACTIVITY-24H] This indicates production schema drift - run db:push against production to fix');
+        const rawResult: any = await db.execute(sql`
+          SELECT id, user_id as "userId", query, 
+            COALESCE(response_time, 0) as "responseTime",
+            COALESCE(use_multi_agent, false) as "useMultiAgent",
+            recommended_videos as "recommendedVideos",
+            error, created_at as "createdAt"
+          FROM prof_queries 
+          WHERE created_at >= ${timeFilter}
+        `);
+        allQueries = Array.isArray(rawResult) ? rawResult : (rawResult.rows || []);
+      }
 
       const totalQueries = allQueries.length;
       const uniqueUsers = new Set(allQueries.map(q => q.userId).filter(Boolean)).size;

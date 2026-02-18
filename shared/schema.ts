@@ -4112,7 +4112,7 @@ export const userTechniqueEcosystem = pgTable("user_technique_ecosystem", {
 }, (table) => ({
   userIdx: index("idx_technique_ecosystem_user").on(table.userId),
   signatureIdx: index("idx_technique_ecosystem_signature").on(table.userId, table.isSignatureMove),
-  uniqueUserTechnique: index("idx_user_technique_unique").on(table.userId, table.techniqueName),
+  uniqueUserTechnique: unique("uq_user_technique").on(table.userId, table.techniqueName),
 }));
 
 export const insertUserTechniqueEcosystemSchema = createInsertSchema(userTechniqueEcosystem).omit({
@@ -6439,7 +6439,7 @@ export const userEngagementPatterns = pgTable("user_engagement_patterns", {
 }, (table) => ({
   userIdx: index("user_engagement_user_idx").on(table.userId),
   dateIdx: index("user_engagement_date_idx").on(table.date.desc()),
-  userDateUnique: index("user_engagement_user_date_idx").on(table.userId, table.date),
+  userDateUnique: unique("uq_user_engagement_date").on(table.userId, table.date),
 }));
 
 export const insertUserEngagementPatternsSchema = createInsertSchema(userEngagementPatterns).omit({

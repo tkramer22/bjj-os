@@ -319,9 +319,11 @@ export async function handleClaudeStream(req: any, res: any) {
   // 🔒 SECURITY: Get userId from authenticated user, not from request body
   const userId = req.user?.userId;
   
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  
   // 🔍 DEBUG: Comprehensive request logging for troubleshooting
   console.log('═══════════════════════════════════════════════════════════════');
-  console.log('[CHAT API] 📥 REQUEST RECEIVED - ' + new Date().toISOString());
+  console.log(`[CHAT API] 📥 REQUEST RECEIVED - ${new Date().toISOString()} [${requestId}]`);
   console.log('[CHAT API] User ID from req.user:', userId);
   console.log('[CHAT API] req.user object:', JSON.stringify(req.user || 'undefined'));
   console.log('[CHAT API] Message (first 100 chars):', (message || '').substring(0, 100));
@@ -1538,10 +1540,11 @@ export async function handleClaudeStream(req: any, res: any) {
     }
     
   } catch (error: any) {
-    console.error('❌ CLAUDE STREAM ERROR:', error);
-    console.error('❌ Error type:', error.constructor?.name);
-    console.error('❌ Error message:', error.message);
-    console.error('❌ User message was:', message);
+    console.error(`❌ CLAUDE STREAM ERROR [${requestId}]:`, error);
+    console.error(`❌ [${requestId}] Error type:`, error.constructor?.name);
+    console.error(`❌ [${requestId}] Error message:`, error.message);
+    console.error(`❌ [${requestId}] User ID:`, userId);
+    console.error(`❌ [${requestId}] User message was:`, message);
     
     // 📊 DIAGNOSTICS: Save diagnostics on error
     if (userId && message) {
@@ -1550,40 +1553,43 @@ export async function handleClaudeStream(req: any, res: any) {
       diagnosticData.validationIssues = [error.message || 'Unknown error'];
       
       saveDiagnostics(userId.toString(), message, diagnosticData as DiagnosticData).catch(err => {
-        console.error('❌ Failed to save error diagnostics:', err);
+        console.error(`❌ [${requestId}] Failed to save error diagnostics:`, err);
       });
     }
     
-    // Create user-friendly error message
-    let userFriendlyError = error.message || 'Something went wrong';
-    
-    // Check for content policy / safety filter errors from Claude
     const errorMsg = (error.message || '').toLowerCase();
+    
+    let userFriendlyError = "Sorry, I'm having a brief hiccup. Please try again!";
+    let errorCategory = 'unknown';
+    
     if (errorMsg.includes('content') || errorMsg.includes('policy') || 
         errorMsg.includes('safety') || errorMsg.includes('refused') ||
         errorMsg.includes('harmful') || errorMsg.includes('inappropriate')) {
       userFriendlyError = "I had trouble with that message. This can happen when certain words trigger safety filters, even in normal BJJ context like 'I got murdered from mount.' Could you try rephrasing?";
-    }
-    
-    // Check for database connection errors (timeouts, connection refused, etc.)
-    if (errorMsg.includes('connect_timeout') || errorMsg.includes('connection') || 
+      errorCategory = 'content_policy';
+    } else if (errorMsg.includes('connect_timeout') || errorMsg.includes('connection') || 
         errorMsg.includes('timeout') || errorMsg.includes('econnrefused') ||
         errorMsg.includes('pool') || errorMsg.includes('database')) {
-      console.error('❌ [CHAT] Database connection error detected');
       userFriendlyError = "Temporary connection issue. Please try again in a moment.";
+      errorCategory = 'db_connection';
+    } else if (errorMsg.includes('401') || errorMsg.includes('unauthorized') || errorMsg.includes('authentication')) {
+      userFriendlyError = "Your session may have expired. Please try logging out and back in.";
+      errorCategory = 'auth';
+    } else if (errorMsg.includes('overloaded') || errorMsg.includes('529') || errorMsg.includes('rate')) {
+      userFriendlyError = "The AI is experiencing high demand. Please try again in a moment.";
+      errorCategory = 'rate_limit';
     }
     
-    // Check if headers were already sent (streaming started)
+    console.error(`❌ [${requestId}] Error category: ${errorCategory} | Raw: ${error.message}`);
+    
     if (res.headersSent) {
-      // SSE error event for client-side handling
       res.write(`data: ${JSON.stringify({ error: userFriendlyError })}\n\n`);
       res.write('data: [DONE]\n\n');
       res.end();
     } else {
-      // Headers not sent yet - safe to send JSON error
       res.status(500).json({ 
         error: userFriendlyError,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        requestId
       });
     }
   }
